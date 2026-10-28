@@ -145,11 +145,11 @@ def test_a_linux_without_the_right_to_ping_says_how_to_get_it(monkeypatch):
     monkeypatch.setattr(icmpsock, "kind", lambda: None)
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setattr(paths, "running_as_root", lambda: False)
-    monkeypatch.setattr(tcpestats._Linux, "can_list", lambda _self: False)
+    monkeypatch.setattr(tcpreset._Linux, "can_destroy", lambda _self: False)
     check("Linux: Ping's own words", capabilities.why_not("ping") == icmp.NOT_HERE_LINUX,
           f"({capabilities.why_not('ping')})")
-    check("the others keep the shared ones",
-          capabilities.why_not("tcp_health") == capabilities.NOT_HERE)
+    check("a tool without words of its own keeps the shared ones",
+          capabilities.why_not("tcp_reset") == capabilities.NOT_HERE)
     monkeypatch.setattr(paths, "running_as_root", lambda: True)
     check("as root: the words for root", capabilities.why_not("ping") == icmp.NOT_HERE_ROOT,
           f"({capabilities.why_not('ping')})")
@@ -161,6 +161,29 @@ def test_a_linux_without_the_right_to_ping_says_how_to_get_it(monkeypatch):
     check("the user is told what to do", "sudo" in user and "ping_group_range" in user, f"({user})")
     check("root is not told to use sudo, and is told what is missing",
           "sudo" not in root and "CAP_NET_RAW" in root and "ping_group_range" in root, f"({root})")
+
+
+def test_a_linux_kernel_without_the_socket_list_says_so_for_tcp_health(monkeypatch):
+    """TCP health works on Linux, so on a Linux whose kernel lists no TCP sockets the
+    shared words - which name Linux as a system the tools work on - would read as a
+    contradiction. The module says what is missing instead, and the shared words
+    name both systems for the systems that have neither."""
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(tcpestats._Linux, "can_list", lambda _self: False)
+    check("Linux: TCP health's own words",
+          capabilities.why_not("tcp_health") == tcpestats.NOT_HERE_LINUX,
+          f"({capabilities.why_not('tcp_health')})")
+    monkeypatch.setattr(sys, "platform", "darwin")
+    check("another system: the shared words",
+          capabilities.why_not("tcp_health") == capabilities.NOT_HERE)
+    for name in ("en.json", "pl.json", "zh.json"):
+        with open(os.path.join(ROOT, "lang", name), encoding="utf-8") as f:
+            texts = json.load(f)
+        shared = texts[capabilities.NOT_HERE]
+        check(f"{name}: the shared words name Linux too",       # Polish declines it
+              "Linux" in shared or "Linuks" in shared, f"({shared})")
+        check(f"{name}: and TCP health's name the kernel's list",
+              "sock_diag" in texts[tcpestats.NOT_HERE_LINUX])
 
 
 def test_every_reason_is_said_in_every_language():

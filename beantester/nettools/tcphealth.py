@@ -21,7 +21,7 @@ import time
 from typing import NamedTuple
 
 from .. import crashlog, driver, portmap, tcpestats, tcprow
-from .adapters import Detail, Words
+from .adapters import WIDEST_CODE, Detail, Words
 
 HISTORY = 60                    # chart points: a minute at one reading a second
 MAX_WATCHED = 20                # each costs two calls a second, ~50 us (measured)
@@ -297,6 +297,12 @@ STATE_WORDS = {STARTING: "tools.tcphealth.state.starting", tcpestats.OK: "tools.
                tcpestats.FAILED: "tools.tcphealth.state.failed"}
 
 
+# Every word the list's state column can say, a refusal at its widest code: what the
+# column is sized for (``widgets.make_room``).
+STATE_VOCABULARY = tuple(Words(key, WIDEST_CODE) for key in STATE_WORDS.values())
+NO_RTT = "tools.tcphealth.value.no_rtt"
+
+
 def state_words(watch):
     return Words(STATE_WORDS.get(watch.state, "tools.tcphealth.state.failed"), watch.code)
 
@@ -309,7 +315,7 @@ def rtt_number(value):
 
 def ms(value):
     """A round trip: ``214 ms``, ``< 1 ms``, or ``Words`` for "not measured yet"."""
-    return Words("tools.tcphealth.value.no_rtt") if value is None else f"{rtt_number(value)} ms"
+    return Words(NO_RTT) if value is None else f"{rtt_number(value)} ms"
 
 
 def process_text(watch):
@@ -382,7 +388,7 @@ def details(watch):
                                      ms(last.sample_rtt))),
             (("min_rtt", "max_rtt"), Detail(
                 "range", Words("tools.tcphealth.item.range"),
-                Words("tools.tcphealth.value.no_rtt")
+                Words(NO_RTT)
                 if last.min_rtt is None or last.max_rtt is None
                 else f"{rtt_number(last.min_rtt)} / {rtt_number(last.max_rtt)} ms")),
             # A stack without the highest round trip (Linux) says the lowest alone.

@@ -182,6 +182,34 @@ def test_process_name_substring_stays_backward_compatible():
     check("bare name rejects others", not m.matches(104, "firefox.exe"))
 
 
+def test_the_process_example_the_program_shows_finds_it_on_both_systems():
+    """The hint under the field, the "?" sheet and ``--help`` show "chrome": a bare
+    name, which finds Chrome as Windows names it (chrome.exe) and as Linux does
+    (chrome). The example before, "chrome.exe", found nothing on Linux."""
+    import json
+    import os
+
+    from beantester import cli
+    from fakes import LANG_DIR, LANGS
+    m = _proc("chrome, !chromedriver")
+    check("the example finds Windows' name and Linux's",
+          m.matches(1, "chrome.exe") and m.matches(2, "chrome"))
+    check("and leaves out what it says it leaves out",
+          not m.matches(3, "chromedriver") and not m.matches(4, "chromedriver.exe"))
+    for code in LANGS:
+        with open(os.path.join(LANG_DIR, f"{code}.json"), encoding="utf-8") as f:
+            texts = json.load(f)
+        for key in ("fields.target_example", "dialogs.match_help"):
+            check(f"lang/{code}.json: {key} shows a name that finds it on Linux",
+                  "chrome.exe" not in texts[key] and "chrome" in texts[key], f"({texts[key]})")
+        # The field's tip said "Requires psutil": not on Windows, which targets from its
+        # own tables, and psutil is installed with the program everywhere.
+        check(f"lang/{code}.json: the field's tip sends nobody to psutil",
+              "psutil" not in texts["tips.target_process"])
+    text = cli.build_arg_parser().format_help()
+    check("--help too", "chrome.exe" not in text and "--target chrome " in text)
+
+
 def test_process_list_exclusions_and_wildcards():
     m = _proc("chrome, !chromedriver")
     check("name list minus an exclusion", m.matches(101, "chrome.exe"))

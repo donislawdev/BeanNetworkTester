@@ -292,7 +292,7 @@ class SocketsPanel:
             lines.append(T("tools.sockets.note_failed", tables=", ".join(snapshot.failed)))
         unnamed = sockets.without_owner(snapshot)
         if unnamed:
-            lines.append(T("tools.sockets.note_no_pid", count=unnamed))
+            lines.append(T(sockets.no_owner_note(), count=unnamed))
         return lines
 
     def _show_failure(self):

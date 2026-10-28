@@ -197,10 +197,14 @@ PAGE_WRAP_PAD = 2 * SPACE["page"] + SPACE["tight"]
 # The adapters tool: `adapter` fits most adapter names as Windows gives them (8 to
 # 34 characters on the development machine, measured 2026-10-13 - a longer one is
 # cut in the list and shown whole in the details below it); `if_status` and
-# `if_kind` the longest status and type word in the three languages; `internet`
+# `if_kind` are floors - the list sizes those columns by the words they can show
+# (``widgets.make_room``), which a count of characters had missed; `internet`
 # fits "IPv4, IPv6"; `item` the longest row name of the details table; `note` an
 # address's origin and its duplicate-address warning side by side. TCP health:
-# `rtt` fits "1234 ms", `resent` the column's header in the three languages. Ping:
+# `rtt` fits "1234 ms" (its words size it past that), `resent` the column's header in
+# the three languages, `endpoint` an IPv4 address with its port, the longest one
+# ("255.255.255.255:65535") whole in the widest font measured - DejaVu Sans, 152
+# px at 100 % (2026-10-27). Ping:
 # `host` is the port check's 24 - an address or a name, a longer one scrolls in the
 # box; `sent_at` fits "12:01:07" and the column's header; `result` its longest
 # word in the three languages ("Odpowiedź wróciła zmieniona"); `seq` five digits.
@@ -216,6 +220,7 @@ CHARS = {
     "proto": 5,
     "process": 16,
     "tcp_state": 12,
+    "endpoint": 21,
     "verdict": 23,
     "adapter": 24,
     "if_status": 14,
@@ -248,7 +253,7 @@ ROWS = {
 # Sizes that are neither a gap nor a run of characters, in design pixels at 100 %.
 # `side_chart`: the TCP health RTT chart beside its details table - room for the
 # axis numbers, "-60 s" and "now", while the details keep three readable columns in
-# the 760 px window a 1366x768 screen opens (rendered 2026-10-19 in en/pl/zh: about
+# the 760 px window a 1366x768 screen opened then (rendered 2026-10-19 in en/pl/zh: about
 # six detail rows, nothing cut but the table's own sideways scroll). Stacked under
 # the details instead, the chart left them ONE pixel. `chart`: the least height of
 # a chart's canvas.

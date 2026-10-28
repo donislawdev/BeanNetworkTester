@@ -142,8 +142,9 @@ FUNCTION_CEILING = 119          # beantester/gui/app.py::_build_ui
 # `engine.py` (766), which joins the crowd. FILES_NEAR_CEILING went from 1 to 2 for
 # that, by the OWNER's decision of the same day, over the alternative of keeping
 # three lines in `app.py` written longer than they need to be to hold the count.
-# `cli.py` is 757, seven lines under the band.
-FILE_CEILING = 1086             # beantester/gui/app.py
+# `cli.py` is 757, seven lines under the band. 1086 -> 1083 on 2026-10-27: the choice
+# of the geometry the window opens with moved into `scaling.restored_geometry`.
+FILE_CEILING = 1083             # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
 # to a record and is blind to everything creeping upward together: five files at

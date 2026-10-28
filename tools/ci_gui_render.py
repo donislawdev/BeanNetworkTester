@@ -242,6 +242,128 @@ def _tab_check_can_fail(root):
         window.destroy()
 
 
+# -- the tables that cannot scroll sideways ------------------------------------ #
+# Such a table has nowhere to put a column past its right edge: Tk cuts it off,
+# header and all. Measured 2026-10-27 on real Tk: TCP health's list asked 699 to 716
+# px of a 691 px table at the old 760 px window, in every language, on Windows and
+# on Linux, and nothing here looked at a table. Its columns are born at their
+# natural width and only ever WIDENED to fill the table
+# (``widgets.sortable_tree.fitted_widths``), so a row of columns wider than the table
+# is one that did not fit at birth - and the one the person sees.
+def _shown_columns(tree):
+    """The columns ``tree`` draws: its ``displaycolumns``, or all of them for ``#all``."""
+    shown = tree.cget("displaycolumns")
+    shown = (shown,) if isinstance(shown, str) else tuple(shown)
+    return tuple(tree.cget("columns")) if shown in ((), ("#all",)) else shown
+
+
+def _cut_tables(root):
+    """Every table on screen that cannot scroll sideways and whose columns run past
+    its edge: (headers, the columns' width, the table's)."""
+    found = []
+    for widget in _walk(root):
+        try:
+            if widget.winfo_class() != "Treeview" or not widget.winfo_ismapped():
+                continue
+            if str(widget.cget("xscrollcommand")):
+                continue                            # it scrolls: a wide row is reachable
+            shown = _shown_columns(widget)
+            need = sum(int(widget.column(column, "width")) for column in shown)
+            got = widget.winfo_width()
+            headers = tuple(str(widget.heading(column, "text")) for column in shown)
+        except tk.TclError:
+            continue
+        if got > 1 and need > got + TOL:
+            found.append((headers, need, got))
+    return found
+
+
+def _table_check_can_fail(root):
+    """What is wrong with the table check itself, measured on a table made to fail:
+    one too wide for its window must be reported, the same one in a window wide
+    enough must not, and neither must a table that scrolls sideways."""
+    window = tk.Toplevel(root)
+    try:
+        columns = ("a", "b", "c")
+        tree = ttk.Treeview(window, columns=columns, show="headings")
+        scrolling = ttk.Treeview(window, columns=columns, show="headings",
+                                 xscrollcommand=lambda *_: None)
+        for table in (tree, scrolling):
+            for column in columns:
+                table.heading(column, text=column)
+                table.column(column, width=scaling.scaled(200), stretch=False)
+            table.pack(fill="x")
+        need = 3 * scaling.scaled(200)
+        problems = []
+        for width, should_see in ((need // 2, True), (need + 40, False)):
+            window.geometry(f"{width}x{scaling.scaled(240)}")
+            window.update_idletasks()
+            window.update()
+            seen = len(_cut_tables(window))
+            if seen != (1 if should_see else 0):
+                problems.append(f"the table check saw {seen} cut table(s) at {width} px, "
+                                f"where {1 if should_see else 0} is cut (they ask {need})")
+        return problems
+    finally:
+        window.destroy()
+
+
+# -- what is placed rather than packed ----------------------------------------- #
+# A widget put in with ``place`` takes its own width, and its parent cuts whatever
+# lies past its edges - the button and label checks never see it, because the widget
+# got all it asked for. Measured 2026-10-27: the TCP health list's empty note was
+# 905 px in an 891 px table on Linux in Polish and lost letters on both sides. The
+# tables' empty notes are the only placed widgets today.
+def _overflowing_placed(root):
+    """Every placed widget on screen that runs past its parent: (text, width, room)."""
+    found = []
+    for widget in _walk(root):
+        try:
+            if not widget.winfo_ismapped() or widget.winfo_manager() != "place":
+                continue
+            room = widget.nametowidget(widget.winfo_parent()).winfo_width()
+            left, width = widget.winfo_x(), widget.winfo_width()
+            text = _text(widget).strip()
+        except tk.TclError:
+            continue
+        if room > 1 and (left < -TOL or left + width > room + TOL):
+            found.append((text, width, room))
+    return found
+
+
+def _placed_check_can_fail(root):
+    """What is wrong with the placed-widget check itself: a label placed in a frame
+    too narrow for it must be reported, and the same label made short must not."""
+    window = tk.Toplevel(root)
+    try:
+        frame = ttk.Frame(window, width=scaling.scaled(200), height=scaling.scaled(60))
+        frame.pack()
+        label = ttk.Label(frame, text="a placed label much wider than the frame it is in")
+        label.place(relx=0.5, rely=0.5, anchor="center")
+        problems = []
+        for text, should_see in ((label.cget("text"), True), ("short", False)):
+            label.config(text=text)
+            window.update_idletasks()
+            window.update()
+            if bool(_overflowing_placed(window)) != should_see:
+                problems.append(f"the placed-widget check {'missed' if should_see else 'invented'} "
+                                f"a label past its frame ({text!r})")
+        return problems
+    finally:
+        window.destroy()
+
+
+def _say_cut(code, verdict, tables, placed):
+    """The log lines for what runs past an edge it cannot scroll to."""
+    for headers, req, got in tables:
+        print(f"  [{code}] {verdict} TABLE - its last columns are past its edge, and it "
+              f"cannot scroll there (columns {req} px, table {got}): "
+              f"{', '.join(map(repr, headers))}")
+    for text, width, room in placed:
+        print(f"  [{code}] {verdict} PLACED WIDGET - wider than its parent, which cuts it "
+              f"(width={width} room={room}): {text!r}")
+
+
 PAINT_OPTIONS =("background", "foreground", "bordercolor", "lightcolor", "darkcolor")
 
 
@@ -422,8 +544,10 @@ def check_language(code):
     face = tkfont.Font(root=root, font=ttk.Style(root).lookup("TNotebook.Tab", "font"))
     print(f"  [{code}] tab font {face.actual('family')} {face.actual('size')}")
     selftest = _tab_check_can_fail(root)
+    selftest += _table_check_can_fail(root)
+    selftest += _placed_check_can_fail(root)
 
-    buttons, labels, cut, squeezed = [], [], [], []
+    buttons, labels, cut, squeezed, tables, placed = [], [], [], [], [], []
     styles = _declared_styles()
 
     def scan():
@@ -432,6 +556,8 @@ def check_language(code):
         labels.extend(l)
         cut.extend(c)
         squeezed.extend(_squeezed_tabs(root))
+        tables.extend(_cut_tables(root))
+        placed.extend(_overflowing_placed(root))
 
     walked = walk_surfaces(app, root, scan)
     # Named in the log on purpose: a guard whose coverage nobody can see is a
@@ -463,6 +589,8 @@ def check_language(code):
     for row, req, got in squeezed:
         widest[row] = max(widest.get(row, (0, got)), (req, got))
     squeezed = sorted((row, req, got) for row, (req, got) in widest.items())
+    tables = sorted(set(tables))
+    placed = sorted(set(placed))
     for text, req, got in labels:
         print(f"  [{code}] note: label narrower than requested "
               f"(req={req} got={got}): {text!r}")
@@ -480,20 +608,20 @@ def check_language(code):
     for row, req, got in squeezed:
         print(f"  [{code}] {'unmeasured' if drawable is False else 'SQUEEZED'} TAB ROW - "
               f"every label in it is cut (req={req} got={got}): {', '.join(map(repr, row))}")
+    _say_cut(code, "unmeasured" if drawable is False else "CUT", tables, placed)
     for problem in selftest:
-        print(f"  [{code}] TAB CHECK BROKEN: {problem}")
+        print(f"  [{code}] CHECK BROKEN: {problem}")
     measured = drawable is not False
     ok = not twins and not selftest and (not measured or (not buttons and not cut
+                                                          and not tables
+                                                          and not placed
                                                           and not squeezed))
-    problems = []
-    if buttons and measured:
-        problems.append(f"{len(buttons)} clipped button(s)")
-    if cut and measured:
-        problems.append(f"{len(cut)} truncated label(s)")
-    if squeezed and measured:
-        problems.append(f"{len(squeezed)} squeezed tab row(s)")
+    found = ((buttons, "clipped button(s)"), (cut, "truncated label(s)"),
+             (squeezed, "squeezed tab row(s)"), (tables, "cut table(s)"),
+             (placed, "cut placed widget(s)"))
+    problems = [f"{len(what)} {kind}" for what, kind in found if what and measured]
     if selftest:
-        problems.append("the tab check cannot tell a squeezed row from one that fits")
+        problems.append("a check cannot tell a row that does not fit from one that does")
     if twins:
         problems.append(f"{len(twins)} style(s) where focus looks like hover")
     state = "OK" if measured else "built, layout NOT measured (no font)"

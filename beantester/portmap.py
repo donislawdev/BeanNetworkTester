@@ -430,9 +430,15 @@ def _psutil_row(proto, conn):
     state = _PSUTIL_STATES.get(conn.status, conn.status) if proto == "TCP" else ""
     blank = state == "LISTEN" or not raddr
     local_ip = str(laddr[0])
+    pid = conn.pid
+    # Linux keeps no file for a socket in TIME_WAIT, so psutil names no process for
+    # it, even to root (measured 2026-10-28, WSL, as a user and as root). No process
+    # owns it any more, which the native path says with PID 0 - and so does the help.
+    if pid is None and state == "TIME_WAIT":
+        pid = 0
     return SocketRow(proto, 6 if ":" in local_ip else 4, local_ip, int(laddr[1]),
                      "" if blank else str(raddr[0]), None if blank else int(raddr[1]),
-                     state, None if conn.pid is None else int(conn.pid))
+                     state, None if pid is None else int(pid))
 
 
 def _psutil_socket_rows():
@@ -440,7 +446,9 @@ def _psutil_socket_rows():
 
     Raises instead of answering empty: see :func:`socket_rows`. Another account's
     socket may carry no PID - psutil leaves ``pid`` as None when the OS will not
-    say, which on Linux is any socket that is not ours unless we run as root.
+    say, which on Linux is any socket that is not ours unless we run as root, and one
+    that no process holds any more, as a closing connection (``_psutil_row`` makes
+    TIME_WAIT's PID 0).
     """
     try:
         import psutil

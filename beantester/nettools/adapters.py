@@ -55,17 +55,31 @@ class Words(NamedTuple):
     code: int | str | None = None
 
 
+STATUS_PREFIX, KIND_PREFIX = "tools.adapters.status.", "tools.adapters.kind."
+# The widest number a word sized for its column shows in place of a name: a state,
+# a type or a refusal's code no table here names (IfType and errno fit in three
+# digits, a Windows error code in five).
+WIDEST_CODE = 99999
+
+
 def _word(table, prefix, number):
     slug = table.get(number)
     return Words(prefix + slug) if slug else Words(prefix + "code", number)
 
 
 def status_words(number):
-    return _word(STATUS, "tools.adapters.status.", number)
+    return _word(STATUS, STATUS_PREFIX, number)
 
 
 def kind_words(number):
-    return _word(KINDS, "tools.adapters.kind.", number)
+    return _word(KINDS, KIND_PREFIX, number)
+
+
+def vocabulary(table, prefix):
+    """Every word ``_word`` can say from ``table``: one per name, and the one for a
+    number the table does not name, at ``WIDEST_CODE`` - what a list column that
+    shows them is sized for (``widgets.make_room``)."""
+    return (*(Words(prefix + slug) for slug in table.values()), Words(prefix + "code", WIDEST_CODE))
 
 
 class Adapter(NamedTuple):

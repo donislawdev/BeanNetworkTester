@@ -133,11 +133,35 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **The window opens wider, and the lists on the Tools tab show every column whole.** At 760
+  pixels the TCP health list lost its last column in every language, and words such as
+  "jeszcze bez pomiaru" (TCP health) and "Ustawienia proxy" (Adapters) were cut. The window
+  now opens 960 pixels wide at 100% and cannot be made narrower. Each column fits the longest
+  word it can show, and an empty list's note wraps inside it. A window size saved by an older
+  version grows to the new width and stays on its screen.
+
+- **Linux, experimental: the texts say what Linux does.** The Sockets note says that Linux
+  shows the programs of other accounts only to root, and that a connection that is closing,
+  or a socket held from outside the system, as in WSL, may have no program at all. A socket
+  in TIME_WAIT shows PID 0, as on Windows. The process field, its "?" help and `--help` show
+  `chrome`, which finds the program on Windows and on Linux. TCP health on a kernel without
+  the socket list says so.
+
+- **Linux, experimental: Copy CLI command gives a command Linux can run.** It is the command
+  the README starts the program with: `sudo .venv/bin/python -B bean_network_tester.py`,
+  without sudo for `--simulate`. Its values are in single quotes, so bash keeps a `!`, a `$`
+  or a backslash in them as it is.
+
+- **Texts that were not true on every system.** The process field's tip no longer says it
+  requires psutil, which comes with the program and which Windows does not use for it. On a
+  system other than Windows and Linux, `--doctor` and the Tools tab say that capture and the
+  tools work on Windows and Linux.
+
 - **The names of the tools on the Tools tab are whole.** On Linux in Polish, and in every
   language but Chinese once the window was made narrow, each name lost its last letters, such
   as "Zdrowie TCI" for "Zdrowie TCP". The tabs inside a page are now narrower than the page
   tabs above them, so the seven tools fit in one row. The main window can no longer be made
-  narrower than it opens, on any screen and at any display scaling (760 pixels at 100%).
+  narrower than it opens, on any screen and at any display scaling.
 
 - **The log no longer says a page opened when no browser started.** After a click on **Donate**
   the log said the support page was opened even when the browser did not start. It now says the

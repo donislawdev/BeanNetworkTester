@@ -128,13 +128,57 @@ def test_settings_to_cli_prefix_and_name():
     ``paths.is_frozen()``), not from a hard-coded string.
     """
     from beantester import build_arg_parser, settings_to_cli_string
-    from beantester.appinfo import EXE_NAME, LAUNCHER
+    from beantester.appinfo import EXE_NAME, LAUNCHER, command_name
     cmd = settings_to_cli_string({"loss": 5}, seed=123)
-    check("cli string: run-from-sources prefix",
-          cmd.startswith(f"python {LAUNCHER}"), f"({cmd[:40]})")
+    check("cli string: run-from-sources prefix, as this system runs it",
+          cmd.startswith(command_name() + " ") and LAUNCHER in cmd.split(), f"({cmd[:60]})")
     check("cli: prog names this build",
           build_arg_parser().prog in (LAUNCHER, EXE_NAME),
           f"({build_arg_parser().prog})")
+
+
+def test_the_command_on_linux_is_the_one_its_readme_runs():
+    """Ubuntu 26.04 has no ``python`` (only ``python3``), a capture needs root and
+    pydivert lives in the virtual environment: the window copied a command that
+    ended in "command not found" (2026-10-27). It is the README's now, and names no
+    path from the machine - a report carrying it is shared."""
+    from beantester.appinfo import LAUNCHER, linux_command
+    checkout, home = "/u/ana/bnt", "/u/ana"
+    say = lambda exe, simulate=False, home=home: linux_command(simulate, exe, checkout, home)  # noqa: E731
+    check("the venv in the checkout, a capture: sudo and -B, as the README",
+          say("/u/ana/bnt/.venv/bin/python") == f"sudo .venv/bin/python -B {LAUNCHER}",
+          f"({say('/u/ana/bnt/.venv/bin/python')})")
+    check("a simulation needs no root",
+          say("/u/ana/bnt/.venv/bin/python", True) == f".venv/bin/python {LAUNCHER}")
+    check("a venv in the person's home: from ~, no account name",
+          say("/u/ana/.venvs/bnt/bin/python") == f"sudo ~/.venvs/bnt/bin/python -B {LAUNCHER}")
+    check("anywhere else: python3, never a path",
+          say("/opt/py/bin/python3.15") == f"sudo python3 -B {LAUNCHER}")
+    check("a folder that only starts like the checkout is not inside it",
+          say("/u/ana/bnt-old/bin/python", home="/srv") == f"sudo python3 -B {LAUNCHER}")
+    check("a space is quoted, ~ is left for the shell",
+          say("/u/ana/my envs/bin/python", True) == f"~/'my envs/bin/python' {LAUNCHER}")
+    check("no home known: python3", say("/x/bin/python", True, "") == f"python3 {LAUNCHER}")
+
+
+def test_the_command_follows_the_system_it_runs_on(monkeypatch):
+    """Windows from source keeps ``python bean_network_tester.py``; Linux asks
+    ``linux_command``, with root only for a capture."""
+    import sys
+
+    from beantester import appinfo, paths
+    from beantester.repro import settings_to_cli_string
+    monkeypatch.setattr(paths, "is_frozen", lambda: False)
+    monkeypatch.setattr(sys, "platform", "win32")
+    check("Windows", appinfo.command_name() == f"python {appinfo.LAUNCHER}")
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(paths, "running_as_root", lambda: False)  # asks geteuid, not on Windows
+    capture = settings_to_cli_string({"loss": 5}, seed=1)
+    check("Linux, a capture: under sudo", capture.startswith("sudo ") and " -B " in capture
+          and f" {appinfo.LAUNCHER} --" in capture, f"({capture})")
+    simulated = settings_to_cli_string({"loss": 5}, seed=1, simulate=True)
+    check("Linux, a simulation: no sudo", not simulated.startswith("sudo")
+          and "--simulate" in simulated, f"({simulated})")
 
 
 def test_build_repro_report():
@@ -147,7 +191,7 @@ def test_build_repro_report():
     settings = dict(DEFAULT_SETTINGS, loss=20, seed=777)
     rep = build_repro_report(sh, settings)
     sh.stop()
-    ok = (rep["seed"] == 777 and rep["cli_command"].startswith("python bean_network_tester.py")
+    ok = (rep["seed"] == 777 and "bean_network_tester.py" in rep["cli_command"].split()
           and "--seed 777" in rep["cli_command"] and "--loss 20" in rep["cli_command"]
           and "effective_loss_pct" in rep["metrics"]
           and any(e["type"] == "BUG" for e in rep["events"])
@@ -244,7 +288,7 @@ def test_save_repro_report_roundtrip():
           f"({sorted(rep)})")
     check("repro file: tool = BeanNetworkTester", rep["tool"] == "BeanNetworkTester")
     check("repro file: cli_command uses the new name",
-          rep["cli_command"].startswith("python bean_network_tester.py"))
+          "bean_network_tester.py" in rep["cli_command"].split(), f"({rep['cli_command']})")
     check("repro file: metrics in English",
           {"packets", "downloaded_mb", "uploaded_mb", "total_mb"} <= set(rep["metrics"]))
 
@@ -513,6 +557,8 @@ def test_the_session_command_takes_the_scenario_and_the_stand_in_from_the_engine
     the same run; the scenario reached neither (external review, P1-3). Both are
     now read off the session itself, by one function every caller uses.
     """
+    import sys
+
     from beantester import DEFAULT_SETTINGS, build_repro_report
     from beantester.repro import session_command
     from beantester.scenario import Scenario
@@ -530,8 +576,9 @@ def test_the_session_command_takes_the_scenario_and_the_stand_in_from_the_engine
         report = build_repro_report(eng, settings)
     finally:
         eng.stop()
+    quoted = '"my scenarios/lte.json"' if sys.platform == "win32" else "'my scenarios/lte.json'"
     check("session command: the scenario, as it was named, quoted for its space",
-          '--scenario "my scenarios/lte.json" --loop' in during, f"({during})")
+          f"--scenario {quoted} --loop" in during, f"({during})")
     check("session command: a stand-in driver is --simulate", "--simulate" in during,
           f"({during})")
     check("session command: the report carries the same command",
@@ -632,3 +679,49 @@ def test_the_command_survives_the_shell_it_is_pasted_into():
             check(f"shell: {sent!r} arrives unchanged", back == sent, f"({back!r})")
     check("shell: the known limit - cmd still expands %NAME% inside quotes",
           pasted(["re:a%BNT_PROBE_VAR%b"]) == ["re:aEXPANDEDb"])
+
+
+def test_the_command_survives_bash_with_history_expansion_on(tmp_path, monkeypatch):
+    """On Linux the command is pasted into bash; what arrives is what was meant.
+
+    The cmd.exe spelling, double quotes, is not enough there: bash still expands
+    ``$( )``, ``$NAME`` and a backtick inside them, and at a prompt, where history
+    expansion is on, the ``!`` of ``chrome,!chromedriver`` refused the line ("event
+    not found") or put an earlier command in its place (measured 2026-10-28, WSL
+    Ubuntu). The script turns history expansion on, as a prompt has it, and runs the
+    command ``settings_to_cli_string`` builds into a real program's argv.
+    """
+    import json
+    import shlex
+    import shutil
+    import subprocess
+    import sys
+
+    import pytest
+
+    bash = shutil.which("bash")
+    if sys.platform == "win32" or bash is None:
+        pytest.skip("bash on Linux is the shell under test; cmd.exe has its own test")
+    from beantester import repro
+
+    echo = tmp_path / "argv_echo.py"
+    echo.write_text("import json, sys\nprint(json.dumps(sys.argv[1:]))\n", encoding="utf-8")
+    monkeypatch.setattr(repro, "command_name", lambda simulate=False: " ".join(
+        shlex.quote(part) for part in (sys.executable, str(echo))))
+    env = {name: value for name, value in os.environ.items() if name != "BASH_ENV"}
+    env["BNT_PROBE_VAR"] = "EXPANDED"
+    values = ["chrome,!chromedriver", "10.0.0.1-10.0.0.50,!10.0.0.7", "a,!echo b",
+              "re:^edge", "re:(a|b)$", "$(echo EXPANDED)", "$BNT_PROBE_VAR", "x`echo y`z",
+              "it's", 'a"b', "a b", "re:\\d+", "re:\\\\d", "end\\", "~/x.json", "*.json"]
+    script = tmp_path / "pasted.sh"
+    # One command each, after one earlier command for `!echo` to find in the history.
+    for value in values:
+        settings = {"target": value}
+        command = repro.settings_to_cli_string(settings)
+        script.write_text(f"set -o history -o histexpand\necho earlier\n{command}\n",
+                          encoding="utf-8")
+        done = subprocess.run([bash, str(script)], capture_output=True, text=True, env=env)
+        last = (done.stdout.splitlines() or [""])[-1]
+        back = json.loads(last) if last.startswith("[") else None
+        check(f"bash: {value!r} arrives unchanged", back == repro.settings_to_cli(settings),
+              f"({command!r} -> {done.stdout!r} {done.stderr!r})")

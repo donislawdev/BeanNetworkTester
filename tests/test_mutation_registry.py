@@ -250,9 +250,8 @@ MUTATIONS = [
         # old primary-screen answer, so nothing looks broken.
         "label": "gui: the main window validates its geometry against the primary screen",
         "file": "beantester/gui/app.py",
-        "old": "        if saved and geometry_fits(saved, screen_w, screen_h,"
-               " winenv.monitor_work_area):",
-        "new": "        if saved and geometry_fits(saved, screen_w, screen_h):",
+        "old": "                                     screen_w, screen_h, winenv.monitor_work_area)\n",
+        "new": "                                     screen_w, screen_h)\n",
         "test": "test_the_main_window_goes_back_to_the_second_monitor_it_was_left_on",
     },
     {
@@ -9686,8 +9685,8 @@ MUTATIONS = [
     {
         "label": "window: the main window does not say which screen its minimum is for",
         "file": "beantester/gui/app.py",
-        "old": "            root.minsize(*min_window_size(screen_w=screen_w, screen_h=screen_h))\n",
-        "new": "            root.minsize(*min_window_size())\n",
+        "old": "        minimum = min_window_size(screen_w=screen_w, screen_h=screen_h)\n",
+        "new": "        minimum = min_window_size()\n",
         "test": "test_the_main_window_tells_its_minimum_which_screen_it_is_on",
     },
     {
@@ -9738,6 +9737,197 @@ MUTATIONS = [
         "old": "    selftest = _tab_check_can_fail(root)\n",
         "new": "    selftest = []\n",
         "test": "test_the_render_check_measures_every_row_of_tabs",
+    },
+    {
+        # 2026-10-27: TCP health's list was cut at 760 px and the check said OK.
+        "label": "render check: a surface's tables are not measured",
+        "file": "tools/ci_gui_render.py",
+        "old": "        tables.extend(_cut_tables(root))\n",
+        "new": "        tables.extend([])\n",
+        "test": "test_the_render_check_measures_every_table_that_cannot_scroll_sideways",
+    },
+    {
+        "label": "render check: a cut table passes",
+        "file": "tools/ci_gui_render.py",
+        "old": "                                                          and not tables\n",
+        "new": "                                                          and True\n",
+        "test": "test_the_render_check_measures_every_table_that_cannot_scroll_sideways",
+    },
+    {
+        "label": "render check: the table check never proves it can fail",
+        "file": "tools/ci_gui_render.py",
+        "old": "    selftest += _table_check_can_fail(root)\n",
+        "new": "    selftest += []\n",
+        "test": "test_the_render_check_measures_every_table_that_cannot_scroll_sideways",
+    },
+    {
+        "label": "render check: a surface's placed widgets are not measured",
+        "file": "tools/ci_gui_render.py",
+        "old": "        placed.extend(_overflowing_placed(root))\n",
+        "new": "        placed.extend([])\n",
+        "test": "test_the_render_check_measures_every_table_that_cannot_scroll_sideways",
+    },
+    {
+        "label": "render check: a placed widget past its parent passes",
+        "file": "tools/ci_gui_render.py",
+        "old": "                                                          and not placed\n",
+        "new": "                                                          and True\n",
+        "test": "test_the_render_check_measures_every_table_that_cannot_scroll_sideways",
+    },
+    {
+        "label": "render check: the placed-widget check never proves it can fail",
+        "file": "tools/ci_gui_render.py",
+        "old": "    selftest += _placed_check_can_fail(root)\n",
+        "new": "    selftest += []\n",
+        "test": "test_the_render_check_measures_every_table_that_cannot_scroll_sideways",
+    },
+    {
+        "label": "tables: the empty note does not wrap inside its table",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "            self._empty_note.config(wraplength=int(self.tree.winfo_width() * NOTE_SHARE))\n",
+        "new": "            pass\n",
+        "test": "test_the_empty_note_wraps_inside_its_table",
+    },
+    {
+        "label": "tables: a column's words do not size it",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "        if need > table._natural.get(col, 0):\n",
+        "new": "        if False:\n",
+        "test": "test_a_column_is_born_as_wide_as_the_words_it_can_show",
+    },
+    {
+        "label": "tables: TCP health's list declares no words",
+        "file": "beantester/gui/toolbox/tcphealth.py",
+        "old": "        make_room(self.table, {column: [say(w) for w in said] for column, said in WORDS.items()})\n",
+        "new": "        make_room(self.table, {})\n",
+        "test": "test_a_column_is_born_as_wide_as_the_words_it_can_show",
+    },
+    {
+        "label": "tables: the adapter list declares no words",
+        "file": "beantester/gui/toolbox/adapters.py",
+        "old": "        make_room(self.table, {column: [say(w) for w in said] for column, said in WORDS.items()})\n",
+        "new": "        make_room(self.table, {})\n",
+        "test": "test_a_column_is_born_as_wide_as_the_words_it_can_show",
+    },
+    {
+        "label": "adapters: the column words leave out the proxy row's type",
+        "file": "beantester/gui/toolbox/adapters.py",
+        "old": "         \"kind\": (*adapters.vocabulary(adapters.KINDS, adapters.KIND_PREFIX), PROXY_KIND)}\n",
+        "new": "         \"kind\": (*adapters.vocabulary(adapters.KINDS, adapters.KIND_PREFIX),)}\n",
+        "test": "test_a_column_is_born_as_wide_as_the_words_it_can_show",
+    },
+    {
+        "label": "window: a size saved narrower is not grown here (Tk grows it rightwards)",
+        "file": "beantester/gui/scaling.py",
+        "old": "    if x + w > right:\n        x = max(left, right - w)\n",
+        "new": "",
+        "test": "test_a_saved_window_below_the_minimum_grows_on_its_own_monitor",
+    },
+    {
+        "label": "window: the main window restores a saved size without growing it",
+        "file": "beantester/gui/scaling.py",
+        "old": "        grown = grown_to(saved, *minimum, screen_w, screen_h, bounds_at)\n",
+        "new": "        grown = str(saved)\n",
+        "test": "test_a_window_saved_narrower_than_today_grows_and_stays_on_its_monitor",
+    },
+    {
+        "label": "sockets: Linux says Windows' words on who may see a socket's program",
+        "file": "beantester/nettools/sockets.py",
+        "old": "    if not (sys.platform if platform is None else platform).startswith(\"linux\"):\n",
+        "new": "    if True:\n",
+        "test": "test_the_note_on_sockets_without_a_program_says_who_may_see_it_here",
+    },
+    {
+        "label": "sockets: Linux under sudo is told to use sudo",
+        "file": "beantester/nettools/sockets.py",
+        "old": "    return NO_OWNER_ROOT if paths.running_as_root() else NO_OWNER_LINUX\n",
+        "new": "    return NO_OWNER_LINUX\n",
+        "test": "test_the_note_on_sockets_without_a_program_says_who_may_see_it_here",
+    },
+    {
+        "label": "sockets panel: the note says Windows' words on every system",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "            lines.append(T(sockets.no_owner_note(), count=unnamed))\n",
+        "new": "            lines.append(T(sockets.NO_OWNER, count=unnamed))\n",
+        "test": "test_the_table_says_why_it_is_empty_and_what_its_rows_are_missing",
+    },
+    {
+        "label": "tcpestats: a Linux kernel without the socket list says the shared words",
+        "file": "beantester/tcpestats.py",
+        "old": "    return NOT_HERE_LINUX if sys.platform.startswith(\"linux\") else None\n",
+        "new": "    return None\n",
+        "test": "test_a_linux_kernel_without_the_socket_list_says_so_for_tcp_health",
+    },
+    {
+        # 2026-10-27: Ubuntu 26.04 has no `python`; the copied command was not found.
+        "label": "repro command: Linux is given Windows' python bean_network_tester.py",
+        "file": "beantester/appinfo.py",
+        "old": "        return linux_command(simulate)\n",
+        "new": "        return f\"python {LAUNCHER}\"\n",
+        "test": "test_the_command_follows_the_system_it_runs_on",
+    },
+    {
+        "label": "repro command: a simulation on Linux is put under sudo",
+        "file": "beantester/appinfo.py",
+        "old": "    return \" \".join(([] if simulate else [\"sudo\"]) + [interpreter]\n",
+        "new": "    return \" \".join([\"sudo\"] + [interpreter]\n",
+        "test": "test_the_command_on_linux_is_the_one_its_readme_runs",
+    },
+    {
+        "label": "repro command: an interpreter outside the checkout is named from it",
+        "file": "beantester/appinfo.py",
+        "old": "    if place == posixpath.pardir or place.startswith(posixpath.pardir + \"/\"):\n",
+        "new": "    if False:\n",
+        "test": "test_the_command_on_linux_is_the_one_its_readme_runs",
+    },
+    {
+        "label": "repro command: the simulate flag does not reach the program name",
+        "file": "beantester/repro.py",
+        "old": "    return f\"{command_name(simulate)} \" + \" \".join(quote(a) for a in args)\n",
+        "new": "    return f\"{command_name()} \" + \" \".join(quote(a) for a in args)\n",
+        "test": "test_the_command_follows_the_system_it_runs_on",
+    },
+    {
+        # 2026-10-28: a narrow window saved on a monitor since unplugged was grown onto
+        # the edge of the one left and kept there, not centred as the README says.
+        "label": "window: a saved geometry is grown before it is judged",
+        "file": "beantester/gui/scaling.py",
+        "old": "    if geometry_fits(saved, screen_w, screen_h, bounds_at):\n        grown = ",
+        "new": "    if True:\n        grown = ",
+        "test": "test_a_narrow_window_saved_on_an_unplugged_monitor_opens_in_the_centre",
+    },
+    {
+        # 2026-10-28: inside double quotes bash expands $( ) and, at a prompt, the `!`
+        # of `chrome,!chromedriver`.
+        "label": "repro command: Linux is quoted for cmd.exe",
+        "file": "beantester/repro.py",
+        "old": "    quote = _quote if sys.platform == \"win32\" else shlex.quote\n",
+        "new": "    quote = _quote\n",
+        "test": "test_cli_expression_survives_the_repro_command",
+    },
+    {
+        "label": "repro command: Windows is quoted for bash",
+        "file": "beantester/repro.py",
+        "old": "    quote = _quote if sys.platform == \"win32\" else shlex.quote\n",
+        "new": "    quote = shlex.quote\n",
+        "test": "test_cli_expression_survives_the_repro_command",
+    },
+    {
+        # Linux gives a socket in TIME_WAIT no PID even under sudo, and the Sockets
+        # note counted it as another account's, or as held from outside the system.
+        "label": "portmap: a TIME_WAIT socket from psutil keeps an unknown owner",
+        "file": "beantester/portmap.py",
+        "old": "    if pid is None and state == \"TIME_WAIT\":\n",
+        "new": "    if False:\n",
+        "test": "test_a_socket_in_time_wait_is_owned_by_no_process_on_the_psutil_path_too",
+    },
+    {
+        # 2026-10-27: a --changed run passed with "BROKEN: 1  caught: 351".
+        "label": "mutate: an entry that does not compile passes the run",
+        "file": "tools/mutate.py",
+        "old": "    return 0 if counts.get(\"SURVIVED\", 0) == 0 and canary_ok and not broken else 1\n",
+        "new": "    return 0 if counts.get(\"SURVIVED\", 0) == 0 and canary_ok else 1\n",
+        "test": "test_an_entry_that_does_not_compile_fails_every_kind_of_run",
     },
 ]
 
@@ -9799,6 +9989,12 @@ PROVEN_BY_HAND = {
     "test_the_depth_metric_still_counts_real_nesting":
         "2026-08-21, it failed on the first draft of the metric (four nested blocks "
         "measured three) and passed once the missing level was added",
+    # Bash on Linux is the shell under test, and the mutation job runs on Windows,
+    # where the test skips: an entry would come back SURVIVED with nothing behind it.
+    # The platform choice itself is in MUTATIONS, through a test that runs anywhere.
+    "test_the_command_survives_bash_with_history_expansion_on":
+        "2026-10-28, WSL Ubuntu: red on the double-quoted command (`!`, `$( )`, a "
+        "backtick, `$NAME`, two backslashes), green on the single-quoted one",
 }
 
 # No mutation at all. Naming them is the point: an unproven guard and a guard nobody
@@ -9854,6 +10050,41 @@ def test_every_mutation_still_points_at_code_that_exists():
         check(f"{entry['label']}: its search pattern occurs exactly once "
               f"(a stale pattern proves nothing and reports SKIP)",
               found == 1, f"(found {found} times)")
+
+
+def _mutated_source_error(entry, texts):
+    """Why ``entry``'s mutated file would not compile, or "" when it would. Read the
+    way the runner reads it; a file that is not Python, or a stale pattern (the test
+    above reports it), is not this check's to judge."""
+    path = os.path.join(ROOT, entry["file"])
+    if not path.endswith(".py") or not os.path.exists(path):
+        return ""
+    if path not in texts:
+        with open(path, "rb") as handle:
+            texts[path] = handle.read().decode("utf-8").replace("\r\n", "\n")
+    if texts[path].count(entry["old"]) != 1:
+        return ""
+    try:
+        compile(texts[path].replace(entry["old"], entry["new"], 1), path, "exec",
+                dont_inherit=True)
+    except SyntaxError as exc:
+        return f"(line {exc.lineno}: {exc.msg})"
+    return ""
+
+
+def test_every_mutation_still_compiles():
+    """A mutation that does not compile proves nothing: every test goes red on it,
+    whatever it guards, and the runner can only call it BROKEN - on CI, minutes
+    later. One did (2026-10-27): an `if False:` four spaces deeper than the line it
+    replaced, which a --changed run then passed as "BROKEN: 1". The suite says it
+    before the push; the canary, which must not compile, proves the check can fail."""
+    texts = {}
+    for entry in MUTATIONS:
+        error = _mutated_source_error(entry, texts)
+        check(f"{entry['label']}: the mutated {entry['file']} still compiles", not error,
+              error)
+    check("the canary does not compile, so this check can fail",
+          _mutated_source_error(CANARY, texts) != "")
 
 
 def test_every_named_test_exists_and_has_exactly_one_state():

@@ -336,6 +336,22 @@ def test_psutil_rows_speak_the_same_words_as_the_native_ones(monkeypatch):
                                                               "", None, "", 20), f"({rows[-1]})")
 
 
+def test_a_socket_in_time_wait_is_owned_by_no_process_on_the_psutil_path_too(monkeypatch):
+    """Linux keeps no file for a socket in TIME_WAIT, so psutil gives it no PID even
+    under sudo (WSL, 2026-10-28). Left at None, the Sockets note counted it as another
+    account's, or under sudo as held from outside the system. It is PID 0, as the
+    native path and the help say; an unknown owner in any other state stays unknown."""
+    fake = FakePsutil(
+        tcp=[_Conn(_Addr("10.0.0.2", 50000), _Addr("10.0.0.9", 443), "TIME_WAIT", None),
+             _Conn(_Addr("10.0.0.2", 50001), _Addr("10.0.0.9", 443), "ESTABLISHED", None),
+             _Conn(_Addr("10.0.0.2", 50002), _Addr("10.0.0.9", 443), "TIME_WAIT", 0)],
+        udp=[_Conn(_Addr("0.0.0.0", 5353), (), "NONE", None)])
+    monkeypatch.setitem(sys.modules, "psutil", fake)
+    pids = [row.pid for row in portmap._psutil_socket_rows()]
+    check("TIME_WAIT: PID 0, from None and from 0 alike; the rest stay unknown",
+          pids == [0, None, 0, None], f"({pids})")
+
+
 def test_a_table_nobody_may_read_is_said_to_be_one(monkeypatch):
     """An empty list would read as "no sockets" - a claim about the machine."""
     monkeypatch.setitem(sys.modules, "psutil", FakePsutil(deny=True))

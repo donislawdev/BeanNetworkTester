@@ -36,7 +36,7 @@ from ..clipboard import copy_confirmed
 from ..labels import wrapping_label
 from ..theme import CHARS, HEALTH_COLORS, ROWS, size, space
 from ..tooltip import add_tooltip
-from ..widgets import SortableTree
+from ..widgets import SortableTree, make_room
 from .base import Poller, StatusLine, job, remembered
 from .details import DetailsMenu, render_detail, say
 
@@ -57,9 +57,12 @@ STOP_TIP, STOP_TIP_LINUX = "tips.tools_tcphealth_stop", "tips.tools_tcphealth_st
 LEGEND = (("Swatch.Down.TLabel", "tools.tcphealth.legend_smoothed"),
           ("Swatch.Up.TLabel", "tools.tcphealth.legend_sample"))
 LEGEND_LINUX = LEGEND[:1]
-MIN_CHARS = {"process": CHARS["process"], "local": CHARS["address"],
-             "remote": CHARS["address"], "state": CHARS["tcp_state"], "rtt": CHARS["rtt"],
+MIN_CHARS = {"process": CHARS["process"], "local": CHARS["endpoint"],
+             "remote": CHARS["endpoint"], "state": CHARS["tcp_state"], "rtt": CHARS["rtt"],
              "resent": CHARS["resent"]}
+# The words the list can say beside numbers and addresses: each column is born as
+# wide as the widest of them, in the window's language (``widgets.make_room``).
+WORDS = {"state": tcphealth.STATE_VOCABULARY, "rtt": (tcphealth.Words(tcphealth.NO_RTT),)}
 DETAIL_COLUMNS = {"item": "tools.tcphealth.col.item", "value": "tools.tcphealth.col.value",
                   "note": "tools.tcphealth.col.note"}
 DETAIL_TIPS = {column: f"tips.tools_tcphealth_col_{column}" for column in DETAIL_COLUMNS}
@@ -168,6 +171,7 @@ class TcpHealthPanel:
             top, COLUMNS, sort={"col": "", "reverse": False}, on_sort=lambda _s: self._show(),
             height=ROWS["watched"], min_chars=MIN_CHARS, tips=tips(), tags=HEALTH_COLORS,
             selectmode="browse", empty_text="tools.tcphealth.empty")
+        make_room(self.table, {column: [say(w) for w in said] for column, said in WORDS.items()})
         self.table.bind_select(self._on_select)
 
         bottom = ttk.Frame(self.frame)

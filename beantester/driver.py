@@ -771,7 +771,7 @@ def doctor():
               ("platform", "ok" if is_windows() else "warn",
                f"{platform.system()} {platform.release()}"
                + ("" if is_windows() else
-                  note if note is not None else " - capture needs Windows; use --simulate")),
+                  note if note is not None else " - capture needs Windows or Linux; use --simulate")),
               ("frozen", "ok", "yes" if getattr(sys, "frozen", False) else "no"),
               _clock_check()]
 

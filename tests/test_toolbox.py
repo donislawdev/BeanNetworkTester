@@ -952,11 +952,15 @@ def test_the_table_says_why_it_is_empty_and_what_its_rows_are_missing():
     run_gui(SOCK + textwrap.dedent("""
         ROWS.append(SocketRow("TCP", 4, "10.0.0.2", 9000, "", None, "LISTEN", None))
         failed_tables.append("udp/v6")
+        # the words this system says (``no_owner_note``), stood in so both runners
+        # see the panel ask for them rather than say Windows' everywhere
+        from beantester.nettools import sockets as sockets_logic
+        sockets_logic.no_owner_note = lambda: sockets_logic.NO_OWNER_ROOT
         panel = open_sockets()
         settle(panel)
         note = panel.note.cget("text")
         assert T("tools.sockets.note_failed", tables="udp/v6") in note, note
-        assert T("tools.sockets.note_no_pid", count=1) in note, note
+        assert T(sockets_logic.NO_OWNER_ROOT, count=1) in note, note
         search(panel, "state:closing")
         settle(panel)
         assert panel.table._empty_text == "tools.sockets.empty_match"

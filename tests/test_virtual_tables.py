@@ -170,6 +170,59 @@ def test_a_width_the_user_dragged_survives_a_fit_but_hiding_a_column_re_fits():
     """)
 
 
+def test_a_column_is_born_as_wide_as_the_words_it_can_show():
+    """``make_room``: the widest text a column can show sizes it, in the window's
+    language. A hand-counted ``min_chars`` went stale when a word grew: Linux's
+    "Ustawienia proxy" and Windows' "jeszcze bez pomiaru" were both cut (real Tk,
+    2026-10-27). The two Tools lists that show such words declare them, and each of
+    their columns is at least as wide as the widest of its words."""
+    run_gui("""
+        from tkinter import ttk
+        from beantester.gui import scaling
+        from beantester.gui.widgets import SortableTree, make_room
+        from beantester.gui.toolbox import adapters as adapters_panel
+        from beantester.gui.toolbox import tcphealth as health_panel
+        from beantester.gui.toolbox.details import say
+
+        long = "a word far longer than its header"
+        table = SortableTree(ttk.Frame(root), {"a": "conns.pid", "b": "conns.pid"})
+        make_room(table, {"a": [long, "short"]})
+        assert int(table.tree.column("a", "width")) == table._natural["a"], table._natural
+        assert table._natural["a"] >= scaling.cell_width(long), table._natural
+        assert table._natural["a"] > table._natural["b"], table._natural
+
+        app.select_page("tools")
+        for sub, module in (("tcphealth", health_panel), ("adapters", adapters_panel)):
+            app.pages["tools"].select(sub)
+            panel = app.pages["tools"].panels[sub]
+            for column, said in module.WORDS.items():
+                widest = max(said, key=lambda w: scaling.cell_width(say(w)))
+                need = scaling.cell_width(say(widest))
+                assert panel.table._natural[column] >= need, (sub, column, say(widest),
+                                                              panel.table._natural[column], need)
+        # ...and the words that were cut are among them
+        said = {say(w) for w in health_panel.WORDS["rtt"]} | \\
+            {say(w) for w in adapters_panel.WORDS["kind"]}
+        assert {"jeszcze bez pomiaru", "Ustawienia proxy"} <= said, said
+    """, lang="pl")
+
+
+def test_the_empty_note_wraps_inside_its_table():
+    """Placed at its own width, a note longer than the table was cut by the frame on
+    both sides: TCP health's Polish one, 905 px in an 891 px table on Linux (real
+    Tk, 2026-10-27). It wraps at a share of the table's width, centred."""
+    run_gui("""
+        from tkinter import ttk
+        from beantester.gui.widgets.sortable_tree import NOTE_SHARE, SortableTree
+        table = SortableTree(ttk.Frame(root), {"a": "conns.pid"}, empty_text="conns.pid")
+        table._on_configure()
+        note = table._empty_note
+        wrap = note.cget("wraplength")
+        assert wrap == int(table.tree.winfo_width() * NOTE_SHARE), (wrap, table.tree.winfo_width())
+        assert note.cget("justify") == "center", note.cget("justify")
+    """)
+
+
 def test_the_widget_never_holds_more_than_a_viewport():
     """100 000 model rows must not become 100 000 Tcl items."""
     run_gui("""

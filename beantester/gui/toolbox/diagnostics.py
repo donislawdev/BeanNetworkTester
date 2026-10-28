@@ -120,7 +120,7 @@ class DiagnosticsPanel:
         # report goes into a PUBLIC bug report and these carry this machine's
         # addresses, MAC and proxy (nettools/diagnostics.py, REPORT_SECTIONS). On a
         # line of their own: with the second box the Polish bar outgrew the 760 px
-        # window a 1366x768 screen opens and pushed the help button out (rendered
+        # window a 1366x768 screen opened then and pushed the help button out (rendered
         # 2026-10-14).
         boxes = ttk.Frame(self.frame)
         boxes.pack(fill="x", padx=space("page"), pady=(space("tight"), 0))

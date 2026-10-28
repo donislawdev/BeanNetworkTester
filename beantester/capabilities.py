@@ -27,14 +27,15 @@ one line here. ``tests/test_capabilities.py`` holds the other end: every module 
 loads a Windows DLL is either named here or listed there with the reason it gates
 itself.
 
-``reason`` is an i18n key: Windows only for now. A tool ported to Linux may still be
+``reason`` is an i18n key: the shared words, which name the systems the tools work
+on (Windows and Linux). A tool ported to Linux may still be
 missing on one system or another, and then its module says why in its own words
 (``why_not()``, asked when it is there): Ping, the first one, needs the ping socket
 for the user's group or sudo (``icmp.why_not``). Reset on Linux needs a kernel built
 with ``CONFIG_INET_DIAG_DESTROY`` (WSL's is not); it has no words of its own, because
 its only reader is a row menu, which greys the entry out - the README says why. TCP
 health on Linux needs a kernel that lists TCP sockets through sock_diag (every one
-measured does); without it the shared words are said.
+measured does); without it the module says so (``tcpestats.why_not``).
 """
 from types import ModuleType
 from typing import NamedTuple, Optional

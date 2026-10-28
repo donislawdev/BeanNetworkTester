@@ -31,6 +31,10 @@ Traps this already fell into, all paid for elsewhere and worth keeping
 4. **The canary.** One entry is deliberately broken syntax and MUST come back as
    BROKEN. Without it, a runner whose subprocess call is misconfigured reports
    "everything caught" and the whole run is a lie.
+5. **Any OTHER entry that comes back BROKEN fails the run.** A mutation that does
+   not compile reddens every test, whatever it guards, so it proves nothing. A
+   `--changed` run passed with one (2026-10-27: "BROKEN: 1  caught: 351", exit 0),
+   because only the full run counted BROKENs, and only to find the canary.
 
 Usage
 -----
@@ -171,20 +175,34 @@ def main(argv):
             return 0
     elif not needle:
         entries = entries + [CANARY]
-    width = max(len(m["label"]) for m in entries)
-    counts = {}
-    for entry in entries:
-        state, detail = apply_one(entry)
-        counts[state] = counts.get(state, 0) + 1
-        print("%-*s  %-9s %s" % (width, entry["label"], state, detail))
-    print("\n" + "  ".join("%s: %d" % kv for kv in sorted(counts.items())))
+    counts, broken, canary_fired = _run(entries)
     # The canary only rides along on a FULL run. A filtered run (a label, or
     # --changed) has none, and demanding one there would make every pull request
     # fail for the shape of the run rather than for its result.
-    canary_ok = needle or ref is not None or counts.get("BROKEN") == 1
+    canary_ok = needle or ref is not None or canary_fired
     if not canary_ok:
         print("CANARY DID NOT FIRE - this whole run proves nothing")
-    return 0 if counts.get("SURVIVED", 0) == 0 and canary_ok else 1
+    if broken:
+        print("BROKEN ENTRIES - their mutated code does not compile, so they prove "
+              "nothing: " + "; ".join(broken))
+    return 0 if counts.get("SURVIVED", 0) == 0 and canary_ok and not broken else 1
+
+
+def _run(entries):
+    """Apply each entry: ``(counts per state, labels of entries that came back
+    BROKEN, whether the canary did)``. The canary is told apart by identity."""
+    width = max(len(m["label"]) for m in entries)
+    counts, broken, canary_fired = {}, [], False
+    for entry in entries:
+        state, detail = apply_one(entry)
+        counts[state] = counts.get(state, 0) + 1
+        if state == "BROKEN" and entry is CANARY:
+            canary_fired = True
+        elif state == "BROKEN":
+            broken.append(entry["label"])
+        print("%-*s  %-9s %s" % (width, entry["label"], state, detail))
+    print("\n" + "  ".join("%s: %d" % kv for kv in sorted(counts.items())))
+    return counts, broken, canary_fired
 
 
 if __name__ == "__main__":

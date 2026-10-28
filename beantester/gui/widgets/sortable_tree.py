@@ -55,10 +55,11 @@ Kept from the original:
   at a glance).
 """
 import sys
+import tkinter.font as tkfont
 from tkinter import TclError, ttk
 
 from ...i18n import T
-from ..scaling import column_width, scaled
+from ..scaling import cell_width, column_width, scaled
 from ..tooltip import make_bubble
 from ..wheel import wheel_units
 from ... import crashlog
@@ -175,7 +176,37 @@ def rows_shown_in_full(first_box, width, height, region_at):
 
 
 BUFFER_ROWS = 4                 # slots past the viewport: a partial row + resize slack
+# How much of the table's width the empty note may take before it wraps. Unwrapped,
+# TCP health's Polish note was 905 px in an 891 px table on Linux and lost its first
+# and last letters to the frame (real Tk, 2026-10-27).
+NOTE_SHARE = 0.9
 MIN_WINDOW = 12                 # slots to keep even before the widget has a size
+
+
+def _cell_font():
+    """The font the rows are drawn in, to measure a column's words with, or ``None``
+    (``scaling``'s measuring font) where the style names none."""
+    name = ttk.Style().lookup("Treeview", "font")
+    return tkfont.Font(font=name) if name else None
+
+
+def make_room(table, words):
+    """Widen each column of ``words`` (column id -> the texts it can show besides
+    numbers and names, in the window's language) in ``table`` to fit the widest of
+    them, in the rows' own font - as its natural width, so a fit and a reset keep it.
+
+    Asked right after the table is built, before anything is fitted. A hand-counted
+    ``min_chars`` went stale the first time a word grew: Linux's "Ustawienia proxy"
+    and Windows' "jeszcze bez pomiaru" were both cut (real Tk, 2026-10-27). A
+    function of this module rather than a method: the class is near its ceiling
+    of methods (``tests/test_code_shape.py``).
+    """
+    font = _cell_font()
+    for col, texts in words.items():
+        need = max((cell_width(text, font) for text in texts), default=0)
+        if need > table._natural.get(col, 0):
+            table._natural[col] = need
+            table.tree.column(col, width=need)
 
 
 class SortableTree:
@@ -281,7 +312,7 @@ class SortableTree:
         # old language on a table that happened to be empty at the time.
         self._empty_text = empty_text
         self._empty_note = ttk.Label(self.frame, text="", style="Hint.TLabel",
-                                     anchor="center") if empty_text else None
+                                     anchor="center", justify="center") if empty_text else None
         self.refresh_headers()
         self._ensure_slots(self._height + BUFFER_ROWS)
         self._bind_events()
@@ -428,6 +459,8 @@ class SortableTree:
         if resized:
             self.offset = min(self.offset, self.max_offset())
             self.repaint()
+        if self._empty_note is not None:      # the note wraps inside the table
+            self._empty_note.config(wraplength=int(self.tree.winfo_width() * NOTE_SHARE))
         # A wider widget means new slack to absorb. Guarded by the memo, so this
         # fires once per real size change and not on every event.
         self.fit_columns()
