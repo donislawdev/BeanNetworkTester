@@ -710,9 +710,10 @@ def test_the_gui_arms_native_capture_without_ever_starting_a_capture(isolated, m
     Reaching a real Tk root here would make it a Windows-only guard pretending to
     be a general one.
     """
-    from beantester import cli, exitcodes, winenv
+    from beantester import cli, exitcodes, linuxenv, winenv
 
     monkeypatch.setattr(winenv, "is_windows", lambda: False)   # skip the elevation dance
+    monkeypatch.setattr(linuxenv, "wants_root", lambda: False)  # and pkexec's on Linux
     monkeypatch.setattr(cli, "is_frozen", lambda: False)
     monkeypatch.setitem(sys.modules, "tkinter", None)          # import tkinter -> ImportError
     crashlog._arm_wanted[0] = True                             # what install(native=True) records
@@ -1178,10 +1179,11 @@ def _gui_start(monkeypatch, frozen=False, gui=None, tkinter=None):
     on a runner without Tk as on this machine. ``detach_console`` is ALWAYS
     replaced: the real one would cut this test process off its console.
     """
-    from beantester import cli, winenv
+    from beantester import cli, linuxenv, winenv
 
     shown = []
     monkeypatch.setattr(winenv, "is_windows", lambda: False)   # skip the elevation dance
+    monkeypatch.setattr(linuxenv, "wants_root", lambda: False)  # and pkexec's on Linux
     monkeypatch.setattr(winenv, "detach_console", lambda: True)
     monkeypatch.setattr(winenv, "show_error", lambda title, text: shown.append((title, text)))
     monkeypatch.setattr(cli, "is_frozen", lambda: frozen)

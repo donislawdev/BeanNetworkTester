@@ -57,6 +57,7 @@ def _become_sudo(monkeypatch):
     monkeypatch.setattr(os, "stat", fake_stat)
     monkeypatch.setenv("SUDO_UID", "1000")
     monkeypatch.setenv("SUDO_GID", "1000")
+    monkeypatch.delenv("PKEXEC_UID", raising=False)   # sudo, not pkexec
     return types.SimpleNamespace(chowned=chowned, followed=followed, owners=owners)
 
 
@@ -80,6 +81,35 @@ def test_who_ran_it_is_read_from_sudo_and_only_by_root(monkeypatch, sudo):
     monkeypatch.setattr(sys, "platform", "win32")
     check("Windows: never", paths.invoking_user() is None)
     check("Windows: never root", paths.running_as_root() is False)
+
+
+def test_who_ran_it_is_read_from_pkexec_where_polkit_sets_no_sudo_uid(monkeypatch, sudo):
+    """pkexec sets SUDO_UID and SUDO_GID from polkit 127 (Ubuntu 26.04) only. Before
+    that (124 on 24.04, 0.105 on 22.04) PKEXEC_UID names the person, and without it
+    every file the window saved stayed root's."""
+    def getpwuid(uid):
+        if uid != 1000:
+            raise KeyError(uid)
+        return types.SimpleNamespace(pw_gid=1003)
+
+    monkeypatch.setitem(sys.modules, "pwd", types.SimpleNamespace(getpwuid=getpwuid))
+    monkeypatch.delenv("SUDO_UID")
+    monkeypatch.delenv("SUDO_GID")
+    monkeypatch.setenv("PKEXEC_UID", "1000")
+    check("polkit 124: the person from PKEXEC_UID, the group from the account database",
+          paths.invoking_user() == (1000, 1003), f"({paths.invoking_user()})")
+    monkeypatch.setenv("SUDO_UID", "1000")
+    monkeypatch.setenv("SUDO_GID", "1000")
+    check("sudo's pair where it is there (polkit 127 sets both)",
+          paths.invoking_user() == (1000, 1000))
+    monkeypatch.delenv("SUDO_UID")
+    monkeypatch.setenv("PKEXEC_UID", "1001")
+    check("an account the system does not know: nobody", paths.invoking_user() is None)
+    monkeypatch.setenv("PKEXEC_UID", "x")
+    check("or not a number", paths.invoking_user() is None)
+    monkeypatch.setenv("PKEXEC_UID", "1000")
+    monkeypatch.setattr(os, "geteuid", lambda: 1000, raising=False)
+    check("not root: nobody to hand anything to", paths.invoking_user() is None)
 
 
 def test_a_file_is_handed_back_only_inside_the_persons_own_directory(tmp_path, sudo):

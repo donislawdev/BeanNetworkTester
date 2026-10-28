@@ -20,7 +20,7 @@ import sys
 import threading
 import time
 
-from . import appinfo, capture_backend, clilog, driver, exitcodes, winenv
+from . import appinfo, capture_backend, clilog, driver, exitcodes, linuxenv, winenv
 from .appinfo import command_name, program_name, version_line
 from .clilog import CliLog
 from . import crashlog
@@ -1323,6 +1323,14 @@ def _run_gui(argv, relaunched=False):
         # elevate_self never asks again, admin or not (see winenv.UAC_RELAUNCH).
         if winenv.elevate_self(argv):
             return exitcodes.OK               # the elevated copy took over
+    elif linuxenv.wants_root():
+        # The same question through polkit, and the copy's exit code back; None =
+        # it did not run (dismissed, no agent), so the window opens here without
+        # root (see linuxenv.py).
+        code = linuxenv.ask_for_root(argv)
+        if code is not None:
+            return code
+    linuxenv.take_desktop()                   # in the copy pkexec started: the person's screen
     if is_frozen():
         winenv.detach_console()               # no black window behind the GUI
     # Arm hard-crash capture for the GUI too, not only for a real capture session
@@ -1338,6 +1346,7 @@ def _run_gui(argv, relaunched=False):
     # the import would also make the guard for this line untestable anywhere Tk is
     # missing, i.e. green here and vacuous on the Linux runner.
     crashlog.arm_native()
+    root = None
     try:
         import tkinter as tk
 
@@ -1346,7 +1355,12 @@ def _run_gui(argv, relaunched=False):
         root = tk.Tk()
         App(root)
     except Exception as exc:
-        return _window_did_not_open(exc)
+        code = _window_did_not_open(exc)
+        # A copy pkexec started whose Tk cannot reach the person's display answers
+        # pkexec's own "did not run": the person's process then opens the window.
+        if root is None and type(exc).__name__ == "TclError" and linuxenv.started_by_pkexec():
+            return linuxenv.NO_WINDOW
+        return code
     root.mainloop()
     return exitcodes.OK
 

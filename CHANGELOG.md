@@ -54,6 +54,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   row of its own. The lowest round trip is the lowest of the last 5 minutes, and timeouts are
   counted from Linux 6.7 on.
 
+- **Linux, experimental: the window asks for the administrator password.** Started without
+  sudo, it shows the desktop's own password dialog, as Windows shows UAC, and opens as root.
+  **Cancel** opens it without root, as before. Where there is no such dialog, as in WSL or over
+  ssh, it opens without root at once. `BEAN_NO_ELEVATE=1` turns the question off. The files it
+  saves stay yours, as under sudo.
+
 - **Ping on the Tools tab, to see the session's latency and loss arrive.** Type an address or a
   name and press **Start**: each ping is a row with its round trip and what came back, the last
   60 are charted, and the totals say what was lost. The ping goes on while another tab is in

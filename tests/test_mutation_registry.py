@@ -1330,8 +1330,8 @@ MUTATIONS = [
         # earlier session of leaving nothing at all behind.
         "label": "crash: the GUI entry point stops arming native capture",
         "file": "beantester/cli.py",
-        "old": "    crashlog.arm_native()\n    try:\n        import tkinter as tk",
-        "new": "    try:\n        import tkinter as tk",
+        "old": "    crashlog.arm_native()\n    root = None\n    try:\n        import tkinter as tk",
+        "new": "    root = None\n    try:\n        import tkinter as tk",
         "test": "test_the_gui_arms_native_capture_without_ever_starting_a_capture",
     },
     {
@@ -7410,7 +7410,12 @@ MUTATIONS = [
                "        root = tk.Tk()\n"
                "        App(root)\n"
                "    except Exception as exc:\n"
-               "        return _window_did_not_open(exc)\n",
+               "        code = _window_did_not_open(exc)\n"
+               "        # A copy pkexec started whose Tk cannot reach the person's display answers\n"
+               "        # pkexec's own \"did not run\": the person's process then opens the window.\n"
+               "        if root is None and type(exc).__name__ == \"TclError\" and linuxenv.started_by_pkexec():\n"
+               "            return linuxenv.NO_WINDOW\n"
+               "        return code\n",
         "new": "    except Exception as exc:\n"
                "        return _window_did_not_open(exc)\n"
                "    winenv.set_dpi_awareness()\n"
@@ -9929,6 +9934,223 @@ MUTATIONS = [
         "new": "    return 0 if counts.get(\"SURVIVED\", 0) == 0 and canary_ok else 1\n",
         "test": "test_an_entry_that_does_not_compile_fails_every_kind_of_run",
     },
+    # -- Linux: the window asks for root through pkexec (linuxenv.py) --------- #
+    {
+        # Root that cannot capture (a container without CAP_BPF) starts copy after copy.
+        "label": "pkexec: root asks for root again",
+        "file": "beantester/linuxenv.py",
+        "old": "    if (os.geteuid() if euid is None else euid) == 0:\n        return False\n",
+        "new": "",
+        "test": "test_the_window_asks_for_root_only_where_it_can_and_root_would_help",
+    },
+    {
+        "label": "pkexec: asked for with no display to ask from",
+        "file": "beantester/linuxenv.py",
+        "old": "    if not environ.get(\"DISPLAY\"):\n        return False\n",
+        "new": "",
+        "test": "test_the_window_asks_for_root_only_where_it_can_and_root_would_help",
+    },
+    {
+        "label": "pkexec: asked for with the capabilities already there",
+        "file": "beantester/linuxenv.py",
+        "old": "    if capture_backend.current().has_capture_rights():\n",
+        "new": "    if False:\n",
+        "test": "test_the_window_asks_for_root_only_where_it_can_and_root_would_help",
+    },
+    {
+        # An automated GUI run on Linux would hang on a dialog nobody can answer.
+        "label": "pkexec: BEAN_NO_ELEVATE is not read",
+        "file": "beantester/linuxenv.py",
+        "old": "    if not is_linux() or winenv.elevation_disabled():\n",
+        "new": "    if not is_linux():\n",
+        "test": "test_the_window_asks_for_root_only_where_it_can_and_root_would_help",
+    },
+    {
+        # pkexec exits 127 before it asks anything (validate_environment_variable).
+        "label": "pkexec: a locale value pkexec refuses is handed to it",
+        "file": "beantester/linuxenv.py",
+        "old": "            if environ.get(name) and not any(bad in environ[name] for bad in _SUSPICIOUS)}",
+        "new": "            if environ.get(name)}",
+        "test": "test_pkexec_is_given_only_the_locale_it_will_not_refuse",
+    },
+    {
+        "label": "pkexec: the copy is handed the whole environment",
+        "file": "beantester/linuxenv.py",
+        "old": "        code = run(command, env=env).returncode\n",
+        "new": "        code = run(command).returncode\n",
+        "test": "test_what_pkexec_answers_decides_who_opens_the_window",
+    },
+    {
+        # Root leaves cache folders in the person's checkout they cannot delete.
+        "label": "pkexec: the copy runs without -B",
+        "file": "beantester/linuxenv.py",
+        "old": "        if \"-B\" not in head:\n            args = [\"-B\"] + args\n",
+        "new": "",
+        "test": "test_the_copy_is_started_the_way_this_program_was",
+    },
+    {
+        # In root's home `python -m beantester` cannot import itself: no window at all.
+        "label": "pkexec: python -m repeated without --keep-cwd",
+        "file": "beantester/linuxenv.py",
+        "old": "        if \"-m\" in head and not keep_cwd:\n            return None\n",
+        "new": "",
+        "test": "test_the_copy_is_started_the_way_this_program_was",
+    },
+    {
+        # Measured in WSL: with a terminal and no agent, pkexec asks in the terminal and waits.
+        "label": "pkexec: its own terminal agent is allowed",
+        "file": "beantester/linuxenv.py",
+        "old": "    return ([pkexec, \"--disable-internal-agent\"] + ",
+        "new": "    return ([pkexec] + ",
+        "test": "test_the_copy_is_started_the_way_this_program_was",
+    },
+    {
+        "label": "pkexec: --keep-cwd is assumed, not read from its usage",
+        "file": "beantester/linuxenv.py",
+        "old": "    return \"--keep-cwd\" in (done.stdout or \"\") + (done.stderr or \"\")\n",
+        "new": "    return True\n",
+        "test": "test_an_old_pkexec_and_python_m_ask_nothing",
+    },
+    {
+        # A dismissed dialog left the person with no window at all.
+        "label": "pkexec: 126/127 taken for the copy's own exit code",
+        "file": "beantester/linuxenv.py",
+        "old": "    if code in NOT_STARTED:\n",
+        "new": "    if False:\n",
+        "test": "test_what_pkexec_answers_decides_who_opens_the_window",
+    },
+    {
+        "label": "pkexec: a copy killed by a signal answers a negative code",
+        "file": "beantester/linuxenv.py",
+        "old": "    return 128 - code if code < 0 else code\n",
+        "new": "    return code\n",
+        "test": "test_what_pkexec_answers_decides_who_opens_the_window",
+    },
+    {
+        # SIG_IGN is inherited through pkexec: the copy would ignore Ctrl+C for good.
+        "label": "pkexec: Ctrl+C is waited through with SIG_IGN",
+        "file": "beantester/linuxenv.py",
+        "old": "    previous = signal.signal(signal.SIGINT, _wait_through)\n",
+        "new": "    previous = signal.signal(signal.SIGINT, signal.SIG_IGN)\n",
+        "test": "test_ctrl_c_while_the_copy_runs_is_waited_through",
+    },
+    {
+        "label": "pkexec: the desktop is taken from a parent that is not the person's",
+        "file": "beantester/linuxenv.py",
+        "old": "    if uid is None or system.real_uid(ppid) != uid:\n",
+        "new": "    if uid is None:\n",
+        "test": "test_the_copy_takes_the_desktop_of_the_person_who_asked",
+    },
+    {
+        "label": "pkexec: any DISPLAY value is taken",
+        "file": "beantester/linuxenv.py",
+        "old": "    if not _DISPLAY.fullmatch(display):\n",
+        "new": "    if not display:\n",
+        "test": "test_the_copy_takes_the_desktop_of_the_person_who_asked",
+    },
+    {
+        "label": "pkexec: an X authority file that is not the person's is taken",
+        "file": "beantester/linuxenv.py",
+        "old": "        if xauthority and posixpath.isabs(xauthority) and system.owns_file(uid, xauthority):\n",
+        "new": "        if xauthority and posixpath.isabs(xauthority):\n",
+        "test": "test_the_copy_takes_the_desktop_of_the_person_who_asked",
+    },
+    {
+        # An X11 session sets no XAUTHORITY; pkexec itself would look in ~/.Xauthority.
+        "label": "pkexec: the ~/.Xauthority fallback is never looked at",
+        "file": "beantester/linuxenv.py",
+        "old": "home and posixpath.join(home, \".Xauthority\")):\n",
+        "new": "None):\n",
+        "test": "test_the_copy_takes_the_desktop_of_the_person_who_asked",
+    },
+    {
+        "label": "pkexec: a pkexec that cannot be started is not recorded",
+        "file": "beantester/linuxenv.py",
+        "old": "        crashlog.note(exc, \"linuxenv.pkexec\")\n",
+        "new": "",
+        "test": "test_a_pkexec_that_cannot_be_started_is_recorded_and_said",
+    },
+    {
+        "label": "pkexec: a DISPLAY sudo kept is replaced",
+        "file": "beantester/linuxenv.py",
+        "old": "    if not started_by_pkexec(environ) or environ.get(\"DISPLAY\"):\n",
+        "new": "    if not started_by_pkexec(environ):\n",
+        "test": "test_only_the_copy_pkexec_started_takes_anything",
+    },
+    {
+        "label": "pkexec: a process that is not root takes a desktop",
+        "file": "beantester/linuxenv.py",
+        "old": "    return is_linux() and os.geteuid() == 0 and _uid(environ.get(\"PKEXEC_UID\")) is not None\n",
+        "new": "    return is_linux() and _uid(environ.get(\"PKEXEC_UID\")) is not None\n",
+        "test": "test_only_the_copy_pkexec_started_takes_anything",
+    },
+    {
+        # The effective uid of a setuid parent is not the person's.
+        "label": "pkexec: the parent's effective uid read for its real one",
+        "file": "beantester/linuxenv.py",
+        "old": "                return _uid(fields[1])\n",
+        "new": "                return _uid(fields[2])\n",
+        "test": "test_the_parent_is_read_from_its_proc_entries",
+    },
+    {
+        "label": "pkexec: a later DISPLAY in the parent's environment wins",
+        "file": "beantester/linuxenv.py",
+        "old": "            if sep and name not in found:\n",
+        "new": "            if sep:\n",
+        "test": "test_the_parent_is_read_from_its_proc_entries",
+    },
+    {
+        # polkit 124 (24.04) and 0.105 (22.04): every file the window saved stays root's.
+        "label": "paths: PKEXEC_UID does not name the person",
+        "file": "beantester/paths.py",
+        "old": "    except (KeyError, ValueError):\n        return _pkexec_user()\n",
+        "new": "    except (KeyError, ValueError):\n        return None\n",
+        "test": "test_who_ran_it_is_read_from_pkexec_where_polkit_sets_no_sudo_uid",
+    },
+    {
+        "label": "paths: the pkexec person's group is taken to be their uid",
+        "file": "beantester/paths.py",
+        "old": "        return uid, pwd.getpwuid(uid).pw_gid\n",
+        "new": "        return uid, uid\n",
+        "test": "test_who_ran_it_is_read_from_pkexec_where_polkit_sets_no_sudo_uid",
+    },
+    {
+        "label": "gui start: Linux never asks for root",
+        "file": "beantester/cli.py",
+        "old": "    elif linuxenv.wants_root():\n",
+        "new": "    elif False:\n",
+        "test": "test_the_window_waits_for_the_copy_and_opens_here_only_when_it_did_not_run",
+    },
+    {
+        # A second window, without root, after the root one closed.
+        "label": "gui start: the window opens again after the copy ran",
+        "file": "beantester/cli.py",
+        "old": "        code = linuxenv.ask_for_root(argv)\n        if code is not None:\n            return code\n",
+        "new": "        code = linuxenv.ask_for_root(argv)\n",
+        "test": "test_the_window_waits_for_the_copy_and_opens_here_only_when_it_did_not_run",
+    },
+    {
+        "label": "gui start: the copy never takes the person's screen",
+        "file": "beantester/cli.py",
+        "old": "    linuxenv.take_desktop()                   # in the copy pkexec started: the person's screen\n",
+        "new": "",
+        "test": "test_the_window_waits_for_the_copy_and_opens_here_only_when_it_did_not_run",
+    },
+    {
+        # Authenticated, and then no window anywhere.
+        "label": "gui start: pkexec's copy without a screen does not hand the window back",
+        "file": "beantester/cli.py",
+        "old": "        if root is None and type(exc).__name__ == \"TclError\" and linuxenv.started_by_pkexec():\n",
+        "new": "        if False:\n",
+        "test": "test_a_copy_that_cannot_reach_the_screen_hands_the_window_back",
+    },
+    {
+        "label": "gui start: a fault in the window itself is handed back as well",
+        "file": "beantester/cli.py",
+        "old": "        if root is None and type(exc).__name__ == \"TclError\" and linuxenv.started_by_pkexec():\n",
+        "new": "        if type(exc).__name__ == \"TclError\" and linuxenv.started_by_pkexec():\n",
+        "test": "test_a_copy_that_cannot_reach_the_screen_hands_the_window_back",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not
@@ -9995,6 +10217,10 @@ PROVEN_BY_HAND = {
     "test_the_command_survives_bash_with_history_expansion_on":
         "2026-10-28, WSL Ubuntu: red on the double-quoted command (`!`, `$( )`, a "
         "backtick, `$NAME`, two backslashes), green on the single-quoted one",
+    # File owners and symlinks: POSIX-only, skipped on the Windows mutation job.
+    "test_an_x_authority_file_is_a_regular_file_of_the_person":
+        "2026-10-28, WSL Ubuntu, four breaks of linuxenv._System each caught (any owner, "
+        "a link followed, a folder, the cwd link unread), green again restored",
 }
 
 # No mutation at all. Naming them is the point: an unproven guard and a guard nobody

@@ -642,10 +642,13 @@ jobs:
   # interfaces are never handed to it. `--require` makes a runner that cannot run
   # the check a failure, not a quiet SKIP. Not in the branch ruleset: a red one says
   # Linux capture broke, and whether that blocks a merge is the owner's call.
+  #
+  # Its last step is the window's way to root on Linux (linuxenv.py), for the same
+  # reason: only a real pkexec and polkitd show what pkexec does to the program.
   linux-capture:
     name: Linux capture (experimental, real kernel)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -659,6 +662,37 @@ jobs:
         run: uname -r
       - name: Real capture inside a network namespace of its own
         run: sudo "$(command -v python)" tools/ci_linux_capture_smoke.py --require
+      # The window asking for root through polkit, with this image's own pkexec and
+      # polkitd (Ubuntu 24.04: polkit 124, which names the person by PKEXEC_UID
+      # only). The runner is thrown away after the job, so a polkit rule that lets
+      # its user run pkexec without a password stands in for the person typing it.
+      # The smoke first asks without the rule and must see pkexec refuse.
+      - name: The window asks for root through pkexec (real polkit, Xvfb)
+        run: |
+          missing=""
+          for package in pkexec polkitd python3-tk xvfb; do
+            dpkg -s "$package" >/dev/null 2>&1 || missing="$missing $package"
+          done
+          if [ -n "$missing" ]; then
+            echo "installing:$missing"
+            # The mirror and the two-step install: see "GUI render check".
+            for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list \
+                          /etc/apt/sources.list.d/*.sources \
+                          /etc/apt/sources.list.d/*.list; do
+              if [ -f "$source" ]; then
+                sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' "$source"
+              fi
+            done
+            if ! sudo timeout 180 apt-get install -y --no-install-recommends $missing; then
+              sudo timeout 240 apt-get update \
+                -o Acquire::Retries=2 \
+                -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15
+              sudo timeout 240 apt-get install -y --no-install-recommends $missing
+            fi
+          fi
+          pkexec --version
+          timeout 120 xvfb-run -a --server-args="-screen 0 1280x800x24" \
+            python -u tools/ci_linux_pkexec_smoke.py --require
 
   build:
     name: build the executable (Windows)
