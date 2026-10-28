@@ -161,6 +161,43 @@ def test_the_command_on_linux_is_the_one_its_readme_runs():
     check("no home known: python3", say("/x/bin/python", True, "") == f"python3 {LAUNCHER}")
 
 
+def test_the_linux_package_names_its_own_program():
+    """The ``.tar.gz`` has no interpreter to start: the command is the program, from
+    ``~`` when it is in the person's home, else from its own folder - never a path
+    from the machine. It said ``BeanNetworkTester.exe`` (measured, 2026-10-28)."""
+    from beantester.appinfo import LINUX_EXE_NAME, linux_command
+    program = "/u/ana/BeanNetworkTester/BeanNetworkTester"
+    say = lambda exe, simulate=False, home="/u/ana": linux_command(  # noqa: E731
+        simulate, exe, "/u/ana/bnt", home, frozen=True)
+    check("in the home, a capture: sudo and the program from ~",
+          say(program) == "sudo ~/BeanNetworkTester/BeanNetworkTester", f"({say(program)})")
+    check("a simulation needs no root", say(program, True) == "~/BeanNetworkTester/BeanNetworkTester")
+    check("elsewhere: from its own folder, no path",
+          say("/opt/bnt/BeanNetworkTester") == f"sudo ./{LINUX_EXE_NAME}")
+    check("a space is quoted, ~ is left for the shell",
+          say("/u/ana/My Apps/BeanNetworkTester", True) == "~/'My Apps/BeanNetworkTester'")
+
+
+def test_the_frozen_command_follows_the_system_it_runs_on(monkeypatch):
+    """The exe on Windows; on Linux the program itself, under sudo for a capture -
+    the repro line, --help's examples and the window's copied command."""
+    import sys
+
+    from beantester import appinfo, paths
+    monkeypatch.setattr(paths, "is_frozen", lambda: True)
+    monkeypatch.setattr(sys, "platform", "win32")
+    check("Windows: the exe", appinfo.command_name() == appinfo.EXE_NAME
+          and appinfo.program_name() == appinfo.EXE_NAME)
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(sys, "executable", "/u/ana/BeanNetworkTester/BeanNetworkTester")
+    monkeypatch.setattr(appinfo, "_persons_home", lambda: "/u/ana")
+    check("Linux: the program, under sudo",
+          appinfo.command_name() == "sudo ~/BeanNetworkTester/BeanNetworkTester",
+          f"({appinfo.command_name()})")
+    check("argparse: no .exe", appinfo.program_name() == appinfo.LINUX_EXE_NAME,
+          f"({appinfo.program_name()})")
+
+
 def test_the_command_follows_the_system_it_runs_on(monkeypatch):
     """Windows from source keeps ``python bean_network_tester.py``; Linux asks
     ``linux_command``, with root only for a capture."""

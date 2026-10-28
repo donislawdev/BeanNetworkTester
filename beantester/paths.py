@@ -10,6 +10,7 @@ The user files used to sit next to the executable. They no longer do, and the
 reason is package managers - see ``user_data_dir``.
 """
 import os
+import posixpath
 import shutil
 import stat
 import sys
@@ -73,6 +74,10 @@ def user_data_dir():
     ELEVATION - the GUI elevates itself, ``--simulate`` does not - and the same
     install would then keep two sets of profiles without saying so.
 
+    On Linux the frozen build (the ``.tar.gz``) writes into the person's
+    ``~/.config/BeanNetworkTester`` (``config_home``): unpacking a newer copy over
+    the old folder would take anything written beside the executable with it.
+
     ``BEAN_DATA_DIR`` overrides everything. Running from sources is unchanged.
     """
     override = os.environ.get(DATA_DIR_ENV, "").strip()
@@ -84,7 +89,31 @@ def user_data_dir():
     # resource_path (below), so a top-level import would run appinfo against a
     # half-initialised paths module.
     from .appinfo import TOOL_ID
+    if sys.platform.startswith("linux"):
+        return posixpath.join(config_home(), TOOL_ID)
     return os.path.join(_local_app_data(), TOOL_ID)
+
+
+def config_home(environ=None, person=None, home=None):
+    """The folder Linux keeps a person's settings in: ``$XDG_CONFIG_HOME``, else
+    ``~/.config``.
+
+    Root started for a person (``sudo``, ``pkexec``) uses THEIR folder: sudo's
+    environment carries root's ``XDG_CONFIG_HOME`` or none and pkexec's none, so it
+    is not read then, and the home comes from the account database. The XDG Base
+    Directory specification says a relative value is to be ignored. ``person``
+    (``invoking_user``) and ``home`` (``home_of``) are injectable for the tests.
+    """
+    environ = os.environ if environ is None else environ
+    person = invoking_user() if person is None else person
+    if person:
+        found = (home_of if home is None else home)(person[0])
+        if found:
+            return posixpath.join(found, ".config")
+    value = environ.get("XDG_CONFIG_HOME", "")
+    if posixpath.isabs(value):
+        return value
+    return posixpath.join(environ.get("HOME") or os.path.expanduser("~"), ".config")
 
 
 def ensure_data_dir():
@@ -340,6 +369,8 @@ def migrate_user_files(source=None, target=None):
     explicit = source is not None or target is not None
     if not explicit and not is_frozen():
         return []                       # from sources the two are the same directory
+    if not explicit and sys.platform != "win32":
+        return []                       # no build elsewhere ever kept files beside itself
     source = executable_dir() if source is None else source
     target = user_data_dir() if target is None else target
     if _same_directory(source, target):

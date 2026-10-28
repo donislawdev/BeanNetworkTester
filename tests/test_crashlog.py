@@ -1296,6 +1296,21 @@ def test_a_missing_tkinter_is_not_a_crash(isolated, monkeypatch, capsys):
     assert len(shown) == 1 and "No tkinter" in shown[0][1], shown
 
 
+def test_a_library_of_the_system_tk_cannot_load_is_named(isolated, monkeypatch, capsys):
+    """Measured 2026-10-28: the Linux package on a system without libXft said "No
+    tkinter" - tkinter was there, a library of the system was not. The line names it,
+    and still offers the command line; it is the machine's business, not a crash."""
+    cli, shown = _gui_start(monkeypatch, frozen=True)
+    missing = ImportError("libXft.so.2: cannot open shared object file: No such file or "
+                          "directory", name="_tkinter")
+    cli._window_did_not_open(missing)
+    err = capsys.readouterr().err
+    assert "libXft.so.2" in err and "No tkinter" not in err, err
+    assert "--simulate" in err, err
+    assert _entries(isolated) == [], "a missing library was recorded as a crash"
+    assert len(shown) == 1 and "libXft.so.2" in shown[0][1], shown
+
+
 # -- what a repeat and a first record cost (performance review 2026-09-26) ----- #
 def _boom_elsewhere():
     """A second fault from a different place than ``_boom``."""

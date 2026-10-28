@@ -24,6 +24,9 @@ and 24.04 (polkit 124, in CI), and read in pkexec's own source - and what follow
   process that asked (measured: that process stopped, the root window stayed).
 * Without ``--keep-cwd`` (polkit 121 and newer) it starts the program in root's
   home, where ``python -m beantester`` from a checkout cannot import itself.
+
+One knob is not about root: the frozen build's library path, which the programs
+this one starts must not inherit (``restore_library_path``).
 """
 import os
 import posixpath
@@ -61,9 +64,36 @@ _DISPLAY = re.compile(r"[A-Za-z0-9._-]*:[0-9]+(\.[0-9]+)?")
 # The most of a parent's environment that is read.
 _ENVIRON_LIMIT = 1 << 20
 
+# Where PyInstaller's bootloader points the loader at the bundle's own libraries,
+# and where it keeps the value the person had.
+LIBRARY_PATH = "LD_LIBRARY_PATH"
+LIBRARY_PATH_ORIG = "LD_LIBRARY_PATH_ORIG"
+
 
 def is_linux():
     return sys.platform.startswith("linux")
+
+
+def restore_library_path(environ=None):
+    """Give the programs this one starts the library path the person had.
+
+    The frozen build's bootloader points ``LD_LIBRARY_PATH`` at the bundle's own
+    libraries, and every program started from here inherits it. MEASURED
+    2026-10-28 on Ubuntu 26.04, Fedora 44 and Arch: a system program then loads the
+    bundle's older fontconfig and stops ("fc-match: symbol lookup error"), and the
+    browser the window opens is such a program. This process keeps its libraries:
+    the loader read the variable when the process started. Only the frozen build
+    on Linux; True when it changed the environment.
+    """
+    environ = os.environ if environ is None else environ
+    if not (is_linux() and winenv.is_frozen()):
+        return False
+    original = environ.pop(LIBRARY_PATH_ORIG, "")
+    if original:
+        environ[LIBRARY_PATH] = original
+    else:
+        environ.pop(LIBRARY_PATH, None)
+    return True
 
 
 def wants_root(environ=None, euid=None, which=shutil.which):

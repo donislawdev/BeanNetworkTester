@@ -16,6 +16,7 @@ import _thread
 import argparse
 import json
 import math
+import re
 import sys
 import threading
 import time
@@ -1368,6 +1369,9 @@ def _run_gui(argv, relaunched=False):
 # The modules whose absence means "this Python has no Tk", not "this program broke".
 _TK_MODULES = ("tkinter", "_tkinter")
 
+# The loader's words for a library it could not find (glibc's dlopen error).
+_MISSING_LIBRARY = re.compile(r"(\S+\.so[.0-9]*): cannot open shared object file")
+
 
 def _window_did_not_open(exc):
     """GUI mode ended before its window could be used: say why, where it is seen.
@@ -1376,9 +1380,20 @@ def _window_did_not_open(exc):
     Tk that cannot start - used to be called that as well and recorded nowhere.
     And in the frozen build the line went to the null sink ``detach_console`` put
     in place of stderr, so a double-clicked exe just vanished with exit code 1.
+
+    A Tk that is there but cannot load a library of the system is not "No
+    tkinter" either. MEASURED 2026-10-28: the Linux package on a system without
+    libXft said exactly that - the library is named instead (the system's package
+    for it has a different name on every distribution, so none is guessed).
     """
     if isinstance(exc, ImportError) and exc.name in _TK_MODULES:
-        text = f"No tkinter. Use CLI mode, e.g.:  {command_name(simulate=True)} --simulate --loss 5"
+        example = f"{command_name(simulate=True)} --simulate --loss 5"
+        missing = _MISSING_LIBRARY.search(str(exc))
+        if missing:
+            text = (f"The window needs {missing.group(1)} from the system, and it is not "
+                    f"installed. The command line works without it, e.g.:  {example}")
+        else:
+            text = f"No tkinter. Use CLI mode, e.g.:  {example}"
     else:
         text = f"The window could not open: {type(exc).__name__}: {exc}"
         if crashlog.record(exc, source="gui-start") is not None:
@@ -1396,6 +1411,7 @@ def main(argv=None):
     # driver, which leave no Python traceback at all). A crash during start-up - the
     # kind a user cannot even describe - used to vanish completely.
     crashlog.install()
+    linuxenv.restore_library_path()           # the frozen build's: not for the programs it starts
     argv = sys.argv[1:] if argv is None else argv
     # The copy winenv.elevate_self started says so with its last argument. It is
     # taken off before anything reads the arguments: left in, the GUI's copy would

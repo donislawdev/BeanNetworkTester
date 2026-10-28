@@ -48,6 +48,7 @@ def _frozen_paths(tmp_path, exe_dir, **env):
     environment = dict(os.environ)
     environment.pop(paths.DATA_DIR_ENV, None)
     environment["LOCALAPPDATA"] = str(tmp_path / "localappdata")
+    environment["XDG_CONFIG_HOME"] = (tmp_path / "xdgconfig").as_posix()
     environment.update(env)
     out = subprocess.run([sys.executable, str(script), str(exe_dir), ROOT],
                          capture_output=True, text=True, env=environment,
@@ -65,9 +66,66 @@ def test_a_frozen_build_keeps_no_user_file_next_to_the_executable(tmp_path):
     inside = [name for name in ("profiles", "stats", "connections", "ui")
               if os.path.dirname(got[name]) == str(exe_dir)]
     check("no user file is written next to the exe", not inside, f"({inside})")
-    check("the data directory is under LOCALAPPDATA",
-          got["data_dir"] == str(tmp_path / "localappdata" / "BeanNetworkTester"),
-          f"({got['data_dir']})")
+    if sys.platform.startswith("linux"):
+        check("the data directory is in the person's config folder",
+              got["data_dir"] == (tmp_path / "xdgconfig" / "BeanNetworkTester").as_posix(),
+              f"({got['data_dir']})")
+    else:
+        check("the data directory is under LOCALAPPDATA",
+              got["data_dir"] == str(tmp_path / "localappdata" / "BeanNetworkTester"),
+              f"({got['data_dir']})")
+
+
+def test_the_linux_package_keeps_the_files_in_the_persons_config_folder(monkeypatch):
+    """The ``.tar.gz`` (owner, 2026-10-28): ``~/.config/BeanNetworkTester``, not
+    ``~/AppData/Local`` - which it used, measured - and never beside the program,
+    which a newer copy unpacked over the old folder would take with it."""
+    monkeypatch.delenv(paths.DATA_DIR_ENV, raising=False)
+    monkeypatch.setattr(paths, "is_frozen", lambda: True)
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(paths, "invoking_user", lambda: None)
+    monkeypatch.setenv("XDG_CONFIG_HOME", "/u/ana/.cfg")
+    check("XDG_CONFIG_HOME/BeanNetworkTester",
+          paths.user_data_dir() == "/u/ana/.cfg/BeanNetworkTester", f"({paths.user_data_dir()})")
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setenv("LOCALAPPDATA", "/w/local")
+    check("Windows keeps LOCALAPPDATA",
+          paths.user_data_dir() == os.path.join("/w/local", "BeanNetworkTester"),
+          f"({paths.user_data_dir()})")
+
+
+def test_the_config_folder_is_the_xdg_one_and_the_persons_under_root():
+    """``$XDG_CONFIG_HOME`` when it is absolute (the XDG spec ignores a relative
+    one), else ``~/.config``; root started for a person writes into theirs, not
+    into root's - sudo's environment carries root's XDG_CONFIG_HOME or none."""
+    home = {1000: "/u/ana"}.get
+    say = lambda env, person=None: paths.config_home(env, person, home)  # noqa: E731
+    check("absolute XDG_CONFIG_HOME", say({"XDG_CONFIG_HOME": "/u/ana/.cfg", "HOME": "/u/ana"})
+          == "/u/ana/.cfg")
+    check("a relative one is ignored", say({"XDG_CONFIG_HOME": "cfg", "HOME": "/u/ana"})
+          == "/u/ana/.config")
+    check("none: ~/.config", say({"HOME": "/u/ana"}) == "/u/ana/.config")
+    check("root for a person: theirs, whatever root's says",
+          say({"XDG_CONFIG_HOME": "/root/.cfg", "HOME": "/root"}, (1000, 1000)) == "/u/ana/.config")
+    check("a person the system does not know: the environment's",
+          say({"HOME": "/root"}, (4242, 4242)) == "/root/.config")
+
+
+def test_the_linux_package_adopts_nothing_beside_itself(tmp_path, monkeypatch):
+    """No Linux build ever kept files beside the program, so there is nothing to
+    adopt - and the copy under pkexec would make root's copies of whatever lay there."""
+    beside, data = tmp_path / "bundle", tmp_path / "data"
+    beside.mkdir()
+    (beside / paths.PROFILE_NAME).write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(paths, "is_frozen", lambda: True)
+    monkeypatch.setattr(paths, "executable_dir", lambda: str(beside))
+    monkeypatch.setattr(paths, "user_data_dir", lambda: str(data))
+    monkeypatch.setattr(sys, "platform", "linux")
+    check("nothing adopted", paths.migrate_user_files() == [] and not data.exists(),
+          f"({sorted(os.listdir(data)) if data.exists() else []})")
+    monkeypatch.setattr(sys, "platform", "win32")
+    paths.migrate_user_files()
+    check("Windows still adopts", (data / paths.PROFILE_NAME).exists(), "(not copied)")
 
 
 def test_every_user_file_lands_in_the_data_directory(tmp_path):
