@@ -15,6 +15,7 @@ silently - convention 35 calls that a blocker, not a formality.
 """
 import io
 import json
+import sys
 
 from beantester import appinfo, exitcodes, legal
 from beantester.cli import run_cli
@@ -47,7 +48,8 @@ def test_every_shipped_component_is_named_with_a_version_and_a_source():
     the user was given, so they can fetch that source and replace it."""
     rows = legal.component_rows()
     names = [name for name, *_ in rows]
-    for required in ("WinDivert", "PyDivert", "psutil", "Python"):
+    divert = "eBPFDivert" if sys.platform.startswith("linux") else "WinDivert"
+    for required in (divert, "PyDivert", "psutil", "Python"):
         check(f"{required} is declared", required in names, f"({names})")
     for name, version, licence, url in rows:
         check(f"{name} carries a version", bool(str(version).strip()))
@@ -284,9 +286,14 @@ def test_the_written_offer_lasts_as_long_as_the_licence_demands():
     has to be at least what the licence requires.
     """
     notices = legal.notices_text()
-    check("notices: the written offer names the three-year floor",
-          "three years" in notices,
-          "(an offer weaker than GPLv3 section 6(b) allows)")
+    offers = notices.split("**Written offer:**")[1:]
+    # PyDivert's, and eBPFDivert's for the Linux package (2026-10-28): EACH one, or a
+    # weaker second offer would hide behind the first one's words.
+    check("notices: both written offers are there", len(offers) == 2, f"({len(offers)})")
+    for offer in offers:
+        check("notices: the written offer names the three-year floor",
+              "three years" in offer.split("\n\n")[0],
+              "(an offer weaker than GPLv3 section 6(b) allows)")
 
 
 def test_the_shipped_driver_is_byte_for_byte_the_one_we_recorded():
@@ -326,3 +333,59 @@ def test_the_shipped_driver_is_byte_for_byte_the_one_we_recorded():
               digest == recorded.get(name),
               f"(got {digest[:16]}..., recorded {str(recorded.get(name))[:16]}... - "
               f"if the pydivert pin moved, re-record it deliberately)")
+
+
+def test_both_builds_are_in_the_registry_and_the_notices():
+    """The Windows zip and the Linux .tar.gz carry different libraries (2026-10-28),
+    and the test above only sees the one this system builds - so both lists are held
+    to the notices here, wherever the suite runs."""
+    import os
+    from fakes import ROOT
+
+    notices = open(os.path.join(ROOT, "THIRD-PARTY-NOTICES.md"), encoding="utf-8").read()
+    for platform in ("win32", "linux"):
+        for name, *_ in legal.components(platform):
+            stem = name.split(" (")[0]
+            check(f"{platform}: the notices have a section for {stem}",
+                  ("## " + stem) in notices)
+    linux = {name for name, *_ in legal.components("linux")}
+    windows = {name for name, *_ in legal.components("win32")}
+    check("Linux carries eBPFDivert, not WinDivert",
+          "eBPFDivert" in linux and "WinDivert" not in linux and "WinDivert" in windows)
+    check("the Windows runtime is not claimed for Linux",
+          not linux & {"Microsoft C Runtime", "libtommath"})
+    check("this system's list is the one --license reports",
+          legal.COMPONENTS == legal.components())
+
+
+def test_the_parts_of_ebpfdivert_are_named_with_the_versions_read():
+    """libebpfdivert.so carries libbpf, libelf and Zstandard built from their own
+    sources, so the notices name the versions eBPFDivert's release script builds -
+    not the ones a distribution packages (they named Ubuntu 24.04's at first) - and
+    --license and the SBOM report the same."""
+    import os
+    from fakes import ROOT
+
+    notices = open(os.path.join(ROOT, "THIRD-PARTY-NOTICES.md"), encoding="utf-8").read()
+    check("the notices say which eBPFDivert the parts were read for",
+          f"eBPFDivert {legal.EBPFDIVERT_READ} carries" in notices)
+    rows = {name: version for name, version, _lic, _url in legal.component_rows("linux")}
+    for name, version in legal.EBPFDIVERT_PARTS.items():
+        stem = name.split(" (")[0]
+        check(f"the notices name {stem} {version}", f"{stem} {version}" in notices)
+        check(f"--license reports {stem} {version}", rows.get(name) == version, f"({rows.get(name)})")
+
+
+def test_the_parts_were_read_for_the_ebpfdivert_we_ship():
+    """The other half: the eBPFDivert in the installed pydivert is the one the
+    parts were read for, the way the WinDivert test above holds the driver. A
+    pydivert that brings another eBPFDivert lands here, on the Linux runner, until
+    somebody reads its release script again (legal.EBPFDIVERT_PARTS)."""
+    import sys as _sys
+
+    shipped = legal._ebpfdivert_version()
+    if shipped == "-" or not _sys.platform.startswith("linux"):
+        return                      # Windows, or no pydivert library here
+    check("the eBPFDivert pydivert brings is the one the parts were read for",
+          shipped == legal.EBPFDIVERT_READ,
+          f"(pydivert brings {shipped!r}, legal.EBPFDIVERT_READ is {legal.EBPFDIVERT_READ!r})")

@@ -411,9 +411,12 @@ def test_about_window_shows_version_author_licence_and_third_parties():
         assert panel is not None and panel.is_open()
         assert app.windows.open_ids() == ["about"]
 
-        # the report the window renders names every shipped component
+        # the report the window renders names every shipped component - this
+        # system's build: the Linux package carries eBPFDivert, not WinDivert
+        import sys
+        divert = "eBPFDivert" if sys.platform.startswith("linux") else "WinDivert"
         names = [row[0] for row in legal.component_rows()]
-        assert "WinDivert" in names and "PyDivert" in names and "psutil" in names
+        assert divert in names and "PyDivert" in names and "psutil" in names
 
         # it survives a language switch (the registry rebuilds open windows)
         app._lang = "en"

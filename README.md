@@ -1092,6 +1092,8 @@ connections arriving from outside, are still blocked in silence.
 | `--simulate` | synthetic traffic instead of WinDivert (test with no Windows, no driver, no admin) |
 | `--gui` | open the GUI. Valid **on its own only** - the GUI has its own controls, so combining it with settings flags is a usage error (exit 2) rather than a silent headless run |
 | `--version` | print the version and exit |
+| `--install-desktop` | the Linux package only: add the program to your desktop's applications menu, then exit. Run it **without** `sudo`, from the folder you keep the program in. After moving the folder, run it again |
+| `--remove-desktop` | the Linux package only: remove that menu entry again, then exit |
 
 **Output and diagnostics**
 
@@ -1566,6 +1568,7 @@ Every job in that workflow, and what a red one means:
 | `tests` | the suite, the GUI smoke, the real-Tk render check and the CLI assertions, on Linux and Windows |
 | `linux-capture` | the experimental Linux capture on a real kernel: the command line, as root, inside a network namespace of its own. The latency and the loss must reach the target and nothing else. Not required for a merge |
 | `build` | the Windows executable, smoke-tested, with the driver check and the licence registry scan |
+| `build-linux` | the Linux package on Ubuntu 24.04: the libraries it carries, the program run as a person runs it (command line, window, menu entry) under Xvfb, and a real capture by the packaged program in a namespace of its own. Not required for a merge |
 | `cron-issue` | opens an issue when the weekly run goes red, deduplicated by which jobs failed. A cron is easy to miss and nothing else announces one. It also answers to a hand-fired run, which is the only way to exercise it without waiting for a red Monday. Never runs on a pull request, and never closes an issue by itself |
 <!-- ci-jobs:end -->
 
@@ -1632,6 +1635,7 @@ beantester/              the implementation package
   clilog.py              CLI output: log on stderr ([bean]), data on stdout (text/NDJSON)
   winenv.py              Windows: admin, elevation (UAC), console detach, DPI
   linuxenv.py            Linux: the window asks for root through polkit (pkexec)
+  desktop.py             Linux package: its entry in the desktop's applications menu
   driver.py              WinDivert driver lifecycle + --doctor / --cleanup-driver
   fields.py              FIELD REGISTRY - single source of truth: type, label, unit,
                          range, form section, profile scope, CLI flag

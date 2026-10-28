@@ -12,11 +12,17 @@ licences below. Where they conflict, the licence below wins for that component.
 
 To see the exact versions bundled in the copy you are holding, run:
 
-    BeanNetworkTester.exe --license
+    BeanNetworkTester.exe --license          (Windows)
+    ./BeanNetworkTester --license            (Linux)
+
+The Windows zip and the Linux `.tar.gz` carry different libraries. Each section says
+which of the two carries it; one that says nothing is in both. The Linux package takes
+some libraries from the system it runs on instead (fontconfig, freetype and the X
+libraries libxcb needs); those are the system's own and are not shipped.
 
 ---
 
-## WinDivert (`WinDivert64.dll`, `WinDivert64.sys`)
+## WinDivert (`WinDivert64.dll`, `WinDivert64.sys`, the Windows zip)
 
 * Copyright (c) basil (basil@reqrypt.org)
 * Used under: **GNU Lesser General Public License, version 3 (LGPLv3)**
@@ -45,6 +51,37 @@ file: it is what makes the paragraph above something you can actually do.
 digitally signed build from the WinDivert project. If you replace it with a driver
 you compiled yourself, Windows will refuse to load it unless it is signed (or the
 machine is in test-signing mode). That is a Windows requirement, not ours.
+
+---
+
+## eBPFDivert (`libebpfdivert.so`, the Linux package)
+
+* Copyright (c) Fabio Falcinelli and eBPFDivert contributors
+* Used under: **GNU Lesser General Public License, version 3 or later
+  (LGPL-3.0-or-later)**
+  (eBPFDivert is dual-licensed under GPL-2.0-or-later or LGPL-3.0-or-later; this
+  program uses it under the LGPL. It contains WinDivert's filter code, which carries
+  the same dual licence.)
+* Licence text: `licenses/LGPL-3.0.txt`, `licenses/GPL-3.0.txt`, `licenses/GPL-2.0.txt`
+* Source code: https://github.com/ffalcinelli/ebpfdivert
+* Shipped as: one library, `_internal/pydivert/bpf/libebpfdivert.so`, which comes
+  with PyDivert's Linux wheel and is used unmodified. Its version is printed by
+  `./BeanNetworkTester --license`. eBPFDivert 0.0.5 carries libbpf 1.7.0,
+  elfutils 0.192 (libelf and libeu), Zstandard 1.5.7 and zlib 1.2.11 inside it:
+  its release script builds the first three from their own sources and links the
+  zlib of the manylinux_2_28 image it is built in (their sections are below).
+
+**Your LGPL rights, in practice.** The library is a separate file the program loads
+from that folder at run time. You may build an interface-compatible
+`libebpfdivert.so` from eBPFDivert's source - with a modified libbpf, libelf,
+Zstandard or zlib inside, if you like - and replace the file. You may reverse
+engineer Bean Network Tester to the extent necessary to debug such modifications.
+
+**Written offer:** for at least three years from the date of this release, the
+Author will supply, on request and at no charge beyond the cost of delivery, the
+complete corresponding source of the eBPFDivert version in this build, with the
+libbpf and libelf it carries. The source is public at the address above. Contact:
+https://donislawdev.com/
 
 ---
 
@@ -106,7 +143,8 @@ version is linked above. Contact: https://donislawdev.com/
 * Used under: **PSF License Agreement**
 * Licence text: `licenses/Python-LICENSE.txt`
 * Source code: https://www.python.org/downloads/source/
-* The Python interpreter and standard library are embedded in the executable.
+* The Python interpreter and standard library are embedded in the executable. In
+  the Linux package the interpreter is `_internal/libpython3.*.so`.
 
 ---
 
@@ -117,7 +155,8 @@ version is linked above. Contact: https://donislawdev.com/
 * Used under: **Tcl/Tk licence (BSD-style)**
 * Licence text: `licenses/Tcl-Tk-LICENSE.txt`
 * Source code: https://www.tcl-lang.org/software/tcltk/
-* Provides the graphical user interface toolkit.
+* Provides the graphical user interface toolkit. In the Linux package it is Tcl/Tk
+  8.6 as Ubuntu 24.04 ships it (`libtcl8.6.so`, `libtk8.6.so`).
 
 ---
 
@@ -145,6 +184,9 @@ version is linked above. Contact: https://donislawdev.com/
   runtime. `--license` reports the version the build links against; note that it
   can read `1.3.1.zlib-ng`, because the `zlib` MODULE is built against zlib-ng
   while the DLL itself is genuine zlib. Both are under this licence.
+* In the Linux package: `libz.so.1` from Ubuntu 24.04 (zlib 1.3), and zlib
+  1.2.11 inside `libebpfdivert.so` (Copyright (C) 1995-2017 Jean-loup Gailly and
+  Mark Adler, as its own strings say).
 
 ---
 
@@ -156,11 +198,67 @@ version is linked above. Contact: https://donislawdev.com/
   incorporated software - libffi arrives with CPython and is licensed there
 * Source code: https://github.com/libffi/libffi
 * Ships as `libffi-8.dll`; it is what `ctypes` calls into, and this project
-  reaches the WinDivert driver and several Windows APIs through `ctypes`.
+  reaches the WinDivert driver and several Windows APIs through `ctypes`. In the
+  Linux package: `libffi.so.8` from Ubuntu 24.04 (libffi 3.4.6), through which
+  `ctypes` reaches eBPFDivert.
 
 ---
 
-## libtommath
+## X.Org libraries (`libX11`, `libXext`, `libXft`, `libXrender`, `libXss`, the Linux package)
+
+* Copyright: the X Consortium, The Open Group, Keith Packard and many others; each
+  library's holders are listed in its own section of the licence file
+* Used under: **MIT and X11-style permission notices** (permissive)
+* Licence text: `licenses/X.Org-libraries.txt` - the copyright files Ubuntu 24.04
+  ships with these libraries, unchanged
+* Source code: https://gitlab.freedesktop.org/xorg/lib
+* Ship as `_internal/libX11.so.6`, `libXext.so.6`, `libXft.so.2`, `libXrender.so.1`
+  and `libXss.so.1`: libX11 1.8.7, libXext 1.3.4, libXft 2.3.6, libXrender 0.9.10 and
+  libXss 1.2.3, as Ubuntu 24.04 builds them. Tk draws the window through them.
+
+---
+
+## libbpf (inside `libebpfdivert.so`, the Linux package)
+
+* Copyright (c) the libbpf authors (Facebook, Isovalent and others)
+* Used under: **GNU Lesser General Public License, version 2.1 (LGPL-2.1)**
+  (libbpf is dual-licensed under LGPL-2.1 or BSD-2-Clause)
+* Licence text: `licenses/LGPL-2.1.txt`, `licenses/libbpf-LICENSE.txt`
+* Source code: https://github.com/libbpf/libbpf, version 1.7.0 (eBPFDivert 0.0.5's
+  `third_party/libbpf` submodule points at the commit of its v1.7.0 tag)
+* What eBPFDivert loads its kernel programs with. Replacing it means rebuilding
+  `libebpfdivert.so` - see eBPFDivert above.
+
+---
+
+## elfutils (libelf, inside `libebpfdivert.so`, the Linux package)
+
+* Copyright (c) Red Hat, Inc. and the elfutils contributors
+* Used under: **GNU Lesser General Public License, version 3 or later
+  (LGPL-3.0-or-later)** (libelf is dual-licensed under LGPL-3.0-or-later or
+  GPL-2.0-or-later)
+* Licence text: `licenses/LGPL-3.0.txt`, `licenses/GPL-2.0.txt`,
+  `licenses/elfutils-LICENSE.txt`
+* Source code: https://sourceware.org/elfutils/, version 0.192 (the release
+  tarball eBPFDivert 0.0.5 builds libelf and libeu, elfutils' helper library, from)
+* What libbpf reads the kernel programs' object file with. Replacing it means
+  rebuilding `libebpfdivert.so` - see eBPFDivert above.
+
+---
+
+## Zstandard (inside `libebpfdivert.so`, the Linux package)
+
+* Copyright (c) Meta Platforms, Inc. and affiliates
+* Used under: **BSD 3-Clause License** (Zstandard is dual-licensed under
+  BSD-3-Clause or GPL-2.0)
+* Licence text: `licenses/zstd-LICENSE.txt`
+* Source code: https://github.com/facebook/zstd, version 1.5.7 (the release
+  tarball eBPFDivert 0.0.5 builds it from)
+* libelf's decompression; nothing in this program calls it directly.
+
+---
+
+## libtommath (the Windows zip)
 
 * Copyright: none claimed - the authors dedicate the work to the public domain
 * Used under: **the Unlicense** (a public-domain dedication)
@@ -173,7 +271,7 @@ version is linked above. Contact: https://donislawdev.com/
 
 ---
 
-## Microsoft C Runtime (`ucrtbase.dll`, `VCRUNTIME140*.dll`, `api-ms-win-*.dll`)
+## Microsoft C Runtime (`ucrtbase.dll`, `VCRUNTIME140*.dll`, `api-ms-win-*.dll`, the Windows zip)
 
 * Copyright (c) Microsoft Corporation
 * Used under: **Microsoft's redistributable terms** for the Visual C++ runtime

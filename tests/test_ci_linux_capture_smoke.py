@@ -281,3 +281,31 @@ def test_a_machine_that_cannot_run_it_skips_and_ci_turns_that_into_a_failure(cap
     check("--require: the same machine is a failure",
           smoke.main(["--require"], environment=("linux", 1000, True)) == 1)
     check("and says FAIL", "FAIL" in capsys.readouterr().out)
+
+
+def test_the_sessions_run_the_program_they_are_given(monkeypatch):
+    """``--program``: the frozen Linux bundle runs the sessions, so CI captures for
+    real with the artefact a person downloads, not only with the source tree."""
+    monkeypatch.setattr(smoke, "PROGRAM", None)
+    check("the source tree by default",
+          smoke.session_command(["--duration", "6"])
+          == [sys.executable, "-m", "beantester", "--duration", "6"])
+    monkeypatch.setattr(smoke, "PROGRAM", "/b/BeanNetworkTester")
+    check("the program given", smoke.session_command(["--duration", "6"])
+          == ["/b/BeanNetworkTester", "--duration", "6"])
+
+
+def test_a_bundle_run_stops_after_the_sessions(monkeypatch):
+    """The tools' phases test the source tree's functions: with ``--program`` only
+    the two sessions run, and their failures still fail the run."""
+    monkeypatch.setattr(smoke, "PROGRAM", None)     # main sets it; undone after the test
+    ran = []
+    for name in ("_latency_phase", "_loss_phase", "_ping_phase", "_reset_phase",
+                 "_health_phase", "_adapters_phase"):
+        monkeypatch.setattr(smoke, name, lambda name=name: ran.append(name) or [])
+    for name in ("build_namespace", "teardown_namespace", "start_far_end"):
+        monkeypatch.setattr(smoke, name, lambda: None)
+    monkeypatch.setattr(smoke, "_loss_phase", lambda: ran.append("_loss_phase") or ["lost"])
+    code = smoke.main(["--program", "/b/BeanNetworkTester"], environment=("linux", 0, True))
+    check("only the sessions", ran == ["_latency_phase", "_loss_phase"], f"({ran})")
+    check("and a failure among them fails the run", code == 1)

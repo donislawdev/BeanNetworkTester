@@ -16,11 +16,12 @@ import _thread
 import argparse
 import json
 import math
+import re
 import sys
 import threading
 import time
 
-from . import appinfo, capture_backend, clilog, driver, exitcodes, linuxenv, winenv
+from . import appinfo, capture_backend, clilog, desktop, driver, exitcodes, linuxenv, winenv
 from .appinfo import command_name, program_name, version_line
 from .clilog import CliLog
 from . import crashlog
@@ -206,6 +207,12 @@ def build_arg_parser():
     p.add_argument("--version", action="version", version=version_line())
     p.add_argument("--license", action="store_true",
                    help="print the licence and the third-party notices, then exit")
+    menu = p.add_mutually_exclusive_group()
+    menu.add_argument("--install-desktop", action="store_true",
+                      help="the Linux package: add this program to your desktop's "
+                           "applications menu (run it without sudo), then exit")
+    menu.add_argument("--remove-desktop", action="store_true",
+                      help="the Linux package: remove that menu entry, then exit")
     p.add_argument("--gui", action="store_true",
                    help="open the GUI (only valid on its own - the GUI has its "
                         "own controls, so it takes no settings flags)")
@@ -711,6 +718,27 @@ def _run_license(log):
     return exitcodes.OK
 
 
+def _run_desktop(log, install):
+    """``--install-desktop`` / ``--remove-desktop``: the Linux package's menu entry
+    (``desktop.py``). Not here (not the package, root): 1; not written: 5."""
+    from . import desktop
+    reason = desktop.why_not()
+    if reason:
+        _fail(exitcodes.RUNTIME, reason)
+    path, error = desktop.install() if install else desktop.remove()
+    if error:
+        _fail(exitcodes.IO, error)
+    if install:
+        log.info(f"Added to the applications menu: {path}")
+        log.info(f"It starts {sys.executable}. After moving this folder, run "
+                 "--install-desktop again from its new place.")
+    elif path:
+        log.info(f"Removed the menu entry: {path}")
+    else:
+        log.info("There was no menu entry to remove.")
+    return exitcodes.OK
+
+
 def _run_doctor(log):
     ok, checks = driver.doctor()
     # Where the user's own files are is an environment fact like the rest of this
@@ -1190,6 +1218,8 @@ def _run_command(args, log, sleep, clock, engine):
               "drop --gui to run these settings from the command line.")
     if args.license:
         return _run_license(log)
+    if args.install_desktop or args.remove_desktop:
+        return _run_desktop(log, args.install_desktop)
     if args.doctor:
         return _run_doctor(log)
     if args.cleanup_driver:
@@ -1352,7 +1382,9 @@ def _run_gui(argv, relaunched=False):
 
         from .gui import App
         winenv.set_dpi_awareness()            # before the Tk root exists
-        root = tk.Tk()
+        # The class the Linux menu entry names (StartupWMClass): Tk's default "Tk"
+        # matches no entry, and GNOME shows such a window as a program of its own.
+        root = tk.Tk(className=desktop.WINDOW_CLASS)
         App(root)
     except Exception as exc:
         code = _window_did_not_open(exc)
@@ -1368,6 +1400,9 @@ def _run_gui(argv, relaunched=False):
 # The modules whose absence means "this Python has no Tk", not "this program broke".
 _TK_MODULES = ("tkinter", "_tkinter")
 
+# The loader's words for a library it could not find (glibc's dlopen error).
+_MISSING_LIBRARY = re.compile(r"(\S+\.so[.0-9]*): cannot open shared object file")
+
 
 def _window_did_not_open(exc):
     """GUI mode ended before its window could be used: say why, where it is seen.
@@ -1376,9 +1411,20 @@ def _window_did_not_open(exc):
     Tk that cannot start - used to be called that as well and recorded nowhere.
     And in the frozen build the line went to the null sink ``detach_console`` put
     in place of stderr, so a double-clicked exe just vanished with exit code 1.
+
+    A Tk that is there but cannot load a library of the system is not "No
+    tkinter" either. MEASURED 2026-10-28: the Linux package on a system without
+    libXft said exactly that - the library is named instead (the system's package
+    for it has a different name on every distribution, so none is guessed).
     """
     if isinstance(exc, ImportError) and exc.name in _TK_MODULES:
-        text = f"No tkinter. Use CLI mode, e.g.:  {command_name(simulate=True)} --simulate --loss 5"
+        example = f"{command_name(simulate=True)} --simulate --loss 5"
+        missing = _MISSING_LIBRARY.search(str(exc))
+        if missing:
+            text = (f"The window needs {missing.group(1)} from the system, and it is not "
+                    f"installed. The command line works without it, e.g.:  {example}")
+        else:
+            text = f"No tkinter. Use CLI mode, e.g.:  {example}"
     else:
         text = f"The window could not open: {type(exc).__name__}: {exc}"
         if crashlog.record(exc, source="gui-start") is not None:
@@ -1396,6 +1442,7 @@ def main(argv=None):
     # driver, which leave no Python traceback at all). A crash during start-up - the
     # kind a user cannot even describe - used to vanish completely.
     crashlog.install()
+    linuxenv.restore_library_path()           # the frozen build's: not for the programs it starts
     argv = sys.argv[1:] if argv is None else argv
     # The copy winenv.elevate_self started says so with its last argument. It is
     # taken off before anything reads the arguments: left in, the GUI's copy would

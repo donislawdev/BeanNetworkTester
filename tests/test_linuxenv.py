@@ -310,7 +310,7 @@ def _fake_tk(tk_fails):
     class TclError(Exception):
         pass
 
-    def tk():
+    def tk(**_options):
         if tk_fails:
             raise TclError("no display name and no $DISPLAY environment variable")
         return types.SimpleNamespace(mainloop=lambda: None)
@@ -371,3 +371,45 @@ def test_a_copy_that_cannot_reach_the_screen_hands_the_window_back(monkeypatch):
     _gui(monkeypatch, tk_fails=False, app_fails=True)
     monkeypatch.setattr(linuxenv, "started_by_pkexec", lambda: True)
     check("a fault in the window itself is not handed back", cli._run_gui([]) == exitcodes.RUNTIME)
+
+
+# -- the frozen build's library path ---------------------------------------------- #
+def test_the_programs_the_package_starts_get_the_persons_library_path(monkeypatch):
+    """The bootloader points LD_LIBRARY_PATH at the bundle; a system program that
+    inherits it loads the bundle's older libraries and stops (measured 2026-10-28:
+    "fc-match: symbol lookup error" on Ubuntu 26.04, Fedora 44 and Arch). The value
+    the person had comes back, or none when they had none."""
+    monkeypatch.setattr(linuxenv, "is_linux", lambda: True)
+    monkeypatch.setattr(winenv, "is_frozen", lambda: True)
+    env = {"LD_LIBRARY_PATH": "/b/_internal", "LD_LIBRARY_PATH_ORIG": "/opt/cuda/lib64", "X": "1"}
+    check("their own value back", linuxenv.restore_library_path(env) is True
+          and env == {"LD_LIBRARY_PATH": "/opt/cuda/lib64", "X": "1"}, f"({env})")
+    env = {"LD_LIBRARY_PATH": "/b/_internal", "X": "1"}
+    linuxenv.restore_library_path(env)
+    check("none of their own: none at all", env == {"X": "1"}, f"({env})")
+    env = {"LD_LIBRARY_PATH": "/b/_internal", "LD_LIBRARY_PATH_ORIG": ""}
+    linuxenv.restore_library_path(env)
+    check("an empty one is none (an empty entry would mean the working folder)", env == {},
+          f"({env})")
+
+
+def test_from_sources_and_on_windows_the_library_path_is_left_alone(monkeypatch):
+    for linux, frozen in ((True, False), (False, True)):
+        monkeypatch.setattr(linuxenv, "is_linux", lambda linux=linux: linux)
+        monkeypatch.setattr(winenv, "is_frozen", lambda frozen=frozen: frozen)
+        env = {"LD_LIBRARY_PATH": "/u/ana/lib", "LD_LIBRARY_PATH_ORIG": "/x"}
+        check(f"linux={linux}, frozen={frozen}: untouched",
+              linuxenv.restore_library_path(env) is False
+              and env == {"LD_LIBRARY_PATH": "/u/ana/lib", "LD_LIBRARY_PATH_ORIG": "/x"})
+
+
+def test_the_library_path_is_restored_before_the_program_does_anything(monkeypatch):
+    done = []
+    monkeypatch.setattr(crashlog, "install", lambda: done.append("crashlog"))
+    monkeypatch.setattr(linuxenv, "restore_library_path", lambda: done.append("library path"))
+    monkeypatch.setattr(cli, "run_cli", lambda argv: done.append("cli") or 0)
+    monkeypatch.setattr(cli, "_run_gui", lambda argv, relaunched: done.append("gui") or 0)
+    cli.main(["--version"])
+    cli.main([])
+    check("before the command line and before the window",
+          done == ["crashlog", "library path", "cli", "crashlog", "library path", "gui"], f"({done})")

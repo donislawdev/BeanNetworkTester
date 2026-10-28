@@ -34,18 +34,27 @@
 #    and "--license" can show them from any copy of the app. build.py additionally
 #    places human-readable copies NEXT TO the exe: PyInstaller 6 puts datas inside
 #    _internal/, and a licence nobody can find is a licence nobody reads.
+#
+# 6. One spec for both systems.
+#    The Linux .tar.gz is this same onedir bundle. On Linux there is no version
+#    resource or .ico (PyInstaller's win32 module does not even import there:
+#    "cannot import name 'win32api'", measured), and the bundle takes the font
+#    stack from the system instead of carrying it (tools/linux_bundle.py says why).
 import os
 import sys
 
 from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
-from PyInstaller.utils.win32.versioninfo import (FixedFileInfo, StringFileInfo,
-                                                 StringStruct, StringTable,
-                                                 VarFileInfo, VarStruct,
-                                                 VSVersionInfo)
+
+WINDOWS = sys.platform == "win32"
 
 sys.path.insert(0, os.path.abspath("."))
 from beantester.appinfo import (APP_NAME, AUTHOR, COPYRIGHT, EXE_NAME,
                                 VERSION_FILE, __version__)
+
+# Off the search path again at once: the analysis below must not find tools/ there.
+sys.path.insert(0, os.path.abspath("tools"))
+import linux_bundle
+sys.path.remove(os.path.abspath("tools"))
 
 if __version__ == "0.0.0":
     raise SystemExit("BeanNetworkTester.spec: VERSION.txt is missing or malformed "
@@ -53,23 +62,29 @@ if __version__ == "0.0.0":
 
 _v = tuple(int(part) for part in __version__.split(".")[:3]) + (0,)
 
-version_info = VSVersionInfo(
-    ffi=FixedFileInfo(filevers=_v, prodvers=_v, mask=0x3F, flags=0x0, OS=0x40004,
-                      fileType=0x1, subtype=0x0),
-    kids=[
-        StringFileInfo([StringTable("040904B0", [
-            StringStruct("CompanyName", AUTHOR),
-            StringStruct("FileDescription", f"{APP_NAME} - poor network conditions simulator"),
-            StringStruct("FileVersion", __version__),
-            StringStruct("InternalName", "BeanNetworkTester"),
-            StringStruct("LegalCopyright", COPYRIGHT),
-            StringStruct("OriginalFilename", EXE_NAME),
-            StringStruct("ProductName", APP_NAME),
-            StringStruct("ProductVersion", __version__),
-        ])]),
-        VarFileInfo([VarStruct("Translation", [1033, 1200])]),
-    ],
-)
+version_info = None
+if WINDOWS:
+    from PyInstaller.utils.win32.versioninfo import (FixedFileInfo, StringFileInfo,
+                                                     StringStruct, StringTable,
+                                                     VarFileInfo, VarStruct,
+                                                     VSVersionInfo)
+    version_info = VSVersionInfo(
+        ffi=FixedFileInfo(filevers=_v, prodvers=_v, mask=0x3F, flags=0x0, OS=0x40004,
+                          fileType=0x1, subtype=0x0),
+        kids=[
+            StringFileInfo([StringTable("040904B0", [
+                StringStruct("CompanyName", AUTHOR),
+                StringStruct("FileDescription", f"{APP_NAME} - poor network conditions simulator"),
+                StringStruct("FileVersion", __version__),
+                StringStruct("InternalName", "BeanNetworkTester"),
+                StringStruct("LegalCopyright", COPYRIGHT),
+                StringStruct("OriginalFilename", EXE_NAME),
+                StringStruct("ProductName", APP_NAME),
+                StringStruct("ProductVersion", __version__),
+            ])]),
+            VarFileInfo([VarStruct("Translation", [1033, 1200])]),
+        ],
+    )
 
 datas = [("lang", "lang"), (VERSION_FILE, "."), ("LICENSE", "."),
          ("THIRD-PARTY-NOTICES.md", "."), ("licenses", "licenses"),
@@ -95,7 +110,8 @@ a = Analysis(
     # never touches `ssl` - and its only hashing is crashlog's sha1 fingerprint, which
     # `hashlib` computes via the built-in `_sha1` module when `_hashlib` is absent
     # (verified). Dropping them is ~7 MB off the release at no runtime cost.
-    excludes=["pytest", "ssl", "_ssl", "_hashlib"],
+    excludes=["pytest", "ssl", "_ssl", "_hashlib"]
+             + ([] if WINDOWS else list(linux_bundle.NOT_NEEDED_MODULES)),
     noarchive=False,
 )
 
@@ -123,6 +139,10 @@ _TCL_CRUFT = ("_tcl_data/tzdata/", "_tcl_data/msgs/", "_tk_data/msgs/")
 a.datas = [d for d in a.datas
            if not any(part in d[0].replace("\\", "/") for part in _TCL_CRUFT)]
 
+if not WINDOWS:
+    a.binaries = [b for b in a.binaries if not (linux_bundle.taken_from_system(b[0])
+                                                or linux_bundle.not_needed(b[0]))]
+
 pyz = PYZ(a.pure)
 
 exe = EXE(
@@ -131,7 +151,7 @@ exe = EXE(
     [],
     exclude_binaries=True,          # onedir
     name="BeanNetworkTester",
-    icon="bean.ico" if os.path.exists("bean.ico") else None,
+    icon="bean.ico" if WINDOWS and os.path.exists("bean.ico") else None,
     console=True,                   # the CLI must have stdout/stderr and an exit code
     uac_admin=False,                # asInvoker - the app elevates itself when needed
     version=version_info,           # exe Properties -> Details (author, version)

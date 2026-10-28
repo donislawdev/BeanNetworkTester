@@ -284,8 +284,8 @@ MUTATIONS = [
         # no PyInstaller to ask, and the answer there must stay "no assertion".
         "label": "sbom: an absent build tool gets an invented version",
         "file": "beantester/legal.py",
-        "old": '        return "bundled"\n\n\ndef component_rows():',
-        "new": '        return "0.0.0"\n\n\ndef component_rows():',
+        "old": '        return "bundled"\n\n\ndef _ebpfdivert_version():',
+        "new": '        return "0.0.0"\n\n\ndef _ebpfdivert_version():',
         "test": "test_a_build_tool_that_is_not_installed_is_not_invented",
     },
     {
@@ -992,8 +992,8 @@ MUTATIONS = [
         # the notice itself exists to cure, one level up.
         "label": "cron notice: a job drops out of what the weekly notice watches",
         "file": ".github/workflows/ci.yml",
-        "old": "    needs: [public-text, lint, types, semgrep, audit, mutations, tests, linux-capture, build]",
-        "new": "    needs: [public-text, lint, types, semgrep, audit, mutations, tests, build]",
+        "old": "    needs: [public-text, lint, types, semgrep, audit, mutations, tests, linux-capture, build, build-linux]",
+        "new": "    needs: [public-text, lint, types, semgrep, audit, mutations, tests, linux-capture, build]",
         "test": "test_the_cron_notice_watches_every_job_in_the_workflow",
     },
     {
@@ -1743,15 +1743,30 @@ MUTATIONS = [
     {
         "label": "licence: the notices name a WinDivert file that is not shipped",
         "file": "THIRD-PARTY-NOTICES.md",
-        "old": "## WinDivert (`WinDivert64.dll`, `WinDivert64.sys`)",
-        "new": "## WinDivert (`WinDivert.dll`, `WinDivert64.sys`)",
+        "old": "## WinDivert (`WinDivert64.dll`, `WinDivert64.sys`, the Windows zip)",
+        "new": "## WinDivert (`WinDivert.dll`, `WinDivert64.sys`, the Windows zip)",
         "test": "test_the_notices_name_the_windivert_files_that_are_really_shipped",
     },
     {
         "label": "licence: the written offer drops below the three-year floor",
         "file": "THIRD-PARTY-NOTICES.md",
-        "old": "**Written offer:** for at least three years from the date of this release, the",
-        "new": "**Written offer:** for as long as this release is distributed, the",
+        "old": "**Written offer:** for at least three years from the date of this release, the\n"
+               "Author will supply, on request and at no charge beyond the cost of delivery, the\n"
+               "complete corresponding source of the PyDivert",
+        "new": "**Written offer:** for as long as this release is distributed, the\n"
+               "Author will supply, on request and at no charge beyond the cost of delivery, the\n"
+               "complete corresponding source of the PyDivert",
+        "test": "test_the_written_offer_lasts_as_long_as_the_licence_demands",
+    },
+    {
+        "label": "licence: the Linux package's written offer drops below the floor",
+        "file": "THIRD-PARTY-NOTICES.md",
+        "old": "**Written offer:** for at least three years from the date of this release, the\n"
+               "Author will supply, on request and at no charge beyond the cost of delivery, the\n"
+               "complete corresponding source of the eBPFDivert",
+        "new": "**Written offer:** for as long as this release is distributed, the\n"
+               "Author will supply, on request and at no charge beyond the cost of delivery, the\n"
+               "complete corresponding source of the eBPFDivert",
         "test": "test_the_written_offer_lasts_as_long_as_the_licence_demands",
     },
     {
@@ -7407,7 +7422,9 @@ MUTATIONS = [
         "label": "cli: a Tk that cannot start escapes the window guard",
         "file": "beantester/cli.py",
         "old": "        winenv.set_dpi_awareness()            # before the Tk root exists\n"
-               "        root = tk.Tk()\n"
+               "        # The class the Linux menu entry names (StartupWMClass): Tk's default \"Tk\"\n"
+               "        # matches no entry, and GNOME shows such a window as a program of its own.\n"
+               "        root = tk.Tk(className=desktop.WINDOW_CLASS)\n"
                "        App(root)\n"
                "    except Exception as exc:\n"
                "        code = _window_did_not_open(exc)\n"
@@ -7419,7 +7436,7 @@ MUTATIONS = [
         "new": "    except Exception as exc:\n"
                "        return _window_did_not_open(exc)\n"
                "    winenv.set_dpi_awareness()\n"
-               "    root = tk.Tk()\n"
+               "    root = tk.Tk(className=desktop.WINDOW_CLASS)\n"
                "    App(root)\n",
         "test": "test_a_tk_that_cannot_start_is_said_and_recorded",
     },
@@ -10069,6 +10086,367 @@ MUTATIONS = [
         "old": "        crashlog.note(exc, \"linuxenv.pkexec\")\n",
         "new": "",
         "test": "test_a_pkexec_that_cannot_be_started_is_recorded_and_said",
+    },
+    # -- the Linux package (.tar.gz, 2026-10-28) ------------------------------------ #
+    {
+        "label": "linux package: the data folder stays ~/AppData/Local",
+        "file": "beantester/paths.py",
+        "old": "    if sys.platform.startswith(\"linux\"):\n        return posixpath.join(config_home(), TOOL_ID)\n",
+        "new": "",
+        "test": "test_the_linux_package_keeps_the_files_in_the_persons_config_folder",
+    },
+    {
+        "label": "config folder: a relative XDG_CONFIG_HOME is taken",
+        "file": "beantester/paths.py",
+        "old": "    if posixpath.isabs(value):\n",
+        "new": "    if value:\n",
+        "test": "test_the_config_folder_is_the_xdg_one_and_the_persons_under_root",
+    },
+    {
+        "label": "config folder: root's for a person, not theirs",
+        "file": "beantester/paths.py",
+        "old": "            return posixpath.join(found, \".config\")\n",
+        "new": "            pass\n",
+        "test": "test_the_config_folder_is_the_xdg_one_and_the_persons_under_root",
+    },
+    {
+        "label": "linux package: files beside the program are adopted",
+        "file": "beantester/paths.py",
+        "old": "    if not explicit and sys.platform != \"win32\":\n",
+        "new": "    if False:\n",
+        "test": "test_the_linux_package_adopts_nothing_beside_itself",
+    },
+    {
+        "label": "linux package: the command starts an interpreter",
+        "file": "beantester/appinfo.py",
+        "old": "    if paths.is_frozen() if frozen is None else frozen:\n",
+        "new": "    if False:\n",
+        "test": "test_the_linux_package_names_its_own_program",
+    },
+    {
+        "label": "linux package: outside the home the command names a path",
+        "file": "beantester/appinfo.py",
+        "old": "or \"./\" + LINUX_EXE_NAME",
+        "new": "or executable",
+        "test": "test_the_linux_package_names_its_own_program",
+    },
+    {
+        "label": "linux package: a capture without sudo",
+        "file": "beantester/appinfo.py",
+        "old": "        return \" \".join(([] if simulate else [\"sudo\"]) + [program])\n",
+        "new": "        return program\n",
+        "test": "test_the_linux_package_names_its_own_program",
+    },
+    {
+        "label": "linux package: the command is the .exe",
+        "file": "beantester/appinfo.py",
+        "old": "    if sys.platform.startswith(\"linux\"):\n        return linux_command(simulate)\n    if is_frozen():\n",
+        "new": "    if is_frozen():\n        return EXE_NAME\n    if sys.platform.startswith(\"linux\"):\n        return linux_command(simulate)\n    if is_frozen():\n",
+        "test": "test_the_frozen_command_follows_the_system_it_runs_on",
+    },
+    {
+        "label": "linux package: argparse names the .exe",
+        "file": "beantester/appinfo.py",
+        "old": "    return exe_name() if is_frozen() else LAUNCHER",
+        "new": "    return EXE_NAME if is_frozen() else LAUNCHER",
+        "test": "test_the_frozen_command_follows_the_system_it_runs_on",
+    },
+    {
+        "label": "library path: the person's own value is dropped",
+        "file": "beantester/linuxenv.py",
+        "old": "    if original:\n        environ[LIBRARY_PATH] = original\n    else:\n        environ.pop(LIBRARY_PATH, None)\n",
+        "new": "    environ.pop(LIBRARY_PATH, None)\n",
+        "test": "test_the_programs_the_package_starts_get_the_persons_library_path",
+    },
+    {
+        "label": "library path: the bundle's is left to the programs it starts",
+        "file": "beantester/linuxenv.py",
+        "old": "    else:\n        environ.pop(LIBRARY_PATH, None)\n    return True\n",
+        "new": "    return True\n",
+        "test": "test_the_programs_the_package_starts_get_the_persons_library_path",
+    },
+    {
+        "label": "library path: the saved copy stays behind",
+        "file": "beantester/linuxenv.py",
+        "old": "    original = environ.pop(LIBRARY_PATH_ORIG, \"\")\n",
+        "new": "    original = environ.get(LIBRARY_PATH_ORIG, \"\")\n",
+        "test": "test_the_programs_the_package_starts_get_the_persons_library_path",
+    },
+    {
+        "label": "library path: changed from sources too",
+        "file": "beantester/linuxenv.py",
+        "old": "    if not (is_linux() and winenv.is_frozen()):\n        return False\n    original",
+        "new": "    if not is_linux():\n        return False\n    original",
+        "test": "test_from_sources_and_on_windows_the_library_path_is_left_alone",
+    },
+    {
+        "label": "library path: not restored when the program starts",
+        "file": "beantester/cli.py",
+        "old": "    linuxenv.restore_library_path()           # the frozen build's: not for the programs it starts\n",
+        "new": "",
+        "test": "test_the_library_path_is_restored_before_the_program_does_anything",
+    },
+    {
+        "label": "a missing library of the system is called No tkinter",
+        "file": "beantester/cli.py",
+        "old": "        if missing:\n",
+        "new": "        if False:\n",
+        "test": "test_a_library_of_the_system_tk_cannot_load_is_named",
+    },
+    {
+        "label": "linux bundle: a bundled fontconfig passes",
+        "file": "tools/linux_bundle.py",
+        "old": "FROM_SYSTEM = (\"libfontconfig.so\", ",
+        "new": "FROM_SYSTEM = (",
+        "test": "test_a_bundle_carrying_the_systems_font_stack_fails",
+    },
+    {
+        "label": "linux bundle: a bundle without Xft passes",
+        "file": "tools/linux_bundle.py",
+        "old": "MUST_CARRY = (\"libtk\", \"libXft.so\", ",
+        "new": "MUST_CARRY = (\"libtk\", ",
+        "test": "test_a_bundle_missing_what_it_must_carry_fails",
+    },
+    {
+        "label": "linux bundle: the check never fails the build",
+        "file": "tools/linux_bundle.py",
+        "old": "    return 1 if found else 0\n",
+        "new": "    return 0\n",
+        "test": "test_a_bundle_carrying_the_systems_font_stack_fails",
+    },
+    {
+        "label": "package smoke: a simulation under sudo passes",
+        "file": "tools/ci_linux_package_smoke.py",
+        "old": "    if program == \"sudo\":\n",
+        "new": "    if False:\n",
+        "test": "test_every_wrong_repro_line_is_named",
+    },
+    {
+        "label": "package smoke: fontconfig's warnings pass",
+        "file": "tools/ci_linux_package_smoke.py",
+        "old": "NOISE = (\"Fontconfig\", ",
+        "new": "NOISE = (",
+        "test": "test_a_window_that_did_not_open_or_spoke_is_named",
+    },
+    {
+        "label": "package smoke: any data folder passes",
+        "file": "tools/ci_linux_package_smoke.py",
+        "old": "    if want not in output:\n",
+        "new": "    if False:\n",
+        "test": "test_a_data_folder_elsewhere_is_named",
+    },
+    {
+        "label": "capture smoke: --program is not what the sessions run",
+        "file": "tools/ci_linux_capture_smoke.py",
+        "old": "    if PROGRAM:\n        return [PROGRAM, *args]\n",
+        "new": "",
+        "test": "test_the_sessions_run_the_program_they_are_given",
+    },
+    {
+        "label": "capture smoke: a bundle run goes on into the tools' phases",
+        "file": "tools/ci_linux_capture_smoke.py",
+        "old": "        if PROGRAM:\n            return _report(failures)\n",
+        "new": "",
+        "test": "test_a_bundle_run_stops_after_the_sessions",
+    },
+    # -- the Linux package's licences (legal.py, sbom.py, 2026-10-28) ---------------- #
+    {
+        "label": "licence: the Linux package reports the Windows list",
+        "file": "beantester/legal.py",
+        "old": "    return LINUX_COMPONENTS if platform.startswith(\"linux\") else WINDOWS_COMPONENTS\n",
+        "new": "    return WINDOWS_COMPONENTS\n",
+        "test": "test_both_builds_are_in_the_registry_and_the_notices",
+    },
+    {
+        "label": "licence: the parts of libebpfdivert are read for another eBPFDivert",
+        "file": "beantester/legal.py",
+        "old": "EBPFDIVERT_READ = \"0.0.5\"\n",
+        "new": "EBPFDIVERT_READ = \"0.0.6\"\n",
+        "test": "test_the_parts_of_ebpfdivert_are_named_with_the_versions_read",
+    },
+    {
+        "label": "licence: --license says bundled for the parts of libebpfdivert",
+        "file": "beantester/legal.py",
+        "old": "            version = EBPFDIVERT_PARTS[name]\n",
+        "new": "            version = \"bundled\"\n",
+        "test": "test_the_parts_of_ebpfdivert_are_named_with_the_versions_read",
+    },
+    {
+        "label": "sbom: the two documents of a release share a namespace",
+        "file": "tools/sbom.py",
+        "old": "        seed += \"|linux\"\n",
+        "new": "        pass\n",
+        "test": "test_the_linux_package_has_an_sbom_of_its_own",
+    },
+    {
+        "label": "sbom: the Linux document describes the Windows build",
+        "file": "tools/sbom.py",
+        "old": "    shipped = legal.components(platform)\n",
+        "new": "    shipped = legal.components(\"win32\")\n",
+        "test": "test_the_linux_package_has_an_sbom_of_its_own",
+    },
+    {
+        "label": "sbom: the X.Org libraries' reference has no text",
+        "file": "tools/sbom.py",
+        "old": "    \"LicenseRef-X.Org-libraries\":\n",
+        "new": "    \"LicenseRef-X.Org-libraries-text\":\n",
+        "test": "test_the_linux_package_has_an_sbom_of_its_own",
+    },
+    # -- the Linux package's menu entry (desktop.py, 2026-10-28) -------------------- #
+    {
+        "label": "menu entry: Exec is not quoted",
+        "file": "beantester/desktop.py",
+        "old": "if c in _EXEC_ESCAPED else c for c in program)",
+        "new": "if False else c for c in program)",
+        "test": "test_exec_quotes_the_path_the_way_the_specification_does",
+    },
+    {
+        # The string escape on top of the quoting (the spec's four backslashes).
+        "label": "menu entry: Exec's backslashes are not doubled",
+        "file": "beantester/desktop.py",
+        "old": r'.replace("\\", "\\\\").replace("%", "%%")',
+        "new": r'.replace("%", "%%")',
+        "test": "test_exec_quotes_the_path_the_way_the_specification_does",
+    },
+    {
+        "label": "menu entry: a percent sign reads as a field code",
+        "file": "beantester/desktop.py",
+        "old": '.replace("%", "%%")',
+        "new": "",
+        "test": "test_exec_quotes_the_path_the_way_the_specification_does",
+    },
+    {
+        "label": "menu entry: no StartupWMClass",
+        "file": "beantester/desktop.py",
+        "old": "        f\"StartupWMClass={WINDOW_CLASS}\",\n",
+        "new": "",
+        "test": "test_the_entry_starts_the_program_itself_and_names_the_windows_class",
+    },
+    {
+        "label": "menu entry: the class is not in Tk's form",
+        "file": "beantester/desktop.py",
+        "old": "WINDOW_CLASS = \"Beannetworktester\"",
+        "new": "WINDOW_CLASS = \"BeanNetworkTester\"",
+        "test": "test_the_class_is_written_the_way_tk_gives_it",
+    },
+    {
+        "label": "menu entry: written under sudo",
+        "file": "beantester/desktop.py",
+        "old": "    if paths.running_as_root():\n",
+        "new": "    if False:\n",
+        "test": "test_only_the_linux_package_run_by_a_person_writes_it",
+    },
+    {
+        "label": "menu entry: written from sources",
+        "file": "beantester/desktop.py",
+        "old": "    if not paths.is_frozen():\n",
+        "new": "    if False:\n",
+        "test": "test_only_the_linux_package_run_by_a_person_writes_it",
+    },
+    {
+        "label": "menu entry: a control character is written into the file",
+        "file": "beantester/desktop.py",
+        "old": "        if _refused(path):\n",
+        "new": "        if False:\n",
+        "test": "test_a_path_the_entry_cannot_carry_is_refused",
+    },
+    {
+        "label": "menu entry: a program path with '=' is written",
+        "file": "beantester/desktop.py",
+        "old": "    if \"=\" in program:\n",
+        "new": "    if False:\n",
+        "test": "test_a_path_the_entry_cannot_carry_is_refused",
+    },
+    {
+        "label": "menu entry: two installs share one temporary file",
+        "file": "beantester/desktop.py",
+        "old": "        temporary = paths.temp_beside(target)\n",
+        "new": "        temporary = target + \".tmp\"\n",
+        "test": "test_a_failed_write_takes_away_its_own_temporary_file_only",
+    },
+    {
+        "label": "menu entry: a failed write leaves its temporary file",
+        "file": "beantester/desktop.py",
+        "old": "                os.unlink(temporary)\n",
+        "new": "                pass\n",
+        "test": "test_a_failed_write_takes_away_its_own_temporary_file_only",
+    },
+    {
+        "label": "menu entry: the window's class is Tk's shared one",
+        "file": "beantester/desktop.py",
+        "old": "WINDOW_CLASS = \"Beannetworktester\"",
+        "new": "WINDOW_CLASS = \"Tk\"",
+        "test": "test_the_class_is_written_the_way_tk_gives_it",
+    },
+    {
+        "label": "menu entry: remove removes nothing",
+        "file": "beantester/desktop.py",
+        "old": "        os.unlink(target)\n",
+        "new": "        pass\n",
+        "test": "test_remove_takes_only_its_own_file",
+    },
+    {
+        "label": "window: Tk's default class, which no menu entry names",
+        "file": "beantester/cli.py",
+        "old": "        root = tk.Tk(className=desktop.WINDOW_CLASS)\n",
+        "new": "        root = tk.Tk()\n",
+        "test": "test_the_window_carries_the_class_the_entry_names",
+    },
+    {
+        "label": "--install-desktop: a refusal answers 0",
+        "file": "beantester/cli.py",
+        "old": "        _fail(exitcodes.RUNTIME, reason)\n",
+        "new": "        return exitcodes.OK\n",
+        "test": "test_the_options_answer_with_exit_codes",
+    },
+    {
+        "label": "--remove-desktop installs",
+        "file": "beantester/cli.py",
+        "old": "    path, error = desktop.install() if install else desktop.remove()\n",
+        "new": "    path, error = desktop.install()\n",
+        "test": "test_the_options_answer_with_exit_codes",
+    },
+    {
+        "label": "package smoke: any window class passes",
+        "file": "tools/ci_linux_package_smoke.py",
+        "old": "        failures = [] if found and found.group(2) == WINDOW_CLASS else [\n",
+        "new": "        failures = [] if True else [\n",
+        "test": "test_a_window_that_did_not_open_or_spoke_is_named",
+    },
+    {
+        "label": "package smoke: an entry for another program passes",
+        "file": "tools/ci_linux_package_smoke.py",
+        "old": "    if f'Exec=\"{program}\"' not in text.splitlines():\n",
+        "new": "    if False:\n",
+        "test": "test_every_wrong_menu_entry_is_named",
+    },
+    {
+        "label": "package smoke: desktop-file-validate is not heard",
+        "file": "tools/ci_linux_package_smoke.py",
+        "old": "    if validated:\n",
+        "new": "    if False:\n",
+        "test": "test_every_wrong_menu_entry_is_named",
+    },
+    {
+        "label": "package smoke: the validator's exit code is not heard",
+        "file": "tools/ci_linux_package_smoke.py",
+        "old": "    if returncode != 0:\n",
+        "new": "    if False:\n",
+        "test": "test_the_validator_is_heard_by_its_exit_code_and_both_streams",
+    },
+    {
+        "label": "package smoke: what the validator says on stderr is not heard",
+        "file": "tools/ci_linux_package_smoke.py",
+        "old": "    said = (stdout + stderr).strip()\n",
+        "new": "    said = stdout.strip()\n",
+        "test": "test_the_validator_is_heard_by_its_exit_code_and_both_streams",
+    },
+    {
+        "label": "package smoke: looks for another class than the window has",
+        "file": "tools/ci_linux_package_smoke.py",
+        "old": "WINDOW_CLASS = \"Beannetworktester\"",
+        "new": "WINDOW_CLASS = \"BeanNetworkTester\"",
+        "test": "test_it_looks_for_what_the_program_writes",
     },
     {
         "label": "pkexec: a DISPLAY sudo kept is replaced",

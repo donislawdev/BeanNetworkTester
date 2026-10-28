@@ -20,6 +20,7 @@ REPO_URL = "https://github.com/donislawdev/BeanNetworkTester"
 TOOL_ID = "BeanNetworkTester"        # machine-readable id used in reports
 LAUNCHER = "bean_network_tester.py"  # entry script name (running from sources)
 EXE_NAME = "BeanNetworkTester.exe"   # the shipped executable - CLI *and* GUI
+LINUX_EXE_NAME = "BeanNetworkTester"  # the same in the Linux .tar.gz
 VERSION_FILE = "VERSION.txt"         # the only place a version number may live
 
 LICENSE_NAME = "GNU General Public License v3.0"   # free & open source, copyleft (see LICENSE)
@@ -60,15 +61,21 @@ def command_name(simulate=False):
     command runs ``--simulate``, which on Linux needs no root.
     """
     from .paths import is_frozen
-    if is_frozen():
-        return EXE_NAME
     if sys.platform.startswith("linux"):
         return linux_command(simulate)
+    if is_frozen():
+        return EXE_NAME
     return f"python {LAUNCHER}"
 
 
-def linux_command(simulate=False, executable=None, checkout=None, home=None):
-    """The script as Linux runs it from this checkout, the README's way:
+def exe_name():
+    """The shipped executable's file name on this system."""
+    return LINUX_EXE_NAME if sys.platform.startswith("linux") else EXE_NAME
+
+
+def linux_command(simulate=False, executable=None, checkout=None, home=None, frozen=None):
+    """The program as Linux runs it, the README's way: from the ``.tar.gz``
+    ``sudo ~/BeanNetworkTester/BeanNetworkTester``, from a checkout
     ``sudo .venv/bin/python -B bean_network_tester.py``.
 
     MEASURED 2026-10-27 on Ubuntu 26.04: there is no ``python`` there, only
@@ -79,12 +86,16 @@ def linux_command(simulate=False, executable=None, checkout=None, home=None):
     checkout) unless the command is a simulation, and the interpreter running now,
     named with no path from this machine - a report carrying the command is shared:
     relative to the checkout when it is inside it, from ``~`` when it is in the
-    person's home, else ``python3``.
+    person's home, else ``python3``. The frozen program the same way: from ``~``,
+    else ``./BeanNetworkTester``, which runs from its own folder.
     """
     from . import paths
     executable = sys.executable if executable is None else executable
-    checkout = paths.PROJECT_ROOT if checkout is None else checkout
     home = _persons_home() if home is None else home
+    if paths.is_frozen() if frozen is None else frozen:
+        program = (home and _inside(executable, home, "~/")) or "./" + LINUX_EXE_NAME
+        return " ".join(([] if simulate else ["sudo"]) + [program])
+    checkout = paths.PROJECT_ROOT if checkout is None else checkout
     interpreter = (_inside(executable, checkout, "")
                    or (home and _inside(executable, home, "~/")) or "python3")
     return " ".join(([] if simulate else ["sudo"]) + [interpreter]
@@ -124,4 +135,4 @@ def version_line():
 def program_name():
     """``prog`` for argparse (no ``python `` prefix - argparse adds no shell)."""
     from .paths import is_frozen
-    return EXE_NAME if is_frozen() else LAUNCHER
+    return exe_name() if is_frozen() else LAUNCHER
