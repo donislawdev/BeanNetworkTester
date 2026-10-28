@@ -12,6 +12,7 @@ import errno
 import io
 import json
 import os
+import sys
 import threading
 import time
 
@@ -1732,12 +1733,20 @@ def test_duration_survives_the_repro_command():
 
 
 def test_repro_command_follows_a_frozen_build(monkeypatch):
-    """A frozen user has no ``python bean_network_tester.py`` to paste."""
+    """A frozen user has no ``python bean_network_tester.py`` to paste: the exe on
+    Windows, the Linux package's program under sudo on Linux."""
     from beantester import DEFAULT_SETTINGS, appinfo, paths, repro
     monkeypatch.setattr(paths, "is_frozen", lambda: True)
+    monkeypatch.setattr(sys, "platform", "win32")
     cmd = repro.settings_to_cli_string(dict(DEFAULT_SETTINGS, loss=5))
     check("repro: the frozen command is the exe",
-          cmd.startswith(appinfo.EXE_NAME), f"({cmd})")
+          cmd.startswith(appinfo.EXE_NAME + " "), f"({cmd})")
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(appinfo, "_persons_home", lambda: "/u/ana")
+    monkeypatch.setattr(sys, "executable", "/u/ana/BeanNetworkTester/BeanNetworkTester")
+    cmd = repro.settings_to_cli_string(dict(DEFAULT_SETTINGS, loss=5))
+    check("repro: on Linux the package's program, under sudo",
+          cmd.startswith("sudo ~/BeanNetworkTester/BeanNetworkTester --"), f"({cmd})")
 
 
 def test_the_saved_config_round_trips_through_the_cli(tmp_path):

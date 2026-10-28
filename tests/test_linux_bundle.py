@@ -33,16 +33,37 @@ def test_a_bundle_that_keeps_to_the_list_passes(tmp_path, capsys):
 def test_a_bundle_carrying_the_systems_font_stack_fails(tmp_path):
     """Measured: a bundled fontconfig 2.15 rejects Arch's 2.18 configuration."""
     for name in ("libfontconfig.so.1", "libfreetype.so.6", "libexpat.so.1", "libpng16.so.16",
-                 "libbrotlicommon.so.1", "libbrotlidec.so.1"):
+                 "libbrotlicommon.so.1", "libbrotlidec.so.1", "libbz2.so.1.0"):
         folder = _bundle(tmp_path / name, GOOD + (f"_internal/{name}",))
         found = linux_bundle.problems(folder)
         check(f"{name} is caught", len(found) == 1 and name in found[0], f"({found})")
         check(f"{name}: the command fails", linux_bundle.main(["check", folder]) == 1)
 
 
+def test_what_the_systems_libxcb_brings_is_not_carried(tmp_path):
+    """The system's libxcb needs libXau and libXdmcp (measured), so they are there."""
+    for name in ("libXau.so.6", "libXdmcp.so.6", "libbsd.so.0", "libmd.so.0"):
+        found = linux_bundle.problems(_bundle(tmp_path / name, GOOD + (f"_internal/{name}",)))
+        check(f"{name} is caught", len(found) == 1 and "from the system" in found[0], f"({found})")
+
+
+def test_modules_the_program_never_uses_are_not_carried(tmp_path):
+    for name in ("python3.15/lib-dynload/_bz2.cpython-315-x86_64-linux-gnu.so",
+                 "python3.15/lib-dynload/_lzma.cpython-315-x86_64-linux-gnu.so",
+                 "python3.15/lib-dynload/_zstd.cpython-315-x86_64-linux-gnu.so",
+                 "liblzma.so.5", "libzstd.so.1"):
+        found = linux_bundle.problems(_bundle(tmp_path / name.replace("/", "_"),
+                                              GOOD + (f"_internal/{name}",)))
+        check(f"{name} is caught", len(found) == 1 and "never uses" in found[0], f"({found})")
+    check("a module that only starts like one stays",
+          not linux_bundle.not_needed("_bz2x.cpython-315.so"))
+
+
 def test_a_bundle_missing_what_it_must_carry_fails(tmp_path):
     """Measured: without libXft, a system that lacks it opens no window."""
-    for part in linux_bundle.MUST_CARRY:
+    # Written out, not read from MUST_CARRY: a part dropped from the list would
+    # otherwise drop out of this test too (a mutation measured exactly that).
+    for part in ("libtk", "libXft.so", "libebpfdivert.so"):
         folder = _bundle(tmp_path / part, [n for n in GOOD if part not in n])
         found = linux_bundle.problems(folder)
         check(f"no {part}: caught", found == [f"does not carry {part}"], f"({found})")

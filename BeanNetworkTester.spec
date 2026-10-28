@@ -110,7 +110,8 @@ a = Analysis(
     # never touches `ssl` - and its only hashing is crashlog's sha1 fingerprint, which
     # `hashlib` computes via the built-in `_sha1` module when `_hashlib` is absent
     # (verified). Dropping them is ~7 MB off the release at no runtime cost.
-    excludes=["pytest", "ssl", "_ssl", "_hashlib"],
+    excludes=["pytest", "ssl", "_ssl", "_hashlib"]
+             + ([] if WINDOWS else list(linux_bundle.NOT_NEEDED_MODULES)),
     noarchive=False,
 )
 

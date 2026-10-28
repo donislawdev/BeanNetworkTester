@@ -112,9 +112,10 @@ def install(program=None, icon=None, environ=None):
     temporary = target + ".tmp"
     try:
         paths.make_dirs(folder)
+        # The person's umask decides who may read it, as for any file they make;
+        # the menu needs no execute bit, and open() never sets one.
         with open(temporary, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(entry_text(program, icon))
-        os.chmod(temporary, 0o644)
         os.replace(temporary, target)
     except OSError as exc:
         with crashlog.quiet("desktop.temporary"):      # nothing half-written left behind

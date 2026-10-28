@@ -49,8 +49,8 @@ def test_exec_quotes_the_path_the_way_the_specification_does():
     check("a plain path", desktop.exec_value(PROGRAM) == f'"{PROGRAM}"')
     check("a space needs only the quotes",
           desktop.exec_value("/u/ana/My Apps/B") == '"/u/ana/My Apps/B"')
-    check("a double quote", desktop.exec_value('/u/a"b/B') == '"/u/a\\\\"b/B"',
-          f"({desktop.exec_value('/u/a\"b/B')})")
+    quoted = desktop.exec_value('/u/a"b/B')
+    check("a double quote", quoted == '"/u/a\\\\"b/B"', f"({quoted})")
     check("a dollar and a backtick", desktop.exec_value("/u/$x`y`/B") == '"/u/\\\\$x\\\\`y\\\\`/B"')
     check("a backslash: four", desktop.exec_value("/u/a\\b/B") == '"/u/a\\\\\\\\b/B"')
     check("a percent sign is not a field code", desktop.exec_value("/u/100%/B") == '"/u/100%%/B"')
@@ -99,7 +99,7 @@ def test_install_writes_the_entry_and_writes_it_again(tmp_path, package):
           f"({path}, {error})")
     check("with the program", f'Exec="{PROGRAM}"' in entry.read_text(encoding="utf-8"))
     if os.name == "posix":
-        check("readable by all, executable by none", (entry.stat().st_mode & 0o777) == 0o644)
+        check("executable by nobody", not entry.stat().st_mode & 0o111)
     desktop.install(PROGRAM.replace("ana", "ana/new"), ICON, env)
     check("a second install replaces it (the folder moved)",
           "ana/new" in entry.read_text(encoding="utf-8"))
