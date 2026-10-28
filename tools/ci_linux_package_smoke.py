@@ -105,6 +105,16 @@ def judge_entry(installed, text, validated, program, removed):
     return failures
 
 
+def validator_says(returncode, stdout, stderr):
+    """What ``desktop-file-validate`` objected to, or "" when it took the entry as it
+    is. Its exit code says whether it found an error, which it can report on either
+    stream or on none; a warning or a hint comes with exit 0 and still counts."""
+    said = (stdout + stderr).strip()
+    if returncode != 0:
+        return said or f"exit {returncode} without a word"
+    return said
+
+
 def _run(program, *args, env=None, timeout=60):
     done = subprocess.run([program, *args], capture_output=True, text=True,
                           env=env, timeout=timeout, check=False)
@@ -168,8 +178,11 @@ def _entry_phase(program, env, scratch):
     if os.path.isfile(entry):
         with open(entry, encoding="utf-8") as handle:
             text = handle.read()
-    validated = subprocess.run(["desktop-file-validate", entry], capture_output=True,
-                               text=True, timeout=30, check=False).stdout if text else ""
+    validated = ""
+    if text:
+        done = subprocess.run(["desktop-file-validate", entry], capture_output=True,
+                              text=True, timeout=30, check=False)
+        validated = validator_says(done.returncode, done.stdout, done.stderr)
     _run(program, "--remove-desktop", env=env)
     return judge_entry(installed, text, validated, program, not os.path.exists(entry))
 

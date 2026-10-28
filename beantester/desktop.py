@@ -21,7 +21,9 @@ What the entry is, and why:
 Quoting follows the Desktop Entry Specification ("The Exec key"): the path goes in
 double quotes with ``"``, `````, ``$`` and ``\\`` escaped by a backslash, ``%`` is
 written ``%%``, and the value's own string escapes (``\\`` for a backslash) apply
-on top. A path with a control character is refused rather than encoded.
+on top. A path with a control character is refused rather than encoded, and so is
+a program path with ``=``: "The name or path of the executable program may not
+contain the equal sign", and no quoting carries one.
 """
 import os
 import posixpath
@@ -107,19 +109,25 @@ def install(program=None, icon=None, environ=None):
     for path in (program, icon):
         if _refused(path):
             return None, f"the path {path!r} holds a control character; move the folder"
+    if "=" in program:
+        return None, (f"the path {program!r} holds '=', and a menu entry cannot start a "
+                      "program there; move the folder")
     folder = applications_dir(environ)
     target = posixpath.join(folder, FILE_NAME)
-    temporary = target + ".tmp"
+    temporary = None
     try:
         paths.make_dirs(folder)
-        # The person's umask decides who may read it, as for any file they make;
-        # the menu needs no execute bit, and open() never sets one.
+        # A name of its own (paths.temp_beside): two installs at once shared
+        # "<target>.tmp", and one truncated what the other was writing. mkstemp
+        # makes it 0600 and os.replace keeps that - the person's own menu reads it,
+        # nobody else needs to, and no execute bit is set.
+        temporary = paths.temp_beside(target)
         with open(temporary, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(entry_text(program, icon))
         os.replace(temporary, target)
     except OSError as exc:
-        with crashlog.quiet("desktop.temporary"):      # nothing half-written left behind
-            if os.path.lexists(temporary):
+        if temporary:
+            with crashlog.quiet("desktop.temporary"):  # nothing half-written left behind
                 os.unlink(temporary)
         return None, f"cannot write {target}: {exc.strerror or exc}"
     return target, None

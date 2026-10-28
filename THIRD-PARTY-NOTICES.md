@@ -66,8 +66,10 @@ machine is in test-signing mode). That is a Windows requirement, not ours.
 * Source code: https://github.com/ffalcinelli/ebpfdivert
 * Shipped as: one library, `_internal/pydivert/bpf/libebpfdivert.so`, which comes
   with PyDivert's Linux wheel and is used unmodified. Its version is printed by
-  `./BeanNetworkTester --license`. It carries libbpf, elfutils' libelf, Zstandard
-  and zlib inside it (their sections are below).
+  `./BeanNetworkTester --license`. eBPFDivert 0.0.5 carries libbpf 1.7.0,
+  elfutils 0.192 (libelf and libeu), Zstandard 1.5.7 and zlib 1.2.11 inside it:
+  its release script builds the first three from their own sources and links the
+  zlib of the manylinux_2_28 image it is built in (their sections are below).
 
 **Your LGPL rights, in practice.** The library is a separate file the program loads
 from that folder at run time. You may build an interface-compatible
@@ -182,8 +184,9 @@ version is linked above. Contact: https://donislawdev.com/
   runtime. `--license` reports the version the build links against; note that it
   can read `1.3.1.zlib-ng`, because the `zlib` MODULE is built against zlib-ng
   while the DLL itself is genuine zlib. Both are under this licence.
-* In the Linux package: `libz.so.1` from Ubuntu 24.04 (zlib 1.3), and a copy
-  inside `libebpfdivert.so`.
+* In the Linux package: `libz.so.1` from Ubuntu 24.04 (zlib 1.3), and zlib
+  1.2.11 inside `libebpfdivert.so` (Copyright (C) 1995-2017 Jean-loup Gailly and
+  Mark Adler, as its own strings say).
 
 ---
 
@@ -220,9 +223,9 @@ version is linked above. Contact: https://donislawdev.com/
 * Copyright (c) the libbpf authors (Facebook, Isovalent and others)
 * Used under: **GNU Lesser General Public License, version 2.1 (LGPL-2.1)**
   (libbpf is dual-licensed under LGPL-2.1 or BSD-2-Clause)
-* Licence text: `licenses/LGPL-2.1.txt`, `licenses/libbpf-copyright.txt`
-* Source code: https://github.com/libbpf/libbpf (eBPFDivert builds the version its
-  source tree pins)
+* Licence text: `licenses/LGPL-2.1.txt`, `licenses/libbpf-LICENSE.txt`
+* Source code: https://github.com/libbpf/libbpf, version 1.7.0 (eBPFDivert 0.0.5's
+  `third_party/libbpf` submodule points at the commit of its v1.7.0 tag)
 * What eBPFDivert loads its kernel programs with. Replacing it means rebuilding
   `libebpfdivert.so` - see eBPFDivert above.
 
@@ -235,8 +238,9 @@ version is linked above. Contact: https://donislawdev.com/
   (LGPL-3.0-or-later)** (libelf is dual-licensed under LGPL-3.0-or-later or
   GPL-2.0-or-later)
 * Licence text: `licenses/LGPL-3.0.txt`, `licenses/GPL-2.0.txt`,
-  `licenses/elfutils-copyright.txt`
-* Source code: https://sourceware.org/elfutils/
+  `licenses/elfutils-LICENSE.txt`
+* Source code: https://sourceware.org/elfutils/, version 0.192 (the release
+  tarball eBPFDivert 0.0.5 builds libelf and libeu, elfutils' helper library, from)
 * What libbpf reads the kernel programs' object file with. Replacing it means
   rebuilding `libebpfdivert.so` - see eBPFDivert above.
 
@@ -247,8 +251,9 @@ version is linked above. Contact: https://donislawdev.com/
 * Copyright (c) Meta Platforms, Inc. and affiliates
 * Used under: **BSD 3-Clause License** (Zstandard is dual-licensed under
   BSD-3-Clause or GPL-2.0)
-* Licence text: `licenses/zstd-copyright.txt`
-* Source code: https://github.com/facebook/zstd
+* Licence text: `licenses/zstd-LICENSE.txt`
+* Source code: https://github.com/facebook/zstd, version 1.5.7 (the release
+  tarball eBPFDivert 0.0.5 builds it from)
 * libelf's decompression; nothing in this program calls it directly.
 
 ---

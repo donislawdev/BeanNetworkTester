@@ -4,6 +4,7 @@ proves nothing)."""
 import os
 import sys
 
+from beantester import desktop
 from fakes import ROOT, check
 
 sys.path.insert(0, os.path.join(ROOT, "tools"))
@@ -71,6 +72,25 @@ def test_every_wrong_menu_entry_is_named():
                        ((0, ENTRY, "", PROGRAM, False), "left the entry")):
         found = smoke.judge_entry(*case)
         check(word, any(word in f for f in found), f"({found})")
+
+
+def test_the_validator_is_heard_by_its_exit_code_and_both_streams():
+    """desktop-file-validate's exit code says whether it found an error, and it can
+    say so on either stream or on none; a warning comes with exit 0 and still counts,
+    because a clean entry here has neither."""
+    check("a clean entry", smoke.validator_says(0, "", "") == "")
+    check("an error without a word: its exit code",
+          smoke.validator_says(1, "", "") == "exit 1 without a word")
+    check("an error on stderr", "error: bad" in smoke.validator_says(1, "", "error: bad\n"))
+    check("an error on stdout", "not quoted" in smoke.validator_says(1, "x: error: not quoted\n", ""))
+    check("a warning with exit 0", "hint" in smoke.validator_says(0, "x: hint: y\n", ""))
+
+
+def test_it_looks_for_what_the_program_writes():
+    """The smoke's own copies of the class and the file name (it runs on the bundle,
+    without the program's sources) are the program's."""
+    check("the window's class", smoke.WINDOW_CLASS == desktop.WINDOW_CLASS)
+    check("the entry's file name", smoke.ENTRY_FILE == desktop.FILE_NAME)
 
 
 def test_it_needs_a_display_and_one_program(monkeypatch, capsys):

@@ -133,11 +133,12 @@ _SHARED = ("PyDivert", "psutil", "Python", "Tcl/Tk", "PyInstaller (bootloader)",
            "libffi")
 
 # The Linux .tar.gz (2026-10-28), read off a bundle built on Ubuntu 24.04 - the
-# libraries it carries come from that system's packages, and their copyright files
-# are what licenses/ holds. tools/linux_bundle.py says which ones the system
-# provides instead. libebpfdivert.so, pydivert's Linux library, is a separate file
-# that carries libbpf, elfutils' libelf, Zstandard and zlib inside it (its own
-# README: they "are linked in"; its strings name libbpf and elfutils).
+# libraries it carries beside the program come from that system's packages (the
+# X.Org ones' copyright files are licenses/X.Org-libraries.txt), and
+# tools/linux_bundle.py says which ones the system provides instead.
+# libebpfdivert.so, pydivert's Linux library, is a separate file that carries
+# libbpf, elfutils' libelf, Zstandard and zlib inside it, built from their own
+# sources rather than taken from a distribution (EBPFDIVERT_PARTS).
 LINUX_COMPONENTS = (
     ("eBPFDivert", None, "LGPL-3.0-or-later (dual with GPL-2.0-or-later)",
      "https://github.com/ffalcinelli/ebpfdivert",
@@ -156,6 +157,16 @@ LINUX_COMPONENTS = (
      "https://github.com/facebook/zstd",
      "BSD-3-Clause OR GPL-2.0-only"),
 )
+
+# The versions inside libebpfdivert.so, read for the eBPFDivert named here
+# (2026-10-28): its release script, scripts/build_release.sh at that tag, builds
+# Zstandard and elfutils from their release tarballs and libbpf from its
+# third_party/libbpf submodule (the commit of libbpf's v1.7.0 tag), and links the
+# zlib of the manylinux_2_28 image; the library's own strings say zstd 1.5.7 and
+# zlib 1.2.11. A pydivert that brings another eBPFDivert reddens
+# tests/test_license_surface.py on Linux until these are read again.
+EBPFDIVERT_READ = "0.0.5"
+EBPFDIVERT_PARTS = {"libbpf": "1.7.0", "elfutils (libelf)": "0.192", "Zstandard": "1.5.7"}
 
 
 def components(platform=None):
@@ -257,9 +268,11 @@ def component_rows(platform=None):
             version = _ebpfdivert_version()
         elif name.startswith("PyInstaller"):
             version = _pyinstaller_version()
+        elif name in EBPFDIVERT_PARTS:
+            version = EBPFDIVERT_PARTS[name]
         else:
-            version = "bundled"          # libffi, the MS runtime, the libraries inside
-                                         # libebpfdivert: no version to read
+            version = "bundled"          # libffi, the MS runtime, the X.Org libraries:
+                                         # no version to read
         rows.append((name, version, licence, url))
     return rows
 

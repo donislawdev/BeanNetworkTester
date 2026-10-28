@@ -107,16 +107,46 @@ def test_install_writes_the_entry_and_writes_it_again(tmp_path, package):
           sorted(os.listdir(entry.parent)) == [desktop.FILE_NAME])
 
 
-def test_a_path_with_a_control_character_is_refused(tmp_path, package):
-    path, error = desktop.install("/u/ana/a\nb/B", ICON, {"HOME": str(tmp_path)})
-    check("refused, nothing written", path is None and "control character" in error
-          and not _entry(tmp_path).exists(), f"({error})")
+def test_a_path_the_entry_cannot_carry_is_refused(tmp_path, package):
+    """A control character has no encoding in the file, and the program's path may
+    not hold "=" at all (the spec's Exec key); an icon's path is a plain string."""
+    env = {"HOME": str(tmp_path)}
+    path, error = desktop.install("/u/ana/a\nb/B", ICON, env)
+    check("a control character: refused, nothing written", path is None
+          and "control character" in error and not _entry(tmp_path).exists(), f"({error})")
+    path, error = desktop.install("/u/ana/a=b/BeanNetworkTester", ICON, env)
+    check("'=' in the program's path: refused, and what to do", path is None
+          and "'='" in error and "move the folder" in error and not _entry(tmp_path).exists(),
+          f"({error})")
+    path, error = desktop.install(PROGRAM, "/u/ana/a=b/bean.png", env)
+    check("'=' in the icon's path is written", error is None and path, f"({error})")
 
 
 def test_a_folder_that_cannot_be_written_is_said_and_leaves_nothing(tmp_path, package):
     (tmp_path / ".local").write_text("a file where the folder would be", encoding="utf-8")
     path, error = desktop.install(PROGRAM, ICON, {"HOME": str(tmp_path)})
     check("not written, and why", path is None and error.startswith("cannot write"), f"({error})")
+
+
+def test_a_failed_write_takes_away_its_own_temporary_file_only(tmp_path, monkeypatch, package):
+    """Two installs at once each write a temporary file of their own: one name for
+    both ("<target>.tmp") let one truncate what the other was writing, and a failed
+    one removes only the file it made."""
+    folder = _entry(tmp_path).parent
+    folder.mkdir(parents=True)
+    other = folder / (desktop.FILE_NAME + ".tmp")
+    other.write_text("half of another install's entry", encoding="utf-8")
+
+    def full(_source, _target):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(desktop.os, "replace", full)
+    path, error = desktop.install(PROGRAM, ICON, {"HOME": str(tmp_path)})
+    check("not written, and why", path is None and "No space left" in error, f"({error})")
+    check("its own temporary file is gone, the other install's is untouched",
+          sorted(os.listdir(folder)) == [other.name]
+          and other.read_text(encoding="utf-8") == "half of another install's entry",
+          f"({sorted(os.listdir(folder))})")
 
 
 def test_remove_takes_only_its_own_file(tmp_path, package):
@@ -154,9 +184,11 @@ def test_install_and_remove_together_is_a_usage_error(capsys):
 
 def test_the_class_is_written_the_way_tk_gives_it():
     """Tk title-cases the class it is given (measured: "BeanNetworkTester" became
-    "Beannetworktester"), so a class in any other form is one no window has."""
-    check("first letter up, the rest down",
-          desktop.WINDOW_CLASS == desktop.WINDOW_CLASS.capitalize(), f"({desktop.WINDOW_CLASS})")
+    "Beannetworktester"), so a class in any other form is one no window has - and
+    it is the program's own, not Tk's default "Tk", which every Tk program shares
+    and GNOME matches to no entry."""
+    check("the class measured on the package's window",
+          desktop.WINDOW_CLASS == "Beannetworktester", f"({desktop.WINDOW_CLASS})")
 
 
 def test_the_window_carries_the_class_the_entry_names(monkeypatch):

@@ -220,3 +220,7 @@ def test_the_linux_package_has_an_sbom_of_its_own():
     refs = {p["licenseDeclared"] for p in linux["packages"] if "LicenseRef" in p["licenseDeclared"]}
     texts = {e["licenseId"] for e in linux.get("hasExtractedLicensingInfo", [])}
     check("every LicenseRef has its text", refs <= texts, f"({refs - texts})")
+    versions = {p["name"]: p["versionInfo"] for p in linux["packages"]}
+    for name, version in legal.EBPFDIVERT_PARTS.items():
+        check(f"{name} inside libebpfdivert.so carries its version",
+              versions.get(name) == version, f"({versions.get(name)})")

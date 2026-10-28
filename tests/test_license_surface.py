@@ -356,3 +356,36 @@ def test_both_builds_are_in_the_registry_and_the_notices():
           not linux & {"Microsoft C Runtime", "libtommath"})
     check("this system's list is the one --license reports",
           legal.COMPONENTS == legal.components())
+
+
+def test_the_parts_of_ebpfdivert_are_named_with_the_versions_read():
+    """libebpfdivert.so carries libbpf, libelf and Zstandard built from their own
+    sources, so the notices name the versions eBPFDivert's release script builds -
+    not the ones a distribution packages (they named Ubuntu 24.04's at first) - and
+    --license and the SBOM report the same."""
+    import os
+    from fakes import ROOT
+
+    notices = open(os.path.join(ROOT, "THIRD-PARTY-NOTICES.md"), encoding="utf-8").read()
+    check("the notices say which eBPFDivert the parts were read for",
+          f"eBPFDivert {legal.EBPFDIVERT_READ} carries" in notices)
+    rows = {name: version for name, version, _lic, _url in legal.component_rows("linux")}
+    for name, version in legal.EBPFDIVERT_PARTS.items():
+        stem = name.split(" (")[0]
+        check(f"the notices name {stem} {version}", f"{stem} {version}" in notices)
+        check(f"--license reports {stem} {version}", rows.get(name) == version, f"({rows.get(name)})")
+
+
+def test_the_parts_were_read_for_the_ebpfdivert_we_ship():
+    """The other half: the eBPFDivert in the installed pydivert is the one the
+    parts were read for, the way the WinDivert test above holds the driver. A
+    pydivert that brings another eBPFDivert lands here, on the Linux runner, until
+    somebody reads its release script again (legal.EBPFDIVERT_PARTS)."""
+    import sys as _sys
+
+    shipped = legal._ebpfdivert_version()
+    if shipped == "-" or not _sys.platform.startswith("linux"):
+        return                      # Windows, or no pydivert library here
+    check("the eBPFDivert pydivert brings is the one the parts were read for",
+          shipped == legal.EBPFDIVERT_READ,
+          f"(pydivert brings {shipped!r}, legal.EBPFDIVERT_READ is {legal.EBPFDIVERT_READ!r})")
