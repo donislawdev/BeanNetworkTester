@@ -151,10 +151,12 @@ max-complexity = 26
 # point is to survive exactly that.
 "beantester/gui/widgets/sortable_tree.py" = ["S112"]
 "beantester/winenv.py" = ["S112"]
-# The one child process the package starts (tests/test_no_telemetry.py, SPAWN_ALLOWED):
-# gsettings on Linux, a fixed argv of found programs and constants, never a shell,
-# never text from outside.
+# The two child processes the package starts (tests/test_no_telemetry.py, SPAWN_ALLOWED),
+# both on Linux: gsettings, a fixed argv of found programs and constants, and pkexec,
+# found on PATH, with this program's own command line. Never a shell, never text from
+# outside.
 "beantester/proxy.py" = ["S603"]
+"beantester/linuxenv.py" = ["S603"]
 # Maintainer and CI scripts: they run `git` and `python` by design, and the only
 # URL opened is a literal api.github.com endpoint whose path is validated first.
 "tools/**" = ["S603", "S607", "S310"]

@@ -126,6 +126,8 @@ ALLOWED_IMPORTS = {
         "list2cmdline, a pure string helper - nothing here spawns anything",
     ("beantester/proxy.py", "subprocess"):
         "Linux: gsettings, which reads the desktop's proxy settings (below)",
+    ("beantester/linuxenv.py", "subprocess"):
+        "Linux: pkexec, which asks for root and starts the window again (below)",
 }
 
 # The exceptions, each with the reason it exists. A call on one of these modules
@@ -632,6 +634,12 @@ SPAWN_ALLOWED = {
         "2026-10-27 (strace -f -e connect,socket,execve, Ubuntu 26.04): its only "
         "sockets were AF_UNIX ones to the system's account database, no D-Bus, no "
         "AF_INET or AF_INET6",
+    ("beantester/linuxenv.py", "subprocess.run"):
+        "Linux: pkexec from PATH, twice at most per start of the window - `pkexec "
+        "--help` (10 s limit) to see whether it takes --keep-cwd, then pkexec running "
+        "this same program as root, waited for while it runs. A fixed argv, an "
+        "environment of the locale variables only, no shell. pkexec itself talks to "
+        "polkitd over the system D-Bus (AF_UNIX); nothing here opens AF_INET or AF_INET6",
 }
 
 
@@ -640,12 +648,12 @@ def unallowed_spawns(found):
             if (rel, detail) not in SPAWN_ALLOWED]
 
 
-def test_the_shipped_package_spawns_only_the_one_named_process():
-    """No child process but the one named above, so no shelling out to curl,
-    bitsadmin or PowerShell."""
+def test_the_shipped_package_spawns_only_the_named_processes():
+    """No child process but the ones named above (gsettings, pkexec), so no shelling
+    out to curl, bitsadmin or PowerShell."""
     found = _scan().get("spawn", [])
     bad = ["%s:%d %s" % (rel, line, detail) for rel, detail, line in unallowed_spawns(found)]
-    check("the shipped package spawns no process but the named one", not bad, f"({bad})")
+    check("the shipped package spawns no process but the named ones", not bad, f"({bad})")
     seen = {(rel, detail) for rel, detail, _line in found}
     stale = sorted(str(key) for key in SPAWN_ALLOWED if key not in seen)
     check("every allowed process is still started where it is allowed", not stale, f"({stale})")

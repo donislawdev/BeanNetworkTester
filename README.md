@@ -190,6 +190,12 @@ checkout, which you could then not delete without `sudo`. Plain `sudo` keeps the
 the window needs to reach the desktop, `DISPLAY` and `XAUTHORITY`, on Ubuntu 24.04 and 26.04,
 also under Wayland. Ubuntu 26.04's `sudo` refuses `-E`, and nothing here needs it.
 
+Started without `sudo` (`.venv/bin/python bean_network_tester.py`), the window asks for an
+administrator's password in the desktop's own dialog, through polkit's `pkexec`, as Windows
+asks through UAC, and opens as root. **Cancel** opens it without root, as before. Where no such
+dialog exists, such as in WSL or over ssh, it opens without root at once, and
+`BEAN_NO_ELEVATE=1` turns the question off.
+
 `--doctor` lists what the machine still lacks, and while something stops a capture it ends with
 exit code 1, as on Windows without administrator rights. Where Linux differs from Windows:
 
@@ -204,8 +210,8 @@ exit code 1, as on Windows without administrator rights. Where Linux differs fro
 - If the tool is killed, the traffic it was holding stays held for about 3 seconds, then flows
   again. There is nothing for `--cleanup-driver` to do: the kernel cleans up by itself.
 - IP fragments always pass through the tool, even those its filter does not match.
-- In the window, the files it saves (window state, profiles, CSV) stay yours under `sudo`, and
-  GitHub and Donate print their address instead of starting a browser as root.
+- In the window, the files it saves (window state, profiles, CSV) stay yours under `sudo` and
+  `pkexec`, and GitHub and Donate print their address instead of starting a browser as root.
 - On the Tools tab, Ping, Sockets, Port check, Filter tester, TCP health and Diagnostics work.
   Ping works without `sudo` where the system lets your group send pings (the setting
   `net.ipv4.ping_group_range`: Ubuntu 26.04 allows it, 24.04 does not). With `sudo` it sends
@@ -1625,6 +1631,7 @@ beantester/              the implementation package
   exitcodes.py           EXIT CODES - the CLI/CI-CD contract (single source of truth)
   clilog.py              CLI output: log on stderr ([bean]), data on stdout (text/NDJSON)
   winenv.py              Windows: admin, elevation (UAC), console detach, DPI
+  linuxenv.py            Linux: the window asks for root through polkit (pkexec)
   driver.py              WinDivert driver lifecycle + --doctor / --cleanup-driver
   fields.py              FIELD REGISTRY - single source of truth: type, label, unit,
                          range, form section, profile scope, CLI flag

@@ -121,17 +121,34 @@ def running_as_root():
 
 
 def invoking_user():
-    """``(uid, gid)`` of the person who typed ``sudo`` for this root process, else ``None``.
+    """``(uid, gid)`` of the person who started this root process with ``sudo`` or
+    ``pkexec``, else ``None``.
 
     What sudo sets for the command it runs: sudo 1.9 (Ubuntu 24.04) and sudo-rs
-    (26.04) both set ``SUDO_UID`` and ``SUDO_GID`` (measured). ``None`` when this
-    process is not root, when nothing says who started it, and on Windows.
+    (26.04) both set ``SUDO_UID`` and ``SUDO_GID`` (measured). pkexec sets them too
+    from polkit 127 (Ubuntu 26.04); before that (124 on 24.04, 0.105 on 22.04) it
+    names the person only by ``PKEXEC_UID``, and the group is theirs from the
+    account database. ``None`` when this process is not root, when nothing says
+    who started it, and on Windows.
     """
     if not running_as_root():
         return None
     try:
         return int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"])
     except (KeyError, ValueError):
+        return _pkexec_user()
+
+
+def _pkexec_user():
+    """``(uid, gid)`` from ``PKEXEC_UID`` and the account database, else ``None``."""
+    try:
+        uid = int(os.environ["PKEXEC_UID"])
+    except (KeyError, ValueError):
+        return None
+    import pwd
+    try:
+        return uid, pwd.getpwuid(uid).pw_gid
+    except (KeyError, OverflowError):
         return None
 
 
