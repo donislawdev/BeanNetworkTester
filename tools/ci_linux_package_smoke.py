@@ -13,7 +13,11 @@ fail (``tests/test_ci_linux_package_smoke.py``):
 * ``--doctor`` puts the user files in ``$XDG_CONFIG_HOME/BeanNetworkTester``
   (it said ``~/AppData/Local``);
 * the window opens on the display, and says nothing on stderr: a bundled
-  fontconfig older than the system's printed a warning per rule it rejected.
+  fontconfig older than the system's printed a warning per rule it rejected;
+* the window's class is the one the menu entry names (Tk's default is "Tk",
+  which GNOME matches to no entry);
+* ``--install-desktop`` writes an entry ``desktop-file-validate`` accepts, which
+  starts this program, and ``--remove-desktop`` takes it away again.
 
     xvfb-run -a python tools/ci_linux_package_smoke.py dist/BeanNetworkTester/BeanNetworkTester
 """
@@ -25,6 +29,8 @@ import tempfile
 import time
 
 WINDOW_TITLE = "Bean Network Tester"
+WINDOW_CLASS = "Beannetworktester"            # beantester/desktop.py WINDOW_CLASS (Tk's form)
+ENTRY_FILE = "com.donislawdev.BeanNetworkTester.desktop"
 WINDOW_WAIT_S = 30
 CONFIG_ERROR = 3
 
@@ -69,11 +75,33 @@ def judge_doctor(output, config_home):
     return []
 
 
-def judge_window(seen, stderr):
-    failures = [] if seen else [f"no window named {WINDOW_TITLE!r} in {WINDOW_WAIT_S} s"]
-    noisy = [line for line in stderr.splitlines() if any(word in line for word in NOISE)]
+def judge_window(line, stderr):
+    """``line``: the window's line in ``xwininfo -root -tree``, or None."""
+    if line is None:
+        failures = [f"no window named {WINDOW_TITLE!r} in {WINDOW_WAIT_S} s"]
+    else:
+        found = re.search(r'\("([^"]*)" "([^"]*)"\)', line)
+        failures = [] if found and found.group(2) == WINDOW_CLASS else [
+            f"the window's class is not {WINDOW_CLASS!r}: {line.strip()!r}"]
+    noisy = [l for l in stderr.splitlines() if any(word in l for word in NOISE)]
     if noisy:
         failures.append(f"the window printed {len(noisy)} line(s) like {noisy[0]!r}")
+    return failures
+
+
+def judge_entry(installed, text, validated, program, removed):
+    """``--install-desktop`` and ``--remove-desktop``: codes, the file, the validator."""
+    failures = []
+    if installed != 0 or text is None:
+        return [f"--install-desktop answered {installed} and wrote {'nothing' if text is None else 'a file'}"]
+    if f'Exec="{program}"' not in text.splitlines():
+        failures.append("the entry does not start this program")
+    if f"StartupWMClass={WINDOW_CLASS}" not in text.splitlines():
+        failures.append("the entry does not name the window's class")
+    if validated:
+        failures.append(f"desktop-file-validate: {validated.strip().splitlines()[0]}")
+    if not removed:
+        failures.append("--remove-desktop left the entry")
     return failures
 
 
@@ -83,22 +111,23 @@ def _run(program, *args, env=None, timeout=60):
     return done.returncode, done.stdout + done.stderr
 
 
-def window_seen(title=WINDOW_TITLE):
-    """True when the display has a top-level window of that title (xwininfo)."""
+def window_line(title=WINDOW_TITLE):
+    """The line ``xwininfo -root -tree`` gives the top-level window of that title
+    (it carries the window's class), or None."""
     tree = subprocess.run(["xwininfo", "-root", "-tree"], capture_output=True,
                           text=True, timeout=10, check=False).stdout
-    return f'"{title}"' in tree
+    return next((l for l in tree.splitlines() if f'"{title}": (' in l), None)
 
 
 def _window_phase(program, env):
     started = subprocess.Popen([program], env=env, stdout=subprocess.DEVNULL,
                                stderr=subprocess.PIPE, text=True)
-    seen = False
+    seen = None
     try:
         deadline = time.monotonic() + WINDOW_WAIT_S
         while time.monotonic() < deadline and started.poll() is None:
-            if window_seen():
-                seen = True
+            seen = window_line()
+            if seen:
                 time.sleep(2)               # what a start prints comes in its first seconds
                 break
             time.sleep(0.5)
@@ -127,7 +156,22 @@ def run_phases(program, scratch):
     _code, report = _run(program, "--doctor", env=doctor_env)
     failures += judge_doctor(report, config_home)
     failures += _window_phase(program, env)
+    failures += _entry_phase(program, env, scratch)
     return failures
+
+
+def _entry_phase(program, env, scratch):
+    env = {**env, "XDG_DATA_HOME": os.path.join(scratch, "share")}
+    entry = os.path.join(scratch, "share", "applications", ENTRY_FILE)
+    installed, _ = _run(program, "--install-desktop", env=env)
+    text = None
+    if os.path.isfile(entry):
+        with open(entry, encoding="utf-8") as handle:
+            text = handle.read()
+    validated = subprocess.run(["desktop-file-validate", entry], capture_output=True,
+                               text=True, timeout=30, check=False).stdout if text else ""
+    _run(program, "--remove-desktop", env=env)
+    return judge_entry(installed, text, validated, program, not os.path.exists(entry))
 
 
 def main(argv=None):

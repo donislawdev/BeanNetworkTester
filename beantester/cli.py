@@ -21,7 +21,7 @@ import sys
 import threading
 import time
 
-from . import appinfo, capture_backend, clilog, driver, exitcodes, linuxenv, winenv
+from . import appinfo, capture_backend, clilog, desktop, driver, exitcodes, linuxenv, winenv
 from .appinfo import command_name, program_name, version_line
 from .clilog import CliLog
 from . import crashlog
@@ -207,6 +207,12 @@ def build_arg_parser():
     p.add_argument("--version", action="version", version=version_line())
     p.add_argument("--license", action="store_true",
                    help="print the licence and the third-party notices, then exit")
+    menu = p.add_mutually_exclusive_group()
+    menu.add_argument("--install-desktop", action="store_true",
+                      help="the Linux package: add this program to your desktop's "
+                           "applications menu (run it without sudo), then exit")
+    menu.add_argument("--remove-desktop", action="store_true",
+                      help="the Linux package: remove that menu entry, then exit")
     p.add_argument("--gui", action="store_true",
                    help="open the GUI (only valid on its own - the GUI has its "
                         "own controls, so it takes no settings flags)")
@@ -712,6 +718,27 @@ def _run_license(log):
     return exitcodes.OK
 
 
+def _run_desktop(log, install):
+    """``--install-desktop`` / ``--remove-desktop``: the Linux package's menu entry
+    (``desktop.py``). Not here (not the package, root): 1; not written: 5."""
+    from . import desktop
+    reason = desktop.why_not()
+    if reason:
+        _fail(exitcodes.RUNTIME, reason)
+    path, error = desktop.install() if install else desktop.remove()
+    if error:
+        _fail(exitcodes.IO, error)
+    if install:
+        log.info(f"Added to the applications menu: {path}")
+        log.info(f"It starts {sys.executable}. After moving this folder, run "
+                 "--install-desktop again from its new place.")
+    elif path:
+        log.info(f"Removed the menu entry: {path}")
+    else:
+        log.info("There was no menu entry to remove.")
+    return exitcodes.OK
+
+
 def _run_doctor(log):
     ok, checks = driver.doctor()
     # Where the user's own files are is an environment fact like the rest of this
@@ -1191,6 +1218,8 @@ def _run_command(args, log, sleep, clock, engine):
               "drop --gui to run these settings from the command line.")
     if args.license:
         return _run_license(log)
+    if args.install_desktop or args.remove_desktop:
+        return _run_desktop(log, args.install_desktop)
     if args.doctor:
         return _run_doctor(log)
     if args.cleanup_driver:
@@ -1353,7 +1382,9 @@ def _run_gui(argv, relaunched=False):
 
         from .gui import App
         winenv.set_dpi_awareness()            # before the Tk root exists
-        root = tk.Tk()
+        # The class the Linux menu entry names (StartupWMClass): Tk's default "Tk"
+        # matches no entry, and GNOME shows such a window as a program of its own.
+        root = tk.Tk(className=desktop.WINDOW_CLASS)
         App(root)
     except Exception as exc:
         code = _window_did_not_open(exc)

@@ -7407,7 +7407,9 @@ MUTATIONS = [
         "label": "cli: a Tk that cannot start escapes the window guard",
         "file": "beantester/cli.py",
         "old": "        winenv.set_dpi_awareness()            # before the Tk root exists\n"
-               "        root = tk.Tk()\n"
+               "        # The class the Linux menu entry names (StartupWMClass): Tk's default \"Tk\"\n"
+               "        # matches no entry, and GNOME shows such a window as a program of its own.\n"
+               "        root = tk.Tk(className=desktop.WINDOW_CLASS)\n"
                "        App(root)\n"
                "    except Exception as exc:\n"
                "        code = _window_did_not_open(exc)\n"
@@ -7419,7 +7421,7 @@ MUTATIONS = [
         "new": "    except Exception as exc:\n"
                "        return _window_did_not_open(exc)\n"
                "    winenv.set_dpi_awareness()\n"
-               "    root = tk.Tk()\n"
+               "    root = tk.Tk(className=desktop.WINDOW_CLASS)\n"
                "    App(root)\n",
         "test": "test_a_tk_that_cannot_start_is_said_and_recorded",
     },
@@ -10231,6 +10233,113 @@ MUTATIONS = [
         "old": "        if PROGRAM:\n            return _report(failures)\n",
         "new": "",
         "test": "test_a_bundle_run_stops_after_the_sessions",
+    },
+    # -- the Linux package's menu entry (desktop.py, 2026-10-28) -------------------- #
+    {
+        "label": "menu entry: Exec is not quoted",
+        "file": "beantester/desktop.py",
+        "old": "if c in _EXEC_ESCAPED else c for c in program)",
+        "new": "if False else c for c in program)",
+        "test": "test_exec_quotes_the_path_the_way_the_specification_does",
+    },
+    {
+        # The string escape on top of the quoting (the spec's four backslashes).
+        "label": "menu entry: Exec's backslashes are not doubled",
+        "file": "beantester/desktop.py",
+        "old": r'.replace("\\", "\\\\").replace("%", "%%")',
+        "new": r'.replace("%", "%%")',
+        "test": "test_exec_quotes_the_path_the_way_the_specification_does",
+    },
+    {
+        "label": "menu entry: a percent sign reads as a field code",
+        "file": "beantester/desktop.py",
+        "old": '.replace("%", "%%")',
+        "new": "",
+        "test": "test_exec_quotes_the_path_the_way_the_specification_does",
+    },
+    {
+        "label": "menu entry: no StartupWMClass",
+        "file": "beantester/desktop.py",
+        "old": "        f\"StartupWMClass={WINDOW_CLASS}\",\n",
+        "new": "",
+        "test": "test_the_entry_starts_the_program_itself_and_names_the_windows_class",
+    },
+    {
+        "label": "menu entry: the class is not in Tk's form",
+        "file": "beantester/desktop.py",
+        "old": "WINDOW_CLASS = \"Beannetworktester\"",
+        "new": "WINDOW_CLASS = \"BeanNetworkTester\"",
+        "test": "test_the_class_is_written_the_way_tk_gives_it",
+    },
+    {
+        "label": "menu entry: written under sudo",
+        "file": "beantester/desktop.py",
+        "old": "    if paths.running_as_root():\n",
+        "new": "    if False:\n",
+        "test": "test_only_the_linux_package_run_by_a_person_writes_it",
+    },
+    {
+        "label": "menu entry: written from sources",
+        "file": "beantester/desktop.py",
+        "old": "    if not paths.is_frozen():\n",
+        "new": "    if False:\n",
+        "test": "test_only_the_linux_package_run_by_a_person_writes_it",
+    },
+    {
+        "label": "menu entry: a control character is written into the file",
+        "file": "beantester/desktop.py",
+        "old": "        if _refused(path):\n",
+        "new": "        if False:\n",
+        "test": "test_a_path_with_a_control_character_is_refused",
+    },
+    {
+        "label": "menu entry: remove removes nothing",
+        "file": "beantester/desktop.py",
+        "old": "        os.unlink(target)\n",
+        "new": "        pass\n",
+        "test": "test_remove_takes_only_its_own_file",
+    },
+    {
+        "label": "window: Tk's default class, which no menu entry names",
+        "file": "beantester/cli.py",
+        "old": "        root = tk.Tk(className=desktop.WINDOW_CLASS)\n",
+        "new": "        root = tk.Tk()\n",
+        "test": "test_the_window_carries_the_class_the_entry_names",
+    },
+    {
+        "label": "--install-desktop: a refusal answers 0",
+        "file": "beantester/cli.py",
+        "old": "        _fail(exitcodes.RUNTIME, reason)\n",
+        "new": "        return exitcodes.OK\n",
+        "test": "test_the_options_answer_with_exit_codes",
+    },
+    {
+        "label": "--remove-desktop installs",
+        "file": "beantester/cli.py",
+        "old": "    path, error = desktop.install() if install else desktop.remove()\n",
+        "new": "    path, error = desktop.install()\n",
+        "test": "test_the_options_answer_with_exit_codes",
+    },
+    {
+        "label": "package smoke: any window class passes",
+        "file": "tools/ci_linux_package_smoke.py",
+        "old": "        failures = [] if found and found.group(2) == WINDOW_CLASS else [\n",
+        "new": "        failures = [] if True else [\n",
+        "test": "test_a_window_that_did_not_open_or_spoke_is_named",
+    },
+    {
+        "label": "package smoke: an entry for another program passes",
+        "file": "tools/ci_linux_package_smoke.py",
+        "old": "    if f'Exec=\"{program}\"' not in text.splitlines():\n",
+        "new": "    if False:\n",
+        "test": "test_every_wrong_menu_entry_is_named",
+    },
+    {
+        "label": "package smoke: desktop-file-validate is not heard",
+        "file": "tools/ci_linux_package_smoke.py",
+        "old": "    if validated:\n",
+        "new": "    if False:\n",
+        "test": "test_every_wrong_menu_entry_is_named",
     },
     {
         "label": "pkexec: a DISPLAY sudo kept is replaced",

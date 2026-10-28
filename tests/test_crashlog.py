@@ -1223,7 +1223,7 @@ def test_a_tk_that_cannot_start_is_said_and_recorded(isolated, monkeypatch, caps
     left a traceback on a stderr the frozen build had already thrown away."""
     from beantester import exitcodes
 
-    def no_display():
+    def no_display(**_options):
         raise RuntimeError("no display name and no $DISPLAY environment variable")
 
     fake_tk = types.ModuleType("tkinter")

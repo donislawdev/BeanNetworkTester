@@ -10,7 +10,12 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 import ci_linux_package_smoke as smoke                       # noqa: E402
 
-GOOD_REPRO = "[bean] Reproduce: ~/work/BeanNetworkTester/BeanNetworkTester --duration 2 --seed 42 --simulate\n"
+# xwininfo -root -tree lines of the window: ours, and Tk's default class (measured).
+WINDOW = '     0x2004b0 "Bean Network Tester": ("beannetworktester" "Beannetworktester")  1000x810+140+30'
+TK_DEFAULT = '     0x2004b0 "Bean Network Tester": ("tk" "Tk")  1000x810+140+30  +140+30'
+PROGRAM = "/t/BeanNetworkTester/BeanNetworkTester"
+ENTRY = f'[Desktop Entry]\nExec="{PROGRAM}"\nStartupWMClass=Beannetworktester\n'
+GOOD_REPRO ="[bean] Reproduce: ~/work/BeanNetworkTester/BeanNetworkTester --duration 2 --seed 42 --simulate\n"
 
 
 def test_a_good_bundle_passes_every_judge():
@@ -19,7 +24,8 @@ def test_a_good_bundle_passes_every_judge():
     check("repro from its own folder",
           smoke.judge_repro("Reproduce: ./BeanNetworkTester --simulate --seed 1") == [])
     check("doctor", smoke.judge_doctor("user files: /t/config/BeanNetworkTester\n", "/t/config") == [])
-    check("window", smoke.judge_window(True, "") == [])
+    check("window", smoke.judge_window(WINDOW, "") == [])
+    check("menu entry", smoke.judge_entry(0, ENTRY, "", PROGRAM, True) == [])
 
 
 def test_every_wrong_exit_code_is_named():
@@ -46,12 +52,25 @@ def test_a_data_folder_elsewhere_is_named():
 
 
 def test_a_window_that_did_not_open_or_spoke_is_named():
-    check("no window", "no window" in " ".join(smoke.judge_window(False, "")))
+    check("no window", "no window" in " ".join(smoke.judge_window(None, "")))
+    check("Tk's default class", "class" in " ".join(smoke.judge_window(TK_DEFAULT, "")))
     for line in ('Fontconfig warning: "/etc/fonts/conf.d/48-guessfamily.conf", line 19',
                  "fc-match: symbol lookup error: fc-match: undefined symbol",
                  "No tkinter. Use CLI mode", "Traceback (most recent call last):"):
-        found = smoke.judge_window(True, line + "\n")
+        found = smoke.judge_window(WINDOW, line + "\n")
         check(f"{line[:30]!r} is caught", len(found) == 1 and "printed 1 line" in found[0], f"({found})")
+
+
+def test_every_wrong_menu_entry_is_named():
+    for case, word in (((5, None, "", PROGRAM, True), "answered 5"),
+                       ((0, ENTRY.replace(PROGRAM, "/elsewhere/B"), "", PROGRAM, True), "this program"),
+                       ((0, ENTRY.replace("StartupWMClass=Beannetworktester", ""), "", PROGRAM, True),
+                        "class"),
+                       ((0, ENTRY, "x.desktop: error: value is not quoted\n", PROGRAM, True),
+                        "desktop-file-validate"),
+                       ((0, ENTRY, "", PROGRAM, False), "left the entry")):
+        found = smoke.judge_entry(*case)
+        check(word, any(word in f for f in found), f"({found})")
 
 
 def test_it_needs_a_display_and_one_program(monkeypatch, capsys):

@@ -310,7 +310,7 @@ def _fake_tk(tk_fails):
     class TclError(Exception):
         pass
 
-    def tk():
+    def tk(**_options):
         if tk_fails:
             raise TclError("no display name and no $DISPLAY environment variable")
         return types.SimpleNamespace(mainloop=lambda: None)
