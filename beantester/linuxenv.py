@@ -4,11 +4,10 @@ The Windows twin is ``winenv`` and its UAC prompt. Here the window, started
 without root, runs itself again through ``pkexec``, which shows the desktop's
 own password dialog (GNOME's, measured on Ubuntu 26.04), and waits for that
 copy. A dismissed or impossible request leaves the window to open here, without
-root, as it did before this module existed. Every fact below was measured or
-read in pkexec's own source; ``internal_tools/PROJEKT-linux-pkexec-2026-10-28.md``
-holds the design and the measurements.
+root, as it did before this module existed.
 
-What pkexec does to the program it starts, and what follows from it:
+What pkexec does to the program it starts - measured on Ubuntu 26.04 (polkit 127)
+and 24.04 (polkit 124, in CI), and read in pkexec's own source - and what follows:
 
 * It keeps only a few variables and drops ``DISPLAY`` and ``XAUTHORITY``, so Tk
   in the copy cannot reach the screen ("no display name"). The copy takes them,
@@ -17,11 +16,12 @@ What pkexec does to the program it starts, and what follows from it:
 * It refuses to run at all (exit 127) when ``SHELL`` is not in ``/etc/shells``
   or a kept variable holds ``/``, ``%`` or ``..``, so it is handed only the
   locale variables that pass those rules (``pkexec_environment``).
-* It sets ``PR_SET_PDEATHSIG`` to SIGTERM before it executes the program: the
-  copy dies with the process that asked. That process waits, in the thread that
-  started pkexec, for as long as the copy runs (``ask_for_root``).
 * It closes every descriptor above 2, so the copy can answer only with its exit
-  code: 126 dismissed, 127 anything else that stopped it (``NOT_STARTED``).
+  code: 126 dismissed, 127 anything else that stopped it (``NOT_STARTED``). The
+  process that asked waits for that code (``ask_for_root``) - not to keep the copy
+  alive: pkexec sets ``PR_SET_PDEATHSIG`` while it asks, but for a person's call
+  the kernel clears it when pkexec takes root's group, so the copy outlives the
+  process that asked (measured: that process stopped, the root window stayed).
 * Without ``--keep-cwd`` (polkit 121 and newer) it starts the program in root's
   home, where ``python -m beantester`` from a checkout cannot import itself.
 """
@@ -34,7 +34,7 @@ import stat
 import subprocess
 import sys
 
-from . import winenv
+from . import crashlog, winenv
 
 # What pkexec answers when the program did not run: 126 the person dismissed the
 # dialog, 127 not authorised, no agent to ask through, or any other error. None of
@@ -142,7 +142,10 @@ def ask_for_root(argv, run=_run, which=shutil.which, environ=None):
     previous = signal.signal(signal.SIGINT, _wait_through)
     try:
         code = run(command, env=env).returncode
-    except OSError:
+    except OSError as exc:
+        crashlog.note(exc, "linuxenv.pkexec")
+        print(f"pkexec could not be started ({exc}): the window opens without "
+              "administrator rights", file=sys.stderr)
         return None
     finally:
         signal.signal(signal.SIGINT, previous)
@@ -163,7 +166,8 @@ def _keeps_cwd(pkexec, env, run):
     try:
         done = run([pkexec, "--help"], env=env, capture_output=True, text=True,
                    timeout=10)
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as exc:
+        crashlog.note(exc, "linuxenv.keep_cwd")
         return False
     return "--keep-cwd" in (done.stdout or "") + (done.stderr or "")
 

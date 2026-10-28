@@ -1324,9 +1324,9 @@ def _run_gui(argv, relaunched=False):
         if winenv.elevate_self(argv):
             return exitcodes.OK               # the elevated copy took over
     elif linuxenv.wants_root():
-        # The same question through polkit. pkexec ends the copy when this process
-        # ends, so it waits for it; None = the copy did not run, the window opens
-        # here without root (see linuxenv.py).
+        # The same question through polkit, and the copy's exit code back; None =
+        # it did not run (dismissed, no agent), so the window opens here without
+        # root (see linuxenv.py).
         code = linuxenv.ask_for_root(argv)
         if code is not None:
             return code

@@ -10056,6 +10056,21 @@ MUTATIONS = [
         "test": "test_the_copy_takes_the_desktop_of_the_person_who_asked",
     },
     {
+        # An X11 session sets no XAUTHORITY; pkexec itself would look in ~/.Xauthority.
+        "label": "pkexec: the ~/.Xauthority fallback is never looked at",
+        "file": "beantester/linuxenv.py",
+        "old": "home and posixpath.join(home, \".Xauthority\")):\n",
+        "new": "None):\n",
+        "test": "test_the_copy_takes_the_desktop_of_the_person_who_asked",
+    },
+    {
+        "label": "pkexec: a pkexec that cannot be started is not recorded",
+        "file": "beantester/linuxenv.py",
+        "old": "        crashlog.note(exc, \"linuxenv.pkexec\")\n",
+        "new": "",
+        "test": "test_a_pkexec_that_cannot_be_started_is_recorded_and_said",
+    },
+    {
         "label": "pkexec: a DISPLAY sudo kept is replaced",
         "file": "beantester/linuxenv.py",
         "old": "    if not started_by_pkexec(environ) or environ.get(\"DISPLAY\"):\n",
@@ -10202,6 +10217,10 @@ PROVEN_BY_HAND = {
     "test_the_command_survives_bash_with_history_expansion_on":
         "2026-10-28, WSL Ubuntu: red on the double-quoted command (`!`, `$( )`, a "
         "backtick, `$NAME`, two backslashes), green on the single-quoted one",
+    # File owners and symlinks: POSIX-only, skipped on the Windows mutation job.
+    "test_an_x_authority_file_is_a_regular_file_of_the_person":
+        "2026-10-28, WSL Ubuntu, four breaks of linuxenv._System each caught (any owner, "
+        "a link followed, a folder, the cwd link unread), green again restored",
 }
 
 # No mutation at all. Naming them is the point: an unproven guard and a guard nobody

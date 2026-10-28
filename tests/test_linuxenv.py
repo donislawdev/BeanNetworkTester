@@ -1,8 +1,8 @@
 """linuxenv: the window on Linux asks for root through pkexec (polkit).
 
 Nothing here starts pkexec: every call to the system is handed in. The real pkexec
-runs in CI (``tools/ci_linux_pkexec_smoke.py``), and what it does was measured on
-Ubuntu 26.04 and read in its source (``internal_tools/PROJEKT-linux-pkexec-2026-10-28.md``).
+runs in CI (``tools/ci_linux_pkexec_smoke.py``); what it does is in linuxenv's own
+docstring.
 """
 import os
 import signal
@@ -137,9 +137,32 @@ def test_what_pkexec_answers_decides_who_opens_the_window(capsys, started_from_s
     check("no pkexec: nothing to ask through",
           linuxenv.ask_for_root([], nothing, lambda name: None, env) is None and not nothing.calls)
 
+
+
+def test_a_pkexec_that_cannot_be_started_is_recorded_and_said(monkeypatch, capsys,
+                                                               started_from_script):
+    noted = []
+    monkeypatch.setattr(crashlog, "note", lambda exc, section: noted.append(section))
+
     def broken(command, env=None, **kw):
         raise OSError("gone")
-    check("pkexec that cannot be started", linuxenv.ask_for_root([], broken, have, env) is None)
+    check("pkexec that cannot be started: the window opens here",
+          linuxenv.ask_for_root([], broken, have, {}) is None)
+    check("recorded, and said on stderr",
+          "linuxenv.pkexec" in noted and "could not be started (gone)" in capsys.readouterr().err,
+          f"({noted})")
+
+    started = []
+
+    def no_usage(command, env=None, **kw):
+        if command[1:] == ["--help"]:
+            raise subprocess.TimeoutExpired(command, 10)
+        started.append(command)
+        return subprocess.CompletedProcess(command, 3)
+    noted.clear()
+    check("a usage that cannot be read: recorded, and asked without --keep-cwd",
+          linuxenv.ask_for_root([], no_usage, have, {}) == 3 and noted == ["linuxenv.keep_cwd"]
+          and started and "--keep-cwd" not in started[0], f"({noted}, {started})")
 
 
 def test_an_old_pkexec_and_python_m_ask_nothing(monkeypatch):
