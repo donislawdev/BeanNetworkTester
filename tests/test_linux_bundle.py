@@ -51,7 +51,7 @@ def test_modules_the_program_never_uses_are_not_carried(tmp_path):
     for name in ("python3.15/lib-dynload/_bz2.cpython-315-x86_64-linux-gnu.so",
                  "python3.15/lib-dynload/_lzma.cpython-315-x86_64-linux-gnu.so",
                  "python3.15/lib-dynload/_zstd.cpython-315-x86_64-linux-gnu.so",
-                 "liblzma.so.5", "libzstd.so.1"):
+                 "liblzma.so.5", "libzstd.so.1", "libBLT.2.5.so.8.6"):
         found = linux_bundle.problems(_bundle(tmp_path / name.replace("/", "_"),
                                               GOOD + (f"_internal/{name}",)))
         check(f"{name} is caught", len(found) == 1 and "never uses" in found[0], f"({found})")

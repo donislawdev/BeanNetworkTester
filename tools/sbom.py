@@ -28,6 +28,9 @@ Usage:
     python tools/sbom.py                       # SPDX JSON to stdout
     python tools/sbom.py -o sbom.spdx.json     # ...or to a file
     python tools/sbom.py --audit-bundle dist/BeanNetworkTester   # guard mode
+
+Each describes the build for the system it runs on - the Windows zip on Windows,
+the Linux .tar.gz on Linux (``legal.components``) - or ``--platform``'s.
 """
 import argparse
 import datetime
@@ -54,6 +57,13 @@ EXTRACTED = {
         "under Microsoft's redistributable-code terms for Visual Studio. "
         "Microsoft publishes the terms rather than a licence text to bundle: "
         "https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files",
+    # Five libraries, five permission notices of the MIT and X11 kind, each with its
+    # own wording and holders: one reference with the texts beside it, rather than
+    # an SPDX expression nobody read the files to choose.
+    "LicenseRef-X.Org-libraries":
+        "libX11, libXext, libXft, libXrender and libXss as Ubuntu 24.04 ships them, "
+        "under the MIT and X11-style permission notices in their copyright files; "
+        "the Linux package carries the full texts in licenses/X.Org-libraries.txt.",
 }
 
 
@@ -78,8 +88,10 @@ def _package(name, version, url, spdx_expression):
     }
 
 
-def build(namespace_seed=None):
+def build(namespace_seed=None, platform=None):
     """The SBOM as a dict, ready for ``json.dump``."""
+    platform = sys.platform if platform is None else platform
+    linux = platform.startswith("linux")
     version = appinfo.__version__
     root_id = _spdx_id("Package", appinfo.APP_NAME)
     created = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -88,6 +100,8 @@ def build(namespace_seed=None):
     # caller has something stable to offer (a tag), so two runs on the same tag
     # produce the same URI instead of a random one nobody can correlate.
     seed = namespace_seed or created
+    if linux:                  # two documents per release: each its own namespace
+        seed += "|linux"
     digest = hashlib.sha256(("%s|%s" % (version, seed)).encode("utf-8")).hexdigest()[:16]
 
     packages = [{
@@ -106,8 +120,9 @@ def build(namespace_seed=None):
         "relatedSpdxElement": root_id,
     }]
 
-    rows = {name: version for name, version, _lic, _url in legal.component_rows()}
-    for name, _module, _prose, url, spdx_expression in legal.COMPONENTS:
+    rows = {name: version for name, version, _lic, _url in legal.component_rows(platform)}
+    shipped = legal.components(platform)
+    for name, _module, _prose, url, spdx_expression in shipped:
         reported = rows.get(name, "")
         packages.append(_package(
             name,
@@ -119,12 +134,12 @@ def build(namespace_seed=None):
             "relatedSpdxElement": _spdx_id("Package", name),
         })
 
-    used = {c[4] for c in legal.COMPONENTS}
+    used = {c[4] for c in shipped}
     document = {
         "spdxVersion": SPDX_VERSION,
         "dataLicense": DATA_LICENSE,
         "SPDXID": "SPDXRef-DOCUMENT",
-        "name": "%s-%s" % (appinfo.APP_NAME, version),
+        "name": "%s-%s%s" % (appinfo.APP_NAME, version, "-linux" if linux else ""),
         "documentNamespace":
             "https://github.com/donislawdev/BeanNetworkTester/spdx/%s-%s" % (version, digest),
         "creationInfo": {
@@ -164,17 +179,23 @@ BUNDLE_PATTERNS = (
     # an anchored one - `re.search`, so the path prefix does not matter.
     (r"libtommath", "libtommath"),
     (r"^pydivert", "PyDivert"),
+    # The Linux .tar.gz.
+    (r"ebpfdivert", "eBPFDivert"),
+    (r"libx11|libxext|libxft|libxrender|libxss|x\.org", "X.Org libraries"),
+    (r"libbpf", "libbpf"),
+    (r"elfutils|libelf", "elfutils (libelf)"),
+    (r"zstd|zstandard", "Zstandard"),
     (r"^psutil", "psutil"),
     (r"pyinstaller", "PyInstaller (bootloader)"),
     (r"^bean network tester$|^beannetworktester", None),      # the program itself
 )
 
 
-def audit_bundle(scan_json):
+def audit_bundle(scan_json, platform=None):
     """Names in a Syft scan that no registry entry accounts for."""
     with open(scan_json, encoding="utf-8") as handle:
         scan = json.load(handle)
-    known = {name for name, *_ in legal.COMPONENTS}
+    known = {name for name, *_ in legal.components(platform)}
     unaccounted = []
     for artifact in scan.get("artifacts", []):
         name = str(artifact.get("name", "")).strip()
@@ -197,10 +218,12 @@ def main():
     parser.add_argument("--audit-bundle", metavar="SYFT_JSON",
                         help="guard mode: fail when a Syft scan names something "
                              "the registry does not account for")
+    parser.add_argument("--platform", choices=("win32", "linux"),
+                        help="the build to describe (default: this system's)")
     args = parser.parse_args()
 
     if args.audit_bundle:
-        missing = audit_bundle(args.audit_bundle)
+        missing = audit_bundle(args.audit_bundle, args.platform)
         if missing:
             print("The built bundle contains components the licence registry does "
                   "not account for.\nAdd them to beantester/legal.py, "
@@ -211,11 +234,12 @@ def main():
         print("bundle audit: every component maps to a registry entry")
         return 0
 
-    text = json.dumps(build(args.namespace_seed), indent=2, sort_keys=False) + "\n"
+    document = build(args.namespace_seed, args.platform)
+    text = json.dumps(document, indent=2, sort_keys=False) + "\n"
     if args.output:
         with open(args.output, "w", encoding="utf-8") as handle:
             handle.write(text)
-        print("wrote %s (%d packages)" % (args.output, len(build()["packages"])))
+        print("wrote %s (%d packages)" % (args.output, len(document["packages"])))
     else:
         sys.stdout.write(text)
     return 0

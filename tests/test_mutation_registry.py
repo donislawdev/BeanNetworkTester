@@ -284,8 +284,8 @@ MUTATIONS = [
         # no PyInstaller to ask, and the answer there must stay "no assertion".
         "label": "sbom: an absent build tool gets an invented version",
         "file": "beantester/legal.py",
-        "old": '        return "bundled"\n\n\ndef component_rows():',
-        "new": '        return "0.0.0"\n\n\ndef component_rows():',
+        "old": '        return "bundled"\n\n\ndef _ebpfdivert_version():',
+        "new": '        return "0.0.0"\n\n\ndef _ebpfdivert_version():',
         "test": "test_a_build_tool_that_is_not_installed_is_not_invented",
     },
     {
@@ -1743,15 +1743,30 @@ MUTATIONS = [
     {
         "label": "licence: the notices name a WinDivert file that is not shipped",
         "file": "THIRD-PARTY-NOTICES.md",
-        "old": "## WinDivert (`WinDivert64.dll`, `WinDivert64.sys`)",
-        "new": "## WinDivert (`WinDivert.dll`, `WinDivert64.sys`)",
+        "old": "## WinDivert (`WinDivert64.dll`, `WinDivert64.sys`, the Windows zip)",
+        "new": "## WinDivert (`WinDivert.dll`, `WinDivert64.sys`, the Windows zip)",
         "test": "test_the_notices_name_the_windivert_files_that_are_really_shipped",
     },
     {
         "label": "licence: the written offer drops below the three-year floor",
         "file": "THIRD-PARTY-NOTICES.md",
-        "old": "**Written offer:** for at least three years from the date of this release, the",
-        "new": "**Written offer:** for as long as this release is distributed, the",
+        "old": "**Written offer:** for at least three years from the date of this release, the\n"
+               "Author will supply, on request and at no charge beyond the cost of delivery, the\n"
+               "complete corresponding source of the PyDivert",
+        "new": "**Written offer:** for as long as this release is distributed, the\n"
+               "Author will supply, on request and at no charge beyond the cost of delivery, the\n"
+               "complete corresponding source of the PyDivert",
+        "test": "test_the_written_offer_lasts_as_long_as_the_licence_demands",
+    },
+    {
+        "label": "licence: the Linux package's written offer drops below the floor",
+        "file": "THIRD-PARTY-NOTICES.md",
+        "old": "**Written offer:** for at least three years from the date of this release, the\n"
+               "Author will supply, on request and at no charge beyond the cost of delivery, the\n"
+               "complete corresponding source of the eBPFDivert",
+        "new": "**Written offer:** for as long as this release is distributed, the\n"
+               "Author will supply, on request and at no charge beyond the cost of delivery, the\n"
+               "complete corresponding source of the eBPFDivert",
         "test": "test_the_written_offer_lasts_as_long_as_the_licence_demands",
     },
     {
@@ -10233,6 +10248,35 @@ MUTATIONS = [
         "old": "        if PROGRAM:\n            return _report(failures)\n",
         "new": "",
         "test": "test_a_bundle_run_stops_after_the_sessions",
+    },
+    # -- the Linux package's licences (legal.py, sbom.py, 2026-10-28) ---------------- #
+    {
+        "label": "licence: the Linux package reports the Windows list",
+        "file": "beantester/legal.py",
+        "old": "    return LINUX_COMPONENTS if platform.startswith(\"linux\") else WINDOWS_COMPONENTS\n",
+        "new": "    return WINDOWS_COMPONENTS\n",
+        "test": "test_both_builds_are_in_the_registry_and_the_notices",
+    },
+    {
+        "label": "sbom: the two documents of a release share a namespace",
+        "file": "tools/sbom.py",
+        "old": "        seed += \"|linux\"\n",
+        "new": "        pass\n",
+        "test": "test_the_linux_package_has_an_sbom_of_its_own",
+    },
+    {
+        "label": "sbom: the Linux document describes the Windows build",
+        "file": "tools/sbom.py",
+        "old": "    shipped = legal.components(platform)\n",
+        "new": "    shipped = legal.components(\"win32\")\n",
+        "test": "test_the_linux_package_has_an_sbom_of_its_own",
+    },
+    {
+        "label": "sbom: the X.Org libraries' reference has no text",
+        "file": "tools/sbom.py",
+        "old": "    \"LicenseRef-X.Org-libraries\":\n",
+        "new": "    \"LicenseRef-X.Org-libraries-text\":\n",
+        "test": "test_the_linux_package_has_an_sbom_of_its_own",
     },
     # -- the Linux package's menu entry (desktop.py, 2026-10-28) -------------------- #
     {

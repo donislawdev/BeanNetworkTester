@@ -140,7 +140,8 @@ a.datas = [d for d in a.datas
            if not any(part in d[0].replace("\\", "/") for part in _TCL_CRUFT)]
 
 if not WINDOWS:
-    a.binaries = [b for b in a.binaries if not linux_bundle.taken_from_system(b[0])]
+    a.binaries = [b for b in a.binaries if not (linux_bundle.taken_from_system(b[0])
+                                                or linux_bundle.not_needed(b[0]))]
 
 pyz = PYZ(a.pure)
 

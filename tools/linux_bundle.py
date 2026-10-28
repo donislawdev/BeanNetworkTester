@@ -23,7 +23,9 @@ Ubuntu 26.04, Fedora 44 and Arch:
 
 ``NOT_NEEDED_MODULES`` are standard modules the program never uses - no bz2, lzma
 or zstd anywhere in it - which the standard library only imports when it can
-(``shutil``, ``zipfile``). Left out on Linux, with the libraries they would bring.
+(``shutil``, ``zipfile``). Left out on Linux, with the libraries they would bring -
+and BLT, a Tk extension Ubuntu's python3-tk installs and PyInstaller then collected
+(measured in an ubuntu:24.04 image); nothing here loads it.
 
 ``MUST_CARRY`` are the parts a bundle without them would ship broken: Tk and Xft
 for the window, and pydivert's ``libebpfdivert.so`` for any capture.
@@ -38,7 +40,7 @@ FROM_SYSTEM = ("libfontconfig.so", "libfreetype.so", "libexpat.so", "libpng16.so
                "libXau.so", "libXdmcp.so", "libbsd.so", "libmd.so")
 
 NOT_NEEDED_MODULES = ("_bz2", "_lzma", "_zstd")
-NOT_NEEDED_LIBRARIES = ("liblzma.so", "libzstd.so")
+NOT_NEEDED_LIBRARIES = ("liblzma.so", "libzstd.so", "libBLT")
 
 MUST_CARRY = ("libtk", "libXft.so", "libebpfdivert.so")
 

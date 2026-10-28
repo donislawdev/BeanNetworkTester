@@ -70,21 +70,27 @@ def test_every_registry_component_reaches_the_sbom():
 def test_the_declared_licences_are_real_spdx_and_match_the_registry():
     """A licence expression that is not a real SPDX id is worse than NOASSERTION:
     it looks authoritative to a tool that cannot check it."""
-    doc = sbom.build()
-    by_name = {p["name"]: p for p in doc["packages"]}
     # Hand-curated on purpose: the point is to catch an INVENTED identifier, and a
     # list fetched at test time would need the network. Each entry was read off the
     # official SPDX list before being added here - "Unlicense" (full name "The
     # Unlicense", active, OSI-approved) checked at spdx.org/licenses on 2026-08-17
-    # when Tcl 9 brought libtommath into the bundle.
+    # when Tcl 9 brought libtommath into the bundle; "LGPL-2.1-only" and
+    # "BSD-2-Clause" (libbpf, the Linux package) on 2026-10-28, neither deprecated.
     known_ids = {
         "GPL-3.0-only", "LGPL-3.0-only", "GPL-2.0-only", "LGPL-3.0-or-later",
         "GPL-2.0-or-later", "BSD-3-Clause", "PSF-2.0", "TCL", "Zlib", "MIT",
-        "Unlicense",
+        "Unlicense", "LGPL-2.1-only", "BSD-2-Clause",
     }
     known_exceptions = {"Bootloader-exception"}
 
-    for name, _module, _prose, _url, expression in legal.COMPONENTS:
+    for platform in ("win32", "linux"):         # both builds, wherever this runs
+        _check_expressions(sbom.build(platform=platform), legal.components(platform),
+                           known_ids, known_exceptions)
+
+
+def _check_expressions(doc, components, known_ids, known_exceptions):
+    by_name = {p["name"]: p for p in doc["packages"]}
+    for name, _module, _prose, _url, expression in components:
         package = by_name[name]
         check(f"{name}: the SBOM declares the registry's expression",
               package["licenseDeclared"] == expression, f"({package['licenseDeclared']})")
@@ -134,14 +140,17 @@ def test_the_bundle_guard_notices_a_component_the_registry_lacks(tmp_path):
         {"name": "Python"}, {"name": "zlib"}, {"name": "WinDivert64"},
         {"name": "api-ms-win-core-file-l1-1-0.dll"}, {"name": "Bean Network Tester"},
     ]}), encoding="utf-8")
-    check("a scan of known components is accepted", sbom.audit_bundle(str(clean)) == [],
-          f"({sbom.audit_bundle(str(clean))})")
+    check("a scan of known components is accepted",
+          sbom.audit_bundle(str(clean), "win32") == [],
+          f"({sbom.audit_bundle(str(clean), 'win32')})")
+    check("the Windows runtime is not the Linux package's",
+          any("WinDivert" in line for line in sbom.audit_bundle(str(clean), "linux")))
 
     dirty = tmp_path / "dirty.json"
     dirty.write_text(json.dumps({"artifacts": [
         {"name": "Python"}, {"name": "libcurl"}, {"name": "OpenSSL"},
     ]}), encoding="utf-8")
-    found = sbom.audit_bundle(str(dirty))
+    found = sbom.audit_bundle(str(dirty), "win32")
     check("an unknown component is reported", "libcurl" in found and "OpenSSL" in found,
           f"({found})")
 
@@ -196,3 +205,18 @@ def test_a_build_tool_that_is_not_installed_is_not_invented(monkeypatch):
     packages = {p["name"]: p["versionInfo"] for p in sbom.build()["packages"]}
     check("and the SBOM says NOASSERTION, not a made-up version",
           packages[named] == "NOASSERTION", f"({packages[named]})")
+
+
+def test_the_linux_package_has_an_sbom_of_its_own():
+    """Two archives per release, two documents: each names its own build and has its
+    own namespace, and every LicenseRef the Linux one uses has its text."""
+    windows = sbom.build("v1.2.3", "win32")
+    linux = sbom.build("v1.2.3", "linux")
+    check("its own name", linux["name"].endswith("-linux") and not windows["name"].endswith("-linux"))
+    check("its own namespace", linux["documentNamespace"] != windows["documentNamespace"])
+    names = {p["name"] for p in linux["packages"]}
+    check("eBPFDivert and the X.Org libraries, no WinDivert",
+          {"eBPFDivert", "X.Org libraries"} <= names and "WinDivert" not in names, f"({names})")
+    refs = {p["licenseDeclared"] for p in linux["packages"] if "LicenseRef" in p["licenseDeclared"]}
+    texts = {e["licenseId"] for e in linux.get("hasExtractedLicensingInfo", [])}
+    check("every LicenseRef has its text", refs <= texts, f"({refs - texts})")

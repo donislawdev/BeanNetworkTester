@@ -62,10 +62,12 @@ WINDIVERT_SHA256 = {
 # with it - and the guard failing on that day is the point, not an inconvenience.
 CODESIGN_SHA256 = "47b79ad3cfa53ef846cad03a59148f8c981d0b1196891e48b8c8d7982b10c148"
 
-# The components we ship, in the order a reader cares about. ``module`` is the
-# import name used to report the real version at run time (None = not a Python
-# package, so the version is fixed or reported by other means).
-COMPONENTS = (
+# The components the Windows zip ships, in the order a reader cares about.
+# ``module`` is the import name used to report the real version at run time (None =
+# not a Python package, so the version is fixed or reported by other means). The
+# Linux .tar.gz ships a different set (``LINUX_COMPONENTS`` below), and
+# ``COMPONENTS`` is the one for the system this runs on.
+WINDOWS_COMPONENTS = (
     # (name, module, licence used, where the source lives, SPDX expression)
     # The prose licence is for a person reading `--license`; the SPDX expression is
     # for `tools/sbom.py`. Both, because neither serves the other's reader: a scanner
@@ -126,6 +128,43 @@ COMPONENTS = (
      "https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files",
      "LicenseRef-Microsoft-Redistributable"),
 )
+
+_SHARED = ("PyDivert", "psutil", "Python", "Tcl/Tk", "PyInstaller (bootloader)", "zlib",
+           "libffi")
+
+# The Linux .tar.gz (2026-10-28), read off a bundle built on Ubuntu 24.04 - the
+# libraries it carries come from that system's packages, and their copyright files
+# are what licenses/ holds. tools/linux_bundle.py says which ones the system
+# provides instead. libebpfdivert.so, pydivert's Linux library, is a separate file
+# that carries libbpf, elfutils' libelf, Zstandard and zlib inside it (its own
+# README: they "are linked in"; its strings name libbpf and elfutils).
+LINUX_COMPONENTS = (
+    ("eBPFDivert", None, "LGPL-3.0-or-later (dual with GPL-2.0-or-later)",
+     "https://github.com/ffalcinelli/ebpfdivert",
+     "LGPL-3.0-or-later OR GPL-2.0-or-later"),
+    *(entry for entry in WINDOWS_COMPONENTS if entry[0] in _SHARED),
+    ("X.Org libraries", None, "MIT and X11-style permission notices",
+     "https://gitlab.freedesktop.org/xorg/lib",
+     "LicenseRef-X.Org-libraries"),
+    ("libbpf", None, "LGPL-2.1 (dual with BSD-2-Clause)",
+     "https://github.com/libbpf/libbpf",
+     "LGPL-2.1-only OR BSD-2-Clause"),
+    ("elfutils (libelf)", None, "LGPL-3.0-or-later (dual with GPL-2.0-or-later)",
+     "https://sourceware.org/elfutils/",
+     "LGPL-3.0-or-later OR GPL-2.0-or-later"),
+    ("Zstandard", None, "BSD-3-Clause (dual with GPL-2.0)",
+     "https://github.com/facebook/zstd",
+     "BSD-3-Clause OR GPL-2.0-only"),
+)
+
+
+def components(platform=None):
+    """The components the build for ``platform`` (default: this one) ships."""
+    platform = sys.platform if platform is None else platform
+    return LINUX_COMPONENTS if platform.startswith("linux") else WINDOWS_COMPONENTS
+
+
+COMPONENTS = components()
 
 
 def _module_version(name):
@@ -191,10 +230,19 @@ def _pyinstaller_version():
         return "bundled"
 
 
-def component_rows():
+def _ebpfdivert_version():
+    """The eBPFDivert pydivert loaded, as the library itself says, or ``-``."""
+    try:
+        from pydivert import bpf
+        return bpf.libebpfdivert.ebpfdivert_version().decode()
+    except (ImportError, AttributeError, OSError, ValueError):   # no pydivert, no library
+        return "-"
+
+
+def component_rows(platform=None):
     """``(name, version, licence, source_url)`` for every third-party component."""
     rows = []
-    for name, module, licence, url, _spdx in COMPONENTS:
+    for name, module, licence, url, _spdx in components(platform):
         if module:
             version = _module_version(module)
         elif name == "Python":
@@ -205,10 +253,13 @@ def component_rows():
             version = _zlib_version()
         elif name == "WinDivert":
             version = WINDIVERT_VERSION
+        elif name == "eBPFDivert":
+            version = _ebpfdivert_version()
         elif name.startswith("PyInstaller"):
             version = _pyinstaller_version()
         else:
-            version = "bundled"          # libffi and the MS runtime carry no version
+            version = "bundled"          # libffi, the MS runtime, the libraries inside
+                                         # libebpfdivert: no version to read
         rows.append((name, version, licence, url))
     return rows
 

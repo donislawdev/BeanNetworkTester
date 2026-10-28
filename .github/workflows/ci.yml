@@ -837,6 +837,20 @@ jobs:
         run: |
           sudo "$(command -v python)" tools/ci_linux_capture_smoke.py --require \
             --program dist/BeanNetworkTester/BeanNetworkTester
+      # The licence registry held to the Linux bundle, as the Windows build holds it
+      # to the zip (legal.LINUX_COMPONENTS; the reason is in that job).
+      - name: Scan the bundle and hold the licence registry to it
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c  # v0.24.3
+        with:
+          path: dist/BeanNetworkTester
+          format: syft-json
+          output-file: bundle-scan.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: The registry must account for everything the scan found
+        run: |
+          python -c "import json; print(sorted({a['name'] for a in json.load(open('bundle-scan.json'))['artifacts']}))"
+          python tools/sbom.py --audit-bundle bundle-scan.json
       # A tar.gz, not the folder: an artifact zip loses the executable bit.
       - name: Pack
         run: tar -czf BeanNetworkTester-linux-x64.tar.gz -C dist BeanNetworkTester
