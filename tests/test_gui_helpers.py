@@ -99,6 +99,23 @@ def test_a_saved_window_below_the_minimum_grows_on_its_own_monitor():
           grow("nonsense", 960, 560, 1920, 1080) == "nonsense")
 
 
+def test_a_narrow_window_saved_on_an_unplugged_monitor_opens_in_the_centre():
+    """Growing moves a window's corner onto the monitor nearest to it, so a narrow
+    window saved on a monitor since unplugged was grown onto the edge of the one left
+    and kept there. It is judged as saved first, and goes to the centre (README)."""
+    saved, minimum = "760x920+3000+50", (960, 560)
+    w, h, x, y = scaling.initial_geometry(1920, 1080)
+    centre = f"{w}x{h}+{x}+{y}"
+    gone = lambda x, y: (0, 0, 1920, 1040)  # noqa: E731
+    opened = scaling.restored_geometry(saved, minimum, 1920, 1080, gone)
+    check("the monitor is gone: the centre of the screen", opened == centre, f"({opened})")
+    attached = lambda x, y: (1920, 0, 3840, 1040) if x >= 1900 else (0, 0, 1920, 1040)  # noqa: E731
+    kept = scaling.restored_geometry(saved, minimum, 1920, 1080, attached)
+    check("the monitor is there: grown and kept on it", kept == "960x920+2880+50", f"({kept})")
+    check("garbage: the centre", scaling.restored_geometry("nonsense", minimum, 1920, 1080,
+                                                           gone) == centre)
+
+
 def _primary_only(x, y):
     """One monitor, 3840x2088 of work area. The nearest one is always this one."""
     return (0, 0, 3840, 2088)

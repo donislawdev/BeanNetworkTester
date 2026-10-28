@@ -137,14 +137,18 @@ def no_owner_note(platform=None):
     2026-10-27 on Ubuntu 26.04: 14 of 14 sockets without one as a user, none under
     sudo - and the ones still without one under sudo are held from outside this
     system (WSL: its DNS on the tunnel address and a second chrony socket, for which
-    ``ss`` as root names no process either)."""
+    ``ss`` as root names no process either) or by no process any more: a closing
+    connection that its program has already closed. TIME_WAIT is PID 0, so not
+    counted (``portmap._psutil_row``); FIN_WAIT_2 and LAST_ACK cannot be told from
+    their state, so both Linux texts say "may"."""
     if not (sys.platform if platform is None else platform).startswith("linux"):
         return NO_OWNER
     return NO_OWNER_ROOT if paths.running_as_root() else NO_OWNER_LINUX
 
 
 def without_owner(snapshot):
-    """How many sockets the system would not name a process for (another account's)."""
+    """How many sockets the system would not name a process for (another account's,
+    and on Linux also one held from outside it or by no process any more)."""
     return sum(1 for socket in snapshot.sockets if socket.pid is None)
 
 

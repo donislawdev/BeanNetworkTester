@@ -214,10 +214,16 @@ def geometry_fits(geometry, screen_w, screen_h, bounds_at=None):
 def restored_geometry(saved, minimum, screen_w, screen_h, bounds_at=None):
     """The ``WxH+X+Y`` the main window opens with: the one saved, grown to
     ``minimum`` (``grown_to``) while it still describes a reachable window
-    (``geometry_fits``), else the first-run size, centred."""
-    saved = grown_to(saved, *minimum, screen_w, screen_h, bounds_at)
-    if saved and geometry_fits(saved, screen_w, screen_h, bounds_at):
-        return saved
+    (``geometry_fits``), else the first-run size, centred.
+
+    The saved geometry is judged BEFORE it grows as well. Growing moves the corner
+    onto the monitor nearest to it, so a narrow window saved on a monitor that has
+    since been unplugged came back pulled onto the edge of the one left, instead of
+    in the centre of the screen."""
+    if geometry_fits(saved, screen_w, screen_h, bounds_at):
+        grown = grown_to(saved, *minimum, screen_w, screen_h, bounds_at)
+        if geometry_fits(grown, screen_w, screen_h, bounds_at):
+            return grown
     w, h, x, y = initial_geometry(screen_w, screen_h)
     return f"{w}x{h}+{x}+{y}"
 

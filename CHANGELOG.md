@@ -141,11 +141,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   version grows to the new width and stays on its screen.
 
 - **Linux, experimental: the texts say what Linux does.** The Sockets note says that Linux
-  shows the program of another account's socket only to root, and under sudo that the rest
-  are held from outside the system, as in WSL. The process field, its "?" help and `--help`
-  show `chrome`, which finds the program on Windows and on Linux. **Copy CLI command** gives
-  the command the way the README starts it: `sudo .venv/bin/python -B bean_network_tester.py`,
-  without sudo for `--simulate`. TCP health on a kernel without the socket list says so.
+  shows the programs of other accounts only to root, and that a connection that is closing,
+  or a socket held from outside the system, as in WSL, may have no program at all. A socket
+  in TIME_WAIT shows PID 0, as on Windows. The process field, its "?" help and `--help` show
+  `chrome`, which finds the program on Windows and on Linux. TCP health on a kernel without
+  the socket list says so.
+
+- **Linux, experimental: Copy CLI command gives a command Linux can run.** It is the command
+  the README starts the program with: `sudo .venv/bin/python -B bean_network_tester.py`,
+  without sudo for `--simulate`. Its values are in single quotes, so bash keeps a `!`, a `$`
+  or a backslash in them as it is.
 
 - **Texts that were not true on every system.** The process field's tip no longer says it
   requires psutil, which comes with the program and which Windows does not use for it. On a

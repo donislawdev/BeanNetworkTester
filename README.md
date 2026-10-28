@@ -1066,8 +1066,9 @@ connections arriving from outside, are still blocked in silence.
 
 > In `cmd.exe`/PowerShell **quote the expression** if it contains a comma, `!`, `>`, `<`, `*` or
 > `^` - otherwise the shell interprets it its own way (`cmd.exe` drops a bare `^`, so `re:^edge`
-> would arrive as `re:edge`). The command that recreates the session
-> (`Copy CLI command` and the `Reproduce:` line) quotes them for you.
+> would arrive as `re:edge`). In bash use single quotes: inside double quotes bash still reads
+> `$`, a backtick and `!` its own way. The command that recreates the session
+> (`Copy CLI command` and the `Reproduce:` line) quotes them for you, for the shell of the system.
 
 **Run and reporting**
 

@@ -557,6 +557,8 @@ def test_the_session_command_takes_the_scenario_and_the_stand_in_from_the_engine
     the same run; the scenario reached neither (external review, P1-3). Both are
     now read off the session itself, by one function every caller uses.
     """
+    import sys
+
     from beantester import DEFAULT_SETTINGS, build_repro_report
     from beantester.repro import session_command
     from beantester.scenario import Scenario
@@ -574,8 +576,9 @@ def test_the_session_command_takes_the_scenario_and_the_stand_in_from_the_engine
         report = build_repro_report(eng, settings)
     finally:
         eng.stop()
+    quoted = '"my scenarios/lte.json"' if sys.platform == "win32" else "'my scenarios/lte.json'"
     check("session command: the scenario, as it was named, quoted for its space",
-          '--scenario "my scenarios/lte.json" --loop' in during, f"({during})")
+          f"--scenario {quoted} --loop" in during, f"({during})")
     check("session command: a stand-in driver is --simulate", "--simulate" in during,
           f"({during})")
     check("session command: the report carries the same command",
@@ -676,3 +679,49 @@ def test_the_command_survives_the_shell_it_is_pasted_into():
             check(f"shell: {sent!r} arrives unchanged", back == sent, f"({back!r})")
     check("shell: the known limit - cmd still expands %NAME% inside quotes",
           pasted(["re:a%BNT_PROBE_VAR%b"]) == ["re:aEXPANDEDb"])
+
+
+def test_the_command_survives_bash_with_history_expansion_on(tmp_path, monkeypatch):
+    """On Linux the command is pasted into bash; what arrives is what was meant.
+
+    The cmd.exe spelling, double quotes, is not enough there: bash still expands
+    ``$( )``, ``$NAME`` and a backtick inside them, and at a prompt, where history
+    expansion is on, the ``!`` of ``chrome,!chromedriver`` refused the line ("event
+    not found") or put an earlier command in its place (measured 2026-10-28, WSL
+    Ubuntu). The script turns history expansion on, as a prompt has it, and runs the
+    command ``settings_to_cli_string`` builds into a real program's argv.
+    """
+    import json
+    import shlex
+    import shutil
+    import subprocess
+    import sys
+
+    import pytest
+
+    bash = shutil.which("bash")
+    if sys.platform == "win32" or bash is None:
+        pytest.skip("bash on Linux is the shell under test; cmd.exe has its own test")
+    from beantester import repro
+
+    echo = tmp_path / "argv_echo.py"
+    echo.write_text("import json, sys\nprint(json.dumps(sys.argv[1:]))\n", encoding="utf-8")
+    monkeypatch.setattr(repro, "command_name", lambda simulate=False: " ".join(
+        shlex.quote(part) for part in (sys.executable, str(echo))))
+    env = {name: value for name, value in os.environ.items() if name != "BASH_ENV"}
+    env["BNT_PROBE_VAR"] = "EXPANDED"
+    values = ["chrome,!chromedriver", "10.0.0.1-10.0.0.50,!10.0.0.7", "a,!echo b",
+              "re:^edge", "re:(a|b)$", "$(echo EXPANDED)", "$BNT_PROBE_VAR", "x`echo y`z",
+              "it's", 'a"b', "a b", "re:\\d+", "re:\\\\d", "end\\", "~/x.json", "*.json"]
+    script = tmp_path / "pasted.sh"
+    # One command each, after one earlier command for `!echo` to find in the history.
+    for value in values:
+        settings = {"target": value}
+        command = repro.settings_to_cli_string(settings)
+        script.write_text(f"set -o history -o histexpand\necho earlier\n{command}\n",
+                          encoding="utf-8")
+        done = subprocess.run([bash, str(script)], capture_output=True, text=True, env=env)
+        last = (done.stdout.splitlines() or [""])[-1]
+        back = json.loads(last) if last.startswith("[") else None
+        check(f"bash: {value!r} arrives unchanged", back == repro.settings_to_cli(settings),
+              f"({command!r} -> {done.stdout!r} {done.stderr!r})")

@@ -217,8 +217,12 @@ def test_cli_rejects_bad_expressions():
         check(f"CLI rejects {argv}", raised)
 
 
-def test_cli_expression_survives_the_repro_command():
-    from beantester import (build_arg_parser, config_from_args, settings_to_cli,
+def test_cli_expression_survives_the_repro_command(monkeypatch):
+    """Quoted for the shell of the system: double quotes for cmd.exe and PowerShell,
+    single quotes for bash, which still reads the `!` and `$` inside double ones."""
+    import sys
+
+    from beantester import (build_arg_parser, config_from_args, paths, settings_to_cli,
                             settings_to_cli_string, DEFAULT_SETTINGS)
     s = dict(DEFAULT_SETTINGS)
     s.update(dst_ip="10.0.0.1-10.0.0.50,!10.0.0.7", dst_port="80,443,!8080",
@@ -228,7 +232,14 @@ def test_cli_expression_survives_the_repro_command():
     ok = (parsed["dst_ip"] == s["dst_ip"] and parsed["dst_port"] == s["dst_port"]
           and parsed["target"] == s["target"])
     check("CLI command reproduces the expressions verbatim", ok, f"({parsed})")
+    monkeypatch.setattr(sys, "platform", "win32")
     cmd = settings_to_cli_string(s, seed=7)
-    check("expressions are quoted in the copy-paste command",
+    check("Windows: expressions are double-quoted in the copy-paste command",
           '"10.0.0.1-10.0.0.50,!10.0.0.7"' in cmd and '"80,443,!8080"' in cmd,
           f"({cmd})")
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(paths, "running_as_root", lambda: False)  # asks geteuid, not on Windows
+    cmd = settings_to_cli_string(s, seed=7)
+    check("Linux: single-quoted, so bash reads no `!` in them",
+          "'10.0.0.1-10.0.0.50,!10.0.0.7'" in cmd and "'chrome,!chromedriver'" in cmd
+          and '"' not in cmd, f"({cmd})")

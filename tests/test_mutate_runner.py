@@ -54,6 +54,31 @@ def test_more_than_one_filter_or_an_unknown_option_is_refused(capsys, monkeypatc
     check("nothing ran", not ran, f"({ran})")
 
 
+def test_an_entry_that_does_not_compile_fails_every_kind_of_run(capsys, monkeypatch):
+    """A mutation that does not compile reddens every test, so it proves nothing. A
+    --changed run passed with one (2026-10-27): only the canary's BROKEN was counted."""
+    entry = mutate.MUTATIONS[0]
+    monkeypatch.setattr(mutate, "apply_one", lambda e: ("BROKEN", "does not compile"))
+    code, out, _err = _main(capsys, entry["label"])
+    check("a filtered run fails and names the entry",
+          code == 1 and "BROKEN ENTRIES" in out and entry["label"] in out, f"({code}, {out})")
+    monkeypatch.setattr(mutate, "changed_files", lambda ref: {entry["file"]})
+    code, out, _err = _main(capsys, "--changed", "origin/master")
+    check("so does a --changed run", code == 1 and "BROKEN ENTRIES" in out, f"({code})")
+    # The full run: the canary's BROKEN is the one it must have, and no other.
+    monkeypatch.setattr(mutate, "apply_one", lambda e: (
+        "BROKEN" if e is mutate.CANARY or e is entry else "caught", ""))
+    code, out, _err = _main(capsys)
+    check("a full run with one more BROKEN than the canary fails",
+          code == 1 and "BROKEN ENTRIES" in out and "CANARY DID NOT FIRE" not in out,
+          f"({code})")
+    monkeypatch.setattr(mutate, "apply_one", lambda e: (
+        "BROKEN" if e is mutate.CANARY else "caught", ""))
+    code, out, _err = _main(capsys)
+    check("and only the canary BROKEN passes", code == 0 and "BROKEN ENTRIES" not in out,
+          f"({code})")
+
+
 def test_a_filter_that_matches_still_runs_only_its_entries(capsys, monkeypatch):
     """The canary for this file: the refusals above must not refuse a good filter."""
     ran = []

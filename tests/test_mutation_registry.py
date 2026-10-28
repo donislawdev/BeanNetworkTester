@@ -9792,7 +9792,7 @@ MUTATIONS = [
         "label": "tables: a column's words do not size it",
         "file": "beantester/gui/widgets/sortable_tree.py",
         "old": "        if need > table._natural.get(col, 0):\n",
-        "new": "            if False:\n",
+        "new": "        if False:\n",
         "test": "test_a_column_is_born_as_wide_as_the_words_it_can_show",
     },
     {
@@ -9826,8 +9826,8 @@ MUTATIONS = [
     {
         "label": "window: the main window restores a saved size without growing it",
         "file": "beantester/gui/scaling.py",
-        "old": "    saved = grown_to(saved, *minimum, screen_w, screen_h, bounds_at)\n",
-        "new": "    saved = str(saved)\n",
+        "old": "        grown = grown_to(saved, *minimum, screen_w, screen_h, bounds_at)\n",
+        "new": "        grown = str(saved)\n",
         "test": "test_a_window_saved_narrower_than_today_grows_and_stays_on_its_monitor",
     },
     {
@@ -9883,9 +9883,51 @@ MUTATIONS = [
     {
         "label": "repro command: the simulate flag does not reach the program name",
         "file": "beantester/repro.py",
-        "old": "    return f\"{command_name(simulate)} \" + \" \".join(_quote(a) for a in args)\n",
-        "new": "    return f\"{command_name()} \" + \" \".join(_quote(a) for a in args)\n",
+        "old": "    return f\"{command_name(simulate)} \" + \" \".join(quote(a) for a in args)\n",
+        "new": "    return f\"{command_name()} \" + \" \".join(quote(a) for a in args)\n",
         "test": "test_the_command_follows_the_system_it_runs_on",
+    },
+    {
+        # 2026-10-28: a narrow window saved on a monitor since unplugged was grown onto
+        # the edge of the one left and kept there, not centred as the README says.
+        "label": "window: a saved geometry is grown before it is judged",
+        "file": "beantester/gui/scaling.py",
+        "old": "    if geometry_fits(saved, screen_w, screen_h, bounds_at):\n        grown = ",
+        "new": "    if True:\n        grown = ",
+        "test": "test_a_narrow_window_saved_on_an_unplugged_monitor_opens_in_the_centre",
+    },
+    {
+        # 2026-10-28: inside double quotes bash expands $( ) and, at a prompt, the `!`
+        # of `chrome,!chromedriver`.
+        "label": "repro command: Linux is quoted for cmd.exe",
+        "file": "beantester/repro.py",
+        "old": "    quote = _quote if sys.platform == \"win32\" else shlex.quote\n",
+        "new": "    quote = _quote\n",
+        "test": "test_cli_expression_survives_the_repro_command",
+    },
+    {
+        "label": "repro command: Windows is quoted for bash",
+        "file": "beantester/repro.py",
+        "old": "    quote = _quote if sys.platform == \"win32\" else shlex.quote\n",
+        "new": "    quote = shlex.quote\n",
+        "test": "test_cli_expression_survives_the_repro_command",
+    },
+    {
+        # Linux gives a socket in TIME_WAIT no PID even under sudo, and the Sockets
+        # note counted it as another account's, or as held from outside the system.
+        "label": "portmap: a TIME_WAIT socket from psutil keeps an unknown owner",
+        "file": "beantester/portmap.py",
+        "old": "    if pid is None and state == \"TIME_WAIT\":\n",
+        "new": "    if False:\n",
+        "test": "test_a_socket_in_time_wait_is_owned_by_no_process_on_the_psutil_path_too",
+    },
+    {
+        # 2026-10-27: a --changed run passed with "BROKEN: 1  caught: 351".
+        "label": "mutate: an entry that does not compile passes the run",
+        "file": "tools/mutate.py",
+        "old": "    return 0 if counts.get(\"SURVIVED\", 0) == 0 and canary_ok and not broken else 1\n",
+        "new": "    return 0 if counts.get(\"SURVIVED\", 0) == 0 and canary_ok else 1\n",
+        "test": "test_an_entry_that_does_not_compile_fails_every_kind_of_run",
     },
 ]
 
@@ -9947,6 +9989,12 @@ PROVEN_BY_HAND = {
     "test_the_depth_metric_still_counts_real_nesting":
         "2026-08-21, it failed on the first draft of the metric (four nested blocks "
         "measured three) and passed once the missing level was added",
+    # Bash on Linux is the shell under test, and the mutation job runs on Windows,
+    # where the test skips: an entry would come back SURVIVED with nothing behind it.
+    # The platform choice itself is in MUTATIONS, through a test that runs anywhere.
+    "test_the_command_survives_bash_with_history_expansion_on":
+        "2026-10-28, WSL Ubuntu: red on the double-quoted command (`!`, `$( )`, a "
+        "backtick, `$NAME`, two backslashes), green on the single-quoted one",
 }
 
 # No mutation at all. Naming them is the point: an unproven guard and a guard nobody
@@ -10002,6 +10050,41 @@ def test_every_mutation_still_points_at_code_that_exists():
         check(f"{entry['label']}: its search pattern occurs exactly once "
               f"(a stale pattern proves nothing and reports SKIP)",
               found == 1, f"(found {found} times)")
+
+
+def _mutated_source_error(entry, texts):
+    """Why ``entry``'s mutated file would not compile, or "" when it would. Read the
+    way the runner reads it; a file that is not Python, or a stale pattern (the test
+    above reports it), is not this check's to judge."""
+    path = os.path.join(ROOT, entry["file"])
+    if not path.endswith(".py") or not os.path.exists(path):
+        return ""
+    if path not in texts:
+        with open(path, "rb") as handle:
+            texts[path] = handle.read().decode("utf-8").replace("\r\n", "\n")
+    if texts[path].count(entry["old"]) != 1:
+        return ""
+    try:
+        compile(texts[path].replace(entry["old"], entry["new"], 1), path, "exec",
+                dont_inherit=True)
+    except SyntaxError as exc:
+        return f"(line {exc.lineno}: {exc.msg})"
+    return ""
+
+
+def test_every_mutation_still_compiles():
+    """A mutation that does not compile proves nothing: every test goes red on it,
+    whatever it guards, and the runner can only call it BROKEN - on CI, minutes
+    later. One did (2026-10-27): an `if False:` four spaces deeper than the line it
+    replaced, which a --changed run then passed as "BROKEN: 1". The suite says it
+    before the push; the canary, which must not compile, proves the check can fail."""
+    texts = {}
+    for entry in MUTATIONS:
+        error = _mutated_source_error(entry, texts)
+        check(f"{entry['label']}: the mutated {entry['file']} still compiles", not error,
+              error)
+    check("the canary does not compile, so this check can fail",
+          _mutated_source_error(CANARY, texts) != "")
 
 
 def test_every_named_test_exists_and_has_exactly_one_state():
