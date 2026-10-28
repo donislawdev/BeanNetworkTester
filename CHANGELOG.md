@@ -60,6 +60,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   ssh, it opens without root at once. `BEAN_NO_ELEVATE=1` turns the question off. The files it
   saves stay yours, as under sudo.
 
+- **Linux: a window the desktop can tell apart.** The window now has a class of its own, not
+  the "Tk" every Tk program shares, so the desktop does not group it with other Tk windows.
+  When the window cannot open because the system lacks a library it needs, the line names
+  that library instead of saying tkinter is missing, and the command line still works.
+
 - **Ping on the Tools tab, to see the session's latency and loss arrive.** Type an address or a
   name and press **Start**: each ping is a row with its round trip and what came back, the last
   60 are charted, and the totals say what was lost. The ping goes on while another tab is in
