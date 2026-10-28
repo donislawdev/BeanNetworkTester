@@ -771,6 +771,80 @@ jobs:
           name: BeanNetworkTester-windows
           path: dist/BeanNetworkTester
 
+  # The Linux .tar.gz, built the way release.yml builds it: the same spec, the
+  # same pins, on the OLDEST Ubuntu the program supports (24.04, owner decision
+  # 2026-10-28), because the libraries in the bundle come from the system it is
+  # built on and start on that release and newer ones. A bundle built there was
+  # measured working on Ubuntu 26.04, Fedora 44 and Arch. Not in the branch
+  # ruleset, like the Linux capture job.
+  build-linux:
+    name: build the Linux package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    needs: tests
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      # The interpreter release.yml freezes - see the Windows build above.
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.15"
+          check-latest: true
+          cache: pip
+      # Tk's own library (setup-python's tkinter links the system's), and the
+      # display, window list and desktop-entry checker the smoke uses.
+      - name: Tk, Xvfb and the X tools
+        run: |
+          missing=""
+          for package in libtk8.6 xvfb x11-utils desktop-file-utils; do
+            dpkg -s "$package" >/dev/null 2>&1 || missing="$missing $package"
+          done
+          if [ -n "$missing" ]; then
+            echo "installing:$missing"
+            # The mirror and the two-step install: see "GUI render check".
+            for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list \
+                          /etc/apt/sources.list.d/*.sources \
+                          /etc/apt/sources.list.d/*.list; do
+              if [ -f "$source" ]; then
+                sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' "$source"
+              fi
+            done
+            if ! sudo timeout 180 apt-get install -y --no-install-recommends $missing; then
+              sudo timeout 240 apt-get update \
+                -o Acquire::Retries=2 \
+                -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15
+              sudo timeout 240 apt-get install -y --no-install-recommends $missing
+            fi
+          fi
+      - name: Install dependencies
+        run: pip install --require-hashes -r requirements.txt -r requirements-build.txt
+      - name: Build
+        run: pyinstaller --noconfirm BeanNetworkTester.spec
+      # The font stack from the system, Tk, Xft and libebpfdivert in the bundle -
+      # tools/linux_bundle.py says what each costs when it is wrong.
+      - name: The libraries the bundle carries
+        run: |
+          python tools/linux_bundle.py check dist/BeanNetworkTester
+          find dist/BeanNetworkTester -name '*.so*' -printf '%f\n' | sort
+      - name: The package as a person runs it (CLI, repro line, user files, window)
+        run: |
+          timeout 300 xvfb-run -a --server-args="-screen 0 1280x800x24" \
+            python -u tools/ci_linux_package_smoke.py dist/BeanNetworkTester/BeanNetworkTester
+      # A real capture by the frozen program, bounded as the Linux capture job's
+      # is: a namespace of its own, --dst-ip, --dst-port and --duration.
+      - name: A real capture by the package (namespace of its own)
+        run: |
+          sudo "$(command -v python)" tools/ci_linux_capture_smoke.py --require \
+            --program dist/BeanNetworkTester/BeanNetworkTester
+      # A tar.gz, not the folder: an artifact zip loses the executable bit.
+      - name: Pack
+        run: tar -czf BeanNetworkTester-linux-x64.tar.gz -C dist BeanNetworkTester
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: BeanNetworkTester-linux
+          path: BeanNetworkTester-linux-x64.tar.gz
+
   # 🔴 The weekly run tells nobody it went red. This job is the telling, and it
   # reverses the 2026-08-17 decision - see the note beside `schedule` at the top.
   #
@@ -787,7 +861,7 @@ jobs:
   # case a second time, in tests/test_cron_issue.py.
   cron-issue:
     name: open an issue when the weekly run is red
-    needs: [public-text, lint, types, semgrep, audit, mutations, tests, linux-capture, build]
+    needs: [public-text, lint, types, semgrep, audit, mutations, tests, linux-capture, build, build-linux]
     # 🔴 `workflow_dispatch` is here so this path can be PROVEN. Until it was
     # added, the only way to find out whether `gh issue create` works with these
     # permissions was a red Monday - which is to say, the notice that exists

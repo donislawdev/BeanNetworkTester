@@ -55,6 +55,11 @@ The resets act only on connections this script opened, from inside the namespace
 
 Not Linux, not root, or no eBPFDivert -> SKIP and exit 0, unless ``--require`` is
 given, which CI passes: there a check that cannot run must fail, not pass quietly.
+
+``--program <executable>`` runs the sessions with that program - the frozen Linux
+bundle - instead of ``python -m beantester``, and only the two session phases: the
+tools' phases call the package's own functions from the source tree, which the
+Linux capture job covers already.
 """
 import argparse
 import json
@@ -525,9 +530,20 @@ def open_ping_sockets():
                    check=True, capture_output=True, text=True)
 
 
+# The program the sessions run (--program): None is the source tree's.
+PROGRAM = None
+
+
+def session_command(args):
+    """The command line of a session: ``--program``'s executable, else the source tree."""
+    if PROGRAM:
+        return [PROGRAM, *args]
+    return [sys.executable, "-m", "beantester", *args]
+
+
 def run_session(args, during):
     """The real CLI inside the namespace; ``during()`` runs once the session is up."""
-    p = subprocess.Popen(in_namespace(sys.executable, "-m", "beantester", *args), cwd=ROOT,
+    p = subprocess.Popen(in_namespace(*session_command(args)), cwd=ROOT,
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                          env={**os.environ, "LANG": "C.UTF-8"})
     lines, up = [], threading.Event()
@@ -802,7 +818,12 @@ def main(argv=None, environment=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--require", action="store_true",
                         help="fail instead of skipping when this machine cannot run the check")
+    parser.add_argument("--program", metavar="EXECUTABLE",
+                        help="run the sessions with this program (the frozen bundle), "
+                             "and only the session phases")
     args = parser.parse_args(argv)
+    global PROGRAM
+    PROGRAM = os.path.abspath(args.program) if args.program else None
     if environment is None:
         try:
             from pydivert import bpf
@@ -821,6 +842,8 @@ def main(argv=None, environment=None):
         start_far_end()
         failures += _latency_phase()
         failures += _loss_phase()
+        if PROGRAM:
+            return _report(failures)
         failures += _ping_phase()
         failures += _reset_phase()
         failures += _health_phase()
@@ -829,6 +852,10 @@ def main(argv=None, environment=None):
         failures.append(f"{type(exc).__name__}: {exc}")
     finally:
         teardown_namespace()
+    return _report(failures)
+
+
+def _report(failures):
     for failure in failures:
         print("FAIL:", failure)
     print("OK" if not failures else f"{len(failures)} failure(s)")
