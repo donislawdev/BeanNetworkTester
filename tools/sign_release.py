@@ -15,9 +15,12 @@ script is the seam between them.
 
 What it does, in order, and what it refuses
 -------------------------------------------
-1. downloads the unsigned build the release workflow produced for this tag;
-2. **verifies that build's provenance attestation** before touching it. Signing
-   something you did not check is how a supply chain gets a signature on it;
+1. downloads the unsigned build the release workflow produced for this tag, and the
+   Linux package that workflow put into the draft (its bytes are final: there is
+   nothing to sign on Linux);
+2. **verifies both builds' provenance attestations** before touching either. Signing
+   something you did not check is how a supply chain gets a signature on it, and a
+   checksum written over an unchecked file vouches for it all the same;
 3. signs the executable with the card, with an RFC 3161 timestamp - **without a
    timestamp the signature dies when the certificate expires**, and this one expires
    after a year;
@@ -25,7 +28,8 @@ What it does, in order, and what it refuses
    hashes to ``legal.CODESIGN_SHA256``. A second code-signing certificate on the
    same machine - a renewal, a test one, one from another project - is exactly the
    accident this catches;
-5. repacks the archive, writes ``SHA256SUMS.txt`` over what it just made;
+5. repacks the archive, writes ``SHA256SUMS.txt`` over what it just made and over the
+   Linux package;
 6. **builds the MSI from the payload it has just signed, and signs that too.** The
    order is the point: the installer carries the executable, so building it first
    would ship an unsigned program inside a signed wrapper - worse than either, since
@@ -149,9 +153,26 @@ def expiry_notice(not_after, now):
     return ["  %d days left on the certificate" % days]
 
 
-EXPECTED_ASSETS = (".zip", "SHA256SUMS.txt", ".spdx.json", ".sigstore.json")
+# Every file a complete draft carries, by NAME. Endings stopped being enough with the
+# Linux package: the two SBOMs both end in ".spdx.json" and the two bundles in
+# ".sigstore.json", so a draft missing one of each still matched every ending.
+EXPECTED_ASSETS = ("BeanNetworkTester-{tag}-windows-x64.zip",
+                   "BeanNetworkTester-{tag}-linux-x64.tar.gz",
+                   "SHA256SUMS.txt",
+                   "BeanNetworkTester-{tag}.spdx.json",
+                   "BeanNetworkTester-{tag}-linux.spdx.json",
+                   "BeanNetworkTester-{tag}.sigstore.json",
+                   "BeanNetworkTester-{tag}-linux.sigstore.json")
 # The MSI is only expected on a final release - see `is_release_candidate`.
-MSI_ASSET = ".msi"
+MSI_ASSET = "BeanNetworkTester-{tag}-windows-x64.msi"
+# What release.yml's Linux job builds and its Windows job puts into the draft.
+LINUX_ARCHIVE = "BeanNetworkTester-{tag}-linux-x64.tar.gz"
+
+
+def expected_assets(tag, expect_msi):
+    """The names of every asset a complete draft of ``tag`` carries."""
+    names = [name.format(tag=tag) for name in EXPECTED_ASSETS]
+    return names + ([MSI_ASSET.format(tag=tag)] if expect_msi else [])
 
 
 def is_release_candidate(tag):
@@ -223,7 +244,7 @@ def build_msi(work, unpacked, tag, sums_path):
             "sign_release: the archive has no BeanNetworkTester directory, so the "
             "MSI would harvest the wrong tree. Nothing has been uploaded.")
 
-    out = os.path.join(work, "BeanNetworkTester-%s-windows-x64.msi" % tag)
+    out = os.path.join(work, MSI_ASSET.format(tag=tag))
     run([find_wix(), "build", wxs, "-arch", "x64",
          "-d", "PayloadDir=%s" % payload,
          "-ext", "WixToolset.Util.wixext", "-o", out])
@@ -241,8 +262,11 @@ def _gh_json(*args):
         return None
 
 
-def confirm_draft(tag, digest, wait_seconds, expect_msi=False):
+def confirm_draft(tag, digests, wait_seconds, expect_msi=False):
     """Is the draft actually complete and describing the bytes we just signed?
+
+    ``digests`` maps each archive's name to the sha256 this run wrote for it: the
+    signed zip, and the Linux package it checked.
 
     🔴 This step exists because the script used to end at "dispatched, go look". The
     upload and the dispatch are two calls, phase C is a third thing entirely, and a
@@ -260,14 +284,13 @@ def confirm_draft(tag, digest, wait_seconds, expect_msi=False):
     deadline = time.monotonic() + max(0, wait_seconds)
     # A final release ships the installer as well, and a candidate does not - so what
     # "complete" means is decided by the caller, not by counting to a fixed number.
-    wanted = EXPECTED_ASSETS + ((MSI_ASSET,) if expect_msi else ())
+    wanted = expected_assets(tag, expect_msi)
     lines, assets = [], []
     while True:
         data = _gh_json("release", "view", tag, "--repo", REPO,
                         "--json", "assets,isDraft")
         assets = [a.get("name", "") for a in (data or {}).get("assets", [])]
-        missing = [kind for kind in wanted
-                   if not any(name.endswith(kind) for name in assets)]
+        missing = [name for name in wanted if name not in assets]
         if not missing:
             break
         if time.monotonic() >= deadline:
@@ -294,13 +317,16 @@ def confirm_draft(tag, digest, wait_seconds, expect_msi=False):
         lines.append("  could not download SHA256SUMS.txt back from the draft")
         return False, lines
     with open(os.path.join(where, "SHA256SUMS.txt"), encoding="utf-8") as handle:
-        published = handle.read()
-    if digest not in published:
-        lines.append("  🔴 SHA256SUMS.txt on the release does NOT name the digest we signed")
-        lines.append("     signed:    %s" % digest)
-        lines.append("     published: %s" % published.strip())
-        return False, lines
-    lines.append("  checksums on the release name the digest we signed (%s...)" % digest[:16])
+        published = handle.read().splitlines()
+    for name, digest in sorted(digests.items()):
+        if "%s *%s" % (digest, name) not in published:
+            lines.append("  🔴 SHA256SUMS.txt on the release does NOT name %s as we wrote it"
+                         % name)
+            lines.append("     ours:      %s" % digest)
+            lines.append("     published: %s" % " | ".join(published))
+            return False, lines
+        lines.append("  checksums on the release name %s as we wrote it (%s...)"
+                     % (name, digest[:16]))
     if (_gh_json("release", "view", tag, "--repo", REPO, "--json", "isDraft") or
             {}).get("isDraft") is False:
         lines.append("  🔴 this release is NOT a draft any more - it is already public")
@@ -395,9 +421,20 @@ def main(argv=None):
         raise SystemExit("sign_release: expected one archive in the artefact, got %r"
                          % archives)
     archive = os.path.join(work, archives[0])
+    # The Linux package is in the draft already, put there by the Windows job of the
+    # same run - read back from the draft, so the checksum below describes the file
+    # the release page serves.
+    linux_name = LINUX_ARCHIVE.format(tag=args.tag)
+    run(["gh", "release", "download", args.tag, "--repo", REPO,
+         "--pattern", linux_name, "--dir", work])
+    linux = os.path.join(work, linux_name)
+    if not os.path.isfile(linux):
+        raise SystemExit("sign_release: the draft has no %s - was it opened by a "
+                         "release.yml that builds the Linux package?" % linux_name)
 
     print("\n[2/8] verifying what the workflow says it built")
     run(["gh", "attestation", "verify", archive, "--repo", REPO])
+    run(["gh", "attestation", "verify", linux, "--repo", REPO])
 
     print("\n[3/8] unpacking")
     unpacked = os.path.join(work, "unpacked")
@@ -443,10 +480,12 @@ def main(argv=None):
                 full = os.path.join(base, name)
                 zf.write(full, os.path.relpath(full, unpacked))
     sums = os.path.join(work, "SHA256SUMS.txt")
-    sum_lines = ["%s *%s\n" % (sha256_of(signed), archives[0])]
+    sum_lines = ["%s *%s\n" % (sha256_of(signed), archives[0]),
+                 "%s *%s\n" % (sha256_of(linux), linux_name)]
     with open(sums, "w", encoding="utf-8", newline="\n") as handle:
         handle.writelines(sum_lines)
-    print("  %s" % sha256_of(signed))
+    print("  %s %s" % (sha256_of(signed), archives[0]))
+    print("  %s %s" % (sha256_of(linux), linux_name))
 
     print("\n[6/8] building the installer")
     msi = None
@@ -490,8 +529,9 @@ def main(argv=None):
          "-f", "tag=%s" % args.tag, "-f", "digest=%s" % sha256_of(signed)])
 
     print("\n[8/8] confirming the draft is complete")
-    ok, lines = confirm_draft(args.tag, sha256_of(signed), args.wait,
-                              expect_msi=msi is not None)
+    ok, lines = confirm_draft(args.tag, {archives[0]: sha256_of(signed),
+                                         linux_name: sha256_of(linux)},
+                              args.wait, expect_msi=msi is not None)
     for line in lines:
         print(line)
     if not ok:

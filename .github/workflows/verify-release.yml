@@ -15,7 +15,8 @@
 #
 # Runs on Windows because one of the checks is Authenticode, which does not exist
 # anywhere else - and the signature is the half of the release a checksum cannot
-# speak for.
+# speak for. The Linux package is checked by a second job, on Ubuntu, which also
+# RUNS it: unpacked from the published .tar.gz, the way a person gets it.
 name: Verify the published release
 
 on:
@@ -33,16 +34,19 @@ permissions:
   contents: read
 
 jobs:
-  verify:
-    name: Download what users download, then check it
-    runs-on: windows-latest
-    timeout-minutes: 15
+  # Which release, and whether it carries the Linux package: one answer both jobs
+  # below read, so the Windows job's list of assets and the Linux job's running
+  # cannot disagree about it.
+  which:
+    name: Work out which release we are checking
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
-      # Reading the release assets. Nothing here writes anything, anywhere.
       contents: read
+    outputs:
+      tag: ${{ steps.which.outputs.tag }}
+      linux: ${{ steps.which.outputs.linux }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-
       - name: Work out which release we are checking
         id: which
         shell: bash
@@ -54,26 +58,53 @@ jobs:
           tag="${EVENT_TAG:-$INPUT_TAG}"
           test -n "$tag" || { echo "no tag to check"; exit 1; }
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          # A dispatch has no event payload, so assume "not a pre-release" only when
-          # the payload said so; otherwise ask the API below rather than guessing.
-          echo "prerelease=${PRERELEASE:-unknown}" >> "$GITHUB_OUTPUT"
-          echo "checking $tag (prerelease=${PRERELEASE:-unknown})"
+          # The Linux package ships from 1.0.0 on. An older release, checked again by
+          # hand, has none to check - and is not wrong for it.
+          base="${tag#v}"
+          base="${base%%-*}"
+          if [ "$(printf '%s\n' 1.0.0 "$base" | sort -V | head -n 1)" = "1.0.0" ]; then
+            echo "linux=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "linux=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "checking $tag (prerelease=${PRERELEASE:-unknown}, Linux package from 1.0.0: base $base)"
+
+  verify:
+    name: Download what users download, then check it
+    needs: which
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      # Reading the release assets. Nothing here writes anything, anywhere.
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Download every published asset
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.which.outputs.tag }}
+          TAG: ${{ needs.which.outputs.tag }}
+          LINUX: ${{ needs.which.outputs.linux }}
         run: |
           mkdir -p published && cd published
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY"
           ls -l
-          # Four assets always ship: the archive, the checksums, the SBOM and the
-          # bundle. A missing one means a phase did not finish, which is precisely
-          # the half-failure nobody would notice by looking at the page.
-          for pattern in '*.zip' 'SHA256SUMS.txt' '*.spdx.json' '*.sigstore.json'; do
-            # shellcheck disable=SC2086
-            ls $pattern >/dev/null 2>&1 || { echo "MISSING asset: $pattern"; exit 1; }
+          # Four assets always ship: the Windows archive, the checksums, its SBOM and
+          # its bundle; from 1.0.0 three more, the Linux package with its own SBOM and
+          # bundle. A missing one means a phase did not finish, which is precisely the
+          # half-failure nobody would notice by looking at the page. By NAME: the two
+          # SBOMs and the two bundles share their endings, so a pattern would pass a
+          # release missing one of each.
+          names=("BeanNetworkTester-${TAG}-windows-x64.zip" SHA256SUMS.txt
+                 "BeanNetworkTester-${TAG}.spdx.json" "BeanNetworkTester-${TAG}.sigstore.json")
+          if [ "$LINUX" = "true" ]; then
+            names+=("BeanNetworkTester-${TAG}-linux-x64.tar.gz"
+                    "BeanNetworkTester-${TAG}-linux.spdx.json"
+                    "BeanNetworkTester-${TAG}-linux.sigstore.json")
+          fi
+          for name in "${names[@]}"; do
+            test -f "$name" || { echo "MISSING asset: $name"; exit 1; }
           done
           # A fifth ships on a full release only. 🔴 The rule is `-rc` in the tag and
           # it is the SAME rule as `is_release_candidate` in tools/sign_release.py -
@@ -107,9 +138,10 @@ jobs:
         working-directory: published
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.which.outputs.tag }}
         run: |
-          zip="$(ls ./*.zip)"
-          bundle="$(ls ./*.sigstore.json)"
+          zip="BeanNetworkTester-${TAG}-windows-x64.zip"
+          bundle="BeanNetworkTester-${TAG}.sigstore.json"
           gh attestation verify "$zip" \
             --bundle "$bundle" \
             --repo "$GITHUB_REPOSITORY" \
@@ -120,8 +152,9 @@ jobs:
         working-directory: published
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.which.outputs.tag }}
         run: |
-          zip="$(ls ./*.zip)"
+          zip="BeanNetworkTester-${TAG}-windows-x64.zip"
           gh attestation verify "$zip" \
             -R "$GITHUB_REPOSITORY" \
             --predicate-type https://spdx.dev/Document/v2.3
@@ -187,7 +220,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.which.outputs.tag }}
+          TAG: ${{ needs.which.outputs.tag }}
         run: |
           # The download button on the project site points at /releases/latest, so
           # "published" and "what people get" are only the same thing if this holds.
@@ -201,3 +234,117 @@ jobs:
           latest="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
           echo "latest is $latest, this release is $TAG"
           test "$latest" = "$TAG"
+
+  # The Linux package as a person gets it: the published .tar.gz, its checksum line
+  # and the README's two commands for it, then unpacked and RUN - the CLI, the
+  # Reproduce line, the user files, the window and the menu entry, under Xvfb, with
+  # the same tools/ci_linux_package_smoke.py that judged the build. A release before
+  # 1.0.0 carries no package, so there is nothing to check.
+  verify-linux:
+    name: Download the Linux package users download, then check and run it
+    needs: which
+    if: needs.which.outputs.linux == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      # Reading the release assets. Nothing here writes anything, anywhere.
+      contents: read
+    env:
+      TAG: ${{ needs.which.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download the Linux package, its checksums and its bundle
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p published && cd published
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "BeanNetworkTester-${TAG}-linux-x64.tar.gz" \
+            --pattern "BeanNetworkTester-${TAG}-linux.sigstore.json" \
+            --pattern SHA256SUMS.txt
+          ls -l
+
+      # The README's Linux line: the person downloaded the package alone, so the
+      # Windows lines of the file are skipped rather than reported missing.
+      - name: The checksum users are told to compare
+        shell: bash
+        working-directory: published
+        run: sha256sum -c --ignore-missing SHA256SUMS.txt
+
+      - name: The offline command from the README, verbatim
+        shell: bash
+        working-directory: published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify "BeanNetworkTester-${TAG}-linux-x64.tar.gz" \
+            --bundle "BeanNetworkTester-${TAG}-linux.sigstore.json" \
+            --repo "$GITHUB_REPOSITORY" \
+            --predicate-type https://spdx.dev/Document/v2.3
+
+      - name: The online command from the README, verbatim
+        shell: bash
+        working-directory: published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify "BeanNetworkTester-${TAG}-linux-x64.tar.gz" \
+            -R "$GITHUB_REPOSITORY" \
+            --predicate-type https://spdx.dev/Document/v2.3
+
+      # Unlike the signed Windows zip, these are the bytes release.yml built, so the
+      # build provenance describes the published file itself: which commit, which
+      # workflow. Not a README command - the SBOM one above is the one people run.
+      - name: The build provenance of the published package
+        shell: bash
+        working-directory: published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify "BeanNetworkTester-${TAG}-linux-x64.tar.gz" \
+            -R "$GITHUB_REPOSITORY" \
+            --predicate-type https://slsa.dev/provenance/v1 \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml"
+
+      # The display, the window list and the desktop-entry checker the smoke uses.
+      # Not Tk: the package carries its own, and this is where that is proven.
+      - name: Xvfb and the X tools
+        run: |
+          missing=""
+          for package in xvfb x11-utils desktop-file-utils; do
+            dpkg -s "$package" >/dev/null 2>&1 || missing="$missing $package"
+          done
+          if [ -n "$missing" ]; then
+            echo "installing:$missing"
+            for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list \
+                          /etc/apt/sources.list.d/*.sources \
+                          /etc/apt/sources.list.d/*.list; do
+              if [ -f "$source" ]; then
+                sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' "$source"
+              fi
+            done
+            # $missing unquoted on purpose: it is a list of package names.
+            # shellcheck disable=SC2086
+            if ! sudo timeout 180 apt-get install -y --no-install-recommends $missing; then
+              sudo timeout 240 apt-get update \
+                -o Acquire::Retries=2 \
+                -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15
+              sudo timeout 240 apt-get install -y --no-install-recommends $missing
+            fi
+          fi
+
+      # Unpacked the way the README says, by a person, and run by the system's own
+      # Python 3: the smoke needs no more, and no setup-python environment reaches
+      # the program it starts.
+      - name: Unpack it and run it as a person does
+        shell: bash
+        run: |
+          mkdir -p unpacked
+          tar -xzf "published/BeanNetworkTester-${TAG}-linux-x64.tar.gz" -C unpacked
+          test -x unpacked/BeanNetworkTester/BeanNetworkTester
+          timeout 300 xvfb-run -a --server-args="-screen 0 1280x800x24" \
+            python3 -u tools/ci_linux_package_smoke.py unpacked/BeanNetworkTester/BeanNetworkTester

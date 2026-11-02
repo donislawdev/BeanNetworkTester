@@ -1002,16 +1002,19 @@ def test_the_documented_verify_command_matches_what_we_actually_attest():
     for readme in ("README.md",):
         with open(os.path.join(ROOT, readme), encoding="utf-8") as handle:
             text = handle.read()
+        # Every offline command: the Linux package has its own since 2026-10-28, and
+        # it comes first in the file, so reading only the first one would leave the
+        # Windows line unguarded.
         line = [ln for ln in text.splitlines() if "gh attestation verify" in ln
                 and "--bundle" in ln]
         check(f"{readme} documents the offline verify command", bool(line))
-        command = line[0] if line else ""
-        check(f"{readme}: it names the repository", "--repo " in command, f"({command[:120]})")
-        check(f"{readme}: it names the predicate type",
-              "--predicate-type " in command, f"({command[:120]})")
-        if makes_sbom:
-            check(f"{readme}: the predicate type is the SPDX one the workflow makes",
-                  "https://spdx.dev/Document/v2.3" in command, f"({command[:160]})")
+        for command in line:
+            check(f"{readme}: it names the repository", "--repo " in command, f"({command[:120]})")
+            check(f"{readme}: it names the predicate type",
+                  "--predicate-type " in command, f"({command[:120]})")
+            if makes_sbom:
+                check(f"{readme}: the predicate type is the SPDX one the workflow makes",
+                      "https://spdx.dev/Document/v2.3" in command, f"({command[:160]})")
 
         # 🔴 EVERY documented command, not just the one with `--bundle`. Until
         # 2026-08-21 this test read the offline line only, and the ONLINE line above
@@ -1297,9 +1300,11 @@ def test_the_release_audits_its_pins_before_it_builds():
     if audit is None or release is None:
         return
 
-    check("nothing is built until the audit has passed",
-          re.search(r"^    needs: audit\s*$", release, re.M) is not None,
-          "(the release job does not declare `needs: audit`)")
+    for name, block in (("release", release), ("linux", job_block("linux"))):
+        needs = re.search(r"^    needs: \[?([^\]\n]*)\]?\s*$", block or "", re.M)
+        check(f"nothing is built until the audit has passed ({name} job)",
+              needs is not None and "audit" in [n.strip() for n in needs.group(1).split(",")],
+              f"(the {name} job does not declare `needs: audit`)")
 
     writes = re.findall(r"^\s+([a-z-]+): write\s*$", audit, re.M)
     check("the auditor's token can only read, so an unpinned tool cannot reach "
@@ -1309,6 +1314,225 @@ def test_the_release_audits_its_pins_before_it_builds():
           "--path audit-env" in text)
     check("the audited set is installed with its hashes checked",
           "--require-hashes -r requirements.txt -r requirements-build.txt" in text)
+
+
+def _workflow(name):
+    return _read_text(os.path.join(ROOT, ".github", "workflows", name))
+
+
+def _job(text, name):
+    """The lines of one top-level job of a workflow, up to the next 2-space key."""
+    match = re.search(r"^  %s:\n(.*?)(?=^  [a-z][a-z0-9-]*:\s*$|\Z)" % re.escape(name),
+                      text, re.S | re.M)
+    return match.group(1) if match else ""
+
+
+def _needs(block):
+    found = re.search(r"^    needs: \[?([^\]\n]*)\]?\s*$", block, re.M)
+    return [n.strip() for n in found.group(1).split(",")] if found else []
+
+
+def _sign_release():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "sign_release", os.path.join(ROOT, "tools", "sign_release.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_one_gate_refuses_a_tag_before_either_build():
+    """Two builds come out of one tag (2026-10-28), so the three refusals that do not
+    depend on the system - CI green on the commit, the tag against VERSION.txt, the
+    changelogs closed - sit in one job that both builds wait for. Inside the Windows
+    job, where they were, the Linux job would build and attest a commit CI never
+    passed before anything refused it."""
+    text = _workflow("release.yml")
+    gate = _job(text, "gate")
+    check("release.yml has a gate job", bool(gate))
+    for step in ("actions/runs?head_sha=", "- name: Check the tag against VERSION.txt",
+                 "- name: Check the changelogs are closed for this version"):
+        check(f"the gate job holds {step!r}", step in gate)
+        check(f"and nothing else does ({step!r})", text.count(step) == 1)
+    for name in ("linux", "release"):
+        check(f"the {name} job waits for the gate", "gate" in _needs(_job(text, name)),
+              f"({_needs(_job(text, name))})")
+    check("the Windows job takes 'pre-release or not' from the gate",
+          "needs.gate.outputs.prerelease" in _job(text, "release"))
+
+
+def test_the_linux_package_is_checked_and_in_the_draft_before_signing_is_asked():
+    """The Linux .tar.gz is built, run and attested by a job of its own, and the
+    Windows job opens the draft only once it has it: that job prints the line that
+    sends the maintainer to the card, and signing reads the package out of the
+    draft. Its bytes are final - nothing to sign on Linux - so it goes into the draft
+    at once, while the unsigned Windows archive still does not."""
+    text = _workflow("release.yml")
+    linux, release = _job(text, "linux"), _job(text, "release")
+    check("release.yml has a Linux job", bool(linux))
+    check("the draft waits for the Linux package", "linux" in _needs(release),
+          f"({_needs(release)})")
+    code = "\n".join(ln.split("#", 1)[0] for ln in linux.splitlines())
+    packed = code.find("- name: Package (tar.gz)")
+    check("the package is packed by that job", packed >= 0)
+    for step in ("tools/linux_bundle.py check", "tools/ci_linux_package_smoke.py",
+                 "tools/ci_linux_capture_smoke.py --require", "tools/sbom.py --audit-bundle"):
+        at = code.find(step)
+        check(f"checked before it is packed: {step}", 0 <= at < packed, f"({at}, {packed})")
+    check("its provenance is attested over the archive itself",
+          "actions/attest-build-provenance@" in code
+          and "subject-path: ${{ env.LINUX_ARCHIVE }}" in code)
+    check("its SBOM is the Linux build's", "tools/sbom.py --platform linux" in code)
+    check("it leaves as the artefact the Windows job downloads",
+          "name: linux-build-${{ github.ref_name }}" in code
+          and "name: linux-build-${{ github.ref_name }}" in release)
+    opening = re.search(r"- name: Open the release as a DRAFT.*?(?=\n      - |\Z)", release, re.S)
+    created = re.search(r"gh release create[^\n]*", opening.group(0) if opening else "")
+    created = created.group(0) if created else ""
+    check("the draft carries the Linux package and its SBOM",
+          '"$LINUX_ARCHIVE"' in created and '"$LINUX_SBOM"' in created, f"({created})")
+    check("and still not the unsigned Windows archive", "$ASSET" not in created, f"({created})")
+
+
+def test_every_part_of_a_release_names_the_linux_package_alike():
+    """The package's files are named in five places - the build, the signing script,
+    the attestation, the verification and the README - and a rename in one of them
+    strands the ritual at the next release, the way the artefact name would."""
+    module = _sign_release()
+    check("the signing script's name for it",
+          module.LINUX_ARCHIVE == "BeanNetworkTester-{tag}-linux-x64.tar.gz")
+    readme = _read_text(os.path.join(ROOT, "README.md"))
+    for where, text, parts in (
+            ("release.yml", _workflow("release.yml"),
+             ('"BeanNetworkTester-${GITHUB_REF_NAME}-linux-x64"',
+              "BeanNetworkTester-${GITHUB_REF_NAME}-linux-x64.tar.gz",
+              "BeanNetworkTester-${GITHUB_REF_NAME}-linux.spdx.json")),
+            ("attest-release.yml", _workflow("attest-release.yml"),
+             ("BeanNetworkTester-${TAG}-linux-x64.tar.gz",
+              "BeanNetworkTester-${TAG}-linux.spdx.json",
+              "BeanNetworkTester-${TAG}-linux.sigstore.json")),
+            ("verify-release.yml", _workflow("verify-release.yml"),
+             ("BeanNetworkTester-${TAG}-linux-x64.tar.gz",
+              "BeanNetworkTester-${TAG}-linux.spdx.json",
+              "BeanNetworkTester-${TAG}-linux.sigstore.json")),
+            ("README.md", readme,
+             ("BeanNetworkTester-v1.0.0-linux-x64.tar.gz",
+              "BeanNetworkTester-v1.0.0-linux.sigstore.json"))):
+        for part in parts:
+            check(f"{where} names {part}", part in text)
+    names = module.expected_assets("v1.0.0", expect_msi=False)
+    for part in ("-linux-x64.tar.gz", "-linux.spdx.json", "-linux.sigstore.json"):
+        check(f"a complete draft carries the {part} file",
+              any(name.endswith(part) for name in names), f"({names})")
+
+
+def test_a_complete_draft_is_known_by_its_file_names(monkeypatch, tmp_path):
+    """Endings stopped being enough with the Linux package: both SBOMs end in
+    ".spdx.json" and both bundles in ".sigstore.json", so a draft missing the Linux
+    ones still matched every ending. Driven with a fake gh: a draft missing any one
+    file is incomplete, and so is one whose checksums do not name the Linux package
+    as this run wrote it."""
+    module = _sign_release()
+    tag = "v1.0.0-rc.1"
+    names = module.expected_assets(tag, expect_msi=False)
+    check("seven files for a candidate, eight with the installer",
+          len(set(names)) == 7 and len(set(module.expected_assets("v1.0.0", True))) == 8)
+    check("the installer only when one was built", not any(n.endswith(".msi") for n in names))
+    digests = {f"BeanNetworkTester-{tag}-windows-x64.zip": "a" * 64,
+               f"BeanNetworkTester-{tag}-linux-x64.tar.gz": "b" * 64}
+    state = {"assets": list(names),
+             "sums": "".join(f"{digest} *{name}\n" for name, digest in digests.items())}
+    monkeypatch.setattr(module, "ROOT", str(tmp_path))
+    monkeypatch.setattr(module, "_gh_json", lambda *_args: {
+        "assets": [{"name": name} for name in state["assets"]], "isDraft": True})
+
+    def download(argv, **_kw):
+        where = argv[argv.index("--dir") + 1]
+        with open(os.path.join(where, "SHA256SUMS.txt"), "w", encoding="utf-8") as handle:
+            handle.write(state["sums"])
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(module.subprocess, "run", download)
+    ok, lines = module.confirm_draft(tag, digests, 0)
+    check("complete: it passes", ok, f"({lines})")
+    state["assets"] = [n for n in names if not n.endswith("-linux.sigstore.json")]
+    ok, lines = module.confirm_draft(tag, digests, 0)
+    check("without the Linux bundle: incomplete, and it says which file",
+          not ok and any("-linux.sigstore.json" in line for line in lines), f"({lines})")
+    state["assets"] = list(names)
+    state["sums"] = f"{'a' * 64} *BeanNetworkTester-{tag}-windows-x64.zip\n"
+    ok, lines = module.confirm_draft(tag, digests, 0)
+    check("checksums without the Linux package: refused",
+          not ok and any("linux-x64.tar.gz" in line for line in lines), f"({lines})")
+
+
+def test_the_linux_package_is_verified_before_its_checksum_is_written():
+    """A checksum vouches for a file, so the file is checked first: the Linux
+    package's provenance is verified in step 2, beside the Windows build's, and only
+    then does it get its line in SHA256SUMS.txt. It is read back out of the draft,
+    so the line describes the file the release page serves."""
+    script = _read_text(os.path.join(ROOT, "tools", "sign_release.py"))
+    verified = script.find('run(["gh", "attestation", "verify", linux, "--repo", REPO])')
+    summed = script.find('"%s *%s\\n" % (sha256_of(linux), linux_name)')
+    check("its attestation is verified", verified >= 0)
+    check("it has a line in the checksums", summed >= 0)
+    check("verified before it is summed", 0 <= verified < summed, f"({verified}, {summed})")
+    check("read from the draft", '"--pattern", linux_name' in script)
+    check("and the draft confirmed against it too", "linux_name: sha256_of(linux)" in script)
+
+
+def test_the_linux_package_is_attested_like_the_zip():
+    """Phase C binds each archive to its own SBOM. The Linux package's bytes never
+    changed after the build, so it is cross-checked against the checksum the
+    maintainer wrote over it, and its bundle is published beside the Windows one."""
+    body = "\n".join(ln.split("#", 1)[0] for ln in _workflow("attest-release.yml").splitlines())
+    check("two SBOM attestations", body.count("sbom-path:") == 2)
+    check("the Linux SBOM is bound to the Linux package",
+          "subject-path: ${{ env.LINUX_ARCHIVE }}\n          sbom-path: ${{ env.LINUX_SBOM }}"
+          in body)
+    check("the package is held to the checksum written over it",
+          'grep -F " *${linux}" SHA256SUMS.txt | sha256sum -c -' in body)
+    check("both bundles are published", 'gh release upload "$TAG" "$BUNDLE" "$LINUX_BUNDLE"' in body)
+
+
+def test_the_published_linux_package_is_checked_and_run():
+    """Phase D for Linux: the published .tar.gz, the README's lines for it, then the
+    package unpacked and RUN under Xvfb with the smoke that judged the build. One
+    job decides which release it is and whether it carries the package (from 1.0.0),
+    so the Windows job's list of assets and the Linux job cannot disagree."""
+    text = _workflow("verify-release.yml")
+    which, windows, linux = _job(text, "which"), _job(text, "verify"), _job(text, "verify-linux")
+    check("the jobs are there", bool(which and windows and linux))
+    check("the package is expected from 1.0.0 on",
+          "printf '%s\\n' 1.0.0 \"$base\" | sort -V" in which)
+    for name, block in (("verify", windows), ("verify-linux", linux)):
+        check(f"{name} reads that one answer", _needs(block) == ["which"], f"({_needs(block)})")
+    check("the Linux job runs only for a release that carries the package",
+          "if: needs.which.outputs.linux == 'true'" in linux)
+    check("the Windows job asks for the Linux files on the same answer",
+          '[ "$LINUX" = "true" ]' in windows)
+    readme = _read_text(os.path.join(ROOT, "README.md"))
+    check("the README's checksum line for the package",
+          "sha256sum -c --ignore-missing SHA256SUMS.txt" in readme)
+    check("is the one the job runs", "run: sha256sum -c --ignore-missing SHA256SUMS.txt" in linux)
+    for line in [ln for ln in readme.splitlines()
+                 if "gh attestation verify" in ln and "linux-x64.tar.gz" in ln]:
+        for flag in re.findall(r"(--bundle|--repo|-R|--predicate-type \S+)", line):
+            check(f"the job runs the README's {flag}", flag in linux, f"({line[:90]})")
+    check("it unpacks the published file and runs the package",
+          'tar -xzf "published/BeanNetworkTester-${TAG}-linux-x64.tar.gz"' in linux
+          and "tools/ci_linux_package_smoke.py unpacked/BeanNetworkTester/BeanNetworkTester" in linux)
+
+
+def test_only_the_linux_build_is_stripped():
+    """PyInstaller's own words for --strip: "not recommended for Windows". On Linux it
+    takes setup-python's unstripped libpython - 34 MB of a 69 MB bundle, measured
+    2026-10-28 - out of the package, and the Linux jobs run what is left."""
+    spec = _read_text(os.path.join(ROOT, "BeanNetworkTester.spec"))
+    check("decided once, by the system", "STRIP = not WINDOWS" in spec)
+    check("for the program and for its libraries", spec.count("strip=STRIP,") == 2,
+          f"({spec.count('strip=STRIP,')})")
 
 
 def test_osv_scanner_reads_every_pinned_requirements_file():

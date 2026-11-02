@@ -15,6 +15,11 @@
 # built something, and it is made there, over the unsigned build. Claiming here that
 # this workflow produced a file a person signed on their own machine would be false in
 # the one document nobody should have to doubt.
+#
+# The Linux package gets its SBOM attestation here too, beside the Windows one, so a
+# release's two archives are attested the same way and at the same moment. Its bytes
+# never changed after release.yml built them; it is cross-checked against the
+# SHA256SUMS.txt the maintainer wrote rather than against a digest input.
 name: Attest a signed release
 
 on:
@@ -53,8 +58,12 @@ jobs:
           CLAIMED: ${{ inputs.digest }}
         run: |
           mkdir -p signed && cd signed
-          gh release download "$TAG" --pattern '*.zip' --pattern '*.spdx.json'
-          archive="$(ls *.zip)"
+          archive="BeanNetworkTester-${TAG}-windows-x64.zip"
+          linux="BeanNetworkTester-${TAG}-linux-x64.tar.gz"
+          gh release download "$TAG" --pattern "$archive" --pattern "$linux" \
+            --pattern "BeanNetworkTester-${TAG}.spdx.json" \
+            --pattern "BeanNetworkTester-${TAG}-linux.spdx.json" \
+            --pattern SHA256SUMS.txt
           actual="$(sha256sum "$archive" | cut -d' ' -f1)"
           echo "release carries: $actual"
           if [ "$actual" != "$CLAIMED" ]; then
@@ -62,10 +71,18 @@ jobs:
             echo "::error::dispatched for $CLAIMED - something changed in between"
             exit 1
           fi
+          # The Linux package against the checksum the maintainer wrote over it.
+          grep -F " *${linux}" SHA256SUMS.txt | sha256sum -c - || {
+            echo "::error::$linux on the release is not the file SHA256SUMS.txt names"
+            exit 1
+          }
           {
             echo "ARCHIVE=signed/$archive"
-            echo "SBOM=signed/$(ls *.spdx.json)"
+            echo "SBOM=signed/BeanNetworkTester-${TAG}.spdx.json"
             echo "BUNDLE=BeanNetworkTester-${TAG}.sigstore.json"
+            echo "LINUX_ARCHIVE=signed/$linux"
+            echo "LINUX_SBOM=signed/BeanNetworkTester-${TAG}-linux.spdx.json"
+            echo "LINUX_BUNDLE=BeanNetworkTester-${TAG}-linux.sigstore.json"
           } >> "$GITHUB_ENV"
 
       # The SBOM, bound to the file a user actually downloads. Before the signature
@@ -79,18 +96,30 @@ jobs:
           subject-path: ${{ env.ARCHIVE }}
           sbom-path: ${{ env.SBOM }}
 
+      # The Linux build's own SBOM, bound to the .tar.gz a user downloads.
+      - name: Attest the Linux SBOM against the Linux package
+        id: linux_attestation
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # v4.2.2
+        with:
+          subject-path: ${{ env.LINUX_ARCHIVE }}
+          sbom-path: ${{ env.LINUX_SBOM }}
+
       # 🔴 As an ASSET, not only in the attestation store. Scorecard's Signed-Releases
       # check reads release assets by file extension and never opens that store, and a
       # user with no route to the API cannot use it either. `gh attestation verify
       # <zip> --bundle <this file>` answers offline, from a mirror, from anywhere.
-      - name: Publish the bundle beside the archive
+      - name: Publish the bundles beside the archives
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
           BUNDLE_PATH: ${{ steps.attestation.outputs.bundle-path }}
+          LINUX_BUNDLE_PATH: ${{ steps.linux_attestation.outputs.bundle-path }}
         run: |
           cp "$BUNDLE_PATH" "$BUNDLE"
-          python -c "import json,sys; json.load(open(sys.argv[1])); print('bundle parses as JSON')" "$BUNDLE"
-          gh release upload "$TAG" "$BUNDLE" --clobber
-          echo "attached $BUNDLE to $TAG (still a draft)"
+          cp "$LINUX_BUNDLE_PATH" "$LINUX_BUNDLE"
+          for bundle in "$BUNDLE" "$LINUX_BUNDLE"; do
+            python -c "import json,sys; json.load(open(sys.argv[1])); print(sys.argv[1], 'parses as JSON')" "$bundle"
+          done
+          gh release upload "$TAG" "$BUNDLE" "$LINUX_BUNDLE" --clobber
+          echo "attached $BUNDLE and $LINUX_BUNDLE to $TAG (still a draft)"
