@@ -1,7 +1,8 @@
 <section class="hero">
   <h1>Pobierz Bean Network Tester</h1>
-  <p class="lead">Archiwum zip, które działa bez instalowania, albo instalator dla wszystkich
-  użytkowników komputera. W obu przypadkach program sam poprosi o prawa administratora.</p>
+  <p class="lead">Na Windows archiwum zip, które działa bez instalowania, albo instalator dla
+  wszystkich użytkowników komputera. W obu przypadkach program sam poprosi o prawa administratora.
+  Na Linuksa jest też paczka, eksperymentalnie.</p>
   <p class="actions">
     <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
   </p>
@@ -11,11 +12,13 @@
   <h2>Fakty w jednym miejscu</h2>
   <ul class="facts">
     <li><strong>Cena:</strong> darmowy, i wolne oprogramowanie - GNU GPL v3.</li>
-    <li><strong>Działa na:</strong> Windows 10 i Windows 11, 64-bit.</li>
-    <li><strong>Wymaga:</strong> praw administratora, bo ruch przechwytuje sterownik.</li>
+    <li><strong>Działa na:</strong> Windows 10 i Windows 11, 64-bit. Linux, eksperymentalnie:
+    64-bit (x86_64), sprawdzony na Ubuntu 24.04 i 26.04.</li>
+    <li><strong>Wymaga:</strong> praw administratora, bo ruch przechwytuje sterownik. Na Linuksie
+    praw roota i jądra 5.10 lub nowszego.</li>
     <li><strong>Instalacja:</strong> niepotrzebna. Rozpakuj zip gdziekolwiek i uruchom. Możesz też
     użyć instalatora <code>.msi</code>, który dodaje program do menu Start i do <code>PATH</code>
-    (wymaga praw administratora).</li>
+    (wymaga praw administratora). Na Linuksie rozpakuj <code>.tar.gz</code>.</li>
     <li><strong>Wysyła dane:</strong> nic sam z siebie. Bez telemetrii, bez sprawdzania aktualizacji.
     Narzędzie {{app.tools.ping.tab}} wysyła tylko na adres, który wpiszesz.</li>
     <li><strong>Tryby:</strong> okno i ten sam plik jako narzędzie linii komend.</li>
@@ -26,17 +29,20 @@
 
 <section>
   <h2>Co jest w wydaniu</h2>
-  <p>Wydanie publikuje pięć plików. Dwa to program, a pozostałe trzy są po to, żebyś nie musiał
+  <p>Wydanie publikuje osiem plików. Trzy to program, a pozostałe pięć jest po to, żebyś nie musiał
   brać pobrania na wiarę:</p>
   <ul>
     <li><strong>archiwum zip</strong> - program i sterownik, którego używa, razem w jednym
     katalogu;</li>
     <li><strong>instalator .msi</strong> - ten sam program, instalowany dla wszystkich
     użytkowników komputera, z pozycją w menu Start;</li>
-    <li><strong>SHA256SUMS.txt</strong> - sumy kontrolne archiwum i instalatora;</li>
-    <li><strong>SBOM</strong> - standardowa lista każdego komponentu w środku, z wersjami i
-    licencjami, podpisana wobec archiwum;</li>
-    <li><strong>plik .sigstore.json</strong> - ten podpis jako plik, żeby sprawdzić go bez
+    <li><strong>archiwum .tar.gz</strong> - program na Linuksa, z własnym Pythonem,
+    eksperymentalnie;</li>
+    <li><strong>SHA256SUMS.txt</strong> - sumy kontrolne archiwum zip, instalatora i paczki na
+    Linuksa;</li>
+    <li><strong>dwa SBOM-y</strong> - standardowa lista każdego komponentu w środku, z wersjami i
+    licencjami, jeden podpisany wobec archiwum zip, drugi wobec paczki na Linuksa;</li>
+    <li><strong>dwa pliki .sigstore.json</strong> - te podpisy jako pliki, żeby sprawdzić je bez
     pytania GitHuba.</li>
   </ul>
 </section>
@@ -50,7 +56,11 @@
   <p>Podpis odpowiada na inne pytanie - „czy to wyszło z tego repozytorium" - i wymaga narzędzia
   linii komend GitHuba:</p>
 <pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
-  <p>Jako pierwszą część wpisz nazwę pobranego pliku zip - <code>gh</code> nie przyjmuje tam
+  <p>Na Linuksie oba sprawdzenia uruchom w katalogu, w którym leży paczka i
+  <code>SHA256SUMS.txt</code>:</p>
+<pre><code>sha256sum -c --ignore-missing SHA256SUMS.txt
+gh attestation verify BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>Jako pierwszą część wpisz nazwę pobranego pliku - <code>gh</code> nie przyjmuje tam
   <code>*</code>. Zostaw <code>--predicate-type</code>: bez niego <code>gh</code> szuka innego
   rodzaju poświadczenia i odpowiada, że żadnego nie znalazł.</p>
   <p>Suma kontrolna skopiowana z tej samej strony, z której pobierasz plik, dowodzi mniej niż
@@ -65,4 +75,19 @@
   powyżej pozwalają zweryfikować plik samodzielnie.
   <a href="../najczestsze-pytania/">Strona z pytaniami</a> opisuje to oraz czego potrzebuje
   sterownik.</p>
+</section>
+
+<section>
+  <h2>Na Linuksie</h2>
+  <p>Paczka to ten sam program z własnym Pythonem i Tk, więc niczego nie trzeba wcześniej
+  instalować. Rozpakuj ją, dodaj do menu aplikacji i uruchom:</p>
+<pre><code>tar -xzf BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+./BeanNetworkTester</code></pre>
+  <p>Okno uruchomione bez <code>sudo</code> poprosi o hasło administratora w oknie dialogowym
+  pulpitu. Paczka wymaga glibc 2.38 lub nowszego, więc Ubuntu 22.04 i Debian 12 są dla niej za
+  stare. Obsługa Linuksa jest eksperymentem, a
+  <a href="{{site.repo_url}}#linux-package-experimental">README</a> mówi, czym różni się od
+  Windows.</p>
 </section>

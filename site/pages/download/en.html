@@ -1,7 +1,8 @@
 <section class="hero">
   <h1>Download Bean Network Tester</h1>
-  <p class="lead">A zip that runs without installing anything, or an installer for everyone on
-  the computer. Either way, the program asks for administrator rights itself.</p>
+  <p class="lead">For Windows, a zip that runs without installing anything, or an installer for
+  everyone on the computer. Either way, the program asks for administrator rights itself. For
+  Linux there is a package too, as an experiment.</p>
   <p class="actions">
     <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
   </p>
@@ -11,11 +12,13 @@
   <h2>The facts, in one place</h2>
   <ul class="facts">
     <li><strong>Price:</strong> free, and free software - GNU GPL v3.</li>
-    <li><strong>Runs on:</strong> Windows 10 and Windows 11, 64-bit.</li>
-    <li><strong>Needs:</strong> administrator rights, because traffic is captured by a driver.</li>
+    <li><strong>Runs on:</strong> Windows 10 and Windows 11, 64-bit. Linux, as an experiment:
+    64-bit (x86_64), checked on Ubuntu 24.04 and 26.04.</li>
+    <li><strong>Needs:</strong> administrator rights, because traffic is captured by a driver. On
+    Linux, root rights and kernel 5.10 or newer.</li>
     <li><strong>Install:</strong> not needed. Unpack the zip anywhere and run it. Or use the
     <code>.msi</code> installer, which adds a Start Menu entry and puts the program on
-    <code>PATH</code> (it needs administrator rights).</li>
+    <code>PATH</code> (it needs administrator rights). On Linux, unpack the <code>.tar.gz</code>.</li>
     <li><strong>Sends data:</strong> nothing on its own. No telemetry, no update check. Its {{app.tools.ping.tab}}
     tool sends only to the address you type.</li>
     <li><strong>Modes:</strong> a window, and the same file as a command-line tool.</li>
@@ -25,17 +28,20 @@
 
 <section>
   <h2>What is in the release</h2>
-  <p>A release publishes five files. Two are the program, and the other three are there so you
+  <p>A release publishes eight files. Three are the program, and the other five are there so you
   do not have to take the download on trust:</p>
   <ul>
     <li><strong>the zip</strong> - the program and the driver it uses, together in one folder;</li>
     <li><strong>the .msi installer</strong> - the same program, installed for everyone on the
     computer, with a Start Menu entry;</li>
-    <li><strong>SHA256SUMS.txt</strong> - the checksums of the zip and the installer;</li>
-    <li><strong>an SBOM</strong> - a standard list of every component inside, with versions and
-    licences, signed against the zip;</li>
-    <li><strong>a .sigstore.json file</strong> - that signature as a file, to check it without
-    asking GitHub.</li>
+    <li><strong>the .tar.gz</strong> - the program for Linux, with its own Python, as an
+    experiment;</li>
+    <li><strong>SHA256SUMS.txt</strong> - the checksums of the zip, the installer and the Linux
+    package;</li>
+    <li><strong>two SBOMs</strong> - a standard list of every component inside, with versions and
+    licences, one signed against the zip and one against the Linux package;</li>
+    <li><strong>two .sigstore.json files</strong> - those signatures as files, to check them
+    without asking GitHub.</li>
   </ul>
 </section>
 
@@ -48,7 +54,10 @@
   <p>The signature answers a different question - "did this come out of that repository" - and needs
   the GitHub command-line tool:</p>
 <pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
-  <p>Type the name of the zip you downloaded as the first part - <code>gh</code> does not accept a
+  <p>On Linux, run both checks in the folder that holds the package and <code>SHA256SUMS.txt</code>:</p>
+<pre><code>sha256sum -c --ignore-missing SHA256SUMS.txt
+gh attestation verify BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>Type the name of the file you downloaded as the first part - <code>gh</code> does not accept a
   <code>*</code> there. Keep <code>--predicate-type</code>: without it <code>gh</code> looks for a
   different kind of statement and reports that it found none.</p>
   <p>A checksum you copy from the same page as the download proves less than a signature. Both are
@@ -62,4 +71,19 @@
   not seen it often yet. That is about the certificate, not about the file, and the two checks
   above let you verify the file yourself. The <a href="../faq/">questions page</a> covers this and
   what the driver needs.</p>
+</section>
+
+<section>
+  <h2>On Linux</h2>
+  <p>The package is the same program with its own Python and Tk, so nothing needs installing
+  first. Unpack it, add it to the applications menu, and start it:</p>
+<pre><code>tar -xzf BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+./BeanNetworkTester</code></pre>
+  <p>Started without <code>sudo</code>, the window asks for an administrator's password in the
+  desktop's own dialog. The package needs glibc 2.38 or newer, so Ubuntu 22.04 and Debian 12 are
+  too old for it. Linux support is an experiment, and the
+  <a href="{{site.repo_url}}#linux-package-experimental">README</a> says where it differs from
+  Windows.</p>
 </section>

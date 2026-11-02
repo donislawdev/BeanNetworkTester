@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>Descargar Bean Network Tester</h1>
-  <p class="lead">Un zip que funciona sin instalar nada, o un instalador para todos los usuarios del sistema. En ambos casos, el programa pide por sí mismo permisos de administrador.</p>
+  <p class="lead">Para Windows, un zip que funciona sin instalar nada, o un instalador para todos los usuarios del sistema. En ambos casos, el programa pide por sí mismo permisos de administrador. Para Linux también hay un paquete, de forma experimental.</p>
   <p class="actions">
     <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
   </p>
@@ -10,9 +10,9 @@
   <h2>Los datos, en un solo lugar</h2>
   <ul class="facts">
     <li><strong>Precio:</strong> gratis, y software libre: GNU GPL v3.</li>
-    <li><strong>Funciona en:</strong> Windows 10 y Windows 11, de 64 bits.</li>
-    <li><strong>Necesita:</strong> permisos de administrador, porque el tráfico lo captura un controlador.</li>
-    <li><strong>Instalación:</strong> no hace falta. Descomprime el zip donde quieras y ejecútalo. O usa el instalador <code>.msi</code>, que añade una entrada al menú Inicio y pone el programa en el <code>PATH</code> (necesita permisos de administrador).</li>
+    <li><strong>Funciona en:</strong> Windows 10 y Windows 11, de 64 bits. Linux, de forma experimental: de 64 bits (x86_64), comprobado en Ubuntu 24.04 y 26.04.</li>
+    <li><strong>Necesita:</strong> permisos de administrador, porque el tráfico lo captura un controlador. En Linux, permisos de root y un kernel 5.10 o posterior.</li>
+    <li><strong>Instalación:</strong> no hace falta. Descomprime el zip donde quieras y ejecútalo. O usa el instalador <code>.msi</code>, que añade una entrada al menú Inicio y pone el programa en el <code>PATH</code> (necesita permisos de administrador). En Linux, descomprime el <code>.tar.gz</code>.</li>
     <li><strong>Envía datos:</strong> nada por su cuenta. Sin telemetría, sin comprobación de actualizaciones. Su herramienta {{app.tools.ping.tab}} solo envía a la dirección que escribes.</li>
     <li><strong>Modos:</strong> una ventana, y el mismo archivo como herramienta de línea de comandos.</li>
     <li><strong>Código fuente:</strong> <a href="{{site.repo_url}}">en GitHub</a>, con la misma licencia.</li>
@@ -21,13 +21,14 @@
 
 <section>
   <h2>Qué incluye la versión</h2>
-  <p>Cada versión publica cinco archivos. Dos son el programa, y los otros tres están para que no tengas que fiarte de la descarga a ciegas:</p>
+  <p>Cada versión publica ocho archivos. Tres son el programa, y los otros cinco están para que no tengas que fiarte de la descarga a ciegas:</p>
   <ul>
     <li><strong>el zip</strong>: el programa y el controlador que usa, juntos en una carpeta;</li>
     <li><strong>el instalador .msi</strong>: el mismo programa, instalado para todos los usuarios del sistema, con una entrada en el menú Inicio;</li>
-    <li><strong>SHA256SUMS.txt</strong>: las sumas de comprobación del zip y del instalador;</li>
-    <li><strong>un SBOM</strong>: una lista estándar de todos los componentes que contiene, con versiones y licencias, firmada respecto al zip;</li>
-    <li><strong>un archivo .sigstore.json</strong>: esa firma como archivo, para comprobarla sin preguntar a GitHub.</li>
+    <li><strong>el .tar.gz</strong>: el programa para Linux, con su propio Python, de forma experimental;</li>
+    <li><strong>SHA256SUMS.txt</strong>: las sumas de comprobación del zip, del instalador y del paquete para Linux;</li>
+    <li><strong>dos SBOM</strong>: listas estándar de todos los componentes que contienen, con versiones y licencias, una firmada respecto al zip y otra respecto al paquete para Linux;</li>
+    <li><strong>dos archivos .sigstore.json</strong>: esas firmas como archivos, para comprobarlas sin preguntar a GitHub.</li>
   </ul>
 </section>
 
@@ -37,11 +38,24 @@
 <pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
   <p>La firma responde a otra pregunta, «¿salió esto de ese repositorio?», y necesita la herramienta de línea de comandos de GitHub:</p>
 <pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
-  <p>Escribe como primera parte el nombre del zip que descargaste: <code>gh</code> no acepta un <code>*</code> ahí. Conserva <code>--predicate-type</code>: sin él, <code>gh</code> busca otro tipo de declaración y comunica que no encontró ninguna.</p>
+  <p>En Linux, ejecuta las dos comprobaciones en la carpeta donde están el paquete y <code>SHA256SUMS.txt</code>:</p>
+<pre><code>sha256sum -c --ignore-missing SHA256SUMS.txt
+gh attestation verify BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>Escribe como primera parte el nombre del archivo que descargaste: <code>gh</code> no acepta un <code>*</code> ahí. Conserva <code>--predicate-type</code>: sin él, <code>gh</code> busca otro tipo de declaración y comunica que no encontró ninguna.</p>
   <p>Una suma de comprobación que copias de la misma página que la descarga demuestra menos que una firma. Ambas están publicadas, así que las dos merecen un momento.</p>
 </section>
 
 <section>
   <h2>Es posible que Windows te avise</h2>
   <p>El programa y el instalador están firmados, así que Windows indica quién los firmó en lugar de decir «Editor desconocido». El certificado es nuevo, por lo que SmartScreen aún puede avisar durante un tiempo: todavía no lo ha visto muchas veces. Eso tiene que ver con el certificado, no con el archivo, y las dos comprobaciones de arriba te permiten verificar el archivo tú mismo. La <a href="../preguntas-frecuentes/">página de preguntas</a> trata esto y lo que necesita el controlador.</p>
+</section>
+
+<section>
+  <h2>En Linux</h2>
+  <p>El paquete es el mismo programa con su propio Python y Tk, así que no hace falta instalar nada antes. Descomprímelo, añádelo al menú de aplicaciones y ábrelo:</p>
+<pre><code>tar -xzf BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+./BeanNetworkTester</code></pre>
+  <p>Abierta sin <code>sudo</code>, la ventana pide la contraseña de un administrador en el diálogo del propio escritorio. El paquete necesita glibc 2.38 o posterior, así que Ubuntu 22.04 y Debian 12 son demasiado antiguos para él. El soporte de Linux es un experimento, y el <a href="{{site.repo_url}}#linux-package-experimental">README</a> explica en qué se diferencia de Windows.</p>
 </section>

@@ -141,7 +141,7 @@
   "og_image": "assets/og-image.png",
   "software": {
     "application_category": "DeveloperApplication",
-    "operating_system": "Windows 10, Windows 11",
+    "operating_system": "Windows 10, Windows 11, Linux",
     "license_url": "https://www.gnu.org/licenses/gpl-3.0.html"
   },
   "palette": {

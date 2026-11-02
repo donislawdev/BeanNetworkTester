@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>Tải Bean Network Tester</h1>
-  <p class="lead">Một tệp zip chạy mà không cần cài đặt, hoặc một trình cài đặt cho mọi người dùng trên máy. Dù chọn cách nào, chương trình tự xin quyền quản trị.</p>
+  <p class="lead">Cho Windows, một tệp zip chạy mà không cần cài đặt, hoặc một trình cài đặt cho mọi người dùng trên máy. Dù chọn cách nào, chương trình tự xin quyền quản trị. Cho Linux cũng có một gói, ở dạng thử nghiệm.</p>
   <p class="actions">
     <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
   </p>
@@ -10,9 +10,9 @@
   <h2>Các thông tin chính, ở một chỗ</h2>
   <ul class="facts">
     <li><strong>Giá:</strong> miễn phí, và là phần mềm tự do, GNU GPL v3.</li>
-    <li><strong>Chạy trên:</strong> Windows 10 và Windows 11, 64 bit.</li>
-    <li><strong>Cần:</strong> quyền quản trị, vì lưu lượng được bắt bởi một trình điều khiển.</li>
-    <li><strong>Cài đặt:</strong> không cần. Giải nén zip ở bất kỳ đâu và chạy. Hoặc dùng trình cài đặt <code>.msi</code>, thêm một mục vào Start Menu và đưa chương trình vào <code>PATH</code> (cần quyền quản trị).</li>
+    <li><strong>Chạy trên:</strong> Windows 10 và Windows 11, 64 bit. Linux, ở dạng thử nghiệm: 64 bit (x86_64), đã kiểm tra trên Ubuntu 24.04 và 26.04.</li>
+    <li><strong>Cần:</strong> quyền quản trị, vì lưu lượng được bắt bởi một trình điều khiển. Trên Linux, cần quyền root và nhân 5.10 trở lên.</li>
+    <li><strong>Cài đặt:</strong> không cần. Giải nén zip ở bất kỳ đâu và chạy. Hoặc dùng trình cài đặt <code>.msi</code>, thêm một mục vào Start Menu và đưa chương trình vào <code>PATH</code> (cần quyền quản trị). Trên Linux, giải nén tệp <code>.tar.gz</code>.</li>
     <li><strong>Gửi dữ liệu:</strong> không tự gửi gì. Không telemetry, không kiểm tra cập nhật. Công cụ {{app.tools.ping.tab}} chỉ gửi tới địa chỉ bạn nhập.</li>
     <li><strong>Chế độ:</strong> một cửa sổ, và cùng tệp đó như một công cụ dòng lệnh.</li>
     <li><strong>Mã nguồn:</strong> <a href="{{site.repo_url}}">trên GitHub</a>, cùng giấy phép.</li>
@@ -21,13 +21,14 @@
 
 <section>
   <h2>Bản phát hành gồm những gì</h2>
-  <p>Một bản phát hành công bố năm tệp. Hai là chương trình, ba còn lại có mặt để bạn không phải tin lời mà tải về:</p>
+  <p>Một bản phát hành công bố tám tệp. Ba là chương trình, năm tệp còn lại có mặt để bạn không phải tin lời mà tải về:</p>
   <ul>
     <li><strong>tệp zip</strong>: chương trình và trình điều khiển nó dùng, cùng trong một thư mục;</li>
     <li><strong>trình cài đặt .msi</strong>: cùng chương trình đó, cài cho mọi người dùng trên máy, có mục trong Start Menu;</li>
-    <li><strong>SHA256SUMS.txt</strong>: tổng kiểm tra của tệp zip và trình cài đặt;</li>
-    <li><strong>một SBOM</strong>: danh sách chuẩn mọi thành phần bên trong, kèm phiên bản và giấy phép, được ký đối với tệp zip;</li>
-    <li><strong>một tệp .sigstore.json</strong>: chữ ký đó dưới dạng tệp, để kiểm tra mà không cần hỏi GitHub.</li>
+    <li><strong>tệp .tar.gz</strong>: chương trình cho Linux, kèm Python riêng, ở dạng thử nghiệm;</li>
+    <li><strong>SHA256SUMS.txt</strong>: tổng kiểm tra của tệp zip, trình cài đặt và gói Linux;</li>
+    <li><strong>hai SBOM</strong>: danh sách chuẩn mọi thành phần bên trong, kèm phiên bản và giấy phép, một bản được ký đối với tệp zip và một bản đối với gói Linux;</li>
+    <li><strong>hai tệp .sigstore.json</strong>: các chữ ký đó dưới dạng tệp, để kiểm tra mà không cần hỏi GitHub.</li>
   </ul>
 </section>
 
@@ -37,11 +38,24 @@
 <pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
   <p>Chữ ký trả lời một câu hỏi khác, “nó có ra từ kho mã đó không”, và cần công cụ dòng lệnh của GitHub:</p>
 <pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
-  <p>Gõ tên tệp zip bạn đã tải làm phần đầu tiên, vì <code>gh</code> không chấp nhận <code>*</code> ở đó. Giữ <code>--predicate-type</code>: thiếu nó, <code>gh</code> tìm một loại phát biểu khác và báo là không thấy gì.</p>
+  <p>Trên Linux, chạy cả hai bước kiểm tra trong thư mục chứa gói và <code>SHA256SUMS.txt</code>:</p>
+<pre><code>sha256sum -c --ignore-missing SHA256SUMS.txt
+gh attestation verify BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>Gõ tên tệp bạn đã tải làm phần đầu tiên, vì <code>gh</code> không chấp nhận <code>*</code> ở đó. Giữ <code>--predicate-type</code>: thiếu nó, <code>gh</code> tìm một loại phát biểu khác và báo là không thấy gì.</p>
   <p>Một tổng kiểm tra bạn chép từ cùng trang với bản tải chứng minh ít hơn một chữ ký. Cả hai đều được công bố, nên cả hai đều đáng một lát thời gian.</p>
 </section>
 
 <section>
   <h2>Windows có thể cảnh báo bạn</h2>
   <p>Chương trình và trình cài đặt đều được ký, nên Windows nêu tên người ký thay vì ghi “Nhà phát hành không xác định”. Chứng chỉ còn mới, nên SmartScreen vẫn có thể cảnh báo một thời gian, vì nó chưa gặp chứng chỉ này nhiều. Đó là chuyện của chứng chỉ, không phải của tệp, và hai cách kiểm tra ở trên cho phép bạn tự xác minh tệp. <a href="../cau-hoi-thuong-gap/">Trang hỏi đáp</a> nói về điều này và về những gì trình điều khiển cần.</p>
+</section>
+
+<section>
+  <h2>Trên Linux</h2>
+  <p>Gói này là cùng chương trình đó, kèm Python và Tk riêng, nên không cần cài gì trước. Giải nén, thêm vào menu ứng dụng rồi khởi chạy:</p>
+<pre><code>tar -xzf BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+./BeanNetworkTester</code></pre>
+  <p>Khi chạy không có <code>sudo</code>, cửa sổ sẽ hỏi mật khẩu quản trị trong hộp thoại của chính môi trường desktop. Gói cần glibc 2.38 trở lên, nên Ubuntu 22.04 và Debian 12 quá cũ cho nó. Hỗ trợ Linux là một thử nghiệm, và <a href="{{site.repo_url}}#linux-package-experimental">README</a> cho biết nó khác Windows ở đâu.</p>
 </section>

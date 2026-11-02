@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>Unduh Bean Network Tester</h1>
-  <p class="lead">Zip yang berjalan tanpa menginstal apa pun, atau installer untuk semua pengguna di komputer. Apa pun pilihannya, program meminta hak administrator sendiri.</p>
+  <p class="lead">Untuk Windows, zip yang berjalan tanpa menginstal apa pun, atau installer untuk semua pengguna di komputer. Apa pun pilihannya, program meminta hak administrator sendiri. Untuk Linux juga ada paket, sebagai uji coba.</p>
   <p class="actions">
     <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
   </p>
@@ -10,9 +10,9 @@
   <h2>Fakta-fakta di satu tempat</h2>
   <ul class="facts">
     <li><strong>Harga:</strong> gratis, dan perangkat lunak bebas: GNU GPL v3.</li>
-    <li><strong>Berjalan di:</strong> Windows 10 dan Windows 11, 64-bit.</li>
-    <li><strong>Membutuhkan:</strong> hak administrator, karena lalu lintas ditangkap oleh driver.</li>
-    <li><strong>Instalasi:</strong> tidak perlu. Ekstrak zip di mana saja lalu jalankan. Atau gunakan installer <code>.msi</code>, yang menambahkan entri Start Menu dan menaruh program di <code>PATH</code> (membutuhkan hak administrator).</li>
+    <li><strong>Berjalan di:</strong> Windows 10 dan Windows 11, 64-bit. Linux, sebagai uji coba: 64-bit (x86_64), diperiksa di Ubuntu 24.04 dan 26.04.</li>
+    <li><strong>Membutuhkan:</strong> hak administrator, karena lalu lintas ditangkap oleh driver. Di Linux, hak root dan kernel 5.10 atau yang lebih baru.</li>
+    <li><strong>Instalasi:</strong> tidak perlu. Ekstrak zip di mana saja lalu jalankan. Atau gunakan installer <code>.msi</code>, yang menambahkan entri Start Menu dan menaruh program di <code>PATH</code> (membutuhkan hak administrator). Di Linux, ekstrak <code>.tar.gz</code>.</li>
     <li><strong>Mengirim data:</strong> tidak ada dengan sendirinya. Tanpa telemetri, tanpa pengecekan pembaruan. Alat {{app.tools.ping.tab}} hanya mengirim ke alamat yang Anda ketik.</li>
     <li><strong>Mode:</strong> sebuah jendela, dan file yang sama sebagai alat baris perintah.</li>
     <li><strong>Kode sumber:</strong> <a href="{{site.repo_url}}">di GitHub</a>, dengan lisensi yang sama.</li>
@@ -21,13 +21,14 @@
 
 <section>
   <h2>Isi rilis</h2>
-  <p>Satu rilis menerbitkan lima file. Dua adalah programnya, dan tiga lainnya ada agar Anda tidak perlu memercayai unduhan begitu saja:</p>
+  <p>Satu rilis menerbitkan delapan file. Tiga adalah programnya, dan lima lainnya ada agar Anda tidak perlu memercayai unduhan begitu saja:</p>
   <ul>
     <li><strong>zip</strong>: program dan driver yang dipakainya, bersama dalam satu folder;</li>
     <li><strong>installer .msi</strong>: program yang sama, dipasang untuk semua pengguna di komputer, dengan entri Start Menu;</li>
-    <li><strong>SHA256SUMS.txt</strong>: checksum zip dan installer;</li>
-    <li><strong>sebuah SBOM</strong>: daftar standar setiap komponen di dalamnya, dengan versi dan lisensi, ditandatangani terhadap zip;</li>
-    <li><strong>file .sigstore.json</strong>: tanda tangan itu sebagai file, untuk memeriksanya tanpa bertanya ke GitHub.</li>
+    <li><strong>.tar.gz</strong>: program untuk Linux, dengan Python-nya sendiri, sebagai uji coba;</li>
+    <li><strong>SHA256SUMS.txt</strong>: checksum zip, installer, dan paket Linux;</li>
+    <li><strong>dua SBOM</strong>: daftar standar setiap komponen di dalamnya, dengan versi dan lisensi, satu ditandatangani terhadap zip dan satu terhadap paket Linux;</li>
+    <li><strong>dua file .sigstore.json</strong>: tanda tangan itu sebagai file, untuk memeriksanya tanpa bertanya ke GitHub.</li>
   </ul>
 </section>
 
@@ -37,11 +38,24 @@
 <pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
   <p>Tanda tangan menjawab pertanyaan lain, “apakah ini berasal dari repositori itu”, dan membutuhkan alat baris perintah GitHub:</p>
 <pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
-  <p>Ketik nama zip yang Anda unduh sebagai bagian pertama: <code>gh</code> tidak menerima <code>*</code> di sana. Pertahankan <code>--predicate-type</code>: tanpanya <code>gh</code> mencari jenis pernyataan yang lain dan melaporkan tidak menemukan apa pun.</p>
+  <p>Di Linux, jalankan kedua pemeriksaan di folder tempat paket dan <code>SHA256SUMS.txt</code> berada:</p>
+<pre><code>sha256sum -c --ignore-missing SHA256SUMS.txt
+gh attestation verify BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>Ketik nama file yang Anda unduh sebagai bagian pertama: <code>gh</code> tidak menerima <code>*</code> di sana. Pertahankan <code>--predicate-type</code>: tanpanya <code>gh</code> mencari jenis pernyataan yang lain dan melaporkan tidak menemukan apa pun.</p>
   <p>Checksum yang Anda salin dari halaman yang sama dengan unduhannya membuktikan lebih sedikit daripada tanda tangan. Keduanya diterbitkan, jadi keduanya layak diperiksa sebentar.</p>
 </section>
 
 <section>
   <h2>Windows mungkin memperingatkan Anda</h2>
   <p>Program dan installer ditandatangani, sehingga Windows menyebut siapa yang menandatanganinya alih-alih mengatakan “Publisher tidak dikenal”. Sertifikatnya baru, jadi SmartScreen mungkin masih memperingatkan untuk sementara karena belum sering melihatnya. Itu soal sertifikat, bukan file, dan dua pemeriksaan di atas memungkinkan Anda memverifikasi file sendiri. <a href="../pertanyaan-umum/">Halaman pertanyaan</a> membahas ini dan apa yang dibutuhkan driver.</p>
+</section>
+
+<section>
+  <h2>Di Linux</h2>
+  <p>Paket ini adalah program yang sama dengan Python dan Tk-nya sendiri, jadi tidak ada yang perlu diinstal lebih dulu. Ekstrak, tambahkan ke menu aplikasi, lalu jalankan:</p>
+<pre><code>tar -xzf BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+./BeanNetworkTester</code></pre>
+  <p>Jika dijalankan tanpa <code>sudo</code>, jendelanya meminta kata sandi administrator lewat dialog desktop itu sendiri. Paket ini membutuhkan glibc 2.38 atau yang lebih baru, jadi Ubuntu 22.04 dan Debian 12 terlalu lama untuknya. Dukungan Linux masih uji coba, dan <a href="{{site.repo_url}}#linux-package-experimental">README</a> menjelaskan perbedaannya dengan Windows.</p>
 </section>
