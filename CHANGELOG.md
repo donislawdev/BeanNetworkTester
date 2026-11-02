@@ -5,7 +5,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-11-02
+## [1.0.0] - 2026-11-03
 
 ### Added
 

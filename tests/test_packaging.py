@@ -140,6 +140,30 @@ def test_the_winget_manifest_keeps_the_exe_with_its_siblings(tmp_path, monkeypat
           "(an alias implies the symlink this field exists to avoid)")
 
 
+def test_every_winget_manifest_names_the_schema_the_pipeline_takes(tmp_path, monkeypatch):
+    """All three files carry one ManifestVersion, and it is not an outdated one.
+
+    The number was moved back once already (1.28.0 to 1.12.0, see WINGET_SCHEMA), so
+    the floor is what keeps a careless "fix" from reaching a submission: an outdated
+    ManifestVersion is something a reviewer can send it back for.
+    """
+    floor = (1, 28, 0)
+    check(f"WINGET_SCHEMA is not older than {'.'.join(map(str, floor))}",
+          tuple(int(part) for part in bp.WINGET_SCHEMA.split(".")) >= floor,
+          f"({bp.WINGET_SCHEMA})")
+    rendered = _rendered(tmp_path, monkeypatch)
+    manifests = {name: text for name, text in rendered.items() if name.startswith("winget/")}
+    check("three WinGet manifests are rendered", len(manifests) == 3, f"({sorted(manifests)})")
+    for name, text in sorted(manifests.items()):
+        check(f"{name} carries ManifestVersion {bp.WINGET_SCHEMA}",
+              f"ManifestVersion: {bp.WINGET_SCHEMA}" in _code(text))
+        headers = [line for line in text.splitlines()
+                   if line.startswith("# yaml-language-server: $schema=")]
+        check(f"{name} points its editor at the same schema",
+              len(headers) == 1 and headers[0].endswith(f".{bp.WINGET_SCHEMA}.schema.json"),
+              f"({headers})")
+
+
 def test_the_nested_path_is_the_one_the_release_builds(tmp_path, monkeypatch):
     installer = _rendered(tmp_path, monkeypatch)["winget/installer.yaml"]
     expected = f"RelativeFilePath: {appinfo.TOOL_ID}/{appinfo.EXE_NAME}"
