@@ -2,7 +2,7 @@
   <a href="README.md">English</a> | <a href="README.zh-Hans.md">简体中文</a> | <a href="README.ja.md">日本語</a> | <a href="README.de.md">Deutsch</a> | <a href="README.ko.md">한국어</a> | <a href="README.fr.md">Français</a> | <b>Português (Brasil)</b> | <a href="README.es.md">Español</a>
 </p>
 
-# Bean Network Tester 🫘 - simulador de condições ruins de rede (Windows) 
+# Bean Network Tester 🫘 - simulador de condições ruins de rede
 <p align="center">
   <b>Siga-me:</b>
   &nbsp
