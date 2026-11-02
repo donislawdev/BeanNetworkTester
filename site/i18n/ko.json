@@ -4,7 +4,7 @@
     "name": "한국어"
   },
   "cta.closing": "내 네트워크를 일부러 망가뜨릴 준비가 되셨나요?",
-  "cta.download": "Windows용 다운로드",
+  "cta.download": "다운로드",
   "cta.note": "GPLv3 오픈 소스 무료 프로그램. Windows 10 및 11, 64비트, Linux는 실험적으로 지원. 계정도 텔레메트리도 없습니다.",
   "cta.source": "GitHub에서 코드 보기",
   "exit.assertion": "실행에 대한 검증이 성립하지 않았습니다.",

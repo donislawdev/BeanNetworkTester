@@ -4,7 +4,7 @@
     "name": "简体中文"
   },
   "cta.closing": "准备好故意搞坏自己的网络了吗？",
-  "cta.download": "下载 Windows 版",
+  "cta.download": "下载",
   "cta.note": "免费开源，采用 GPLv3 许可。支持 Windows 10 和 11（64 位），并实验性支持 Linux。无需账号，无遥测。",
   "cta.source": "在 GitHub 上查看源码",
   "exit.assertion": "关于本次运行的断言未能成立。",

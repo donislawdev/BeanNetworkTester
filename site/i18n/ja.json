@@ -4,7 +4,7 @@
     "name": "日本語"
   },
   "cta.closing": "自分のネットワークを、わざと壊してみませんか？",
-  "cta.download": "Windows版をダウンロード",
+  "cta.download": "ダウンロード",
   "cta.note": "無料のオープンソース（GPLv3）。Windows 10 / 11、64ビット対応。Linuxでも実験的に動作。アカウント不要、テレメトリなし。",
   "cta.source": "GitHubでソースコードを見る",
   "exit.assertion": "実行結果に関する検証（アサーション）が成立しませんでした。",

@@ -4,7 +4,7 @@
     "name": "Türkçe"
   },
   "cta.closing": "Kendi ağınızı bilerek bozmaya hazır mısınız?",
-  "cta.download": "Windows için indir",
+  "cta.download": "İndir",
   "cta.note": "GPLv3 lisansıyla ücretsiz ve açık kaynak. Windows 10 ve 11, 64 bit, ve deneysel olarak Linux. Hesap yok, telemetri yok.",
   "cta.source": "Kodu GitHub’da görün",
   "exit.assertion": "Çalıştırmayla ilgili bir doğrulama sağlanmadı.",

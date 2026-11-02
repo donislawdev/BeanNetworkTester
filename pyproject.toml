@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "beantester"
 dynamic = ["version"]                  # the version lives in VERSION.txt, nowhere else
-description = "Bean Network Tester - poor network conditions simulator for Windows (WinDivert)"
+description = "Bean Network Tester - poor network conditions simulator for Windows (WinDivert) and Linux (eBPFDivert, experimental)"
 readme = "README.md"
 authors = [{ name = "DonislawDev" }]
 requires-python = ">=3.10"

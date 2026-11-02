@@ -1,12 +1,14 @@
-"""BeanNetworkTester - poor network conditions simulator for Windows.
+"""BeanNetworkTester - poor network conditions simulator for Windows and Linux.
 
 A QA/developer tool for testing applications under a bad network: packet
 loss / corruption / duplication, latency + jitter + spikes, per-direction
 speed limits and schedules, link flapping, LAN mode, NAT expiry, RST
 injection, process/destination targeting, seeded reproducibility, scenarios
-and full reproduction reports. Runs on the WinDivert driver (``pydivert``,
-requires Administrator); the engine itself is platform-independent and fully
-covered by tests that need neither Windows nor WinDivert.
+and full reproduction reports. Captures through ``pydivert``: the WinDivert
+driver on Windows (requires Administrator) and, as an experiment, its
+eBPFDivert backend on Linux (requires root, or CAP_BPF, CAP_NET_ADMIN and
+CAP_NET_RAW); the engine itself is platform-independent and fully covered by
+tests that need neither a capture driver nor elevation.
 
 This package intentionally does NOT import the GUI at import time - the GUI
 (tkinter) is loaded lazily by ``beantester.cli.main`` or via the
