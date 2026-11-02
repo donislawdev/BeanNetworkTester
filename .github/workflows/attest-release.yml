@@ -73,7 +73,10 @@ jobs:
           fi
           # The Linux package against the checksum the maintainer wrote over it.
           grep -F " *${linux}" SHA256SUMS.txt | sha256sum -c - || {
-            echo "::error::$linux on the release is not the file SHA256SUMS.txt names"
+            echo "::error::$linux on the release is not the file SHA256SUMS.txt names: one"
+            echo "::error::of them changed after the signing. Run tools/sign_release.py $TAG"
+            echo "::error::again - it reads the package from the draft, checks its"
+            echo "::error::attestation first and writes the checksums again."
             exit 1
           }
           {

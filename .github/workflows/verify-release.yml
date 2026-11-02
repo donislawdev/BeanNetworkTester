@@ -79,6 +79,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Download every published asset
         shell: bash
@@ -269,11 +271,20 @@ jobs:
           ls -l
 
       # The README's Linux line: the person downloaded the package alone, so the
-      # Windows lines of the file are skipped rather than reported missing.
+      # Windows lines of the file are skipped rather than reported missing. That
+      # line fails when no file at all is verified (GNU coreutils 9.4, measured), so
+      # it already refuses a checksum file that leaves the package out - the line
+      # before it says so in its own words, and does not lean on the other lines.
       - name: The checksum users are told to compare
         shell: bash
         working-directory: published
-        run: sha256sum -c --ignore-missing SHA256SUMS.txt
+        run: |
+          grep -qF " *BeanNetworkTester-${TAG}-linux-x64.tar.gz" SHA256SUMS.txt || {
+            echo "::error::SHA256SUMS.txt on $TAG does not name the Linux package. Run"
+            echo "::error::tools/sign_release.py $TAG again: it writes the package's line."
+            exit 1
+          }
+          sha256sum -c --ignore-missing SHA256SUMS.txt
 
       - name: The offline command from the README, verbatim
         shell: bash

@@ -1515,7 +1515,13 @@ def test_the_published_linux_package_is_checked_and_run():
     readme = _read_text(os.path.join(ROOT, "README.md"))
     check("the README's checksum line for the package",
           "sha256sum -c --ignore-missing SHA256SUMS.txt" in readme)
-    check("is the one the job runs", "run: sha256sum -c --ignore-missing SHA256SUMS.txt" in linux)
+    sums = re.search(r"- name: The checksum users are told to compare.*?(?=\n      - |\Z)",
+                     linux, re.S)
+    sums = sums.group(0) if sums else ""
+    check("is the one the job runs", "sha256sum -c --ignore-missing SHA256SUMS.txt" in sums)
+    check("after it has seen the package named in the checksums",
+          'grep -qF " *BeanNetworkTester-${TAG}-linux-x64.tar.gz" SHA256SUMS.txt' in sums,
+          "(the README's line would also pass on any other file the checksums name)")
     for line in [ln for ln in readme.splitlines()
                  if "gh attestation verify" in ln and "linux-x64.tar.gz" in ln]:
         for flag in re.findall(r"(--bundle|--repo|-R|--predicate-type \S+)", line):
@@ -1523,6 +1529,24 @@ def test_the_published_linux_package_is_checked_and_run():
     check("it unpacks the published file and runs the package",
           'tar -xzf "published/BeanNetworkTester-${TAG}-linux-x64.tar.gz"' in linux
           and "tools/ci_linux_package_smoke.py unpacked/BeanNetworkTester/BeanNetworkTester" in linux)
+
+
+def test_the_release_builds_read_no_cache_and_keep_no_token():
+    """zizmor on pull request #299: a release build that reads the pip cache reads
+    what pull-request runs wrote (cache-poisoning), and a checkout that keeps its
+    token leaves it in .git/config of a job holding `contents: write` (artipacked).
+    The hashes would refuse a swapped wheel; the release simply depends on neither."""
+    text = _workflow("release.yml")
+    for name in ("gate", "linux", "release"):
+        block = "\n".join(ln.split("#", 1)[0] for ln in _job(text, name).splitlines())
+        check(f"release.yml {name}: no cache is read", "cache:" not in block)
+        if "actions/checkout@" in block:
+            check(f"release.yml {name}: the checkout keeps no token",
+                  "persist-credentials: false" in block)
+    verify = _workflow("verify-release.yml")
+    for name in ("verify", "verify-linux"):
+        check(f"verify-release.yml {name}: the checkout keeps no token",
+              "persist-credentials: false" in _job(verify, name))
 
 
 def test_only_the_linux_build_is_stripped():

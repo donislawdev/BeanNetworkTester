@@ -2435,6 +2435,32 @@ MUTATIONS = [
         "test": "test_the_published_linux_package_is_checked_and_run",
     },
     {
+        "label": "verification: the checksums are not seen to name the Linux package",
+        "file": ".github/workflows/verify-release.yml",
+        "old": "          grep -qF \" *BeanNetworkTester-${TAG}-linux-x64.tar.gz\" SHA256SUMS.txt || {\n",
+        "new": "          true || {\n",
+        "test": "test_the_published_linux_package_is_checked_and_run",
+    },
+    {
+        "label": "release: the Windows build reads the pip cache again",
+        "file": ".github/workflows/release.yml",
+        "old": "          check-latest: true  # newest 3.15.x, not the runner image's cached one\n\n"
+               "      - name: Install dependencies\n",
+        "new": "          check-latest: true  # newest 3.15.x, not the runner image's cached one\n"
+               "          cache: pip\n\n      - name: Install dependencies\n",
+        "test": "test_the_release_builds_read_no_cache_and_keep_no_token",
+    },
+    {
+        "label": "release: the Windows build's checkout keeps its token",
+        "file": ".github/workflows/release.yml",
+        "old": "      # GH_TOKEN, never through git, and holds `contents: write`.\n"
+               "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1\n"
+               "        with:\n          persist-credentials: false\n",
+        "new": "      # GH_TOKEN, never through git, and holds `contents: write`.\n"
+               "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1\n",
+        "test": "test_the_release_builds_read_no_cache_and_keep_no_token",
+    },
+    {
         "label": "spec: the Windows build is stripped too",
         "file": "BeanNetworkTester.spec",
         "old": "STRIP = not WINDOWS\n",

@@ -337,16 +337,24 @@ jobs:
       id-token: write
       attestations: write
     steps:
+      # No token left in .git/config: this job publishes through `gh` and
+      # GH_TOKEN, never through git, and holds `contents: write`.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       # The interpreter PyInstaller freezes into the shipped bundle. Keep it in
       # step with the build job in ci.yml, or CI smoke-tests one artefact and
       # users download another.
+      #
+      # 🔴 No `cache: pip`, as the Linux job has none: a release build reads no
+      # cache that pull-request runs write (zizmor, cache-poisoning). The hashes
+      # below would refuse a swapped wheel anyway; this keeps the build from
+      # depending on what a cache holds at all, for a minute per release.
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: "3.15"
           check-latest: true  # newest 3.15.x, not the runner image's cached one
-          cache: pip
 
       - name: Install dependencies
         run: |
