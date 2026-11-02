@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-02
+
 ### Added
 
 - **Linux, experimental: the command line impairs real traffic.** From source, on Linux 5.10
