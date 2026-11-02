@@ -1,7 +1,8 @@
 name: Release
 
-# Build and publish a Windows release whenever a version tag is pushed. Tag the
-# default branch only after CI (tests + build) is green:
+# Build a release whenever a version tag is pushed: the Windows zip and the Linux
+# .tar.gz, opened together as one DRAFT. Tag the default branch only after CI
+# (tests + build) is green:
 #   git tag v1.0.0 && git push origin v1.0.0
 on:
   push:
@@ -12,7 +13,7 @@ on:
 # ci.yml, pages.yml and scorecard.yml already follow; this file was the last one
 # breaking it, and OpenSSF Scorecard named it (Token-Permissions, 0/10, 2026-08-19).
 #
-# 🔴 Not cosmetic while there is only one job. A permission written here is granted
+# 🔴 Not cosmetic. A permission written here is granted
 # to every job ADDED to this file later - a job whose author has no reason to scroll
 # back up, in the one workflow that can publish an asset under this project's name.
 permissions:
@@ -94,35 +95,26 @@ jobs:
           fi
           echo "nothing published against the set this tag ships."
 
-  release:
-    name: Build and publish the Windows executable
-    # Nothing is built until the audit above has passed. `needs` is what makes the
-    # gate a gate: a failed dependency skips this job rather than letting it start.
-    needs: audit
-    runs-on: windows-latest
-    timeout-minutes: 30
+  # 🔴 The three refusals that do not depend on the system being built, in a job of
+  # their own and before EITHER build. They lived in the Windows job while it was the
+  # only build; with two, the Linux one would build and attest a commit CI never
+  # passed, or a tag the version does not match, before the Windows job refused it.
+  gate:
+    name: Refuse a tag CI never passed, or one the version and changelog do not match
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
-      # Creating a Release and uploading its assets. The default token only reads.
-      contents: write
-      # For the SBOM attestation. `id-token` mints the short-lived OIDC token that
-      # signs it, `attestations` writes the result to the repository's attestation
-      # store. Both are required by actions/attest and neither grants anything else;
-      # a release that skipped them would still publish an SBOM, just an unsigned one
-      # that anybody could swap.
-      #
-      # NOT here on purpose: `artifact-metadata: write`, which that action's README
-      # lists as a third permission. It is needed to create the artifact STORAGE
-      # RECORD, and `create-storage-record` requires `push-to-registry`, which
-      # defaults to false and is not used here (read in the action's own action.yml,
-      # 2026-08-12). Granting a permission we do not need would contradict the line
-      # above it.
-      id-token: write
-      attestations: write
-      # Reading the CI runs for the tagged commit, for the gate that is the first
-      # step below. Read-only, and it is the whole reason this scope is here.
+      contents: read
+      # Reading the CI runs for the tagged commit, for the first step below.
+      # Read-only, and it is the whole reason this scope is here.
       actions: read
+    outputs:
+      prerelease: ${{ steps.tag.outputs.prerelease }}
+      title: ${{ steps.tag.outputs.title }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       # 🔴 FIRST, before anything is installed or built: was CI green on EXACTLY
       # this commit? This workflow deliberately does not re-run the tests - it
@@ -156,27 +148,12 @@ jobs:
           fi
           echo "CI is green on the commit being released."
 
-      # The interpreter PyInstaller freezes into the shipped bundle. Keep it in
-      # step with the build job in ci.yml, or CI smoke-tests one artefact and
-      # users download another.
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
-        with:
-          python-version: "3.15"
-          check-latest: true  # newest 3.15.x, not the runner image's cached one
-          cache: pip
-
-      - name: Install dependencies
-        run: |
-          # One hash-checked resolution over both files - the same command the
-          # build job in ci.yml runs, so a release cannot be built from a
-          # different set of bytes than the one CI proved.
-          pip install --require-hashes -r requirements.txt -r requirements-build.txt
-
       # The version is single-sourced in VERSION.txt. The tag is v<version> for a
       # final release, or v<version>-rc.N (also -beta.N / -alpha.N) for a pre-release.
       # Its BASE must match VERSION.txt so a release can never ship mislabelled, and the
       # presence of a -suffix decides whether GitHub marks it a pre-release.
       - name: Check the tag against VERSION.txt
+        id: tag
         shell: bash
         run: |
           ref="${GITHUB_REF_NAME}"       # v0.3.0        or  v0.3.0-rc.4
@@ -185,9 +162,9 @@ jobs:
           version="$(cat VERSION.txt)"
           echo "tag=$ref base=$base VERSION.txt=$version"
           test "$base" = "$version" || { echo "tag base v$base != VERSION.txt $version"; exit 1; }
-          if [ "$ver" != "$base" ]; then echo "PRERELEASE=true" >> "$GITHUB_ENV"
-          else echo "PRERELEASE=false" >> "$GITHUB_ENV"; fi
-          echo "TITLE=$ver" >> "$GITHUB_ENV"
+          if [ "$ver" != "$base" ]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+          echo "title=$ver" >> "$GITHUB_OUTPUT"
 
       # The step above proves the tag is LABELLED right. This one proves the release
       # NOTES are, which is a different thing and had no check at all until 0.4.0:
@@ -213,6 +190,181 @@ jobs:
           done
           test "$fail" = "0" || exit 1
           echo "changelogs closed for $version"
+
+  # The Linux .tar.gz (experimental in 1.0, owner's decision 2026-10-28), built on the
+  # oldest supported Ubuntu as ci.yml's build-linux job builds it: the libraries in
+  # the bundle come from the system it is built on. Its bytes are FINAL here - there
+  # is nothing to sign on Linux - so its provenance is attested over the file the
+  # user downloads, and the Windows job puts it into the draft. Its checksum is
+  # written with the Windows one, by tools/sign_release.py.
+  linux:
+    name: Build the Linux package
+    needs: [audit, gate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # The provenance attestation of the .tar.gz (see the Windows job's comment).
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      # The interpreter the bundle carries: the same one the Windows job freezes and
+      # ci.yml's build jobs test.
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.15"
+          check-latest: true
+      # Tk's own library (setup-python's tkinter links the system's), and the display,
+      # window list and desktop-entry checker the smoke uses. The mirror swap and the
+      # two-step install are ci.yml's (its "GUI render check" says why).
+      - name: Tk, Xvfb and the X tools
+        run: |
+          missing=""
+          for package in libtk8.6 xvfb x11-utils desktop-file-utils; do
+            dpkg -s "$package" >/dev/null 2>&1 || missing="$missing $package"
+          done
+          if [ -n "$missing" ]; then
+            echo "installing:$missing"
+            for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list \
+                          /etc/apt/sources.list.d/*.sources \
+                          /etc/apt/sources.list.d/*.list; do
+              if [ -f "$source" ]; then
+                sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' "$source"
+              fi
+            done
+            # $missing unquoted on purpose: it is a list of package names.
+            # shellcheck disable=SC2086
+            if ! sudo timeout 180 apt-get install -y --no-install-recommends $missing; then
+              sudo timeout 240 apt-get update \
+                -o Acquire::Retries=2 \
+                -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15
+              sudo timeout 240 apt-get install -y --no-install-recommends $missing
+            fi
+          fi
+      - name: Install dependencies
+        run: pip install --require-hashes -r requirements.txt -r requirements-build.txt
+      - name: Build
+        run: pyinstaller --noconfirm BeanNetworkTester.spec
+      # The checks ci.yml's build-linux job runs, on the bytes this tag ships: what
+      # the bundle carries, the program as a person runs it, and a real capture in a
+      # namespace of its own (--dst-ip, --dst-port and --duration).
+      - name: The libraries the bundle carries
+        run: python tools/linux_bundle.py check dist/BeanNetworkTester
+      - name: The package as a person runs it (CLI, repro line, user files, window)
+        run: |
+          timeout 300 xvfb-run -a --server-args="-screen 0 1280x800x24" \
+            python -u tools/ci_linux_package_smoke.py dist/BeanNetworkTester/BeanNetworkTester
+      - name: A real capture by the package (namespace of its own)
+        run: |
+          sudo "$(command -v python)" tools/ci_linux_capture_smoke.py --require \
+            --program dist/BeanNetworkTester/BeanNetworkTester
+      - name: Scan the bundle and hold the licence registry to it
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c  # v0.24.3
+        with:
+          path: dist/BeanNetworkTester
+          format: syft-json
+          output-file: bundle-scan.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: The registry must account for everything the scan found
+        run: python tools/sbom.py --audit-bundle bundle-scan.json
+      # Owned by root in the archive: unpacked with sudo, the files are root's rather
+      # than whoever has the runner's uid on that machine, and unpacked by a person
+      # they are that person's, as tar always does.
+      - name: Package (tar.gz)
+        shell: bash
+        run: |
+          name="BeanNetworkTester-${GITHUB_REF_NAME}-linux-x64"
+          tar --owner=0 --group=0 --numeric-owner -czf "${name}.tar.gz" -C dist BeanNetworkTester
+          sha256sum "${name}.tar.gz"
+          echo "LINUX_ARCHIVE=${name}.tar.gz" >> "$GITHUB_ENV"
+      # The Linux build's own SBOM, from legal.LINUX_COMPONENTS on this system (the
+      # versions --license reports in the package), with a namespace of its own.
+      - name: Generate the Linux SBOM (SPDX 2.3)
+        shell: bash
+        run: |
+          python tools/sbom.py --platform linux --namespace-seed "$GITHUB_REF_NAME" \
+                 -o "BeanNetworkTester-${GITHUB_REF_NAME}-linux.spdx.json"
+          echo "LINUX_SBOM=BeanNetworkTester-${GITHUB_REF_NAME}-linux.spdx.json" >> "$GITHUB_ENV"
+      # Over the bytes the user downloads: unlike the Windows zip, nothing changes
+      # this file after the build, so the provenance describes the published file
+      # and `gh attestation verify <tar.gz> -R <repo>` answers for it.
+      - name: Attest the build provenance of the Linux archive
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-path: ${{ env.LINUX_ARCHIVE }}
+      # The name is what the Windows job below downloads.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: linux-build-${{ github.ref_name }}
+          path: |
+            ${{ env.LINUX_ARCHIVE }}
+            ${{ env.LINUX_SBOM }}
+          retention-days: 7
+
+  release:
+    name: Build the Windows executable and open the draft
+    # Nothing is built until the audit and the gate above have passed, and the draft
+    # is opened only once the Linux package is built too. `needs` is what makes the
+    # gate a gate: a failed dependency skips this job rather than letting it start.
+    # 🔴 `linux` is here so the line "Now, on the machine with the card" at the end
+    # can only be printed when the draft carries both builds: signing reads the
+    # .tar.gz out of the draft.
+    needs: [audit, gate, linux]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      PRERELEASE: ${{ needs.gate.outputs.prerelease }}
+      TITLE: ${{ needs.gate.outputs.title }}
+    permissions:
+      # Creating a Release and uploading its assets. The default token only reads.
+      contents: write
+      # For the SBOM attestation. `id-token` mints the short-lived OIDC token that
+      # signs it, `attestations` writes the result to the repository's attestation
+      # store. Both are required by actions/attest and neither grants anything else;
+      # a release that skipped them would still publish an SBOM, just an unsigned one
+      # that anybody could swap.
+      #
+      # NOT here on purpose: `artifact-metadata: write`, which that action's README
+      # lists as a third permission. It is needed to create the artifact STORAGE
+      # RECORD, and `create-storage-record` requires `push-to-registry`, which
+      # defaults to false and is not used here (read in the action's own action.yml,
+      # 2026-08-12). Granting a permission we do not need would contradict the line
+      # above it.
+      id-token: write
+      attestations: write
+    steps:
+      # No token left in .git/config: this job publishes through `gh` and
+      # GH_TOKEN, never through git, and holds `contents: write`.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The interpreter PyInstaller freezes into the shipped bundle. Keep it in
+      # step with the build job in ci.yml, or CI smoke-tests one artefact and
+      # users download another.
+      #
+      # 🔴 No `cache: pip`, as the Linux job has none: a release build reads no
+      # cache that pull-request runs write (zizmor, cache-poisoning). The hashes
+      # below would refuse a swapped wheel anyway; this keeps the build from
+      # depending on what a cache holds at all, for a minute per release.
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.15"
+          check-latest: true  # newest 3.15.x, not the runner image's cached one
+
+      - name: Install dependencies
+        run: |
+          # One hash-checked resolution over both files - the same command the
+          # build job in ci.yml runs, so a release cannot be built from a
+          # different set of bytes than the one CI proved.
+          pip install --require-hashes -r requirements.txt -r requirements-build.txt
+
+      # The tag, the version and the changelogs were checked by the gate job above,
+      # which also says whether this is a pre-release (PRERELEASE and TITLE).
 
       # CI (ci.yml) already runs the full test suite on every push to master - i.e. on
       # exactly this commit - so the release does not re-test. It builds, smoke-tests the
@@ -300,7 +452,15 @@ jobs:
       # something nobody wrote and never showed the changelog at all - for 0.4.0 that
       # would have been 43 PR titles. Extracting the section instead means the release
       # page, a blog post and CHANGELOG.md are one text that cannot drift apart.
-      # The step above has already proved that section exists and is dated.
+      # The gate job has already proved that section exists and is dated.
+      #
+      # The Linux package goes into the draft here, with its SBOM, because its bytes
+      # are final (the Linux job says why). The Windows archive does not: it is
+      # unsigned until tools/sign_release.py has been to the card.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: linux-build-${{ github.ref_name }}
+          path: linux-build
       - name: Open the release as a DRAFT
         env:
           GH_TOKEN: ${{ github.token }}
@@ -308,9 +468,12 @@ jobs:
         run: |
           python tools/release_notes.py > RELEASE_NOTES.md
           head -5 RELEASE_NOTES.md
+          LINUX_ARCHIVE="linux-build/BeanNetworkTester-${GITHUB_REF_NAME}-linux-x64.tar.gz"
+          LINUX_SBOM="linux-build/BeanNetworkTester-${GITHUB_REF_NAME}-linux.spdx.json"
+          ls -l "$LINUX_ARCHIVE" "$LINUX_SBOM"
           flags=(--draft --title "$TITLE" --notes-file RELEASE_NOTES.md)
           if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); else flags+=(--latest); fi
-          gh release create "$GITHUB_REF_NAME" "$SBOM" "${flags[@]}"
+          gh release create "$GITHUB_REF_NAME" "$SBOM" "$LINUX_SBOM" "$LINUX_ARCHIVE" "${flags[@]}"
 
       # 🔴 The build leaves as an ARTEFACT, not as a release asset, and the reason is
       # that it is not finished. The executable inside is unsigned, and this runner
@@ -329,11 +492,12 @@ jobs:
       - name: Say what happens next
         shell: bash
         run: |
-          echo "Built, attested, and opened as a DRAFT release."
+          echo "Built both systems, attested, and opened as a DRAFT release that"
+          echo "carries the Linux package and both SBOMs."
           echo
           echo "Now, on the machine with the card:"
           echo "    python tools/sign_release.py ${GITHUB_REF_NAME}"
           echo
           echo "That signs the executable, checks it was the pinned certificate that"
-          echo "signed it, uploads the archive and its checksum, and asks"
-          echo "attest-release.yml for the bundle. Then read the draft and publish it."
+          echo "signed it, uploads the archive and the checksums of both archives, and"
+          echo "asks attest-release.yml for the bundles. Then read the draft and publish it."

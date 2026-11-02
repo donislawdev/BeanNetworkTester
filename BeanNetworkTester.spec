@@ -145,6 +145,14 @@ if not WINDOWS:
 
 pyz = PYZ(a.pure)
 
+# The symbol tables stripped from the Linux program and libraries, never on Windows
+# ("not recommended for Windows", PyInstaller's own words for --strip). Measured
+# 2026-10-28: the package built with setup-python's 3.15 came to 30 MB, one built
+# with Ubuntu's own Python, whose libraries arrive stripped, to 13 MB. The dynamic
+# symbols ctypes looks up stay; the Linux CI job runs the package and a real capture
+# on the stripped bundle.
+STRIP = not WINDOWS
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -156,7 +164,7 @@ exe = EXE(
     uac_admin=False,                # asInvoker - the app elevates itself when needed
     version=version_info,           # exe Properties -> Details (author, version)
     debug=False,
-    strip=False,
+    strip=STRIP,
     upx=False,
 )
 
@@ -164,7 +172,7 @@ coll = COLLECT(
     exe,
     a.binaries,
     a.datas,
-    strip=False,
+    strip=STRIP,
     upx=False,
     name="BeanNetworkTester",       # dist\BeanNetworkTester\BeanNetworkTester.exe
 )

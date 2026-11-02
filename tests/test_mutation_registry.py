@@ -2292,9 +2292,19 @@ MUTATIONS = [
         # extension does not.
         "label": "release: the documented OFFLINE verify command loses its predicate type",
         "file": "README.md",
-        "old": ".sigstore.json --repo donislawdev/BeanNetworkTester"
+        "old": "v0.5.0.sigstore.json --repo donislawdev/BeanNetworkTester"
                " --predicate-type https://spdx.dev/Document/v2.3",
-        "new": ".sigstore.json --repo donislawdev/BeanNetworkTester",
+        "new": "v0.5.0.sigstore.json --repo donislawdev/BeanNetworkTester",
+        "test": "test_the_documented_verify_command_matches_what_we_actually_attest",
+    },
+    {
+        # The Linux package's own offline line (2026-10-28), which comes FIRST in the
+        # README - the test used to read only the first offline line it found.
+        "label": "release: the Linux package's OFFLINE verify command loses its predicate type",
+        "file": "README.md",
+        "old": "v1.0.0-linux.sigstore.json --repo donislawdev/BeanNetworkTester"
+               " --predicate-type https://spdx.dev/Document/v2.3",
+        "new": "v1.0.0-linux.sigstore.json --repo donislawdev/BeanNetworkTester",
         "test": "test_the_documented_verify_command_matches_what_we_actually_attest",
     },
     {
@@ -2303,9 +2313,17 @@ MUTATIONS = [
         # for the same reason the one above does.
         "label": "release: the documented ONLINE verify command loses its predicate type",
         "file": "README.md",
-        "old": "-R donislawdev/BeanNetworkTester"
+        "old": "windows-x64.zip -R donislawdev/BeanNetworkTester"
                " --predicate-type https://spdx.dev/Document/v2.3",
-        "new": "-R donislawdev/BeanNetworkTester",
+        "new": "windows-x64.zip -R donislawdev/BeanNetworkTester",
+        "test": "test_the_documented_verify_command_matches_what_we_actually_attest",
+    },
+    {
+        "label": "release: the Linux package's ONLINE verify command loses its predicate type",
+        "file": "README.md",
+        "old": "linux-x64.tar.gz -R donislawdev/BeanNetworkTester"
+               " --predicate-type https://spdx.dev/Document/v2.3",
+        "new": "linux-x64.tar.gz -R donislawdev/BeanNetworkTester",
         "test": "test_the_documented_verify_command_matches_what_we_actually_attest",
     },
     {
@@ -2324,9 +2342,130 @@ MUTATIONS = [
         # archive is right there, why not attach it.
         "label": "release: the draft ships the unsigned archive after all",
         "file": ".github/workflows/release.yml",
-        "old": 'gh release create "$GITHUB_REF_NAME" "$SBOM" "${flags[@]}"',
-        "new": 'gh release create "$GITHUB_REF_NAME" "$ASSET" "$SBOM" "${flags[@]}"',
+        "old": 'gh release create "$GITHUB_REF_NAME" "$SBOM" "$LINUX_SBOM" "$LINUX_ARCHIVE" "${flags[@]}"',
+        "new": 'gh release create "$GITHUB_REF_NAME" "$ASSET" "$SBOM" "$LINUX_SBOM" "$LINUX_ARCHIVE" "${flags[@]}"',
         "test": "test_the_release_never_publishes_an_unsigned_archive",
+    },
+    # -- the Linux package in the release (2026-10-28, owner: 1.0.0 with Linux) ------ #
+    {
+        # The race the gate's `needs` closes: the draft opened, and the maintainer
+        # sent to the card, before the Linux package was in it.
+        "label": "release: the draft is opened without waiting for the Linux package",
+        "file": ".github/workflows/release.yml",
+        "old": "    needs: [audit, gate, linux]\n",
+        "new": "    needs: [audit, gate]\n",
+        "test": "test_the_linux_package_is_checked_and_in_the_draft_before_signing_is_asked",
+    },
+    {
+        "label": "release: the Linux package builds before the gate has refused anything",
+        "file": ".github/workflows/release.yml",
+        "old": "    needs: [audit, gate]\n    runs-on: ubuntu-24.04\n",
+        "new": "    needs: audit\n    runs-on: ubuntu-24.04\n",
+        "test": "test_one_gate_refuses_a_tag_before_either_build",
+    },
+    {
+        "label": "release: the draft carries no Linux package",
+        "file": ".github/workflows/release.yml",
+        "old": '"$SBOM" "$LINUX_SBOM" "$LINUX_ARCHIVE" "${flags[@]}"',
+        "new": '"$SBOM" "${flags[@]}"',
+        "test": "test_the_linux_package_is_checked_and_in_the_draft_before_signing_is_asked",
+    },
+    {
+        "label": "release: the Linux package ships without a real capture",
+        "file": ".github/workflows/release.yml",
+        "old": "          sudo \"$(command -v python)\" tools/ci_linux_capture_smoke.py --require \\\n",
+        "new": "          true \\\n",
+        "test": "test_the_linux_package_is_checked_and_in_the_draft_before_signing_is_asked",
+    },
+    {
+        "label": "release: a draft is complete when every ending matches",
+        "file": "tools/sign_release.py",
+        "old": "        missing = [name for name in wanted if name not in assets]\n",
+        "new": "        missing = []\n",
+        "test": "test_a_complete_draft_is_known_by_its_file_names",
+    },
+    {
+        "label": "release: the published checksums are not held to the Linux package",
+        "file": "tools/sign_release.py",
+        "old": "        if \"%s *%s\" % (digest, name) not in published:\n",
+        "new": "        if False:\n",
+        "test": "test_a_complete_draft_is_known_by_its_file_names",
+    },
+    {
+        "label": "release: the Linux package gets no checksum",
+        "file": "tools/sign_release.py",
+        "old": (r'    sum_lines = ["%s *%s\n" % (sha256_of(signed), archives[0]),' + "\n"
+                + r'                 "%s *%s\n" % (sha256_of(linux), linux_name)]'),
+        "new": r'    sum_lines = ["%s *%s\n" % (sha256_of(signed), archives[0])]',
+        "test": "test_the_linux_package_is_verified_before_its_checksum_is_written",
+    },
+    {
+        "label": "release: the Linux package is summed without its attestation checked",
+        "file": "tools/sign_release.py",
+        "old": "    run([\"gh\", \"attestation\", \"verify\", linux, \"--repo\", REPO])\n",
+        "new": "",
+        "test": "test_the_linux_package_is_verified_before_its_checksum_is_written",
+    },
+    {
+        "label": "attestation: the Linux SBOM is bound to the Windows archive",
+        "file": ".github/workflows/attest-release.yml",
+        "old": "          subject-path: ${{ env.LINUX_ARCHIVE }}\n",
+        "new": "          subject-path: ${{ env.ARCHIVE }}\n",
+        "test": "test_the_linux_package_is_attested_like_the_zip",
+    },
+    {
+        "label": "attestation: the Linux package is not held to its checksum",
+        "file": ".github/workflows/attest-release.yml",
+        "old": "          grep -F \" *${linux}\" SHA256SUMS.txt | sha256sum -c - || {\n",
+        "new": "          true || {\n",
+        "test": "test_the_linux_package_is_attested_like_the_zip",
+    },
+    {
+        "label": "verification: the published Linux package is never checked",
+        "file": ".github/workflows/verify-release.yml",
+        "old": "    if: needs.which.outputs.linux == 'true'\n",
+        "new": "    if: false\n",
+        "test": "test_the_published_linux_package_is_checked_and_run",
+    },
+    {
+        "label": "verification: the published Linux package is checked but never run",
+        "file": ".github/workflows/verify-release.yml",
+        "old": "            python3 -u tools/ci_linux_package_smoke.py unpacked/BeanNetworkTester/BeanNetworkTester\n",
+        "new": "            true\n",
+        "test": "test_the_published_linux_package_is_checked_and_run",
+    },
+    {
+        "label": "verification: the checksums are not seen to name the Linux package",
+        "file": ".github/workflows/verify-release.yml",
+        "old": "          grep -qF \" *BeanNetworkTester-${TAG}-linux-x64.tar.gz\" SHA256SUMS.txt || {\n",
+        "new": "          true || {\n",
+        "test": "test_the_published_linux_package_is_checked_and_run",
+    },
+    {
+        "label": "release: the Windows build reads the pip cache again",
+        "file": ".github/workflows/release.yml",
+        "old": "          check-latest: true  # newest 3.15.x, not the runner image's cached one\n\n"
+               "      - name: Install dependencies\n",
+        "new": "          check-latest: true  # newest 3.15.x, not the runner image's cached one\n"
+               "          cache: pip\n\n      - name: Install dependencies\n",
+        "test": "test_the_release_builds_read_no_cache_and_keep_no_token",
+    },
+    {
+        "label": "release: the Windows build's checkout keeps its token",
+        "file": ".github/workflows/release.yml",
+        "old": "      # GH_TOKEN, never through git, and holds `contents: write`.\n"
+               "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1\n"
+               "        with:\n          persist-credentials: false\n",
+        "new": "      # GH_TOKEN, never through git, and holds `contents: write`.\n"
+               "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1\n",
+        "test": "test_the_release_builds_read_no_cache_and_keep_no_token",
+    },
+    {
+        "label": "spec: the Windows build is stripped too",
+        "file": "BeanNetworkTester.spec",
+        "old": "STRIP = not WINDOWS\n",
+        "new": "STRIP = True\n",
+        "test": "test_only_the_linux_build_is_stripped",
     },
     {
         # "Signed" going back to being a claim instead of a measurement. A second

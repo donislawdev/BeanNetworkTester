@@ -103,6 +103,7 @@ exists.
 1. Download `BeanNetworkTester`: the **zip** runs without installing anything, the **`.msi`**
    installs it for everyone on the computer, on `PATH` and in the Start Menu (needs
    Administrator rights). Or build it: `pyinstaller --noconfirm BeanNetworkTester.spec`.
+   On Linux, the **`.tar.gz`** (experimental): see [the Linux package](#linux-package-experimental).
 2. Run `BeanNetworkTester.exe` - the program **asks for administrator rights by itself**
    (WinDivert needs them). From the repository: `python bean_network_tester.py`.
 3. Pick a preset from the "Profiles" list (e.g. "3G network") and click **START**.
@@ -165,6 +166,50 @@ the socket table and the process names come straight from the OS, and targeting 
 `psutil` removed entirely (measured: 310 ports mapped, 37 of 37 names resolved). It is the fallback
 for everything else, which is how the engine's tests run with no driver at all - and on
 Linux it is what `--target` reads.
+
+### Linux package (experimental)
+
+From 1.0.0 every release carries `BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz`: the same program,
+frozen with its own Python and Tk, so nothing needs installing first. Like the program run from
+source (below) it is experimental. It is built on Ubuntu 24.04 and checked on Ubuntu 24.04 and
+26.04, for x86_64. It needs glibc 2.38 or newer, so other distributions that new often run it
+too, and older ones such as Ubuntu 22.04 and Debian 12 do not.
+
+```bash
+tar -xzf BeanNetworkTester-v1.0.0-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+./BeanNetworkTester
+sudo ./BeanNetworkTester --dst-ip 203.0.113.10 --latency 100 --duration 30
+```
+
+- `--install-desktop` adds **Bean Network Tester** to the desktop's applications menu, for you,
+  so run it without `sudo`. The entry starts the program in this folder: move the folder and run
+  it again from the new place. `--remove-desktop` takes the entry away.
+- Started without `sudo`, from the menu or as `./BeanNetworkTester`, the window asks for an
+  administrator's password through polkit's `pkexec`, as described below. A capture from the
+  command line needs `sudo`, and a `--simulate` session does not.
+- Your files (window state, profiles, settings) are in `~/.config/BeanNetworkTester`
+  (`$XDG_CONFIG_HOME` when it is set), and stay yours under `sudo` and `pkexec`.
+- The desktop's fonts and its connection to the display (fontconfig, FreeType, libxcb) come from
+  the system, as every desktop has them. The kernel needs what the program from source needs:
+  Linux 5.10 or newer with BTF, and root or the three capabilities below.
+- The commands it shows to repeat a session (the **Reproduce** line, the copied command) name
+  this folder's program, with `sudo` where the session needs it.
+
+To check the download, compare its line in the release's `SHA256SUMS.txt`, then the attestation
+that binds it to its bill of materials (the commands are explained in
+[the note on SmartScreen](#a-note-on-smartscreen-and-antivirus)):
+
+```bash
+sha256sum -c --ignore-missing SHA256SUMS.txt
+gh attestation verify BeanNetworkTester-v1.0.0-linux-x64.tar.gz --bundle BeanNetworkTester-v1.0.0-linux.sigstore.json --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3
+gh attestation verify BeanNetworkTester-v1.0.0-linux-x64.tar.gz -R donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3
+```
+
+There is no code signature on Linux. The package is the file the release workflow built, and its
+build provenance in this repository's attestation store says which commit and which workflow
+produced it.
 
 ### Linux (experimental, from source)
 
@@ -1600,16 +1645,21 @@ than English ones, so that is where layouts break, and it has caught breakage th
 in English.
 
 Releases go out through a second workflow (`.github/workflows/release.yml`) on a `v*` tag. It
-checks the tag against `VERSION.txt`, refuses to publish while the changelogs are still open,
-builds and smoke-tests the exe, and opens a **draft** carrying the SPDX SBOM. It deliberately
-publishes no archive: the signing key lives on a hardware card that no runner can reach, so the
-archive is signed on the maintainer's machine (`tools/sign_release.py`) and uploaded from there,
-and a third workflow then attests the bytes that actually ship.
+refuses a commit CI never passed, checks the tag against `VERSION.txt` and refuses to publish
+while the changelogs are still open, all before anything is built. Then it builds and
+smoke-tests the exe and, on Ubuntu 24.04, the Linux package (with a real capture in a network
+namespace of its own), and opens a **draft** carrying both SPDX SBOMs and the Linux package. It
+deliberately publishes no Windows archive: the signing key lives on a hardware card that no
+runner can reach, so the archive is signed on the maintainer's machine (`tools/sign_release.py`)
+and uploaded from there with the checksums of both archives, and a third workflow then attests
+the bytes that actually ship.
 
-A published release therefore carries the zip, the `SHA256SUMS.txt` this README tells you to
-verify, the SBOM, and the attestation bundle. A full release carries a fifth file, the `.msi`
-installer. A release candidate does not, because Windows Installer ignores the `-rc.1` and would
-treat a candidate and its release as the same version.
+A published release therefore carries the zip and the Linux `.tar.gz`, the `SHA256SUMS.txt` this
+README tells you to verify, and an SBOM and an attestation bundle for each archive. A full
+release carries one more file, the `.msi` installer. A release candidate does not, because
+Windows Installer ignores the `-rc.1` and would treat a candidate and its release as the same
+version. When a release is published, a fourth workflow downloads it and checks it the way this
+README says, and on Ubuntu unpacks the Linux package and runs it.
 
 ## Project layout
 

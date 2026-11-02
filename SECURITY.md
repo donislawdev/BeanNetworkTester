@@ -28,7 +28,8 @@ https://donislawdev.com/.
 
 Please include:
 
-- the version (`BeanNetworkTester.exe --version`) and your Windows version,
+- the version (`BeanNetworkTester.exe --version`, on Linux `./BeanNetworkTester --version`)
+  and your Windows version or Linux distribution,
 - whether you ran the GUI or the CLI, and whether it was elevated (administrator),
 - a clear description and the smallest steps to reproduce,
 - the impact you believe it has.

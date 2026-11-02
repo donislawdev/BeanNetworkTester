@@ -60,6 +60,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   ssh, it opens without root at once. `BEAN_NO_ELEVATE=1` turns the question off. The files it
   saves stay yours, as under sudo.
 
+- **Linux, experimental: a package to download.** Each release now carries
+  `BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz`: unpack it and run `./BeanNetworkTester`, with no
+  Python to install. It runs on Ubuntu 24.04 and 26.04 and other systems with glibc 2.38 or
+  newer. `--install-desktop` adds it to the applications menu, and `--remove-desktop` removes
+  it. Your files go to `~/.config/BeanNetworkTester`. `SHA256SUMS.txt` and an attestation
+  check the download, as for the zip.
+
 - **Linux: a window the desktop can tell apart.** The window now has a class of its own, not
   the "Tk" every Tk program shares, so the desktop does not group it with other Tk windows.
   When the window cannot open because the system lacks a library it needs, the line names
