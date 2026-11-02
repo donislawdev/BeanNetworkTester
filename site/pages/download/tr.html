@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>Bean Network Tester’ı indirin</h1>
-  <p class="lead">Hiçbir şey kurmadan çalışan bir zip ya da bilgisayardaki herkes için bir yükleyici. İki durumda da program yönetici haklarını kendisi ister.</p>
+  <p class="lead">Windows için hiçbir şey kurmadan çalışan bir zip ya da bilgisayardaki herkes için bir yükleyici. İki durumda da program yönetici haklarını kendisi ister. Linux için de deneysel bir paket var.</p>
   <p class="actions">
     <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
   </p>
@@ -10,9 +10,9 @@
   <h2>Gerçekler tek yerde</h2>
   <ul class="facts">
     <li><strong>Fiyat:</strong> ücretsiz ve özgür yazılım: GNU GPL v3.</li>
-    <li><strong>Çalıştığı yer:</strong> Windows 10 ve Windows 11, 64 bit.</li>
-    <li><strong>Gereken:</strong> yönetici hakları, çünkü trafiği bir sürücü yakalar.</li>
-    <li><strong>Kurulum:</strong> gerekmez. Zip’i istediğiniz yere çıkarıp çalıştırın. Ya da Başlat menüsü girişi ekleyen ve programı <code>PATH</code> içine koyan <code>.msi</code> yükleyicisini kullanın (yönetici hakları gerektirir).</li>
+    <li><strong>Çalıştığı yer:</strong> Windows 10 ve Windows 11, 64 bit. Linux, deneysel olarak: 64 bit (x86_64), Ubuntu 24.04 ve 26.04 üzerinde denendi.</li>
+    <li><strong>Gereken:</strong> yönetici hakları, çünkü trafiği bir sürücü yakalar. Linux’ta root yetkileri ve 5.10 veya daha yeni bir çekirdek.</li>
+    <li><strong>Kurulum:</strong> gerekmez. Zip’i istediğiniz yere çıkarıp çalıştırın. Ya da Başlat menüsü girişi ekleyen ve programı <code>PATH</code> içine koyan <code>.msi</code> yükleyicisini kullanın (yönetici hakları gerektirir). Linux’ta <code>.tar.gz</code> dosyasını çıkarın.</li>
     <li><strong>Veri gönderir mi:</strong> kendiliğinden hiçbir şey. Telemetri yok, güncelleme denetimi yok. {{app.tools.ping.tab}} aracı yalnızca yazdığınız adrese gönderir.</li>
     <li><strong>Kipler:</strong> bir pencere ve aynı dosya bir komut satırı aracı olarak.</li>
     <li><strong>Kaynak:</strong> <a href="{{site.repo_url}}">GitHub’da</a>, aynı lisansla.</li>
@@ -21,13 +21,14 @@
 
 <section>
   <h2>Sürümde neler var</h2>
-  <p>Bir sürüm beş dosya yayımlar. İkisi programdır, diğer üçü ise indirmeye körü körüne güvenmek zorunda kalmamanız için oradadır:</p>
+  <p>Bir sürüm sekiz dosya yayımlar. Üçü programdır, diğer beşi ise indirmeye körü körüne güvenmek zorunda kalmamanız için oradadır:</p>
   <ul>
     <li><strong>zip</strong>: program ve kullandığı sürücü, tek bir klasörde birlikte;</li>
     <li><strong>.msi yükleyicisi</strong>: aynı program, bilgisayardaki herkes için kurulur, bir Başlat menüsü girişiyle;</li>
-    <li><strong>SHA256SUMS.txt</strong>: zip ve yükleyicinin sağlama toplamları;</li>
-    <li><strong>bir SBOM</strong>: içindeki her bileşenin sürümleri ve lisanslarıyla standart listesi, zip’e karşı imzalanmış;</li>
-    <li><strong>bir .sigstore.json dosyası</strong>: o imza bir dosya olarak, GitHub’a sormadan denetlemek için.</li>
+    <li><strong>.tar.gz</strong>: Linux için program, kendi Python’uyla, deneysel olarak;</li>
+    <li><strong>SHA256SUMS.txt</strong>: zip’in, yükleyicinin ve Linux paketinin sağlama toplamları;</li>
+    <li><strong>iki SBOM</strong>: içindeki her bileşenin sürümleri ve lisanslarıyla standart listeleri, biri zip’e, diğeri Linux paketine karşı imzalanmış;</li>
+    <li><strong>iki .sigstore.json dosyası</strong>: o imzalar dosya olarak, GitHub’a sormadan denetlemek için.</li>
   </ul>
 </section>
 
@@ -37,11 +38,24 @@
 <pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
   <p>İmza ise başka bir soruyu yanıtlar: “bu o depodan mı çıktı”; ve GitHub komut satırı aracını gerektirir:</p>
 <pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
-  <p>İlk kısım olarak indirdiğiniz zip’in adını yazın: <code>gh</code> orada <code>*</code> kabul etmez. <code>--predicate-type</code> seçeneğini bırakın: onsuz <code>gh</code> farklı türde bir beyan arar ve hiçbir şey bulamadığını bildirir.</p>
+  <p>Linux’ta iki denetimi de paketin ve <code>SHA256SUMS.txt</code> dosyasının bulunduğu klasörde çalıştırın:</p>
+<pre><code>sha256sum -c --ignore-missing SHA256SUMS.txt
+gh attestation verify BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>İlk kısım olarak indirdiğiniz dosyanın adını yazın: <code>gh</code> orada <code>*</code> kabul etmez. <code>--predicate-type</code> seçeneğini bırakın: onsuz <code>gh</code> farklı türde bir beyan arar ve hiçbir şey bulamadığını bildirir.</p>
   <p>İndirmeyle aynı sayfadan kopyaladığınız bir sağlama toplamı, bir imzadan daha az şey kanıtlar. İkisi de yayımlanmıştır; ikisine de bir an ayırmaya değer.</p>
 </section>
 
 <section>
   <h2>Windows sizi uyarabilir</h2>
   <p>Program ve yükleyici imzalıdır; bu yüzden Windows “Bilinmeyen yayımcı” demek yerine kimin imzaladığını söyler. Sertifika yenidir, bu yüzden SmartScreen bir süre daha uyarabilir: onu henüz sık görmemiştir. Bu, dosyayla değil sertifikayla ilgilidir ve yukarıdaki iki denetim dosyayı kendiniz doğrulamanıza izin verir. <a href="../sik-sorulan-sorular/">Sorular sayfası</a> bunu ve sürücünün neye ihtiyaç duyduğunu ele alır.</p>
+</section>
+
+<section>
+  <h2>Linux’ta</h2>
+  <p>Paket, kendi Python’u ve Tk’siyle aynı programdır; bu yüzden önceden hiçbir şey kurmak gerekmez. Paketi çıkarın, uygulama menüsüne ekleyin ve başlatın:</p>
+<pre><code>tar -xzf BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+./BeanNetworkTester</code></pre>
+  <p><code>sudo</code> olmadan başlatılan pencere, masaüstünün kendi iletişim kutusunda bir yöneticinin parolasını ister. Paket glibc 2.38 veya daha yenisini gerektirir; bu yüzden Ubuntu 22.04 ve Debian 12 onun için fazla eskidir. Linux desteği bir deneydir ve <a href="{{site.repo_url}}#linux-package-experimental">README</a> Windows’tan nerede ayrıldığını anlatır.</p>
 </section>

@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>Stáhnout Bean Network Tester</h1>
-  <p class="lead">Zip, který běží bez instalace, nebo instalátor pro všechny uživatele počítače. V obou případech si program práva správce vyžádá sám.</p>
+  <p class="lead">Pro Windows zip, který běží bez instalace, nebo instalátor pro všechny uživatele počítače. V obou případech si program práva správce vyžádá sám. Pro Linux je k dispozici i balíček, jako experiment.</p>
   <p class="actions">
     <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
   </p>
@@ -10,9 +10,9 @@
   <h2>Fakta na jednom místě</h2>
   <ul class="facts">
     <li><strong>Cena:</strong> zdarma a svobodný software, GNU GPL v3.</li>
-    <li><strong>Běží na:</strong> Windows 10 a Windows 11, 64 bitů.</li>
-    <li><strong>Potřebuje:</strong> práva správce, protože provoz zachytává ovladač.</li>
-    <li><strong>Instalace:</strong> není potřeba. Rozbalte zip kdekoli a spusťte. Nebo použijte instalátor <code>.msi</code>, který přidá položku do nabídky Start a dá program na <code>PATH</code> (vyžaduje práva správce).</li>
+    <li><strong>Běží na:</strong> Windows 10 a Windows 11, 64 bitů. Linux jako experiment: 64 bitů (x86_64), ověřeno na Ubuntu 24.04 a 26.04.</li>
+    <li><strong>Potřebuje:</strong> práva správce, protože provoz zachytává ovladač. Na Linuxu práva roota a jádro 5.10 nebo novější.</li>
+    <li><strong>Instalace:</strong> není potřeba. Rozbalte zip kdekoli a spusťte. Nebo použijte instalátor <code>.msi</code>, který přidá položku do nabídky Start a dá program na <code>PATH</code> (vyžaduje práva správce). Na Linuxu rozbalte <code>.tar.gz</code>.</li>
     <li><strong>Odesílá data:</strong> sám od sebe nic. Žádná telemetrie, žádná kontrola aktualizací. Jeho nástroj {{app.tools.ping.tab}} posílá jen na adresu, kterou zadáte.</li>
     <li><strong>Režimy:</strong> okno a tentýž soubor jako nástroj příkazového řádku.</li>
     <li><strong>Zdroj:</strong> <a href="{{site.repo_url}}">na GitHubu</a>, pod stejnou licencí.</li>
@@ -21,13 +21,14 @@
 
 <section>
   <h2>Co je ve vydání</h2>
-  <p>Vydání zveřejňuje pět souborů. Dva jsou program a další tři tu jsou proto, abyste nemuseli stažení brát na slepou víru:</p>
+  <p>Vydání zveřejňuje osm souborů. Tři jsou program a dalších pět tu je proto, abyste nemuseli stažení brát na slepou víru:</p>
   <ul>
     <li><strong>zip</strong>: program a ovladač, který používá, pohromadě v jedné složce;</li>
     <li><strong>instalátor .msi</strong>: tentýž program nainstalovaný pro všechny uživatele počítače, s položkou v nabídce Start;</li>
-    <li><strong>SHA256SUMS.txt</strong>: kontrolní součty zipu a instalátoru;</li>
-    <li><strong>SBOM</strong>: standardní seznam všech součástí uvnitř, s verzemi a licencemi, podepsaný proti zipu;</li>
-    <li><strong>soubor .sigstore.json</strong>: tentýž podpis jako soubor, aby šel ověřit bez dotazu na GitHub.</li>
+    <li><strong>.tar.gz</strong>: program pro Linux s vlastním Pythonem, jako experiment;</li>
+    <li><strong>SHA256SUMS.txt</strong>: kontrolní součty zipu, instalátoru a balíčku pro Linux;</li>
+    <li><strong>dva SBOM</strong>: standardní seznamy všech součástí uvnitř, s verzemi a licencemi, jeden podepsaný proti zipu a druhý proti balíčku pro Linux;</li>
+    <li><strong>dva soubory .sigstore.json</strong>: tytéž podpisy jako soubory, aby šly ověřit bez dotazu na GitHub.</li>
   </ul>
 </section>
 
@@ -37,11 +38,24 @@
 <pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
   <p>Podpis odpovídá na jinou otázku, „vzniklo to v tom repozitáři“, a potřebuje nástroj příkazového řádku GitHubu:</p>
 <pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
-  <p>Jako první část zadejte název staženého zipu, protože <code>gh</code> tam <code>*</code> nepřijímá. Ponechte <code>--predicate-type</code>: bez něj <code>gh</code> hledá jiný druh prohlášení a oznámí, že žádné nenašel.</p>
+  <p>Na Linuxu spusťte obě kontroly ve složce, kde leží balíček a <code>SHA256SUMS.txt</code>:</p>
+<pre><code>sha256sum -c --ignore-missing SHA256SUMS.txt
+gh attestation verify BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>Jako první část zadejte název staženého souboru, protože <code>gh</code> tam <code>*</code> nepřijímá. Ponechte <code>--predicate-type</code>: bez něj <code>gh</code> hledá jiný druh prohlášení a oznámí, že žádné nenašel.</p>
   <p>Kontrolní součet, který zkopírujete ze stejné stránky jako stažení, dokazuje méně než podpis. Zveřejněno je obojí, takže stojí za chvilku obojí.</p>
 </section>
 
 <section>
   <h2>Windows vás může varovat</h2>
   <p>Program i instalátor jsou podepsané, takže Windows uvede, kdo je podepsal, místo „Neznámý vydavatel“. Certifikát je nový, takže SmartScreen může ještě nějakou dobu varovat, protože ho zatím neviděl často. Jde o certifikát, ne o soubor, a obě výše uvedené kontroly vám umožní soubor ověřit samotným. Na stránce <a href="../caste-dotazy/">otázek</a> je to popsáno i s tím, co ovladač potřebuje.</p>
+</section>
+
+<section>
+  <h2>Na Linuxu</h2>
+  <p>Balíček je tentýž program s vlastním Pythonem a Tk, takže předem není nutné nic instalovat. Rozbalte ho, přidejte do nabídky aplikací a spusťte:</p>
+<pre><code>tar -xzf BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+./BeanNetworkTester</code></pre>
+  <p>Okno spuštěné bez <code>sudo</code> si řekne o heslo správce v dialogu pracovního prostředí. Balíček potřebuje glibc 2.38 nebo novější, takže Ubuntu 22.04 a Debian 12 jsou pro něj příliš staré. Podpora Linuxu je experiment a <a href="{{site.repo_url}}#linux-package-experimental">README</a> popisuje, čím se liší od Windows.</p>
 </section>

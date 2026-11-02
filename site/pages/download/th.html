@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>ดาวน์โหลด Bean Network Tester</h1>
-  <p class="lead">ไฟล์ zip ที่รันได้โดยไม่ต้องติดตั้ง หรือตัวติดตั้งสำหรับผู้ใช้ทุกคนบนคอมพิวเตอร์ ไม่ว่าแบบไหน โปรแกรมจะขอสิทธิ์ผู้ดูแลระบบเอง</p>
+  <p class="lead">สำหรับ Windows มีไฟล์ zip ที่รันได้โดยไม่ต้องติดตั้ง หรือตัวติดตั้งสำหรับผู้ใช้ทุกคนบนคอมพิวเตอร์ ไม่ว่าแบบไหน โปรแกรมจะขอสิทธิ์ผู้ดูแลระบบเอง สำหรับ Linux ก็มีแพ็กเกจด้วย ในแบบทดลอง</p>
   <p class="actions">
     <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
   </p>
@@ -10,9 +10,9 @@
   <h2>ข้อเท็จจริงในที่เดียว</h2>
   <ul class="facts">
     <li><strong>ราคา:</strong> ฟรี และเป็นซอฟต์แวร์เสรี GNU GPL v3</li>
-    <li><strong>รันบน:</strong> Windows 10 และ Windows 11 แบบ 64 บิต</li>
-    <li><strong>ต้องมี:</strong> สิทธิ์ผู้ดูแลระบบ เพราะไดรเวอร์เป็นตัวดักจับทราฟฟิก</li>
-    <li><strong>การติดตั้ง:</strong> ไม่จำเป็น แตก zip ที่ไหนก็ได้แล้วรัน หรือใช้ตัวติดตั้ง <code>.msi</code> ซึ่งเพิ่มรายการในเมนูเริ่มและวางโปรแกรมไว้ใน <code>PATH</code> (ต้องใช้สิทธิ์ผู้ดูแลระบบ)</li>
+    <li><strong>รันบน:</strong> Windows 10 และ Windows 11 แบบ 64 บิต Linux ในแบบทดลอง: 64 บิต (x86_64) ตรวจแล้วบน Ubuntu 24.04 และ 26.04</li>
+    <li><strong>ต้องมี:</strong> สิทธิ์ผู้ดูแลระบบ เพราะไดรเวอร์เป็นตัวดักจับทราฟฟิก บน Linux ต้องมีสิทธิ์ root และเคอร์เนล 5.10 ขึ้นไป</li>
+    <li><strong>การติดตั้ง:</strong> ไม่จำเป็น แตก zip ที่ไหนก็ได้แล้วรัน หรือใช้ตัวติดตั้ง <code>.msi</code> ซึ่งเพิ่มรายการในเมนูเริ่มและวางโปรแกรมไว้ใน <code>PATH</code> (ต้องใช้สิทธิ์ผู้ดูแลระบบ) บน Linux ให้แตกไฟล์ <code>.tar.gz</code></li>
     <li><strong>ส่งข้อมูลหรือไม่:</strong> ไม่ส่งสิ่งใดออกไปเอง ไม่มีเทเลเมทรี ไม่มีการตรวจสอบอัปเดต เครื่องมือ {{app.tools.ping.tab}} ส่งไปยังที่อยู่ที่คุณพิมพ์เท่านั้น</li>
     <li><strong>โหมด:</strong> หน้าต่าง และไฟล์เดียวกันใช้เป็นเครื่องมือบรรทัดคำสั่ง</li>
     <li><strong>ซอร์ส:</strong> <a href="{{site.repo_url}}">บน GitHub</a> ภายใต้ใบอนุญาตเดียวกัน</li>
@@ -21,13 +21,14 @@
 
 <section>
   <h2>สิ่งที่อยู่ในรุ่นที่ปล่อย</h2>
-  <p>แต่ละรุ่นเผยแพร่ห้าไฟล์ สองไฟล์เป็นตัวโปรแกรม และอีกสามไฟล์มีไว้เพื่อให้คุณไม่ต้องเชื่อการดาวน์โหลดแบบไม่มีหลักฐาน:</p>
+  <p>แต่ละรุ่นเผยแพร่แปดไฟล์ สามไฟล์เป็นตัวโปรแกรม และอีกห้าไฟล์มีไว้เพื่อให้คุณไม่ต้องเชื่อการดาวน์โหลดแบบไม่มีหลักฐาน:</p>
   <ul>
     <li><strong>ไฟล์ zip</strong> โปรแกรมและไดรเวอร์ที่ใช้ รวมอยู่ในโฟลเดอร์เดียว</li>
     <li><strong>ตัวติดตั้ง .msi</strong> โปรแกรมเดียวกัน ติดตั้งให้ผู้ใช้ทุกคนบนคอมพิวเตอร์ พร้อมรายการในเมนูเริ่ม</li>
-    <li><strong>SHA256SUMS.txt</strong> เช็กซัมของไฟล์ zip และตัวติดตั้ง</li>
-    <li><strong>SBOM</strong> รายการมาตรฐานของทุกองค์ประกอบภายใน พร้อมเวอร์ชันและใบอนุญาต ลงนามไว้กับไฟล์ zip</li>
-    <li><strong>ไฟล์ .sigstore.json</strong> ลายเซ็นนั้นในรูปแบบไฟล์ เพื่อตรวจสอบได้โดยไม่ต้องถาม GitHub</li>
+    <li><strong>ไฟล์ .tar.gz</strong> โปรแกรมสำหรับ Linux พร้อม Python ของตัวเอง ในแบบทดลอง</li>
+    <li><strong>SHA256SUMS.txt</strong> เช็กซัมของไฟล์ zip ตัวติดตั้ง และแพ็กเกจ Linux</li>
+    <li><strong>SBOM สองชุด</strong> รายการมาตรฐานของทุกองค์ประกอบภายใน พร้อมเวอร์ชันและใบอนุญาต ชุดหนึ่งลงนามไว้กับไฟล์ zip อีกชุดกับแพ็กเกจ Linux</li>
+    <li><strong>ไฟล์ .sigstore.json สองไฟล์</strong> ลายเซ็นเหล่านั้นในรูปแบบไฟล์ เพื่อตรวจสอบได้โดยไม่ต้องถาม GitHub</li>
   </ul>
 </section>
 
@@ -37,11 +38,24 @@
 <pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
   <p>ลายเซ็นตอบคำถามอีกข้อ “สิ่งนี้มาจากรีโพซิทอรีนั้นหรือไม่” และต้องใช้เครื่องมือบรรทัดคำสั่งของ GitHub:</p>
 <pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
-  <p>พิมพ์ชื่อไฟล์ zip ที่คุณดาวน์โหลดเป็นส่วนแรก <code>gh</code> ไม่ยอมรับ <code>*</code> ตรงนั้น คง <code>--predicate-type</code> ไว้ ถ้าไม่มี <code>gh</code> จะหาข้อความรับรองอีกชนิดและรายงานว่าไม่พบ</p>
+  <p>บน Linux ให้รันการตรวจทั้งสองในโฟลเดอร์ที่มีแพ็กเกจและ <code>SHA256SUMS.txt</code>:</p>
+<pre><code>sha256sum -c --ignore-missing SHA256SUMS.txt
+gh attestation verify BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>พิมพ์ชื่อไฟล์ที่คุณดาวน์โหลดเป็นส่วนแรก <code>gh</code> ไม่ยอมรับ <code>*</code> ตรงนั้น คง <code>--predicate-type</code> ไว้ ถ้าไม่มี <code>gh</code> จะหาข้อความรับรองอีกชนิดและรายงานว่าไม่พบ</p>
   <p>เช็กซัมที่คัดลอกจากหน้าเดียวกับการดาวน์โหลดพิสูจน์ได้น้อยกว่าลายเซ็น ทั้งสองอย่างเผยแพร่ไว้ จึงควรตรวจทั้งคู่</p>
 </section>
 
 <section>
   <h2>Windows อาจเตือนคุณ</h2>
   <p>โปรแกรมและตัวติดตั้งลงนามไว้แล้ว Windows จึงแสดงชื่อผู้ลงนามแทนคำว่า “ผู้เผยแพร่ที่ไม่รู้จัก” ใบรับรองเป็นของใหม่ SmartScreen จึงอาจยังเตือนอยู่พักหนึ่ง เพราะยังไม่เห็นมันบ่อยนัก เรื่องนี้เกี่ยวกับใบรับรอง ไม่ใช่ไฟล์ และการตรวจสองอย่างข้างต้นให้คุณตรวจไฟล์ด้วยตัวเองได้ <a href="../kham-tham-thi-phop-boi/">หน้าคำถาม</a> กล่าวถึงเรื่องนี้และสิ่งที่ไดรเวอร์ต้องการ</p>
+</section>
+
+<section>
+  <h2>บน Linux</h2>
+  <p>แพ็กเกจนี้คือโปรแกรมเดียวกัน พร้อม Python และ Tk ของตัวเอง จึงไม่ต้องติดตั้งอะไรก่อน แตกไฟล์ เพิ่มลงในเมนูแอปพลิเคชัน แล้วเปิดใช้:</p>
+<pre><code>tar -xzf BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+./BeanNetworkTester</code></pre>
+  <p>เมื่อเปิดโดยไม่ใช้ <code>sudo</code> หน้าต่างจะขอรหัสผ่านผู้ดูแลระบบผ่านกล่องโต้ตอบของเดสก์ท็อปเอง แพ็กเกจต้องใช้ glibc 2.38 ขึ้นไป Ubuntu 22.04 และ Debian 12 จึงเก่าเกินไป การรองรับ Linux ยังเป็นแบบทดลอง และ <a href="{{site.repo_url}}#linux-package-experimental">README</a> บอกว่าต่างจาก Windows ตรงไหน</p>
 </section>

@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>Bean Network Tester downloaden</h1>
-  <p class="lead">Een zip die zonder installatie draait, of een installatieprogramma voor iedereen op de computer. In beide gevallen vraagt het programma zelf om beheerdersrechten.</p>
+  <p class="lead">Voor Windows een zip die zonder installatie draait, of een installatieprogramma voor iedereen op de computer. In beide gevallen vraagt het programma zelf om beheerdersrechten. Voor Linux is er ook een pakket, als experiment.</p>
   <p class="actions">
     <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
   </p>
@@ -10,9 +10,9 @@
   <h2>De feiten op één plek</h2>
   <ul class="facts">
     <li><strong>Prijs:</strong> gratis, en vrije software, GNU GPL v3.</li>
-    <li><strong>Draait op:</strong> Windows 10 en Windows 11, 64-bits.</li>
-    <li><strong>Vereist:</strong> beheerdersrechten, omdat verkeer door een stuurprogramma wordt onderschept.</li>
-    <li><strong>Installatie:</strong> niet nodig. Pak de zip ergens uit en start hem. Of gebruik het <code>.msi</code>-installatieprogramma, dat een item in het Startmenu toevoegt en het programma op <code>PATH</code> zet (vereist beheerdersrechten).</li>
+    <li><strong>Draait op:</strong> Windows 10 en Windows 11, 64-bits. Linux, als experiment: 64-bits (x86_64), getest op Ubuntu 24.04 en 26.04.</li>
+    <li><strong>Vereist:</strong> beheerdersrechten, omdat verkeer door een stuurprogramma wordt onderschept. Op Linux rootrechten en kernel 5.10 of nieuwer.</li>
+    <li><strong>Installatie:</strong> niet nodig. Pak de zip ergens uit en start hem. Of gebruik het <code>.msi</code>-installatieprogramma, dat een item in het Startmenu toevoegt en het programma op <code>PATH</code> zet (vereist beheerdersrechten). Op Linux pak je de <code>.tar.gz</code> uit.</li>
     <li><strong>Verstuurt gegevens:</strong> uit zichzelf niets. Geen telemetrie, geen updatecontrole. De tool {{app.tools.ping.tab}} stuurt alleen naar het adres dat je intypt.</li>
     <li><strong>Modi:</strong> een venster, en hetzelfde bestand als opdrachtregeltool.</li>
     <li><strong>Broncode:</strong> <a href="{{site.repo_url}}">op GitHub</a>, onder dezelfde licentie.</li>
@@ -21,13 +21,14 @@
 
 <section>
   <h2>Wat er in de release zit</h2>
-  <p>Een release publiceert vijf bestanden. Twee zijn het programma, en de andere drie zijn er zodat je de download niet op goed vertrouwen hoeft aan te nemen:</p>
+  <p>Een release publiceert acht bestanden. Drie zijn het programma, en de andere vijf zijn er zodat je de download niet op goed vertrouwen hoeft aan te nemen:</p>
   <ul>
     <li><strong>de zip</strong>: het programma en het stuurprogramma dat het gebruikt, samen in één map;</li>
     <li><strong>het .msi-installatieprogramma</strong>: hetzelfde programma, geïnstalleerd voor iedereen op de computer, met een Startmenu-item;</li>
-    <li><strong>SHA256SUMS.txt</strong>: de controlesommen van de zip en het installatieprogramma;</li>
-    <li><strong>een SBOM</strong>: een standaardlijst van elk onderdeel erin, met versies en licenties, ondertekend tegen de zip;</li>
-    <li><strong>een .sigstore.json-bestand</strong>: die handtekening als bestand, om te controleren zonder GitHub te vragen.</li>
+    <li><strong>de .tar.gz</strong>: het programma voor Linux, met een eigen Python, als experiment;</li>
+    <li><strong>SHA256SUMS.txt</strong>: de controlesommen van de zip, het installatieprogramma en het Linux-pakket;</li>
+    <li><strong>twee SBOM's</strong>: standaardlijsten van elk onderdeel erin, met versies en licenties, de ene ondertekend tegen de zip en de andere tegen het Linux-pakket;</li>
+    <li><strong>twee .sigstore.json-bestanden</strong>: die handtekeningen als bestanden, om te controleren zonder GitHub te vragen.</li>
   </ul>
 </section>
 
@@ -37,11 +38,24 @@
 <pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
   <p>De handtekening beantwoordt een andere vraag, “kwam dit uit die repository”, en heeft de opdrachtregeltool van GitHub nodig:</p>
 <pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
-  <p>Typ de naam van de zip die je hebt gedownload als eerste deel: <code>gh</code> accepteert daar geen <code>*</code>. Houd <code>--predicate-type</code> erbij: zonder dat zoekt <code>gh</code> naar een ander soort verklaring en meldt dat het er geen heeft gevonden.</p>
+  <p>Op Linux voer je beide controles uit in de map met het pakket en <code>SHA256SUMS.txt</code>:</p>
+<pre><code>sha256sum -c --ignore-missing SHA256SUMS.txt
+gh attestation verify BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>Typ de naam van het bestand dat je hebt gedownload als eerste deel: <code>gh</code> accepteert daar geen <code>*</code>. Houd <code>--predicate-type</code> erbij: zonder dat zoekt <code>gh</code> naar een ander soort verklaring en meldt dat het er geen heeft gevonden.</p>
   <p>Een controlesom die je van dezelfde pagina als de download kopieert bewijst minder dan een handtekening. Beide zijn gepubliceerd, dus beide zijn een momentje waard.</p>
 </section>
 
 <section>
   <h2>Windows kan je waarschuwen</h2>
   <p>Het programma en het installatieprogramma zijn ondertekend, dus Windows noemt wie ze heeft ondertekend in plaats van “Onbekende uitgever”. Het certificaat is nieuw, dus SmartScreen kan nog een tijdje waarschuwen, omdat het het nog niet vaak heeft gezien. Dat gaat over het certificaat, niet over het bestand, en met de twee controles hierboven kun je het bestand zelf verifiëren. De <a href="../veelgestelde-vragen/">pagina met vragen</a> behandelt dit en wat het stuurprogramma nodig heeft.</p>
+</section>
+
+<section>
+  <h2>Op Linux</h2>
+  <p>Het pakket is hetzelfde programma met een eigen Python en Tk, dus vooraf hoeft er niets geïnstalleerd te worden. Pak het uit, zet het in het programmamenu en start het:</p>
+<pre><code>tar -xzf BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+./BeanNetworkTester</code></pre>
+  <p>Gestart zonder <code>sudo</code> vraagt het venster in het dialoogvenster van de desktop om het wachtwoord van een beheerder. Het pakket vereist glibc 2.38 of nieuwer, dus Ubuntu 22.04 en Debian 12 zijn er te oud voor. Linux-ondersteuning is een experiment, en de <a href="{{site.repo_url}}#linux-package-experimental">README</a> zegt waar die van Windows verschilt.</p>
 </section>

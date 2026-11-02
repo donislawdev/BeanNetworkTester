@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>Baixar o Bean Network Tester</h1>
-  <p class="lead">Um zip que roda sem instalar nada, ou um instalador para todos os usuários do computador. De qualquer forma, o programa pede permissões de administrador sozinho.</p>
+  <p class="lead">Para Windows, um zip que roda sem instalar nada, ou um instalador para todos os usuários do computador. De qualquer forma, o programa pede permissões de administrador sozinho. Para Linux também há um pacote, de forma experimental.</p>
   <p class="actions">
     <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
   </p>
@@ -10,9 +10,9 @@
   <h2>Os fatos em um só lugar</h2>
   <ul class="facts">
     <li><strong>Preço:</strong> grátis, e software livre: GNU GPL v3.</li>
-    <li><strong>Roda em:</strong> Windows 10 e Windows 11, 64 bits.</li>
-    <li><strong>Precisa de:</strong> permissões de administrador, porque o tráfego é capturado por um driver.</li>
-    <li><strong>Instalação:</strong> desnecessária. Descompacte o zip em qualquer lugar e execute. Ou use o instalador <code>.msi</code>, que adiciona uma entrada ao menu Iniciar e coloca o programa no <code>PATH</code> (precisa de permissões de administrador).</li>
+    <li><strong>Roda em:</strong> Windows 10 e Windows 11, 64 bits. Linux, de forma experimental: 64 bits (x86_64), testado no Ubuntu 24.04 e 26.04.</li>
+    <li><strong>Precisa de:</strong> permissões de administrador, porque o tráfego é capturado por um driver. No Linux, permissões de root e kernel 5.10 ou mais novo.</li>
+    <li><strong>Instalação:</strong> desnecessária. Descompacte o zip em qualquer lugar e execute. Ou use o instalador <code>.msi</code>, que adiciona uma entrada ao menu Iniciar e coloca o programa no <code>PATH</code> (precisa de permissões de administrador). No Linux, descompacte o <code>.tar.gz</code>.</li>
     <li><strong>Envia dados:</strong> nada por conta própria. Sem telemetria, sem verificação de atualizações. A ferramenta {{app.tools.ping.tab}} só envia para o endereço que você digita.</li>
     <li><strong>Modos:</strong> uma janela e o mesmo arquivo como ferramenta de linha de comando.</li>
     <li><strong>Código-fonte:</strong> <a href="{{site.repo_url}}">no GitHub</a>, sob a mesma licença.</li>
@@ -21,13 +21,14 @@
 
 <section>
   <h2>O que vem na versão</h2>
-  <p>Uma versão publica cinco arquivos. Dois são o programa, e os outros três existem para que você não precise confiar cegamente no download:</p>
+  <p>Uma versão publica oito arquivos. Três são o programa, e os outros cinco existem para que você não precise confiar cegamente no download:</p>
   <ul>
     <li><strong>o zip</strong>: o programa e o driver que ele usa, juntos em uma pasta;</li>
     <li><strong>o instalador .msi</strong>: o mesmo programa, instalado para todos os usuários do computador, com uma entrada no menu Iniciar;</li>
-    <li><strong>SHA256SUMS.txt</strong>: as somas de verificação do zip e do instalador;</li>
-    <li><strong>um SBOM</strong>: uma lista padrão de todos os componentes internos, com versões e licenças, assinada em relação ao zip;</li>
-    <li><strong>um arquivo .sigstore.json</strong>: essa assinatura como arquivo, para conferir sem perguntar ao GitHub.</li>
+    <li><strong>o .tar.gz</strong>: o programa para Linux, com o próprio Python, de forma experimental;</li>
+    <li><strong>SHA256SUMS.txt</strong>: as somas de verificação do zip, do instalador e do pacote para Linux;</li>
+    <li><strong>dois SBOMs</strong>: listas padrão de todos os componentes internos, com versões e licenças, uma assinada em relação ao zip e outra em relação ao pacote para Linux;</li>
+    <li><strong>dois arquivos .sigstore.json</strong>: essas assinaturas como arquivos, para conferir sem perguntar ao GitHub.</li>
   </ul>
 </section>
 
@@ -37,11 +38,24 @@
 <pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
   <p>A assinatura responde a outra pergunta, “isto saiu daquele repositório”, e precisa da ferramenta de linha de comando do GitHub:</p>
 <pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
-  <p>Digite como primeira parte o nome do zip que você baixou: o <code>gh</code> não aceita um <code>*</code> ali. Mantenha <code>--predicate-type</code>: sem ele, o <code>gh</code> procura outro tipo de declaração e informa que não encontrou nenhuma.</p>
+  <p>No Linux, rode as duas verificações na pasta onde estão o pacote e o <code>SHA256SUMS.txt</code>:</p>
+<pre><code>sha256sum -c --ignore-missing SHA256SUMS.txt
+gh attestation verify BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>Digite como primeira parte o nome do arquivo que você baixou: o <code>gh</code> não aceita um <code>*</code> ali. Mantenha <code>--predicate-type</code>: sem ele, o <code>gh</code> procura outro tipo de declaração e informa que não encontrou nenhuma.</p>
   <p>Uma soma de verificação copiada da mesma página do download prova menos que uma assinatura. As duas são publicadas, então as duas valem um momento.</p>
 </section>
 
 <section>
   <h2>O Windows pode avisar você</h2>
   <p>O programa e o instalador são assinados, então o Windows mostra quem os assinou em vez de dizer “Editor desconhecido”. O certificado é novo, então o SmartScreen ainda pode avisar por um tempo, porque ainda não o viu muitas vezes. Isso é sobre o certificado, não sobre o arquivo, e as duas verificações acima deixam você conferir o arquivo por conta própria. A <a href="../perguntas-frequentes/">página de perguntas</a> trata disso e do que o driver precisa.</p>
+</section>
+
+<section>
+  <h2>No Linux</h2>
+  <p>O pacote é o mesmo programa com o próprio Python e Tk, então não é preciso instalar nada antes. Descompacte, adicione ao menu de aplicativos e abra:</p>
+<pre><code>tar -xzf BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+./BeanNetworkTester</code></pre>
+  <p>Aberta sem <code>sudo</code>, a janela pede a senha de um administrador no diálogo do próprio desktop. O pacote precisa de glibc 2.38 ou mais novo, então o Ubuntu 22.04 e o Debian 12 são antigos demais para ele. O suporte a Linux é um experimento, e o <a href="{{site.repo_url}}#linux-package-experimental">README</a> explica onde ele difere do Windows.</p>
 </section>

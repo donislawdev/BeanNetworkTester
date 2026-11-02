@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>Bean Network Tester डाउनलोड करें</h1>
-  <p class="lead">एक zip जो बिना कुछ इंस्टॉल किए चलता है, या कंप्यूटर के सभी उपयोगकर्ताओं के लिए एक इंस्टॉलर। दोनों में प्रोग्राम एडमिनिस्ट्रेटर अधिकार खुद माँगता है।</p>
+  <p class="lead">Windows के लिए एक zip जो बिना कुछ इंस्टॉल किए चलता है, या कंप्यूटर के सभी उपयोगकर्ताओं के लिए एक इंस्टॉलर। दोनों में प्रोग्राम एडमिनिस्ट्रेटर अधिकार खुद माँगता है। Linux के लिए भी एक पैकेज है, प्रयोग के तौर पर।</p>
   <p class="actions">
     <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
   </p>
@@ -10,9 +10,9 @@
   <h2>तथ्य, एक जगह</h2>
   <ul class="facts">
     <li><strong>कीमत:</strong> मुफ़्त, और मुक्त सॉफ़्टवेयर, GNU GPL v3।</li>
-    <li><strong>चलता है:</strong> Windows 10 और Windows 11, 64-बिट पर।</li>
-    <li><strong>ज़रूरत:</strong> एडमिनिस्ट्रेटर अधिकार, क्योंकि ट्रैफ़िक एक ड्राइवर कैप्चर करता है।</li>
-    <li><strong>इंस्टॉल:</strong> ज़रूरी नहीं। zip कहीं भी खोलें और चलाएँ। या <code>.msi</code> इंस्टॉलर इस्तेमाल करें, जो Start Menu में प्रविष्टि जोड़ता है और प्रोग्राम को <code>PATH</code> में रखता है (इसके लिए एडमिनिस्ट्रेटर अधिकार चाहिए)।</li>
+    <li><strong>चलता है:</strong> Windows 10 और Windows 11, 64-बिट पर। Linux पर, प्रयोग के तौर पर: 64-बिट (x86_64), Ubuntu 24.04 और 26.04 पर जाँचा गया।</li>
+    <li><strong>ज़रूरत:</strong> एडमिनिस्ट्रेटर अधिकार, क्योंकि ट्रैफ़िक एक ड्राइवर कैप्चर करता है। Linux पर root अधिकार और कर्नेल 5.10 या नया।</li>
+    <li><strong>इंस्टॉल:</strong> ज़रूरी नहीं। zip कहीं भी खोलें और चलाएँ। या <code>.msi</code> इंस्टॉलर इस्तेमाल करें, जो Start Menu में प्रविष्टि जोड़ता है और प्रोग्राम को <code>PATH</code> में रखता है (इसके लिए एडमिनिस्ट्रेटर अधिकार चाहिए)। Linux पर <code>.tar.gz</code> खोलें।</li>
     <li><strong>डेटा भेजता है:</strong> अपने आप कुछ नहीं। न टेलीमेट्री, न अपडेट की जाँच। इसका {{app.tools.ping.tab}} टूल केवल उसी पते पर भेजता है जो आप लिखते हैं।</li>
     <li><strong>मोड:</strong> एक विंडो, और वही फ़ाइल कमांड-लाइन टूल की तरह।</li>
     <li><strong>सोर्स:</strong> <a href="{{site.repo_url}}">GitHub पर</a>, उसी लाइसेंस के तहत।</li>
@@ -21,13 +21,14 @@
 
 <section>
   <h2>रिलीज़ में क्या है</h2>
-  <p>एक रिलीज़ पाँच फ़ाइलें प्रकाशित करती है। दो प्रोग्राम हैं, और बाकी तीन इसलिए हैं कि आपको डाउनलोड पर आँख मूँदकर भरोसा न करना पड़े:</p>
+  <p>एक रिलीज़ आठ फ़ाइलें प्रकाशित करती है। तीन प्रोग्राम हैं, और बाकी पाँच इसलिए हैं कि आपको डाउनलोड पर आँख मूँदकर भरोसा न करना पड़े:</p>
   <ul>
     <li><strong>zip</strong>: प्रोग्राम और उसका ड्राइवर, एक ही फ़ोल्डर में साथ-साथ;</li>
     <li><strong>.msi इंस्टॉलर</strong>: वही प्रोग्राम, कंप्यूटर के सभी उपयोगकर्ताओं के लिए इंस्टॉल, Start Menu प्रविष्टि के साथ;</li>
-    <li><strong>SHA256SUMS.txt</strong>: zip और इंस्टॉलर के चेकसम;</li>
-    <li><strong>एक SBOM</strong>: भीतर के हर घटक की मानक सूची, संस्करणों और लाइसेंसों के साथ, zip के विरुद्ध हस्ताक्षरित;</li>
-    <li><strong>एक .sigstore.json फ़ाइल</strong>: वही हस्ताक्षर फ़ाइल के रूप में, ताकि GitHub से पूछे बिना जाँचा जा सके।</li>
+    <li><strong>.tar.gz</strong>: Linux के लिए प्रोग्राम, अपने Python के साथ, प्रयोग के तौर पर;</li>
+    <li><strong>SHA256SUMS.txt</strong>: zip, इंस्टॉलर और Linux पैकेज के चेकसम;</li>
+    <li><strong>दो SBOM</strong>: भीतर के हर घटक की मानक सूचियाँ, संस्करणों और लाइसेंसों के साथ, एक zip के विरुद्ध और दूसरी Linux पैकेज के विरुद्ध हस्ताक्षरित;</li>
+    <li><strong>दो .sigstore.json फ़ाइलें</strong>: वही हस्ताक्षर फ़ाइलों के रूप में, ताकि GitHub से पूछे बिना जाँचे जा सकें।</li>
   </ul>
 </section>
 
@@ -37,11 +38,24 @@
 <pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
   <p>हस्ताक्षर एक अलग सवाल का जवाब देता है, “क्या यह उसी रिपॉज़िटरी से निकला”, और उसके लिए GitHub का कमांड-लाइन टूल चाहिए:</p>
 <pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
-  <p>पहले हिस्से के रूप में आपने जो zip डाउनलोड किया उसका नाम लिखें, क्योंकि <code>gh</code> वहाँ <code>*</code> स्वीकार नहीं करता। <code>--predicate-type</code> रखें: इसके बिना <code>gh</code> किसी दूसरी तरह का कथन खोजता है और बताता है कि उसे कुछ नहीं मिला।</p>
+  <p>Linux पर दोनों जाँचें उस फ़ोल्डर में चलाएँ जहाँ पैकेज और <code>SHA256SUMS.txt</code> हैं:</p>
+<pre><code>sha256sum -c --ignore-missing SHA256SUMS.txt
+gh attestation verify BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>पहले हिस्से के रूप में आपने जो फ़ाइल डाउनलोड की उसका नाम लिखें, क्योंकि <code>gh</code> वहाँ <code>*</code> स्वीकार नहीं करता। <code>--predicate-type</code> रखें: इसके बिना <code>gh</code> किसी दूसरी तरह का कथन खोजता है और बताता है कि उसे कुछ नहीं मिला।</p>
   <p>जो चेकसम आप डाउनलोड वाले ही पेज से कॉपी करते हैं, वह हस्ताक्षर से कम साबित करता है। दोनों प्रकाशित हैं, इसलिए दोनों के लिए थोड़ा समय देना ठीक है।</p>
 </section>
 
 <section>
   <h2>Windows चेतावनी दे सकता है</h2>
   <p>प्रोग्राम और इंस्टॉलर हस्ताक्षरित हैं, इसलिए Windows “अज्ञात प्रकाशक” कहने की जगह बताता है कि हस्ताक्षर किसने किए। प्रमाणपत्र नया है, इसलिए SmartScreen कुछ समय तक फिर भी चेतावनी दे सकता है, क्योंकि उसने इसे अभी ज़्यादा बार नहीं देखा। यह प्रमाणपत्र के बारे में है, फ़ाइल के बारे में नहीं, और ऊपर की दोनों जाँचें आपको फ़ाइल खुद सत्यापित करने देती हैं। <a href="../aksar-puche-jane-wale-sawal/">सवालों वाला पेज</a> इसके बारे में और ड्राइवर को क्या चाहिए, इसके बारे में बताता है।</p>
+</section>
+
+<section>
+  <h2>Linux पर</h2>
+  <p>पैकेज वही प्रोग्राम है, अपने Python और Tk के साथ, इसलिए पहले कुछ इंस्टॉल करने की ज़रूरत नहीं। इसे खोलें, ऐप्लिकेशन मेनू में जोड़ें और चलाएँ:</p>
+<pre><code>tar -xzf BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+./BeanNetworkTester</code></pre>
+  <p><code>sudo</code> के बिना शुरू करने पर विंडो डेस्कटॉप के अपने डायलॉग में एडमिनिस्ट्रेटर का पासवर्ड माँगती है। पैकेज को glibc 2.38 या नया चाहिए, इसलिए Ubuntu 22.04 और Debian 12 इसके लिए बहुत पुराने हैं। Linux समर्थन एक प्रयोग है, और <a href="{{site.repo_url}}#linux-package-experimental">README</a> बताता है कि यह Windows से कहाँ अलग है।</p>
 </section>

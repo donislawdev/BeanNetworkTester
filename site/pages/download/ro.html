@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>Descarcă Bean Network Tester</h1>
-  <p class="lead">Un zip care rulează fără instalare sau un instalator pentru toți utilizatorii calculatorului. Oricum, programul cere singur drepturile de administrator.</p>
+  <p class="lead">Pentru Windows, un zip care rulează fără instalare sau un instalator pentru toți utilizatorii calculatorului. Oricum, programul cere singur drepturile de administrator. Pentru Linux există și un pachet, experimental.</p>
   <p class="actions">
     <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
   </p>
@@ -10,9 +10,9 @@
   <h2>Faptele, într-un singur loc</h2>
   <ul class="facts">
     <li><strong>Preț:</strong> gratuit și software liber, GNU GPL v3.</li>
-    <li><strong>Rulează pe:</strong> Windows 10 și Windows 11, pe 64 de biți.</li>
-    <li><strong>Necesită:</strong> drepturi de administrator, pentru că traficul este capturat de un driver.</li>
-    <li><strong>Instalare:</strong> nu e nevoie. Dezarhivează zip-ul oriunde și rulează-l. Sau folosește instalatorul <code>.msi</code>, care adaugă o intrare în meniul Start și pune programul în <code>PATH</code> (cere drepturi de administrator).</li>
+    <li><strong>Rulează pe:</strong> Windows 10 și Windows 11, pe 64 de biți. Linux, experimental: pe 64 de biți (x86_64), verificat pe Ubuntu 24.04 și 26.04.</li>
+    <li><strong>Necesită:</strong> drepturi de administrator, pentru că traficul este capturat de un driver. Pe Linux, drepturi de root și un nucleu 5.10 sau mai nou.</li>
+    <li><strong>Instalare:</strong> nu e nevoie. Dezarhivează zip-ul oriunde și rulează-l. Sau folosește instalatorul <code>.msi</code>, care adaugă o intrare în meniul Start și pune programul în <code>PATH</code> (cere drepturi de administrator). Pe Linux, dezarhivează <code>.tar.gz</code>-ul.</li>
     <li><strong>Trimite date:</strong> nimic din proprie inițiativă. Fără telemetrie, fără verificare de actualizări. Instrumentul {{app.tools.ping.tab}} trimite doar la adresa pe care o tastezi.</li>
     <li><strong>Moduri:</strong> o fereastră și același fișier ca instrument în linia de comandă.</li>
     <li><strong>Sursă:</strong> <a href="{{site.repo_url}}">pe GitHub</a>, sub aceeași licență.</li>
@@ -21,13 +21,14 @@
 
 <section>
   <h2>Ce conține versiunea</h2>
-  <p>O versiune publică cinci fișiere. Două sunt programul, iar celelalte trei sunt acolo ca să nu fii nevoit să iei descărcarea pe încredere:</p>
+  <p>O versiune publică opt fișiere. Trei sunt programul, iar celelalte cinci sunt acolo ca să nu fii nevoit să iei descărcarea pe încredere:</p>
   <ul>
     <li><strong>zip-ul</strong>: programul și driverul pe care îl folosește, împreună într-un singur folder;</li>
     <li><strong>instalatorul .msi</strong>: același program, instalat pentru toți utilizatorii calculatorului, cu o intrare în meniul Start;</li>
-    <li><strong>SHA256SUMS.txt</strong>: sumele de control ale zip-ului și ale instalatorului;</li>
-    <li><strong>un SBOM</strong>: o listă standard a fiecărei componente din interior, cu versiuni și licențe, semnată față de zip;</li>
-    <li><strong>un fișier .sigstore.json</strong>: acea semnătură ca fișier, pentru a o verifica fără să întrebi GitHub.</li>
+    <li><strong>.tar.gz-ul</strong>: programul pentru Linux, cu propriul Python, experimental;</li>
+    <li><strong>SHA256SUMS.txt</strong>: sumele de control ale zip-ului, ale instalatorului și ale pachetului pentru Linux;</li>
+    <li><strong>două SBOM-uri</strong>: liste standard ale fiecărei componente din interior, cu versiuni și licențe, una semnată față de zip și cealaltă față de pachetul pentru Linux;</li>
+    <li><strong>două fișiere .sigstore.json</strong>: acele semnături ca fișiere, pentru a le verifica fără să întrebi GitHub.</li>
   </ul>
 </section>
 
@@ -37,11 +38,24 @@
 <pre><code>Get-FileHash .\BeanNetworkTester-*.zip -Algorithm SHA256</code></pre>
   <p>Semnătura răspunde la altă întrebare, „a ieșit asta din acel depozit”, și cere instrumentul de linie de comandă GitHub:</p>
 <pre><code>gh attestation verify BeanNetworkTester-vX.Y.Z-windows-x64.zip --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
-  <p>Scrie numele zip-ului descărcat ca prima parte: <code>gh</code> nu acceptă acolo un <code>*</code>. Păstrează <code>--predicate-type</code>: fără el, <code>gh</code> caută alt fel de afirmație și raportează că nu a găsit niciuna.</p>
+  <p>Pe Linux, rulează ambele verificări în folderul în care se află pachetul și <code>SHA256SUMS.txt</code>:</p>
+<pre><code>sha256sum -c --ignore-missing SHA256SUMS.txt
+gh attestation verify BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz --repo donislawdev/BeanNetworkTester --predicate-type https://spdx.dev/Document/v2.3</code></pre>
+  <p>Scrie numele fișierului descărcat ca prima parte: <code>gh</code> nu acceptă acolo un <code>*</code>. Păstrează <code>--predicate-type</code>: fără el, <code>gh</code> caută alt fel de afirmație și raportează că nu a găsit niciuna.</p>
   <p>O sumă de control copiată de pe aceeași pagină cu descărcarea dovedește mai puțin decât o semnătură. Ambele sunt publicate, deci merită un moment amândouă.</p>
 </section>
 
 <section>
   <h2>Windows te poate avertiza</h2>
   <p>Programul și instalatorul sunt semnate, deci Windows spune cine le-a semnat, în loc de „Editor necunoscut”. Certificatul este nou, deci SmartScreen poate încă avertiza o vreme, pentru că nu l-a mai văzut des. E vorba despre certificat, nu despre fișier, iar cele două verificări de mai sus îți permit să verifici singur fișierul. <a href="../intrebari-frecvente/">Pagina de întrebări</a> tratează asta și ce are nevoie driverul.</p>
+</section>
+
+<section>
+  <h2>Pe Linux</h2>
+  <p>Pachetul este același program cu propriul Python și Tk, deci nu trebuie instalat nimic înainte. Dezarhivează-l, adaugă-l în meniul de aplicații și pornește-l:</p>
+<pre><code>tar -xzf BeanNetworkTester-vX.Y.Z-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+./BeanNetworkTester</code></pre>
+  <p>Pornită fără <code>sudo</code>, fereastra cere parola unui administrator în dialogul desktopului. Pachetul are nevoie de glibc 2.38 sau mai nou, deci Ubuntu 22.04 și Debian 12 sunt prea vechi pentru el. Suportul pentru Linux este un experiment, iar <a href="{{site.repo_url}}#linux-package-experimental">README</a>-ul spune prin ce diferă de Windows.</p>
 </section>
