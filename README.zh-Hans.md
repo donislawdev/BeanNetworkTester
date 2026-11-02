@@ -2,7 +2,7 @@
   <a href="README.md">English</a> | <b>简体中文</b> | <a href="README.ja.md">日本語</a> | <a href="README.de.md">Deutsch</a> | <a href="README.ko.md">한국어</a> | <a href="README.fr.md">Français</a> | <a href="README.pt-BR.md">Português (Brasil)</a> | <a href="README.es.md">Español</a>
 </p>
 
-# Bean Network Tester 🫘 - 糟糕网络环境模拟器（Windows） 
+# Bean Network Tester 🫘 - 糟糕网络环境模拟器
 <p align="center">
   <b>Follow me:</b>
   &nbsp

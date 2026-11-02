@@ -2,7 +2,7 @@
   <a href="README.md">English</a> | <a href="README.zh-Hans.md">简体中文</a> | <a href="README.ja.md">日本語</a> | <a href="README.de.md">Deutsch</a> | <b>한국어</b> | <a href="README.fr.md">Français</a> | <a href="README.pt-BR.md">Português (Brasil)</a> | <a href="README.es.md">Español</a>
 </p>
 
-# Bean Network Tester 🫘 - 나쁜 네트워크 환경 시뮬레이터 (Windows) 
+# Bean Network Tester 🫘 - 나쁜 네트워크 환경 시뮬레이터
 <p align="center">
   <b>팔로우하기:</b>
   &nbsp

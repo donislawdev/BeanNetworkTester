@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-02
+
 ### Added
 
 - **Linux, experimental: the command line impairs real traffic.** From source, on Linux 5.10
@@ -203,6 +205,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   top of every README links between them, and the link to the website in each translation opens
   the website in that language. The command line and the program's own labels stay in English,
   as the program shows them.
+
+- **The README's title names no single system.** The program runs on Windows and, as an
+  experiment, on Linux, so the title of the README in every language no longer ends in
+  "(Windows)".
 
 ## [0.8.0] - 2026-10-03
 
