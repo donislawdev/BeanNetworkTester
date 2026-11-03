@@ -5,6 +5,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Fixed
+
+- **Linux, experimental: Ping over IPv6 shows the real round trip.** Each reply read up to
+  about 10 ms too long: the time the program spent preparing the request was counted as time
+  on the network. IPv4 was not affected.
+
 ## [1.0.0] - 2026-11-03
 
 ### Added

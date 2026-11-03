@@ -349,6 +349,59 @@ def test_an_ipv6_reply_has_no_ttl_and_a_zone_goes_as_its_interface_number(monkey
           == "99999")
 
 
+def test_an_address_without_a_zone_asks_for_no_interface(monkeypatch):
+    """Asking the kernel for the interface named ``""`` is refused, and the refusal took
+    7-13 ms as root on Ubuntu 26.04 (measured on a VM, 2026-11-03), inside every IPv6
+    round trip: a ping across a virtual link said ~8 ms where the system's said under 0.5."""
+    asked = []
+    monkeypatch.setattr(icmpsock.socket, "if_nametoindex", lambda name: asked.append(name) or 1)
+    target = icmpsock._target(V6)
+    check("no zone: interface 0, and nothing asked", target == ("2001:db8:78::2", 0, 0, 0)
+          and not asked, f"({target}, asked {asked})")
+
+
+class Running(Clock):
+    """A clock whose wall time moves with its monotonic one."""
+
+    def time_ns(self):
+        return SENT_WALL + self.mono
+
+
+def test_the_round_trip_starts_when_the_request_leaves(monkeypatch):
+    """Making the request is not the network's time. Here naming the zone's interface
+    takes 8 ms and building the packet 2 ms; the kernel has the reply 1.5 ms after the
+    send and this program reads it at 4 ms. The answer is 1.5 ms by the kernel's
+    receive time and 4 ms by the time read here - neither counts what came before."""
+    clock = Running(step_ns=0)
+    build = icmpsock.request
+
+    def slow_lookup(name):
+        clock.mono += 8_000_000
+        return {"eth0": 3}[name]
+
+    def slow_request(*args):
+        clock.mono += 2_000_000
+        return build(*args)
+
+    class Wire(FakeSocket):
+        def sendto(self, data, address):
+            self.script.append(("data", head(129, 21214) + PAYLOAD,
+                                [(icmpsock.SOL_SOCKET, icmpsock.SO_TIMESTAMPNS,
+                                  timespec(clock.time_ns() + 1_500_000))],
+                                ("fe80::1", 0, 0, 3)))
+            clock.mono += 4_000_000                 # read here 4 ms after the send
+            return super().sendto(data, address)
+
+    monkeypatch.setattr(icmpsock.socket, "if_nametoindex", slow_lookup)
+    monkeypatch.setattr(icmpsock, "request", slow_request)
+    for stamped, want in ((True, 1_500_000), (False, 4_000_000)):
+        sock = Wire(name=("::", 21214, 0, 0))
+        answer = run(sock, ipaddress.ip_address("fe80::1%eth0"), clock=clock, stamped=stamped)
+        check(f"stamped={stamped}: {want / 1e6} ms, nothing before the send in it",
+              answer.replied and answer.rtt_ns == want
+              and sock.sent[0][1] == ("fe80::1", 0, 0, 3), f"({answer}, {sock.sent})")
+
+
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux only: its sockets")
 def test_a_live_ping_of_this_machine_reads_a_real_reply():  # pragma: no cover - Linux only
     """The control, on a Linux runner that lets this process ping (the ping socket for
