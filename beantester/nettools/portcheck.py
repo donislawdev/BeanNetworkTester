@@ -21,6 +21,14 @@ How, and why this way - measured 2026-09-24 on Windows 11 and on a Windows Serve
   server on 0.0.0.0 (Learn, "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE").
 * **TIME_WAIT holds nothing** on Windows: a bind succeeds beside it, so its rows
   are not owners. Where a bind DOES fail beside one (Linux), the port is closing.
+* **Linux lists a dual-stack socket once**, under IPv6: the server on ``[::]`` and
+  the connections it accepted from IPv4, which carry ``::ffff:127.0.0.1``. So an
+  ``::ffff:`` address counts as IPv4, and on Linux an IPv4 bind refused beside a
+  socket on ``[::]`` names that socket - one for IPv6 alone lets the bind through
+  (MEASURED 2026-11-03, Ubuntu 26.04 and WSL, the release rig). Not beside an IPv4
+  connection's TIME_WAIT, which refuses the bind by itself: the table cannot tell the
+  two kinds of ``[::]`` apart (MEASURED 2026-11-04, the same rig). Windows lists a
+  dual-stack socket under IPv4 too, so there a socket on ``[::]`` is never asked.
 * WSAEACCES is not always a reservation (Learn: an exclusive socket of another
   program, a wildcard socket of another account) - but those are in the table,
   and a row there wins. Off Windows, EACCES is a port this account may not use
@@ -164,8 +172,8 @@ def check(matcher, protocols, families, bind=probe, read=sockets.read):
             unavailable.append(family)
         else:
             codes.update(answers)
-    live, closing = _holders(read())
-    rows = [_row(where, code, live, closing) for where, code in codes.items()]
+    held = _holders(read())
+    rows = [_row(where, code, held) for where, code in codes.items()]
     return Check(tuple(sort(rows)), str(matcher), tuple(protocols),
                  tuple(f for f in families if f not in unavailable), zero,
                  tuple(unavailable), time.time(),
@@ -189,20 +197,44 @@ def _ask_family(bind, family, protocols, wanted):
 
 
 def _holders(snapshot):
-    """``(live, closing)``: owners by ``(port, proto, family)``, and where only TIME_WAIT sits."""
-    live, closing = {}, set()
+    """``(live, closing, native_closing, wide)``: owners by ``(port, proto, family)``,
+    where TIME_WAIT sits, where an IPv4 socket's own sits (not an ``::ffff:`` one), and
+    the owners on the IPv6 wildcard address by ``(port, proto)``."""
+    live, closing, native_closing, wide = {}, set(), set(), {}
     for s in snapshot.sockets:
-        where = (s.local_port, s.proto, s.family)
+        family = _version(s)
+        where = (s.local_port, s.proto, family)
         if s.state == "TIME_WAIT":
             closing.add(where)
-        else:
-            live.setdefault(where, set()).add((s.pid, s.proc))
-    return live, closing
+            if s.family == 4:
+                native_closing.add(where)
+            continue
+        live.setdefault(where, set()).add((s.pid, s.proc))
+        if family == 6 and s.local_ip == "::":
+            wide.setdefault((s.local_port, s.proto), set()).add((s.pid, s.proc))
+    return live, closing, native_closing, wide
 
 
-def _row(where, code, live, closing):
+def _version(s):
+    """The IP version a socket holds its port on: 4 for an IPv4 address written the
+    IPv6 way (``::ffff:127.0.0.1``), which is where Linux lists them."""
+    if s.family == 6 and s.local_ip.startswith("::ffff:") and "." in s.local_ip:
+        return 4
+    return s.family
+
+
+def _row(where, code, held):
+    live, closing, native_closing, wide = held
     port, proto, family = where
-    owners = tuple(sorted(live.get(where, ()), key=lambda o: (o[0] is None, o[0] or 0, o[1])))
+    found = live.get(where, ())
+    if (not WINDOWS and not found and family == 4 and code in IN_USE_CODES
+            and where not in native_closing):
+        # Refused, and the table names no IPv4 holder: a socket on [::] that takes IPv4
+        # too, listed under IPv6 alone. Asked before the TIME_WAIT such a server's own
+        # closed connections leave beside it (::ffff:), never beside an IPv4 socket's,
+        # which explains the refusal while [::] may be for IPv6 alone.
+        found = wide.get((port, proto), ())
+    owners = tuple(sorted(found, key=lambda o: (o[0] is None, o[0] or 0, o[1])))
     return Row(f"{port}|{proto}|{family}", port, proto, family,
                verdict(code, owners, where in closing), code, owners)
 
