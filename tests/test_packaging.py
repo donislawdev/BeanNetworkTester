@@ -151,17 +151,23 @@ def test_every_winget_manifest_names_the_schema_the_pipeline_takes(tmp_path, mon
     check(f"WINGET_SCHEMA is not older than {'.'.join(map(str, floor))}",
           tuple(int(part) for part in bp.WINGET_SCHEMA.split(".")) >= floor,
           f"({bp.WINGET_SCHEMA})")
+    # Each file has its own schema, so a header naming another file's passes nothing.
+    kinds = {"winget/installer.yaml": "installer", "winget/locale.en-US.yaml": "defaultLocale",
+             "winget/version.yaml": "version"}
     rendered = _rendered(tmp_path, monkeypatch)
     manifests = {name: text for name, text in rendered.items() if name.startswith("winget/")}
-    check("three WinGet manifests are rendered", len(manifests) == 3, f"({sorted(manifests)})")
+    check("the three WinGet manifests are rendered", sorted(manifests) == sorted(kinds),
+          f"({sorted(manifests)})")
     for name, text in sorted(manifests.items()):
-        check(f"{name} carries ManifestVersion {bp.WINGET_SCHEMA}",
-              f"ManifestVersion: {bp.WINGET_SCHEMA}" in _code(text))
+        # WinGet refuses a field given twice, so one right line beside a wrong one fails.
+        versions = [line for line in _code(text) if line.startswith("ManifestVersion:")]
+        check(f"{name} carries ManifestVersion {bp.WINGET_SCHEMA}, once",
+              versions == [f"ManifestVersion: {bp.WINGET_SCHEMA}"], f"({versions})")
         headers = [line for line in text.splitlines()
                    if line.startswith("# yaml-language-server: $schema=")]
-        check(f"{name} points its editor at the same schema",
-              len(headers) == 1 and headers[0].endswith(f".{bp.WINGET_SCHEMA}.schema.json"),
-              f"({headers})")
+        url = f"https://aka.ms/winget-manifest.{kinds.get(name)}.{bp.WINGET_SCHEMA}.schema.json"
+        check(f"{name} points its editor at its own schema",
+              headers == [f"# yaml-language-server: $schema={url}"], f"({headers})")
 
 
 def test_the_nested_path_is_the_one_the_release_builds(tmp_path, monkeypatch):
