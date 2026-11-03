@@ -18,6 +18,7 @@ from typing import NamedTuple
 import pytest
 
 from beantester import crashlog, portmap
+from beantester.nettools import portcheck
 from beantester.portmap import _AF_INET, _AF_INET6, SocketRow
 from fakes import check
 
@@ -253,6 +254,8 @@ def test_a_table_that_keeps_outgrowing_its_buffer_is_a_failed_table():
     check("nothing is invented", rows == [], f"({rows})")
     check("all four are named as failed", failed == ["tcp/v4", "tcp/v6", "udp/v4", "udp/v6"],
           f"({failed})")
+    check("each by a name the port check reads", set(failed) == set(portcheck.TABLE_NAMES),
+          f"({sorted(portcheck.TABLE_NAMES)})")
     check("each was given six tries and no more",
           len([key for key, _size in api.calls if key == TCP4]) == 6, f"({api.calls})")
 

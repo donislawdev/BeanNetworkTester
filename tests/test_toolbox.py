@@ -1247,6 +1247,7 @@ HOLDER = sk.Socket("k", "TCP", 4, "0.0.0.0", 8080, "", None, "LISTEN", 1234, "no
 gate = threading.Event()
 gate.set()
 checks = []
+failed = []          # the socket tables the stand-in table says did not answer
 real_check = pc.check
 
 def reserved_9010(proto, family, port):
@@ -1256,7 +1257,7 @@ def fake_check(matcher, protocols, families):
     checks.append((str(matcher), protocols, families))
     gate.wait(5)
     return real_check(matcher, protocols, families, bind=reserved_9010,
-                      read=lambda: sk.Snapshot((HOLDER,), (), time.time(), 1))
+                      read=lambda: sk.Snapshot((HOLDER,), tuple(failed), time.time(), 1))
 
 pc.check = fake_check
 
@@ -1415,6 +1416,26 @@ def test_the_port_check_row_menu_acts_on_the_program_that_holds_the_port():
         panel.table.select_keys([row(panel, 8080).key])
         panel._target()
         assert app.vars["target"].get() == "node.exe", app.vars["target"].get()
+    """))
+
+
+def test_a_socket_table_that_did_not_answer_is_named_and_its_rows_read_unknown():
+    run_gui(PORTS + textwrap.dedent("""
+        failed.append("tcp/v4")
+        panel = open_ports()
+        type_ports(panel, "9010")
+        panel.check()
+        settle(panel)
+        assert row(panel, 9010).verdict == pc.UNREAD, "reserved, but without its table"
+        assert row(panel, 9010, family=6).verdict == pc.RESERVED, "its table answered"
+        assert render(row(panel, 9010))[3] == T("tools.portcheck.verdict.unread")
+        assert panel.table._tag_of(row(panel, 9010)) == "unsure"
+        tables = T("tools.portcheck.table_name", proto=T("tools.portcheck.tcp"),
+                   family=T("tools.portcheck.ipv4"))
+        want = T("tools.portcheck.note_unread", tables=tables,
+                 verdict=T("tools.portcheck.verdict.unread"))
+        assert want in panel.note.cget("text"), panel.note.cget("text")
+        assert panel.count.cget("text") == T("tools.portcheck.count", taken=2, total=4)
     """))
 
 

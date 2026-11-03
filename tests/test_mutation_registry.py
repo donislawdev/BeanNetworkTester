@@ -4659,8 +4659,8 @@ MUTATIONS = [
                 "            unavailable.append(family)\n"
                 "        else:\n"
                 "            codes.update(answers)\n"
-                "    held = _holders(read())\n"),
-        "new": ("    held = _holders(read())\n"
+                "    snapshot = read()\n"),
+        "new": ("    snapshot = read()\n"
                 "    codes, unavailable = {}, []\n"
                 "    for family in families:\n"
                 "        answers = _ask_family(bind, family, protocols, wanted)\n"
@@ -4733,6 +4733,30 @@ MUTATIONS = [
         "test": "test_an_ipv4_time_wait_explains_a_refusal_beside_a_server_on_any",
     },
     {
+        # A table that failed cannot say nobody holds the port (a dual-stack server
+        # is invisible to a bind).
+        "label": "portcheck: a table that did not answer still says free",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "    return UNREAD if unread and said in (FREE, RESERVED) else said\n",
+        "new": "    return said\n",
+        "test": "test_a_table_that_did_not_answer_cannot_say_free_or_reserved",
+    },
+    {
+        # Another program's exclusive socket answers WSAEACCES like a reservation.
+        "label": "portcheck: a reservation is said without its table",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "said in (FREE, RESERVED)",
+        "new": "said in (FREE,)",
+        "test": "test_a_table_that_did_not_answer_cannot_say_free_or_reserved",
+    },
+    {
+        "label": "portcheck: a failed table is named although it was not checked",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "                 tuple(t for t in sorted(unread) if t[0] in protocols and t[1] in checked))\n",
+        "new": "                 tuple(sorted(unread)))\n",
+        "test": "test_only_the_tables_that_were_checked_are_named_as_unread",
+    },
+    {
         "label": "portcheck: the probe leaves its socket open",
         "file": "beantester/nettools/portcheck.py",
         "old": "    with sock:\n        try:",
@@ -4775,6 +4799,20 @@ MUTATIONS = [
         "old": "            self.status.refused(str(exc))",
         "new": "            self.status.refused(\"\")",
         "test": "test_ports_the_parser_refuses_never_reach_the_worker",
+    },
+    {
+        "label": "portcheck panel: a table that did not answer is not named",
+        "file": "beantester/gui/toolbox/portcheck.py",
+        "old": "        if answer.unread:\n",
+        "new": "        if False:\n",
+        "test": "test_a_socket_table_that_did_not_answer_is_named_and_its_rows_read_unknown",
+    },
+    {
+        "label": "portcheck panel: an unknown port is not coloured",
+        "file": "beantester/gui/toolbox/portcheck.py",
+        "old": "            portcheck.UNREAD: \"unsure\"}",
+        "new": "            portcheck.UNREAD: \"\"}",
+        "test": "test_a_socket_table_that_did_not_answer_is_named_and_its_rows_read_unknown",
     },
     {
         "label": "portcheck panel: a held port is not coloured",

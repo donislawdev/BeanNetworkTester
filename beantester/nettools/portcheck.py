@@ -33,6 +33,10 @@ How, and why this way - measured 2026-09-24 on Windows 11 and on a Windows Serve
   program, a wildcard socket of another account) - but those are in the table,
   and a row there wins. Off Windows, EACCES is a port this account may not use
   (below 1024 on Linux), not a reservation.
+* **A table that did not answer** (Windows reads four, and ``sockets.read`` names
+  the ones that failed) cannot say "nobody holds this port". Free and Reserved both
+  rest on exactly that, so a row of that table reads Unknown instead, and the check
+  names the tables.
 
 Nothing here draws or translates; the port parser's message, which arrives in the
 window's language, is the one exception nettools already names.
@@ -67,9 +71,12 @@ NO_FAMILY_CODES = frozenset({errno.EAFNOSUPPORT, errno.EADDRNOTAVAIL,
 WINDOWS = sys.platform.startswith("win")
 
 # Verdicts. VERDICTS is also the table's default order: what stops a program first.
-IN_USE, UNSEEN, RESERVED, DENIED, CLOSING, FAILED, FREE = (
-    "in_use", "unseen", "reserved", "denied", "closing", "failed", "free")
-VERDICTS = (IN_USE, UNSEEN, RESERVED, DENIED, CLOSING, FAILED, FREE)
+IN_USE, UNSEEN, RESERVED, DENIED, CLOSING, FAILED, UNREAD, FREE = (
+    "in_use", "unseen", "reserved", "denied", "closing", "failed", "unread", "free")
+VERDICTS = (IN_USE, UNSEEN, RESERVED, DENIED, CLOSING, FAILED, UNREAD, FREE)
+# How ``sockets.read`` names a table that did not answer (``portmap``: "tcp/v4").
+TABLE_NAMES = {f"{proto.lower()}/v{family}": (proto, family)
+               for proto in PROTOCOLS for family in FAMILIES}
 
 
 class Row(NamedTuple):
@@ -93,6 +100,7 @@ class Check(NamedTuple):
     unavailable: tuple      # IP versions this machine has no loopback address for
     checked_at: float
     elapsed_ms: int
+    unread: tuple = ()      # (proto, family) checked whose socket table did not answer
 
 
 def parse(text):
@@ -142,10 +150,18 @@ def _code(exc):
     return getattr(exc, "winerror", None) or exc.errno or -1
 
 
-def verdict(code, owners, closing):
-    """What one bind answer and the socket table say together."""
+def verdict(code, owners, closing, unread=False):
+    """What one bind answer and the socket table say together; ``unread``: that
+    table did not answer, so nobody can say that no program holds the port."""
     if owners:
         return IN_USE           # the table names a holder, whatever bind said
+    said = _bound(code, closing)
+    # Free and Reserved rest on the table naming nobody: a dual-stack server is
+    # invisible to a bind, another program's exclusive socket answers WSAEACCES.
+    return UNREAD if unread and said in (FREE, RESERVED) else said
+
+
+def _bound(code, closing):
     if code == 0:
         return FREE
     if code in IN_USE_CODES:
@@ -161,7 +177,8 @@ def check(matcher, protocols, families, bind=probe, read=sockets.read):
     The binds come FIRST and the table after, so a holder that starts in between is
     in the table and the answer errs towards "in use", never towards "free".
     ``sockets.Unreadable`` travels as it is: "free" without the table is a claim
-    this code cannot make (a dual-stack server is invisible to a bind).
+    this code cannot make (a dual-stack server is invisible to a bind). For the same
+    reason a table that failed while the others answered makes its rows Unknown.
     """
     started = time.perf_counter()
     wanted, zero = ports(matcher)
@@ -172,12 +189,15 @@ def check(matcher, protocols, families, bind=probe, read=sockets.read):
             unavailable.append(family)
         else:
             codes.update(answers)
-    held = _holders(read())
-    rows = [_row(where, code, held) for where, code in codes.items()]
-    return Check(tuple(sort(rows)), str(matcher), tuple(protocols),
-                 tuple(f for f in families if f not in unavailable), zero,
+    snapshot = read()
+    held = _holders(snapshot)
+    unread = {TABLE_NAMES[name] for name in snapshot.failed}
+    rows = [_row(where, code, held, unread) for where, code in codes.items()]
+    checked = tuple(f for f in families if f not in unavailable)
+    return Check(tuple(sort(rows)), str(matcher), tuple(protocols), checked, zero,
                  tuple(unavailable), time.time(),
-                 round((time.perf_counter() - started) * 1000))
+                 round((time.perf_counter() - started) * 1000),
+                 tuple(t for t in sorted(unread) if t[0] in protocols and t[1] in checked))
 
 
 def _ask_family(bind, family, protocols, wanted):
@@ -223,7 +243,7 @@ def _version(s):
     return s.family
 
 
-def _row(where, code, held):
+def _row(where, code, held, unread):
     live, closing, native_closing, wide = held
     port, proto, family = where
     found = live.get(where, ())
@@ -236,7 +256,7 @@ def _row(where, code, held):
         found = wide.get((port, proto), ())
     owners = tuple(sorted(found, key=lambda o: (o[0] is None, o[0] or 0, o[1])))
     return Row(f"{port}|{proto}|{family}", port, proto, family,
-               verdict(code, owners, where in closing), code, owners)
+               verdict(code, owners, where in closing, (proto, family) in unread), code, owners)
 
 
 def not_free(rows):

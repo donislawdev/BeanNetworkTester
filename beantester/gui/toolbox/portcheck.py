@@ -48,7 +48,8 @@ VERDICT_TEXT = "tools.portcheck.verdict.{verdict}"
 # Row colour by verdict (``theme.PORT_COLORS``); a free row has none.
 ROW_TAGS = {portcheck.IN_USE: "blocked", portcheck.UNSEEN: "blocked",
             portcheck.RESERVED: "blocked", portcheck.DENIED: "blocked",
-            portcheck.CLOSING: "unsure", portcheck.FAILED: "unsure"}
+            portcheck.CLOSING: "unsure", portcheck.FAILED: "unsure",
+            portcheck.UNREAD: "unsure"}
 
 # Menu entries a row may be refused, by position (0 is "Copy", 1 the separator).
 NEEDS_NAME = (2, 3)         # target / leave alone: the holder's process name
@@ -267,6 +268,11 @@ class PortCheckPanel:
         if answer.unavailable:
             lines.append(T("tools.portcheck.note_unavailable",
                            families=", ".join(T(FAMILY_NAMES[f]) for f in answer.unavailable)))
+        if answer.unread:
+            tables = ", ".join(T("tools.portcheck.table_name", proto=T(PROTOCOL_NAMES[p]),
+                                 family=T(FAMILY_NAMES[f])) for p, f in answer.unread)
+            lines.append(T("tools.portcheck.note_unread", tables=tables,
+                           verdict=T(VERDICT_TEXT.format(verdict=portcheck.UNREAD))))
         return lines
 
     def _show_failure(self):
