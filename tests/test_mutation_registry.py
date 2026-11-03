@@ -9688,6 +9688,34 @@ MUTATIONS = [
         "test": "test_the_socket_is_closed_whatever_happens",
     },
     {
+        # if_nametoindex("") took 7-13 ms as root on Ubuntu 26.04, inside every IPv6 RTT.
+        "label": "ping on Linux: an address without a zone asks for the interface ''",
+        "file": "beantester/icmpsock.py",
+        "old": "    if not zone:\n        return str(address), 0, 0, 0\n",
+        "new": "    if False:\n        return str(address), 0, 0, 0\n",
+        "test": "test_an_address_without_a_zone_asks_for_no_interface",
+    },
+    {
+        "label": "ping on Linux: the packet is built inside the round trip",
+        "file": "beantester/icmpsock.py",
+        "old": "    packet, target = request(version, kind, wire_ident, sent), _target(address)\n"
+               "    sent_wall, sent_at = clock.time_ns(), clock.monotonic_ns()",
+        "new": "    target = _target(address)\n"
+               "    sent_wall, sent_at = clock.time_ns(), clock.monotonic_ns()\n"
+               "    packet = request(version, kind, wire_ident, sent)",
+        "test": "test_the_round_trip_starts_when_the_request_leaves",
+    },
+    {
+        "label": "ping on Linux: the address is made inside the round trip",
+        "file": "beantester/icmpsock.py",
+        "old": "    packet, target = request(version, kind, wire_ident, sent), _target(address)\n"
+               "    sent_wall, sent_at = clock.time_ns(), clock.monotonic_ns()",
+        "new": "    packet = request(version, kind, wire_ident, sent)\n"
+               "    sent_wall, sent_at = clock.time_ns(), clock.monotonic_ns()\n"
+               "    target = _target(address)",
+        "test": "test_the_round_trip_starts_when_the_request_leaves",
+    },
+    {
         "label": "ping on Linux: TTL expired is said as a general failure",
         "file": "beantester/icmp.py",
         "old": "        (3, 4): IP_PACKET_TOO_BIG, (11, 0): IP_TTL_EXPIRED_TRANSIT},\n",

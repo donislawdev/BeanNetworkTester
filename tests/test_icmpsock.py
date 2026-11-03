@@ -368,14 +368,20 @@ class Running(Clock):
 
 
 def test_the_round_trip_starts_when_the_request_leaves(monkeypatch):
-    """Making the request is not the network's time: here naming the zone's interface
-    takes 8 ms and the network 1.5 ms, and the answer says 1.5 ms - whether the time is
-    the kernel's receive time or the one read here."""
+    """Making the request is not the network's time. Here naming the zone's interface
+    takes 8 ms and building the packet 2 ms; the kernel has the reply 1.5 ms after the
+    send and this program reads it at 4 ms. The answer is 1.5 ms by the kernel's
+    receive time and 4 ms by the time read here - neither counts what came before."""
     clock = Running(step_ns=0)
+    build = icmpsock.request
 
     def slow_lookup(name):
         clock.mono += 8_000_000
         return {"eth0": 3}[name]
+
+    def slow_request(*args):
+        clock.mono += 2_000_000
+        return build(*args)
 
     class Wire(FakeSocket):
         def sendto(self, data, address):
@@ -383,15 +389,16 @@ def test_the_round_trip_starts_when_the_request_leaves(monkeypatch):
                                 [(icmpsock.SOL_SOCKET, icmpsock.SO_TIMESTAMPNS,
                                   timespec(clock.time_ns() + 1_500_000))],
                                 ("fe80::1", 0, 0, 3)))
-            clock.mono += 1_500_000                 # the reply is here 1.5 ms later
+            clock.mono += 4_000_000                 # read here 4 ms after the send
             return super().sendto(data, address)
 
     monkeypatch.setattr(icmpsock.socket, "if_nametoindex", slow_lookup)
-    for stamped in (True, False):
+    monkeypatch.setattr(icmpsock, "request", slow_request)
+    for stamped, want in ((True, 1_500_000), (False, 4_000_000)):
         sock = Wire(name=("::", 21214, 0, 0))
         answer = run(sock, ipaddress.ip_address("fe80::1%eth0"), clock=clock, stamped=stamped)
-        check(f"stamped={stamped}: 1.5 ms, the lookup before the send not in it",
-              answer.replied and answer.rtt_ns == 1_500_000
+        check(f"stamped={stamped}: {want / 1e6} ms, nothing before the send in it",
+              answer.replied and answer.rtt_ns == want
               and sock.sent[0][1] == ("fe80::1", 0, 0, 3), f"({answer}, {sock.sent})")
 
 
