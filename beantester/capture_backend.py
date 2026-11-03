@@ -57,6 +57,7 @@ class CaptureBackend(Protocol):
     def overload_counters(self, divert: Any) -> Optional[Dict[str, int]]: ...
     def is_permission_error(self, exc: BaseException) -> bool: ...
     def open_failure_hint(self, exc: BaseException, elevated: Optional[bool] = None) -> str: ...
+    def send_refused_hint(self, exc: BaseException) -> str: ...
     def doctor_rows(self) -> Any: ...
     def platform_note(self) -> Optional[str]: ...
     def has_capture_rights(self) -> bool: ...
@@ -183,6 +184,12 @@ class WinDivertBackend:
         return driver.open_failure_hint(exc, elevated=elevated)
 
     @staticmethod
+    def send_refused_hint(exc):
+        """Never a reason to stop on Windows: an open there needs the elevation a send
+        needs, so a send that fails is a packet lost, said by the session's warning."""
+        return ""
+
+    @staticmethod
     def doctor_rows():
         """``--doctor``'s driver rows for a platform ``driver.doctor`` has none of its own.
 
@@ -244,9 +251,14 @@ class EBPFDivertBackend:
     # Nothing to clean up, MEASURED 2026-10-20 (Ubuntu 26.04): a SIGKILLed session's
     # programs stopped holding traffic after 2.6 s, and EBPFDivert.unregister() right
     # after the kill made it 2.6 s too - so a cleanup button would do nothing. (It
-    # did leave a LIVE handle of another process alone.) The kernel does it.
-    CLEANUP_LINE = ("Linux - nothing to clean up: the kernel removes a stopped or killed "
-                    "session's eBPF programs by itself, within about 3 seconds.")
+    # did leave a LIVE handle of another process alone.) MEASURED again 2026-11-03
+    # (Ubuntu 26.04 and WSL, bpftool): traffic flows 2.8-2.9 s after the kill, but the
+    # programs themselves stay attached - watched for 60 s - until the next session
+    # opens and takes them off. A session that stops (its end, Ctrl+C, SIGTERM) takes
+    # its own off at once. So the kernel does not remove them; nobody needs to.
+    CLEANUP_LINE = ("Linux - nothing to clean up: traffic flows normally again within about "
+                    "3 seconds of a session being killed, and the next session removes the "
+                    "eBPF programs it left behind.")
     CLEANUP_BLOCKER = "tools.diagnostics.clean_linux"
     # What doctor_rows' four rows need, then why "Clean up the driver" stays greyed
     # out - the same sentence as the note under the button, not a second copy of it.
@@ -334,13 +346,13 @@ class EBPFDivertBackend:
     @staticmethod
     def is_permission_error(exc):
         """eBPFDivert refuses an unprivileged open with EPERM/EACCES (it needs root, or
-        CAP_BPF + CAP_NET_ADMIN + CAP_NET_RAW). Asked of the open itself rather than
+        the capabilities ``_rights`` names). Asked of the open itself rather than
         guessed beforehand: the open is the authority, and nothing is captured yet.
 
-        Not when the process IS root: the kernel can refuse root too (lockdown, an
-        LSM policy such as SELinux or AppArmor), and "run it with sudo" would then
-        be wrong advice next to ``--doctor``'s "privileges ok". That failure stays
-        a RUNTIME one, with the driver's own words and ``open_failure_hint``'s.
+        Not when the process IS root: "run it with sudo" would be wrong advice there.
+        Root is refused when a container took its capabilities away, or by the kernel
+        itself (lockdown, an LSM policy such as SELinux or AppArmor). That failure
+        stays a RUNTIME one, with the driver's own words and ``open_failure_hint``'s.
         """
         if getattr(exc, "errno", None) not in _REFUSED:
             return False
@@ -351,13 +363,34 @@ class EBPFDivertBackend:
                         errno.EOPNOTSUPP: "dialogs.ebpf_kernel",
                         errno.EINVAL: "dialogs.ebpf_filter_refused"}
     ROOT_REFUSED_HINT = "dialogs.ebpf_refused_as_root"
+    ROOT_WITHOUT_RIGHTS_HINT = "dialogs.ebpf_root_without_caps"
 
     @classmethod
     def open_failure_hint(cls, exc, elevated=None):
         code = getattr(exc, "errno", None)
         if code in _REFUSED and _euid() == 0:
-            return cls.ROOT_REFUSED_HINT
+            # Root without the capabilities is a container's doing, and its fix is not
+            # the kernel's policy: each is told its own.
+            return cls.ROOT_WITHOUT_RIGHTS_HINT if _root_without_rights() else cls.ROOT_REFUSED_HINT
         return cls.OPEN_ERROR_HINTS.get(code, "")
+
+    SEND_REFUSED_HINT = "log.ebpf_send_refused"
+
+    @classmethod
+    def send_refused_hint(cls, exc):
+        """Why the session must stop, when the kernel will not let it put packets back.
+
+        eBPFDivert sends a packet back through a raw socket, so without CAP_NET_RAW
+        the open SUCCEEDS and every send is refused - MEASURED 2026-11-03 (Ubuntu
+        26.04, WSL): the session said "Running", held all of its target's traffic and
+        ended "ok". The cause is certain only when this process lacks that capability;
+        a send refused while it has it is something else (a firewall rule drops what
+        it sends), and stays a lost packet the session's warning reports. An i18n key,
+        "" for "keep going".
+        """
+        if getattr(exc, "errno", None) not in _REFUSED:
+            return ""
+        return "" if _capabilities("/", None) & (1 << _CAP_NET_RAW) else cls.SEND_REFUSED_HINT
 
     PLATFORM_NOTE = " - capture is experimental (eBPFDivert), and --simulate needs none of the rows below"
 
@@ -398,7 +431,7 @@ class EBPFDivertBackend:
 
     @staticmethod
     def has_capture_rights():
-        """Root, or CAP_BPF + CAP_NET_ADMIN + CAP_NET_RAW - the ``--doctor`` row's answer.
+        """The capabilities a capture needs (``_rights``) - the ``--doctor`` row's answer.
 
         A hint, not the authority: the open itself decides (``is_permission_error``),
         and the kernel can refuse root too. Asked by the window for its red line.
@@ -407,15 +440,28 @@ class EBPFDivertBackend:
 
     @staticmethod
     def startup_note(has_rights):
-        return "log.ebpf_note_experimental" if has_rights else "log.ebpf_note_root"
+        if has_rights:
+            return "log.ebpf_note_experimental"
+        return "log.ebpf_note_root_without_caps" if _euid() == 0 else "log.ebpf_note_root"
 
     @staticmethod
     def rights_banner():
-        return "warn.ebpf_not_root"
+        return "warn.ebpf_root_without_caps" if _euid() == 0 else "warn.ebpf_not_root"
 
 
-# Capability bits (linux/capability.h) a capture needs without root.
-_CAP_NET_ADMIN, _CAP_NET_RAW, _CAP_BPF = 12, 13, 39
+# Capability bits (linux/capability.h).
+_CAP_NET_ADMIN, _CAP_NET_RAW, _CAP_SYS_ADMIN, _CAP_PERFMON, _CAP_BPF = 12, 13, 21, 38, 39
+# What a capture needs. MEASURED 2026-11-03 on Ubuntu 26.04 (Linux 7.0) and in WSL
+# (6.18), every combination, each through a whole session: CAP_NET_ADMIN attaches the
+# programs; CAP_BPF with CAP_PERFMON - or CAP_SYS_ADMIN, which covers both - loads them
+# (without CAP_PERFMON the open is refused, EACCES); CAP_NET_RAW puts packets back
+# (without it the open succeeds and every send is refused). The three this program
+# named before, CAP_BPF + CAP_NET_ADMIN + CAP_NET_RAW, open nothing. The first set is
+# the one the texts name; the second is accepted because it works.
+_SENDS = (1 << _CAP_NET_ADMIN) | (1 << _CAP_NET_RAW)
+_CAPTURE_RIGHTS = ((_SENDS | (1 << _CAP_BPF) | (1 << _CAP_PERFMON),
+                    "CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN and CAP_NET_RAW"),
+                   (_SENDS | (1 << _CAP_SYS_ADMIN), "CAP_SYS_ADMIN, CAP_NET_ADMIN and CAP_NET_RAW"))
 
 # What eBPFDivert's open answers when it is not allowed.
 _REFUSED = (errno.EPERM, errno.EACCES)
@@ -430,36 +476,51 @@ def _euid():
     return geteuid() if geteuid is not None else None
 
 
-def _rights(euid, root, status):
-    """What lets this process capture - ``"root"`` or the three capabilities - or ``None``.
-
-    ONE answer for ``--doctor``'s row and the window's red line, so the two cannot
-    disagree about the same process.
-    """
-    if euid == 0:
-        return "root"
+def _capabilities(root, status):
+    """This process's effective capabilities (``CapEff``) as bits; 0 when unreadable."""
     if status is None:
         try:
             with open(os.path.join(root, "proc", "self", "status"), encoding="ascii") as f:
                 status = f.read()
         except OSError:
             status = ""
-    caps = 0
     for line in status.splitlines():
         if line.startswith("CapEff:"):
-            caps = int(line.split(":", 1)[1].strip() or "0", 16)
-    needed = (1 << _CAP_NET_ADMIN) | (1 << _CAP_NET_RAW) | (1 << _CAP_BPF)
-    if caps & needed == needed:
-        return "CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW"
+            return int(line.split(":", 1)[1].strip() or "0", 16)
+    return 0
+
+
+def _rights(euid, root, status):
+    """What lets this process capture - ``"root"`` or the capabilities - or ``None``.
+
+    ONE answer for ``--doctor``'s row and the window's red line, so the two cannot
+    disagree about the same process. Root is asked for its capabilities too: a
+    container's root holds neither CAP_BPF nor CAP_NET_ADMIN unless it was started
+    with them, and MEASURED (root with none) the row said "ok" over an open that
+    the kernel refused.
+    """
+    caps = _capabilities(root, status)
+    for needed, names in _CAPTURE_RIGHTS:
+        if caps & needed == needed:
+            return "root" if euid == 0 else names
     return None
+
+
+def _root_without_rights():
+    """Root, and still without what a capture needs: whatever started it took that away."""
+    return _euid() == 0 and _rights(0, "/", None) is None
 
 
 def _privileges_row(euid, root, status):
     how = _rights(euid, root, status)
     if how is not None:
         return ("privileges", "ok", how)
-    return ("privileges", "fail", "not root, and without CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW - "
-                                  "a capture session cannot start. Run it with sudo")
+    if euid == 0:
+        return ("privileges", "fail", f"root, but without {_CAPTURE_RIGHTS[0][1]} - whatever "
+                                      "started it (a container, a service) took them away, so "
+                                      "a capture session cannot start")
+    return ("privileges", "fail", "not root, and without CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN and "
+                                  "CAP_NET_RAW - a capture session cannot start. Run it with sudo")
 
 
 def _pydivert_row():

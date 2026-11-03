@@ -2034,6 +2034,23 @@ class BeanEngine:
         self._rst_warned = now
         self.log(f"{T('log.rst_inject_failed')} ({exc})")
 
+    def _send_failed(self, exc, session):
+        """A packet could not be put back: warn - or stop, when none ever will be.
+
+        The backend knows when the system will refuse every packet after this one too
+        (Linux: no CAP_NET_RAW). Kept going, such a session held all of its target's
+        traffic under "Running" and ended "ok" (MEASURED 2026-11-03), so it stops and
+        says why. Blocking, as the capture thread's fault is: the first packet can fail
+        while ``start()`` still holds ``_stop_lock``, and a stop that bowed out then
+        said "the session was stopped" over a session that went on (measured in the
+        test, the second packet stopped it).
+        """
+        refused = capture_backend.current().send_refused_hint(exc)
+        if refused:
+            self._fail_stop(exc, lead=(T(refused),), session=session)
+        else:
+            self._warn_send_failed(exc)
+
     def _warn_send_failed(self, exc):
         """Say - once every SEND_WARN_S - that injection is failing, and how often."""
         now = time.monotonic()
@@ -2258,5 +2275,5 @@ class BeanEngine:
                 # these numbers honest. Every other way a packet can die has a
                 # counter; this one only had a log line.
                 if self._release_lost(copy, key, "drop_send") and session.live:
-                    self._warn_send_failed(e)
+                    self._send_failed(e, session)
             session.busy = None

@@ -1167,6 +1167,51 @@ def test_failed_injections_do_not_flood_the_log():
           "WARN" in kinds, f"({kinds})")
 
 
+class PermissionRefusingDivert(FakeDivert):
+    """eBPFDivert without CAP_NET_RAW: the open succeeds and every send is refused."""
+
+    def send(self, p, recalculate_checksum=True):
+        raise PermissionError(1, "ebpfdivert_send: Operation not permitted")
+
+
+def test_a_send_refused_for_good_stops_the_session_and_says_why(monkeypatch):
+    """MEASURED 2026-11-03 (Ubuntu 26.04, WSL): without CAP_NET_RAW the session said
+    "Running", held every packet of its target and ended "ok", while its warning said
+    to check the connection. When the backend knows the refusal is for good, the first
+    one stops the session as a fault, with the backend's reason; a send the backend
+    cannot explain stays a lost packet the session goes on past."""
+    from beantester.i18n import T
+
+    class _NoRawSocket(capture_backend.WinDivertBackend):
+        @staticmethod
+        def send_refused_hint(exc):
+            return "log.ebpf_send_refused" if isinstance(exc, PermissionError) else ""
+    monkeypatch.setattr(capture_backend, "current", lambda: _NoRawSocket())
+    lines = []
+    sh = BeanEngine(log_fn=lines.append)
+    sh.start("test", divert=PermissionRefusingDivert(
+        [FakePacket(size=100, port=7990 + i) for i in range(50)]))
+    stopped = wait_until(lambda: not sh.is_running(), timeout=10)
+    s = sh.stats_snapshot()
+    sh.stop()
+    check("refused for good: the session stopped by itself", stopped)
+    check("as a fault", sh.stop_reason == "fault" and sh.fault, f"({sh.stop_reason}, {sh.fault})")
+    check("at the first refusal, not after every packet", s["drop_send"] == 1,
+          f"(drop_send={s['drop_send']})")
+    check("saying why", any(T("log.ebpf_send_refused") in ln for ln in lines), f"({lines[-4:]})")
+    check("and with the system's own words in the fault line",
+          any("Operation not permitted" in ln for ln in lines), f"({lines[-4:]})")
+
+    lines.clear()
+    sh = BeanEngine(log_fn=lines.append)
+    sh.start("test", divert=RefusingDivert([FakePacket(size=100, port=7995) for _ in range(20)]))
+    wait_until(lambda: sh.stats_snapshot()["drop_send"] == 20, timeout=10)
+    running = sh.is_running()
+    sh.stop()
+    check("a failure the backend cannot explain: the session goes on", running)
+    check("and only warns", not any(T("log.ebpf_send_refused") in ln for ln in lines))
+
+
 def test_a_second_scenario_stops_the_first_instead_of_orphaning_it():
     """Overwriting `_scenario_runner` left the old thread alive and unreachable.
 

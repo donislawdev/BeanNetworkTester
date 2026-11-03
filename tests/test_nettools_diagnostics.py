@@ -247,15 +247,18 @@ def test_why_the_driver_cannot_be_cleaned_up_from_here(monkeypatch):
         monkeypatch.setattr(driver, "is_admin", lambda a=admin: a)
         got = diagnostics.cleanup_blocker()
         check(f"windows={windows} admin={admin}", got == expected, f"({got!r})")
-    # Linux: nothing to clean - the kernel does it (measured: unregister() after a
-    # SIGKILL changed nothing, 2.6 s either way).
+    # Linux: nothing to clean (measured: traffic flows ~3 s after a SIGKILL, and the
+    # next session takes the programs it left off).
     monkeypatch.setattr(capture_backend, "_CURRENT", capture_backend._EBPFDIVERT)
     monkeypatch.setattr(driver, "is_windows", lambda: False)
     check("Linux says why there is nothing to clean",
           diagnostics.cleanup_blocker() == "tools.diagnostics.clean_linux")
+    line = capture_backend.EBPFDivertBackend.CLEANUP_LINE
     check("and the command line says it in its own words",
-          driver.cleanup_driver() == [capture_backend.EBPFDivertBackend.CLEANUP_LINE]
-          and "kernel" in capture_backend.EBPFDivertBackend.CLEANUP_LINE)
+          driver.cleanup_driver() == [line] and "3 seconds" in line and "next session" in line,
+          f"({line})")
+    check("never that the kernel removes the programs: it does not (measured, 60 s)",
+          "kernel removes" not in line, f"({line})")
 
 
 def test_the_window_cleans_up_with_its_own_marker_let_go_first(monkeypatch):
@@ -325,7 +328,7 @@ def test_the_linux_help_names_every_row_that_can_stop_a_session(monkeypatch):
     # too. The sheet once said "needs root" alone (CodeRabbit on #282).
     every_bit = "CapEff:\t" + format((1 << 64) - 1, "016x") + "\n"
     caps = re.findall(r"CAP_[A-Z_]+", capture_backend._rights(1000, ROOT, every_bit) or "")
-    check("the rights row names the capabilities it accepts", len(caps) == 3, f"({caps})")
+    check("the rights row names the capabilities it accepts", len(caps) == 4, f"({caps})")
     for code in LANGS:
         texts = _texts(code)
         sheet = texts["tools.diagnostics.help_linux"]

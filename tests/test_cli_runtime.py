@@ -536,16 +536,21 @@ def test_linux_answers_an_unprivileged_open_with_permission(monkeypatch):
     check("Windows: no sudo advice", "sudo" not in errs["windivert"], f"({errs['windivert']!r})")
 
     # Root refused by the kernel itself (lockdown, an LSM policy): sudo would change
-    # nothing, so it is a RUNTIME failure that says what it is.
+    # nothing, so it is a RUNTIME failure that says what it is. Root that a container
+    # started without the capabilities is the same exit, told its own reason.
     monkeypatch.setattr(capture_backend, "_euid", lambda: 0)
     monkeypatch.setattr(capture_backend, "current", lambda: capture_backend.EBPFDivertBackend())
-    out, err = io.StringIO(), io.StringIO()
-    clock = FakeClock()
-    code = run_cli(["--loss", "5", "--duration", "1"], sleep=clock.sleep, clock=clock,
-                   engine=_RefusedOpen(), out=out, err=err)
-    check("Linux as root: EPERM at the open -> RUNTIME", code == exitcodes.RUNTIME, f"(code={code})")
-    check("and it names the refusal, not sudo", T("dialogs.ebpf_refused_as_root") in err.getvalue()
-          and T("dialogs.ebpf_needs_root") not in err.getvalue(), f"({err.getvalue()!r})")
+    for caps, said in (((1 << 41) - 1, "dialogs.ebpf_refused_as_root"),
+                       (0, "dialogs.ebpf_root_without_caps")):
+        monkeypatch.setattr(capture_backend, "_capabilities", lambda root, status, c=caps: c)
+        out, err = io.StringIO(), io.StringIO()
+        clock = FakeClock()
+        code = run_cli(["--loss", "5", "--duration", "1"], sleep=clock.sleep, clock=clock,
+                       engine=_RefusedOpen(), out=out, err=err)
+        check(f"Linux as root ({said}): EPERM at the open -> RUNTIME", code == exitcodes.RUNTIME,
+              f"(code={code})")
+        check("and it names the refusal, not sudo", T(said) in err.getvalue()
+              and T("dialogs.ebpf_needs_root") not in err.getvalue(), f"({err.getvalue()!r})")
 
 
 def test_the_console_also_says_what_to_do_about_a_driver_that_will_not_open(monkeypatch):
