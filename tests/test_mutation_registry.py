@@ -4682,9 +4682,17 @@ MUTATIONS = [
         # [::] for IPv6 alone lets the IPv4 bind through: it holds nothing there.
         "label": "portcheck: a server on [::] is named on IPv4 although the bind worked",
         "file": "beantester/nettools/portcheck.py",
-        "old": "    if not found and family == 4 and code in IN_USE_CODES:\n",
-        "new": "    if not found and family == 4:\n",
+        "old": "    if (not WINDOWS and not found and family == 4 and code in IN_USE_CODES\n",
+        "new": "    if (not WINDOWS and not found and family == 4\n",
         "test": "test_linux_lists_a_dual_stack_server_once_and_its_refusal_names_it",
+    },
+    {
+        # Windows lists a dual-stack socket under IPv4 too: no IPv4 row there is none.
+        "label": "portcheck: Windows names a socket on [::] for an IPv4 refusal",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "    if (not WINDOWS and not found and family == 4",
+        "new": "    if (not found and family == 4",
+        "test": "test_windows_never_names_a_socket_on_any_for_an_ipv4_refusal",
     },
     {
         "label": "portcheck: a socket on ::1 counts as one on [::]",
@@ -4704,9 +4712,25 @@ MUTATIONS = [
         # A dual-stack server's closed connections leave TIME_WAIT beside it.
         "label": "portcheck: TIME_WAIT beside a server on [::] hides the server",
         "file": "beantester/nettools/portcheck.py",
-        "old": "    if not found and family == 4 and code in IN_USE_CODES:\n",
-        "new": "    if not found and family == 4 and code in IN_USE_CODES and where not in closing:\n",
+        "old": "            and where not in native_closing):\n",
+        "new": "            and where not in closing):\n",
         "test": "test_an_ipv4_address_written_the_ipv6_way_holds_ipv4",
+    },
+    {
+        # The ::ffff: TIME_WAIT a dual-stack server leaves is not an IPv4 socket's.
+        "label": "portcheck: a dual-stack server's own TIME_WAIT hides the server",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "            if s.family == 4:\n",
+        "new": "            if family == 4:\n",
+        "test": "test_an_ipv4_address_written_the_ipv6_way_holds_ipv4",
+    },
+    {
+        # MEASURED 2026-11-04: [::] for IPv6 alone beside an IPv4 connection's TIME_WAIT.
+        "label": "portcheck: an IPv4 TIME_WAIT's refusal names a server on [::]",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "                native_closing.add(where)\n",
+        "new": "                pass\n",
+        "test": "test_an_ipv4_time_wait_explains_a_refusal_beside_a_server_on_any",
     },
     {
         "label": "portcheck: the probe leaves its socket open",

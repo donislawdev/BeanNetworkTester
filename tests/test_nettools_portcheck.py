@@ -29,8 +29,9 @@ def sock(port, proto="TCP", family=4, state="LISTEN", pid=1234, proc="server.exe
 
 
 def run(text, answers=None, rows=(), protocols=pc.PROTOCOLS, families=pc.FAMILIES,
-        calls=None):
-    """``check`` with a stand-in bind (``answers``: (proto, family, port) -> code, else 0)."""
+        calls=None, failed=()):
+    """``check`` with a stand-in bind (``answers``: (proto, family, port) -> code, else 0)
+    and table (``failed``: the tables that did not answer)."""
     calls = [] if calls is None else calls
 
     def bind(proto, family, port):
@@ -39,7 +40,7 @@ def run(text, answers=None, rows=(), protocols=pc.PROTOCOLS, families=pc.FAMILIE
 
     def read():
         calls.append(("read",))
-        return sk.Snapshot(tuple(rows), (), 0.0, 0)
+        return sk.Snapshot(tuple(rows), tuple(failed), 0.0, 0)
 
     return pc.check(pc.parse(text), protocols, families, bind=bind, read=read)
 
@@ -71,11 +72,12 @@ def test_a_holder_no_bind_can_see_still_holds_the_port():
     check("and only for its own protocol", seen[(3000, "UDP", 4)] == pc.FREE, f"({seen})")
 
 
-def test_linux_lists_a_dual_stack_server_once_and_its_refusal_names_it():
+def test_linux_lists_a_dual_stack_server_once_and_its_refusal_names_it(monkeypatch):
     """MEASURED 2026-11-03 (Ubuntu 26.04 and WSL, the release rig): a server on [::] that
     takes IPv4 too is in Linux's table once, under IPv6, and a bind on 127.0.0.1 beside it
     is refused. Its IPv4 row read "in use (owner not shown)" while the table knew the
     owner. One on [::] for IPv6 alone lets that bind through, and holds nothing on IPv4."""
+    monkeypatch.setattr(pc, "WINDOWS", False)
     dual = [sock(3000, family=6, ip="::", proc="node"),
             sock(53, proto="UDP", family=6, state="", ip="::", proc="dnsd")]
     refused = {("TCP", 4, 3000): errno.EADDRINUSE, ("UDP", 4, 53): errno.EADDRINUSE}
@@ -97,11 +99,12 @@ def test_linux_lists_a_dual_stack_server_once_and_its_refusal_names_it():
           verdicts(elsewhere)[(3000, "TCP", 4)] == pc.UNSEEN, f"({verdicts(elsewhere)})")
 
 
-def test_an_ipv4_address_written_the_ipv6_way_holds_ipv4():
+def test_an_ipv4_address_written_the_ipv6_way_holds_ipv4(monkeypatch):
     """Linux lists the connections a dual-stack server accepted from IPv4 under IPv6, as
     ::ffff:127.0.0.1 - and their TIME_WAIT, which the server's own closes leave behind.
     MEASURED 2026-11-03 (the release rig): once that server stopped, its IPv4 port read
     "in use (owner not shown)" instead of closing."""
+    monkeypatch.setattr(pc, "WINDOWS", False)
     mapped = "::ffff:127.0.0.1"
     talking = run("4000", {("TCP", 4, 4000): errno.EADDRINUSE},
                   rows=[sock(4000, family=6, ip=mapped, state="ESTABLISHED", pid=77, proc="app")])
@@ -119,6 +122,35 @@ def test_an_ipv4_address_written_the_ipv6_way_holds_ipv4():
     v4 = next(r for r in still if (r.proto, r.family) == ("TCP", 4))
     check("while the server still listens, the port is in use by it, not closing",
           v4.verdict == pc.IN_USE and v4.owners == ((1234, "node"),), f"({v4})")
+
+
+def test_an_ipv4_time_wait_explains_a_refusal_beside_a_server_on_any(monkeypatch):
+    """An IPv4 connection's TIME_WAIT refuses the IPv4 bind by itself, and the table cannot
+    tell [::] for both IP versions from [::] for IPv6 alone - MEASURED 2026-11-04 (the
+    release rig): with one for IPv6 alone there, the IPv4 row named that server."""
+    monkeypatch.setattr(pc, "WINDOWS", False)
+    rows = [sock(4100, state="TIME_WAIT", pid=0, proc=""),
+            sock(4100, family=6, ip="::", proc="nginx")]
+    found = {(r.port, r.proto, r.family): r
+             for r in run("4100", {("TCP", 4, 4100): errno.EADDRINUSE}, rows=rows).rows}
+    v4 = found[(4100, "TCP", 4)]
+    check("closing, and the server on [::] is not named for IPv4",
+          v4.verdict == pc.CLOSING and not v4.owners, f"({v4})")
+    check("it holds its own IPv6 port", found[(4100, "TCP", 6)].owners == ((1234, "nginx"),),
+          f"({found[(4100, 'TCP', 6)]})")
+
+
+def test_windows_never_names_a_socket_on_any_for_an_ipv4_refusal(monkeypatch):
+    """Windows lists a server on [::] for both IP versions under IPv4 too (MEASURED
+    2026-09-24), so an IPv4 refusal with no IPv4 row is never that server's - and the
+    IPv4 table may be the one that did not answer."""
+    monkeypatch.setattr(pc, "WINDOWS", True)
+    for failed in ((), ("tcp/v4",)):
+        result = run("3000", {("TCP", 4, 3000): 10048}, failed=failed,
+                     rows=[sock(3000, family=6, ip="::", proc="web.exe")])
+        v4 = next(r for r in result.rows if (r.proto, r.family) == ("TCP", 4))
+        check(f"tables failed {failed}: in use, owner not shown",
+              v4.verdict == pc.UNSEEN and not v4.owners, f"({v4})")
 
 
 def test_a_holder_counts_only_for_its_own_protocol_and_ip_version():

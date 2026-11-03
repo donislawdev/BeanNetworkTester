@@ -11,7 +11,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   server on `[::]` that takes IPv4 connections too, as Node does, showed its IPv4 row as
   "In use (owner not shown)". That row now names the program, as on Windows. Once such a
   server stops, its IPv4 port reads Closing while its last connections finish, like its
-  IPv6 port.
+  IPv6 port. While an earlier IPv4 connection on the port is still closing, the IPv4 row
+  reads Closing too, and a server on `[::]` that takes IPv6 only is not named there.
 
 - **Linux, experimental: Ping over IPv6 shows the real round trip.** Each reply read up to
   about 10 ms too long: the time the program spent preparing the request was counted as time

@@ -22,10 +22,13 @@ How, and why this way - measured 2026-09-24 on Windows 11 and on a Windows Serve
 * **TIME_WAIT holds nothing** on Windows: a bind succeeds beside it, so its rows
   are not owners. Where a bind DOES fail beside one (Linux), the port is closing.
 * **Linux lists a dual-stack socket once**, under IPv6: the server on ``[::]`` and
-  the connections it accepted from IPv4, which carry ``::ffff:127.0.0.1``. Windows
-  lists them under IPv4 too. So an ``::ffff:`` address counts as IPv4, and an IPv4
-  bind refused beside a socket on ``[::]`` names that socket - one for IPv6 alone lets
-  the bind through (MEASURED 2026-11-03, Ubuntu 26.04 and WSL, the release rig).
+  the connections it accepted from IPv4, which carry ``::ffff:127.0.0.1``. So an
+  ``::ffff:`` address counts as IPv4, and on Linux an IPv4 bind refused beside a
+  socket on ``[::]`` names that socket - one for IPv6 alone lets the bind through
+  (MEASURED 2026-11-03, Ubuntu 26.04 and WSL, the release rig). Not beside an IPv4
+  connection's TIME_WAIT, which refuses the bind by itself: the table cannot tell the
+  two kinds of ``[::]`` apart (MEASURED 2026-11-04, the same rig). Windows lists a
+  dual-stack socket under IPv4 too, so there a socket on ``[::]`` is never asked.
 * WSAEACCES is not always a reservation (Learn: an exclusive socket of another
   program, a wildcard socket of another account) - but those are in the table,
   and a row there wins. Off Windows, EACCES is a port this account may not use
@@ -194,19 +197,22 @@ def _ask_family(bind, family, protocols, wanted):
 
 
 def _holders(snapshot):
-    """``(live, closing, wide)``: owners by ``(port, proto, family)``, where only
-    TIME_WAIT sits, and the owners on the IPv6 wildcard address by ``(port, proto)``."""
-    live, closing, wide = {}, set(), {}
+    """``(live, closing, native_closing, wide)``: owners by ``(port, proto, family)``,
+    where TIME_WAIT sits, where an IPv4 socket's own sits (not an ``::ffff:`` one), and
+    the owners on the IPv6 wildcard address by ``(port, proto)``."""
+    live, closing, native_closing, wide = {}, set(), set(), {}
     for s in snapshot.sockets:
         family = _version(s)
         where = (s.local_port, s.proto, family)
         if s.state == "TIME_WAIT":
             closing.add(where)
+            if s.family == 4:
+                native_closing.add(where)
             continue
         live.setdefault(where, set()).add((s.pid, s.proc))
         if family == 6 and s.local_ip == "::":
             wide.setdefault((s.local_port, s.proto), set()).add((s.pid, s.proc))
-    return live, closing, wide
+    return live, closing, native_closing, wide
 
 
 def _version(s):
@@ -218,13 +224,15 @@ def _version(s):
 
 
 def _row(where, code, held):
-    live, closing, wide = held
+    live, closing, native_closing, wide = held
     port, proto, family = where
     found = live.get(where, ())
-    if not found and family == 4 and code in IN_USE_CODES:
+    if (not WINDOWS and not found and family == 4 and code in IN_USE_CODES
+            and where not in native_closing):
         # Refused, and the table names no IPv4 holder: a socket on [::] that takes IPv4
-        # too, listed under IPv6 alone. Asked before TIME_WAIT, which such a server's
-        # closed connections leave behind beside it.
+        # too, listed under IPv6 alone. Asked before the TIME_WAIT such a server's own
+        # closed connections leave beside it (::ffff:), never beside an IPv4 socket's,
+        # which explains the refusal while [::] may be for IPv6 alone.
         found = wide.get((port, proto), ())
     owners = tuple(sorted(found, key=lambda o: (o[0] is None, o[0] or 0, o[1])))
     return Row(f"{port}|{proto}|{family}", port, proto, family,
