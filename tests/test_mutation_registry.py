@@ -8978,6 +8978,43 @@ MUTATIONS = [
         "test": "test_a_round_trip_windows_stopped_measuring_while_data_went_out_is_said_to_be_old",
     },
     {
+        # MEASURED 2026-11-03: DataBytesOut ran 0.1-5% above the data that went out.
+        "label": "tcp health: data sent is Windows' own DataBytesOut again",
+        "file": "beantester/tcpestats.py",
+        "old": "                  path.CurMss, data.ThruBytesAcked + in_flight + path.BytesRetrans,\n",
+        "new": "                  path.CurMss, data.DataBytesOut,\n",
+        "test": "test_data_sent_is_what_went_out_not_windows_own_byte_count",
+    },
+    {
+        "label": "tcp health: data sent leaves out the data not acknowledged yet",
+        "file": "beantester/tcpestats.py",
+        "old": "                  path.CurMss, data.ThruBytesAcked + in_flight + path.BytesRetrans,\n",
+        "new": "                  path.CurMss, data.ThruBytesAcked + path.BytesRetrans,\n",
+        "test": "test_data_sent_is_what_went_out_not_windows_own_byte_count",
+    },
+    {
+        "label": "tcp health: the data in flight ignores the sequence numbers' wrap",
+        "file": "beantester/tcpestats.py",
+        "old": "    in_flight = (data.SndMax - data.SndUna) % 2 ** 32",
+        "new": "    in_flight = data.SndMax - data.SndUna",
+        "test": "test_data_sent_is_what_went_out_not_windows_own_byte_count",
+    },
+    {
+        "label": "tcp health: a resend counter's wrap reads as a new connection",
+        "file": "beantester/nettools/tcphealth.py",
+        "old": "    return _sent_once(new) < _sent_once(old) or new.bytes_in < old.bytes_in\n",
+        "new": "    return new.bytes_out < old.bytes_out or new.bytes_in < old.bytes_in\n",
+        "test": "test_a_resend_counter_that_wraps_is_neither_a_new_connection_nor_a_huge_number",
+    },
+    {
+        "label": "tcp health: data sent is one counter across the resends' wrap",
+        "file": "beantester/nettools/tcphealth.py",
+        "old": "        once = (_sent_once(self.last) - _sent_once(self.first)) % 2 ** 64\n"
+               "        return once + self.since_watching(\"resent_bytes\")\n",
+        "new": "        return self.since_watching(\"bytes_out\")\n",
+        "test": "test_a_resend_counter_that_wraps_is_neither_a_new_connection_nor_a_huge_number",
+    },
+    {
         "label": "tcp health: the list is drawn without the rows' colours",
         "file": "beantester/gui/toolbox/tcphealth.py",
         "old": "                             tag_of=tcphealth.tag_of)\n",

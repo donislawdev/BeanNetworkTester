@@ -56,8 +56,13 @@ and a packet capture on the peer as the controls:
   to 289 segments were sent again (on the wire, and the engine's drop count).
   ``BytesRetrans`` is exact (24 x 200 B; 289 x MSS = 282 drops + 5 probes + 2 at the
   session's end), so resends are said in bytes and the segment count is not read.
-* ``DataBytesOut`` / ``DataBytesIn`` count data sent again and received twice too
-  (19 800 B for 15 000 B the application sent).
+* ``DataBytesIn`` counts data received twice too. The data sent is NOT ``DataBytesOut``:
+  MEASURED 2026-11-03 on Windows Server 2025 against a Linux peer, it ran 0.1% above what
+  went out with no loss and 2-5% above through 2% loss (4 404 110 B where this program's
+  session counted 2960 packets carrying 4 318 413 B of data, on average more than a whole
+  segment per packet). The data acknowledged (``ThruBytesAcked``), the data not
+  acknowledged yet (``SndMax - SndUna``) and the data sent again (``BytesRetrans``) are
+  what went out, to the byte.
 
 On Linux the kernel keeps ``struct tcp_info`` for every TCP socket, from the moment it
 opened, and gives it through sock_diag (``sockdiag.lookup``) - nothing is turned on, and
@@ -189,10 +194,12 @@ def _sample(path, data):
     def rtt(value):
         return value if measured and value != UNSET else None
 
+    in_flight = (data.SndMax - data.SndUna) % 2 ** 32       # sequence numbers wrap
     return Sample(rtt(path.SmoothedRtt), rtt(path.SampleRtt), rtt(path.MinRtt),
                   rtt(path.MaxRtt), rtt(path.RttVar), path.CurRto,
                   path.BytesRetrans, path.Timeouts, path.FastRetran, path.DupAcksIn,
-                  path.CurMss, data.DataBytesOut, data.DataBytesIn, path.CountRtt)
+                  path.CurMss, data.ThruBytesAcked + in_flight + path.BytesRetrans,
+                  data.DataBytesIn, path.CountRtt)
 
 
 # -- the binding --------------------------------------------------------------------- #

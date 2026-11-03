@@ -168,6 +168,15 @@ class Watch:
         sent = self.last.bytes_out != self.sent_when_measured
         return waited if sent and waited >= STALE_S else 0
 
+    def data_sent(self):
+        """The data sent since the first reading: sent once, and sent again - each at its
+        own width, as their sum is not one counter: Windows' resends count in 32 bits
+        (``BytesRetrans``) and wrap long before the 64-bit rest."""
+        if self.last is None:
+            return None
+        once = (_sent_once(self.last) - _sent_once(self.first)) % 2 ** 64
+        return once + self.since_watching("resent_bytes")
+
     def since_previous(self, field):
         if self.last is None or self.previous is None:
             return 0
@@ -179,10 +188,16 @@ def _span(sample, field):
     return 2 ** sample.widths.get(field, 32)
 
 
+def _sent_once(sample):
+    """The data sent for the first time: the data sent, less what of it was sent again."""
+    return sample.bytes_out - sample.resent_bytes
+
+
 def _went_back(old, new):
-    """A 64-bit byte counter never goes down on one connection: when it does, the
-    same four numbers now name a new connection."""
-    return new.bytes_out < old.bytes_out or new.bytes_in < old.bytes_in
+    """The data sent once and the data received never go down on one connection: when
+    they do, the same four numbers now name a new connection. Not the data sent - the
+    resends in it wrap at 32 bits on Windows."""
+    return _sent_once(new) < _sent_once(old) or new.bytes_in < old.bytes_in
 
 
 class Watchlist:
@@ -376,7 +391,7 @@ def details(watch):
     last = watch.last
     if last is None:
         return out
-    sent, received = watch.since_watching("bytes_out"), watch.since_watching("bytes_in")
+    sent, received = watch.data_sent(), watch.since_watching("bytes_in")
     unmeasured = watch.unmeasured_for()
     # The Note column says one thing: that the round trip is not measured. What a row
     # means is the help's - every other note was cut at the smallest window.
@@ -466,7 +481,7 @@ def report_lines(watchlist):
                   ("timeouts", f"timeouts {watch.since_watching('timeouts')}"),
                   ("fast_resends", f"fast resends {watch.since_watching('fast_resends')}"),
                   ("duplicate_acks", f"duplicate ACKs {watch.since_watching('duplicate_acks')}"),
-                  ("bytes_out", f"sent {watch.since_watching('bytes_out')} B"),
+                  ("bytes_out", f"sent {watch.data_sent()} B"),
                   ("bytes_in", f"received {watch.since_watching('bytes_in')} B")]
         lines.append("  since watching ("
                      + time.strftime("%H:%M:%S", time.localtime(watch.since)) + "): "
