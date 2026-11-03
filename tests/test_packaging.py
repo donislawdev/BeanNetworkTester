@@ -140,6 +140,36 @@ def test_the_winget_manifest_keeps_the_exe_with_its_siblings(tmp_path, monkeypat
           "(an alias implies the symlink this field exists to avoid)")
 
 
+def test_every_winget_manifest_names_the_schema_the_pipeline_takes(tmp_path, monkeypatch):
+    """All three files carry one ManifestVersion, and it is not an outdated one.
+
+    The number was moved back once already (1.28.0 to 1.12.0, see WINGET_SCHEMA), so
+    the floor is what keeps a careless "fix" from reaching a submission: an outdated
+    ManifestVersion is something a reviewer can send it back for.
+    """
+    floor = (1, 28, 0)
+    check(f"WINGET_SCHEMA is not older than {'.'.join(map(str, floor))}",
+          tuple(int(part) for part in bp.WINGET_SCHEMA.split(".")) >= floor,
+          f"({bp.WINGET_SCHEMA})")
+    # Each file has its own schema, so a header naming another file's passes nothing.
+    kinds = {"winget/installer.yaml": "installer", "winget/locale.en-US.yaml": "defaultLocale",
+             "winget/version.yaml": "version"}
+    rendered = _rendered(tmp_path, monkeypatch)
+    manifests = {name: text for name, text in rendered.items() if name.startswith("winget/")}
+    check("the three WinGet manifests are rendered", sorted(manifests) == sorted(kinds),
+          f"({sorted(manifests)})")
+    for name, text in sorted(manifests.items()):
+        # WinGet refuses a field given twice, so one right line beside a wrong one fails.
+        versions = [line for line in _code(text) if line.startswith("ManifestVersion:")]
+        check(f"{name} carries ManifestVersion {bp.WINGET_SCHEMA}, once",
+              versions == [f"ManifestVersion: {bp.WINGET_SCHEMA}"], f"({versions})")
+        headers = [line for line in text.splitlines()
+                   if line.startswith("# yaml-language-server: $schema=")]
+        url = f"https://aka.ms/winget-manifest.{kinds.get(name)}.{bp.WINGET_SCHEMA}.schema.json"
+        check(f"{name} points its editor at its own schema",
+              headers == [f"# yaml-language-server: $schema={url}"], f"({headers})")
+
+
 def test_the_nested_path_is_the_one_the_release_builds(tmp_path, monkeypatch):
     installer = _rendered(tmp_path, monkeypatch)["winget/installer.yaml"]
     expected = f"RelativeFilePath: {appinfo.TOOL_ID}/{appinfo.EXE_NAME}"

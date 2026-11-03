@@ -46,21 +46,25 @@ WINGET_ID = f"{appinfo.AUTHOR}.{appinfo.TOOL_ID}"
 # Pinned rather than "latest": a schema version is a contract, and a manifest that
 # silently follows a moving target fails in the reviewer's CI, not ours.
 #
-# 🔴 1.12.0, and the way this number was got wrong once is the useful part. It was
-# 1.28.0 from 2026-08-12 to 2026-08-25, read from the folder listing under
+# 🔴 1.28.0, and the way this number was got wrong once is the useful part. It was
+# 1.28.0 from 2026-08-12 to 2026-08-25 too, read from the folder listing under
 # `microsoft/winget-pkgs/doc/manifest/schema` - the newest directory there. Both
 # `winget validate` and the local install accepted it. The SUBMISSION did not: the
 # first pull request came back with `Manifest-Version-Error` from "02. Manifest
-# Validation", within minutes.
+# Validation", within minutes, and 0.8.0 went out on 1.12.0.
 #
-# What the pipeline actually accepts is what MERGED manifests carry, and on
-# 2026-08-25 the ones landing on master carried 1.12.0. So the authoritative source
-# for this field is other people's accepted submissions, not the documentation tree -
-# a schema can be documented before the validation service takes it.
-# Checked that 1.12.0 still defines every field this manifest needs:
+# What the pipeline actually accepts is what MERGED manifests carry, so the
+# authoritative source for this field is other people's accepted submissions, not
+# the documentation tree - a schema can be documented before the validation service
+# takes it. On 2026-08-25 the manifests landing on master carried 1.12.0; on
+# 2026-11-02 they carried 1.28.0 beside 1.12.0 and older, so the pipeline takes
+# 1.28.0 now. This is the newest one it takes, because an outdated ManifestVersion
+# is something a reviewer can send a submission back for. Re-read the merged
+# manifests before raising this again.
+# Checked that 1.28.0 defines every key of the three templates, among them
 # `NestedInstallerType`, `NestedInstallerFiles`, `ArchiveBinariesDependOnPath` and
 # `ElevationRequirement`.
-WINGET_SCHEMA = "1.12.0"
+WINGET_SCHEMA = "1.28.0"
 
 # 🔴 The MSI's UpgradeCode: the identity of the PRODUCT, generated once and never
 # again. Windows Installer finds a machine's previous version through this GUID and
