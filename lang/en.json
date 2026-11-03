@@ -1106,7 +1106,7 @@
   "warn.ebpf_bypassed": "The tool is not keeping up: packets are going around it without being impaired, so the session does less than it says. Narrow the traffic filter.",
   "warn.ebpf_driver_dropped": "The driver is dropping packets before the tool sees them: the loss you are measuring is partly ours. Narrow the traffic filter.",
   "warn.ebpf_not_root": "Not running as root - eBPFDivert cannot attach and START will fail. Restart the app with sudo.",
-  "warn.ebpf_root_without_caps": "Running as root, but without the capabilities eBPFDivert needs - START will fail. A container takes them away unless it is started with them.",
+  "warn.ebpf_root_without_caps": "Running as root, but without the capabilities eBPFDivert needs, so no session can run: START fails, or the session stops at its first packet. A container takes them away unless it is started with them.",
   "warn.global_impairment": "Nothing in this run narrows it and it has no time limit, so it affects every connection on this machine. Set a target that narrows it, or a time limit.",
   "warn.not_admin": "Not running as administrator - the WinDivert driver will not load and START will fail. Restart the app as administrator.",
   "warn.queue_overflow": "The latency queue is full: the tool is dropping packets you did not ask to lose. The loss you are measuring is partly ours. Lower the latency or the traffic rate.",

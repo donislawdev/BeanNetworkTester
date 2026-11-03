@@ -458,7 +458,8 @@ def test_only_linux_reads_an_open_failure_as_missing_rights(monkeypatch):
     monkeypatch.setattr(capture_backend, "_capabilities", lambda root, status: 0)
     check("root without the capabilities (a container) is told that, not the kernel's policy",
           EBPFDivertBackend.open_failure_hint(refused) == "dialogs.ebpf_root_without_caps")
-    check("and is not told to use sudo either", not EBPFDivertBackend.is_permission_error(refused))
+    check("and it IS a missing right (exit 7, as without root), the capabilities, not sudo",
+          EBPFDivertBackend.is_permission_error(refused))
     monkeypatch.setattr(capture_backend, "_capabilities", lambda root, status: ROOTS_CAPS)
     check("root's other failures keep their own hints",
           EBPFDivertBackend.open_failure_hint(OSError(errno.EINVAL, "x")) == "dialogs.ebpf_filter_refused")
@@ -590,7 +591,14 @@ def test_the_linux_doctor_rows_say_what_is_missing_and_fail_what_stops_a_capture
     contained = _rows(release="6.8.0", root=str(tmp_path), euid=0, status=_cap_eff())["privileges"]
     check("root without them fails, and is not told to use sudo",
           contained[1] == "fail" and "container" in contained[2] and "sudo" not in contained[2]
-          and "cannot start" in contained[2], f"({contained})")
+          and "cannot run" in contained[2], f"({contained})")
+    # Without CAP_NET_RAW alone START works and the first packet stops the session, so
+    # "cannot start" would promise the wrong thing: the row names both outcomes.
+    no_raw = _rows(release="6.8.0", root=str(tmp_path), euid=0,
+                   status=_cap_eff(NET_ADMIN, PERFMON, BPF))["privileges"]
+    check("root without CAP_NET_RAW alone fails too, saying a session can start and stop",
+          no_raw[1] == "fail" and "START fails, or the session stops at its first packet"
+          in no_raw[2], f"({no_raw})")
 
     monkeypatch.setitem(sys.modules, "pydivert", _ebpf_pydivert(lib=False)[0])
     bare = _rows(release="5.4.0-42-generic", root=str(tmp_path / "nothing"), euid=1000,

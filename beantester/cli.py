@@ -1014,7 +1014,8 @@ def _open_session(cfg, log, engine):
         # above with PERMISSION), so the hint can only be about the driver itself.
         # On Linux nothing is checked beforehand: eBPFDivert answers an
         # unprivileged open with EPERM/EACCES before anything is captured, and that
-        # answer earns the same exit a Windows run without elevation gets above.
+        # answer earns the same exit a Windows run without elevation gets above -
+        # root that a container started without the capabilities too.
         backend = capture_backend.current()
         if backend.is_permission_error(e):
             _fail(exitcodes.PERMISSION, f"cannot start the capture: {e}\n"
@@ -1113,7 +1114,11 @@ def _drive_session(engine, cfg, log, sleep, clock, scen):
         engine.stop()
 
     if engine.fault and code == exitcodes.OK:
-        code, stop_reason = exitcodes.RUNTIME, "fault"
+        # A right the system refused mid-session (Linux: no CAP_NET_RAW, so every
+        # packet is refused) is the missing right exit 7 names: a job tells it from
+        # a driver that failed.
+        code = exitcodes.PERMISSION if engine.fault_rights_missing else exitcodes.RUNTIME
+        stop_reason = "fault"
     return code, stop_reason, t0
 
 

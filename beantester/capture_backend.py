@@ -349,14 +349,17 @@ class EBPFDivertBackend:
         the capabilities ``_rights`` names). Asked of the open itself rather than
         guessed beforehand: the open is the authority, and nothing is captured yet.
 
-        Not when the process IS root: "run it with sudo" would be wrong advice there.
-        Root is refused when a container took its capabilities away, or by the kernel
-        itself (lockdown, an LSM policy such as SELinux or AppArmor). That failure
-        stays a RUNTIME one, with the driver's own words and ``open_failure_hint``'s.
+        Root too when it runs without those capabilities (a container started without
+        them): the right is missing for certain, as it is for a session that stops at
+        its first packet without CAP_NET_RAW, and both end with exit 7.
+        ``open_failure_hint`` tells root its own reason, not "run it with sudo". Root
+        with them that the kernel itself refuses (lockdown, an LSM policy such as
+        SELinux or AppArmor) is not a missing right: a RUNTIME failure, with the
+        driver's own words and the hint's.
         """
         if getattr(exc, "errno", None) not in _REFUSED:
             return False
-        return _euid() != 0
+        return _euid() != 0 or _root_without_rights()
 
     OPEN_ERROR_HINTS = {errno.EPERM: "dialogs.ebpf_needs_root",
                         errno.EACCES: "dialogs.ebpf_needs_root",
@@ -518,7 +521,8 @@ def _privileges_row(euid, root, status):
     if euid == 0:
         return ("privileges", "fail", f"root, but without {_CAPTURE_RIGHTS[0][1]} - whatever "
                                       "started it (a container, a service) took them away, so "
-                                      "a capture session cannot start")
+                                      "a capture session cannot run: START fails, or the "
+                                      "session stops at its first packet")
     return ("privileges", "fail", "not root, and without CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN and "
                                   "CAP_NET_RAW - a capture session cannot start. Run it with sudo")
 

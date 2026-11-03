@@ -193,7 +193,7 @@ sudo ./BeanNetworkTester --dst-ip 203.0.113.10 --latency 100 --duration 30
   (`$XDG_CONFIG_HOME` when it is set), and stay yours under `sudo` and `pkexec`.
 - The desktop's fonts and its connection to the display (fontconfig, FreeType, libxcb) come from
   the system, as every desktop has them. The kernel needs what the program from source needs:
-  Linux 5.10 or newer with BTF, and root or the three capabilities below.
+  Linux 5.10 or newer with BTF, and root or the four capabilities below.
 - The commands it shows to repeat a session (the **Reproduce** line, the copied command) name
   this folder's program, with `sudo` where the session needs it.
 
@@ -245,10 +245,11 @@ dialog exists, such as in WSL or over ssh, it opens without root at once, and
 exit code 1, as on Windows without administrator rights. Where Linux differs from Windows:
 
 - Without root or those capabilities a session stops with exit code 7 and says to use `sudo`.
-  If the kernel refuses root itself (kernel lockdown, SELinux, AppArmor), or root runs without
-  those capabilities (a container started without them), it stops with exit code 1 and says
-  which. Without CAP_NET_RAW alone a session can start but cannot put packets back, so it stops
-  at the first one with exit code 1 and says why.
+  Root that runs without them (a container started without them) also stops with exit code 7,
+  and is told that instead. Without CAP_NET_RAW alone a session can start but cannot put
+  packets back, so it stops at the first one, also with exit code 7, and says why. If the
+  kernel refuses root itself (kernel lockdown, SELinux, AppArmor), it stops with exit code 1
+  and says so.
 - `--target` reads the socket table, so the first exchange of a new connection can pass before the
   target applies.
 - When the tool cannot keep up, the kernel lets packets go around it unimpaired. The log, the

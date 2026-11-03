@@ -1201,15 +1201,19 @@ def test_a_send_refused_for_good_stops_the_session_and_says_why(monkeypatch):
     check("saying why", any(T("log.ebpf_send_refused") in ln for ln in lines), f"({lines[-4:]})")
     check("and with the system's own words in the fault line",
           any("Operation not permitted" in ln for ln in lines), f"({lines[-4:]})")
+    check("and recorded as a missing right, which the CLI exits 7 for",
+          sh.fault_rights_missing)
 
+    # The same engine, so the next session starts without the last one's fault.
     lines.clear()
-    sh = BeanEngine(log_fn=lines.append)
     sh.start("test", divert=RefusingDivert([FakePacket(size=100, port=7995) for _ in range(20)]))
     wait_until(lambda: sh.stats_snapshot()["drop_send"] == 20, timeout=10)
     running = sh.is_running()
+    carried = sh.fault_rights_missing
     sh.stop()
     check("a failure the backend cannot explain: the session goes on", running)
     check("and only warns", not any(T("log.ebpf_send_refused") in ln for ln in lines))
+    check("a new session does not keep the last one's missing right", not carried)
 
 
 def test_a_second_scenario_stops_the_first_instead_of_orphaning_it():

@@ -6275,14 +6275,14 @@ MUTATIONS = [
     {
         "label": "capture_backend: Linux never reads EPERM as missing rights",
         "file": "beantester/capture_backend.py",
-        "old": "        return _euid() != 0\n",
+        "old": "        return _euid() != 0 or _root_without_rights()\n",
         "new": "        return False\n",
         "test": "test_linux_answers_an_unprivileged_open_with_permission",
     },
     {
         "label": "capture_backend: root refused by the kernel is told to use sudo",
         "file": "beantester/capture_backend.py",
-        "old": "        return _euid() != 0\n",
+        "old": "        return _euid() != 0 or _root_without_rights()\n",
         "new": "        return True\n",
         "test": "test_only_linux_reads_an_open_failure_as_missing_rights",
     },
@@ -6456,6 +6456,51 @@ MUTATIONS = [
         "old": "        if refused:\n",
         "new": "        if False:\n",
         "test": "test_a_send_refused_for_good_stops_the_session_and_says_why",
+    },
+    {
+        "label": "engine: a send refused for good is not recorded as a missing right",
+        "file": "beantester/engine.py",
+        "old": "session=session, rights_missing=True)",
+        "new": "session=session)",
+        "test": "test_a_send_refused_for_good_stops_the_session_and_says_why",
+    },
+    {
+        "label": "engine: a new session keeps the last one's missing right",
+        "file": "beantester/engine.py",
+        "old": "            self.fault = None\n            self.fault_rights_missing = False\n",
+        "new": "            self.fault = None\n",
+        "test": "test_a_send_refused_for_good_stops_the_session_and_says_why",
+    },
+    {
+        # The exit 7 names: a job tells a missing right from a driver that broke.
+        "label": "cli: a session stopped for a missing right exits RUNTIME again",
+        "file": "beantester/cli.py",
+        "old": "        code = exitcodes.PERMISSION if engine.fault_rights_missing else exitcodes.RUNTIME\n",
+        "new": "        code = exitcodes.RUNTIME\n",
+        "test": "test_a_session_the_system_will_not_let_put_packets_back_exits_permission",
+    },
+    {
+        "label": "cli: every session fault exits PERMISSION",
+        "file": "beantester/cli.py",
+        "old": "        code = exitcodes.PERMISSION if engine.fault_rights_missing else exitcodes.RUNTIME\n",
+        "new": "        code = exitcodes.PERMISSION\n",
+        "test": "test_a_session_the_system_will_not_let_put_packets_back_exits_permission",
+    },
+    {
+        # Root a container started without the capabilities lacks a right for certain.
+        "label": "capture_backend: a container's root refused at the open exits RUNTIME again",
+        "file": "beantester/capture_backend.py",
+        "old": "        return _euid() != 0 or _root_without_rights()\n",
+        "new": "        return _euid() != 0\n",
+        "test": "test_only_linux_reads_an_open_failure_as_missing_rights",
+    },
+    {
+        # Without CAP_NET_RAW alone START works: "cannot start" promises the wrong thing.
+        "label": "capture_backend: the doctor's root row says START fails, and no more",
+        "file": "beantester/capture_backend.py",
+        "old": "\"a capture session cannot run: START fails, or the \"",
+        "new": "\"a capture session cannot start \"",
+        "test": "test_the_linux_doctor_rows_say_what_is_missing_and_fail_what_stops_a_capture",
     },
     {
         "label": "capture_backend: an unelevated Windows window is not told to elevate",

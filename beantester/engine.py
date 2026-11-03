@@ -271,6 +271,7 @@ class BeanEngine:
         self._fast_switch = False
         self.stop_reason = None     # "user" | "duration" | "fault" | "exit"
         self.fault = None           # last fatal worker error, if any
+        self.fault_rights_missing = False   # that error is a right the system refused
         self.reset_stats()
 
     def set_seed(self, seed):
@@ -1065,6 +1066,7 @@ class BeanEngine:
             self._deadline = (self._start_mono + self._duration) if self._duration > 0 else None
             self.stop_reason = None
             self.fault = None
+            self.fault_rights_missing = False
             # Registered BEFORE the workers are spawned, not after: from the moment
             # the divert is open and _running is True, atexit and the watchdog must
             # be able to find this engine. Adding it only once every thread was
@@ -1546,7 +1548,7 @@ class BeanEngine:
     # long enough not to spin. See _fault_stop_blocking.
     FAULT_LOCK_POLL_S = 0.05
 
-    def _fail_stop(self, error, blocking=True, lead=(), session=None):
+    def _fail_stop(self, error, blocking=True, lead=(), session=None, rights_missing=False):
         """A worker died: stop the session so the network is never left impaired.
 
         ``blocking`` picks HOW the stop is taken, and the two callers genuinely differ:
@@ -1593,6 +1595,7 @@ class BeanEngine:
         # of the report. Both are still LOGGED: two failures are two events.
         if not self.fault:
             self.fault = str(error)
+            self.fault_rights_missing = rights_missing
         say = (*lead, T("log.engine_fault", e=str(error)))
         if blocking:
             self._fault_stop_blocking(say, session)
@@ -2047,7 +2050,7 @@ class BeanEngine:
         """
         refused = capture_backend.current().send_refused_hint(exc)
         if refused:
-            self._fail_stop(exc, lead=(T(refused),), session=session)
+            self._fail_stop(exc, lead=(T(refused),), session=session, rights_missing=True)
         else:
             self._warn_send_failed(exc)
 

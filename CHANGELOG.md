@@ -28,12 +28,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 - **Linux, experimental: a session that cannot put packets back stops and says why.**
   Without CAP_NET_RAW a session started, held all of its target's traffic and ended "ok".
-  It now stops at the first such packet with exit code 1, and says which capability is
-  missing.
+  It now stops at the first such packet with exit code 7, the code for missing rights, and
+  says which capability is missing.
 
 - **Linux, experimental: root without the capabilities is told so.** In a container started
   without them, Diagnostics said capturing was allowed, and a refused START blamed the
-  kernel's security policy. Both now say that root is missing the capabilities.
+  kernel's security policy. Both now say that root is missing the capabilities, and a
+  refused START ends with exit code 7, the code for missing rights, instead of 1.
 
 - **Linux, experimental: what happens after a killed session, said as it is.** Diagnostics
   said the kernel removes a killed session's programs within about 3 seconds. Traffic does
