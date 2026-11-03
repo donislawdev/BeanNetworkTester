@@ -4659,8 +4659,8 @@ MUTATIONS = [
                 "            unavailable.append(family)\n"
                 "        else:\n"
                 "            codes.update(answers)\n"
-                "    live, closing = _holders(read())\n"),
-        "new": ("    live, closing = _holders(read())\n"
+                "    held = _holders(read())\n"),
+        "new": ("    held = _holders(read())\n"
                 "    codes, unavailable = {}, []\n"
                 "    for family in families:\n"
                 "        answers = _ask_family(bind, family, protocols, wanted)\n"
@@ -4669,6 +4669,44 @@ MUTATIONS = [
                 "        else:\n"
                 "            codes.update(answers)\n"),
         "test": "test_the_system_is_asked_first_and_the_table_read_after",
+    },
+    {
+        # MEASURED 2026-11-03: Linux lists a dual-stack server once, under IPv6.
+        "label": "portcheck: a refused IPv4 bind beside a server on [::] names nobody",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "        found = wide.get((port, proto), ())\n",
+        "new": "        found = ()\n",
+        "test": "test_linux_lists_a_dual_stack_server_once_and_its_refusal_names_it",
+    },
+    {
+        # [::] for IPv6 alone lets the IPv4 bind through: it holds nothing there.
+        "label": "portcheck: a server on [::] is named on IPv4 although the bind worked",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "    if not found and family == 4 and code in IN_USE_CODES:\n",
+        "new": "    if not found and family == 4:\n",
+        "test": "test_linux_lists_a_dual_stack_server_once_and_its_refusal_names_it",
+    },
+    {
+        "label": "portcheck: a socket on ::1 counts as one on [::]",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "        if family == 6 and s.local_ip == \"::\":\n",
+        "new": "        if family == 6:\n",
+        "test": "test_linux_lists_a_dual_stack_server_once_and_its_refusal_names_it",
+    },
+    {
+        "label": "portcheck: an ::ffff: address holds IPv6",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "        return 4\n    return s.family\n",
+        "new": "        return s.family\n    return s.family\n",
+        "test": "test_an_ipv4_address_written_the_ipv6_way_holds_ipv4",
+    },
+    {
+        # A dual-stack server's closed connections leave TIME_WAIT beside it.
+        "label": "portcheck: TIME_WAIT beside a server on [::] hides the server",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "    if not found and family == 4 and code in IN_USE_CODES:\n",
+        "new": "    if not found and family == 4 and code in IN_USE_CODES and where not in closing:\n",
+        "test": "test_an_ipv4_address_written_the_ipv6_way_holds_ipv4",
     },
     {
         "label": "portcheck: the probe leaves its socket open",

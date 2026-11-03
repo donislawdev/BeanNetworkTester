@@ -7,6 +7,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Linux, experimental: Port check names a server that listens on both IP versions.** A
+  server on `[::]` that takes IPv4 connections too, as Node does, showed its IPv4 row as
+  "In use (owner not shown)". That row now names the program, as on Windows. Once such a
+  server stops, its IPv4 port reads Closing while its last connections finish, like its
+  IPv6 port.
+
 - **Linux, experimental: Ping over IPv6 shows the real round trip.** Each reply read up to
   about 10 ms too long: the time the program spent preparing the request was counted as time
   on the network. IPv4 was not affected.
