@@ -8841,9 +8841,16 @@ MUTATIONS = [
     {
         "label": "tcp health: a 32-bit counter that wrapped reads as a huge drop",
         "file": "beantester/nettools/tcphealth.py",
-        "old": "        return (getattr(self.last, field) - getattr(self.first, field)) % _span(self.last, field)\n",
-        "new": "        return getattr(self.last, field) - getattr(self.first, field)\n",
+        "old": "    return (getattr(new, field) - getattr(old, field)) % _span(new, field)\n",
+        "new": "    return getattr(new, field) - getattr(old, field)\n",
         "test": "test_counters_are_differences_from_the_first_reading_and_wrap_at_32_bits",
+    },
+    {
+        "label": "tcp health: a counter that wraps twice while watched keeps only its last step",
+        "file": "beantester/nettools/tcphealth.py",
+        "old": "                self.counted[field] += _grown(self.last, sample, field)\n",
+        "new": "                self.counted[field] = _grown(self.last, sample, field)\n",
+        "test": "test_a_counter_that_wraps_twice_while_watched_keeps_both_wraps",
     },
     {
         "label": "tcp health: a port taken by a new connection mixes its numbers in",
@@ -9009,9 +9016,8 @@ MUTATIONS = [
     {
         "label": "tcp health: data sent is one counter across the resends' wrap",
         "file": "beantester/nettools/tcphealth.py",
-        "old": "        once = (_sent_once(self.last) - _sent_once(self.first)) % 2 ** 64\n"
-               "        return once + self.since_watching(\"resent_bytes\")\n",
-        "new": "        return self.since_watching(\"bytes_out\")\n",
+        "old": "    if field == \"bytes_out\":\n",
+        "new": "    if False:\n",
         "test": "test_a_resend_counter_that_wraps_is_neither_a_new_connection_nor_a_huge_number",
     },
     {

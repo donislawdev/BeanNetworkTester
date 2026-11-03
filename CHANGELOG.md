@@ -16,6 +16,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   count of the data sent includes bytes that never left. It is now the data the other end
   confirmed, the data still on its way and the data sent again.
 
+- **TCP health: counts that pass 4 GiB more than once stay whole.** On a long watch, a count
+  that went past its limit a second time read 4 GiB too little for each time after the first.
+  On Windows that is the data sent again (the Resent column), and with it Data sent.
+
 ## [1.0.0] - 2026-11-03
 
 ### Added

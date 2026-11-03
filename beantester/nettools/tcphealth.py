@@ -104,7 +104,10 @@ class Watch:
         self.state = STARTING
         self.code = 0
         self.detail = ""
-        self.first = self.previous = self.last = None
+        self.previous = self.last = None
+        # Each counter's growth since the first reading: the steps between readings added
+        # up, so one that wraps more than once while watched is not cut to its width.
+        self.counted = collections.Counter()
         self.handle = None          # how the system finds it again (``Reading.handle``)
         self.history = collections.deque(maxlen=HISTORY)    # (at, smoothed, sample)
         # When Windows last measured a round trip, and the bytes sent by then.
@@ -131,10 +134,13 @@ class Watch:
         self.state, self.code, self.detail = reading.state, reading.code, reading.detail
         if reading.state != tcpestats.OK:
             return
-        if self.first is None:
-            self.first, self.since = sample, at
+        if self.since is None:
+            self.since = at
         if self.last is None or sample.rtt_samples != self.last.rtt_samples:
             self.measured_at, self.sent_when_measured = at, sample.bytes_out
+        if self.last is not None:
+            for field in sample.widths:
+                self.counted[field] += _grown(self.last, sample, field)
         self.previous, self.last, self.read_at = self.last, sample, at
         if sample.smoothed_rtt is not None:
             # A reading with no newest sample (the field still unset) draws the
@@ -148,11 +154,12 @@ class Watch:
         return self.last is not None and field not in self.last.absent
 
     def since_watching(self, field):
-        """A counter's change since the first reading - modulo its width
-        (``Sample.widths``): Windows' 32-bit counters wrap, Linux's timeouts at 16."""
+        """A counter's growth since the first reading (``counted``): Windows' 32-bit
+        counters wrap, Linux's timeouts at 16, and the bytes sent again on Windows pass
+        4 GiB - a wrap - on a long watch of a lossy connection."""
         if self.last is None:
             return None
-        return (getattr(self.last, field) - getattr(self.first, field)) % _span(self.last, field)
+        return self.counted[field]
 
     def unmeasured_for(self):
         """Whole seconds since Windows last measured a round trip, when data went out
@@ -168,24 +175,26 @@ class Watch:
         sent = self.last.bytes_out != self.sent_when_measured
         return waited if sent and waited >= STALE_S else 0
 
-    def data_sent(self):
-        """The data sent since the first reading: sent once, and sent again - each at its
-        own width, as their sum is not one counter: Windows' resends count in 32 bits
-        (``BytesRetrans``) and wrap long before the 64-bit rest."""
-        if self.last is None:
-            return None
-        once = (_sent_once(self.last) - _sent_once(self.first)) % 2 ** 64
-        return once + self.since_watching("resent_bytes")
-
     def since_previous(self, field):
         if self.last is None or self.previous is None:
             return 0
-        return (getattr(self.last, field) - getattr(self.previous, field)) % _span(self.last, field)
+        return _grown(self.previous, self.last, field)
 
 
 def _span(sample, field):
     """How many values a counter of ``sample`` takes before it wraps."""
     return 2 ** sample.widths.get(field, 32)
+
+
+def _grown(old, new, field):
+    """How much a counter grew from one reading to the next - modulo its width
+    (``Sample.widths``). The data sent is not one counter: it is the data sent once and
+    the data sent again, each at its own width - Windows' resends count in 32 bits
+    (``BytesRetrans``) and wrap long before the 64-bit rest."""
+    if field == "bytes_out":
+        return ((_sent_once(new) - _sent_once(old)) % _span(new, field)
+                + _grown(old, new, "resent_bytes"))
+    return (getattr(new, field) - getattr(old, field)) % _span(new, field)
 
 
 def _sent_once(sample):
@@ -391,7 +400,7 @@ def details(watch):
     last = watch.last
     if last is None:
         return out
-    sent, received = watch.data_sent(), watch.since_watching("bytes_in")
+    sent, received = watch.since_watching("bytes_out"), watch.since_watching("bytes_in")
     unmeasured = watch.unmeasured_for()
     # The Note column says one thing: that the round trip is not measured. What a row
     # means is the help's - every other note was cut at the smallest window.
@@ -481,7 +490,7 @@ def report_lines(watchlist):
                   ("timeouts", f"timeouts {watch.since_watching('timeouts')}"),
                   ("fast_resends", f"fast resends {watch.since_watching('fast_resends')}"),
                   ("duplicate_acks", f"duplicate ACKs {watch.since_watching('duplicate_acks')}"),
-                  ("bytes_out", f"sent {watch.data_sent()} B"),
+                  ("bytes_out", f"sent {watch.since_watching('bytes_out')} B"),
                   ("bytes_in", f"received {watch.since_watching('bytes_in')} B")]
         lines.append("  since watching ("
                      + time.strftime("%H:%M:%S", time.localtime(watch.since)) + "): "

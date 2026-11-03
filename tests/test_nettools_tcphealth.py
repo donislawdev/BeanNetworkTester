@@ -80,11 +80,32 @@ def test_a_resend_counter_that_wraps_is_neither_a_new_connection_nor_a_huge_numb
     watch.take(ok(out=once + 2000 + 20, resent=20), 2.0)
     check("the same connection: still read", watch.state == tcpestats.OK and watch.reading,
           f"({watch.state})")
-    check("data sent: 2000 B sent once and 30 B sent again", watch.data_sent() == 2030,
-          f"({watch.data_sent()})")
+    sent = watch.since_watching("bytes_out")
+    check("data sent: 2000 B sent once and 30 B sent again", sent == 2030, f"({sent})")
     [data] = [d for d in tcphealth.details(watch) if d.key == "data"]
     check("and the details say it", data.value.startswith("2030 / "), f"({data.value})")
     check("so does the report", "sent 2030 B" in tcphealth.report_lines(_listed(watch))[-1])
+
+
+def test_a_counter_that_wraps_twice_while_watched_keeps_both_wraps():
+    """A counter's growth is the steps between readings added up: the first reading
+    and the last alone would read a growth past the counter's width as the rest of it
+    - on Windows 4 GiB of the bytes sent again, and of the data sent, gone."""
+    watch = Watch(C, "app.exe", 7, 0.0)
+    for second, resent in enumerate((0, 2 ** 32 - 10, 20), start=1):
+        watch.take(ok(out=1000 * second + resent, resent=resent), float(second))
+    resent = watch.since_watching("resent_bytes")
+    check("resent since watching: both wraps", resent == 2 ** 32 + 20, f"({resent})")
+    check("and since the previous reading", watch.since_previous("resent_bytes") == 30)
+    sent = watch.since_watching("bytes_out")
+    check("data sent: 2000 B sent once and all of it sent again", sent == 2 ** 32 + 2020,
+          f"({sent})")
+    [data] = [d for d in tcphealth.details(watch) if d.key == "data"]
+    check("the details say it", data.value.startswith(f"{2 ** 32 + 2020} / "), f"({data.value})")
+    check("so does the list", tcphealth.cells(watch)[5] == f"{2 ** 32 + 20} B")
+    report = tcphealth.report_lines(_listed(watch))[-1]
+    check("and the report", f"sent {2 ** 32 + 2020} B" in report
+          and f"resent {2 ** 32 + 20} B" in report, f"({report})")
 
 
 def _listed(*watches):
