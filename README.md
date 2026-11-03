@@ -193,7 +193,7 @@ sudo ./BeanNetworkTester --dst-ip 203.0.113.10 --latency 100 --duration 30
   (`$XDG_CONFIG_HOME` when it is set), and stay yours under `sudo` and `pkexec`.
 - The desktop's fonts and its connection to the display (fontconfig, FreeType, libxcb) come from
   the system, as every desktop has them. The kernel needs what the program from source needs:
-  Linux 5.10 or newer with BTF, and root or the three capabilities below.
+  Linux 5.10 or newer with BTF, and root or the four capabilities below.
 - The commands it shows to repeat a session (the **Reproduce** line, the copied command) name
   this folder's program, with `sudo` where the session needs it.
 
@@ -218,7 +218,7 @@ is experimental, and so is the pydivert Linux support it rests on.
 
 - Linux 5.10 or newer built with BTF (`/sys/kernel/btf/vmlinux` exists), x86_64 or aarch64,
   glibc 2.28 or newer
-- root, or the capabilities CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW
+- root, or the capabilities CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN and CAP_NET_RAW
 - run from a checkout, in a virtual environment (the window also needs Tk: `python3-tk` on
   Ubuntu):
 
@@ -245,15 +245,19 @@ dialog exists, such as in WSL or over ssh, it opens without root at once, and
 exit code 1, as on Windows without administrator rights. Where Linux differs from Windows:
 
 - Without root or those capabilities a session stops with exit code 7 and says to use `sudo`.
-  If the kernel refuses root itself (kernel lockdown, SELinux, AppArmor), it stops with exit
-  code 1 and says so.
+  Root that runs without them (a container started without them) also stops with exit code 7,
+  and is told that instead. Without CAP_NET_RAW alone a session can start but cannot put
+  packets back, so it stops at the first one, also with exit code 7, and says why. If the
+  kernel refuses root itself (kernel lockdown, SELinux, AppArmor), it stops with exit code 1
+  and says so.
 - `--target` reads the socket table, so the first exchange of a new connection can pass before the
   target applies.
 - When the tool cannot keep up, the kernel lets packets go around it unimpaired. The log, the
   Statistics page, the JSON counters and the repro report say how many, and how many the driver
   dropped.
 - If the tool is killed, the traffic it was holding stays held for about 3 seconds, then flows
-  again. There is nothing for `--cleanup-driver` to do: the kernel cleans up by itself.
+  again. Its eBPF programs stay attached until the next session starts, which removes them, so
+  there is nothing for `--cleanup-driver` to do.
 - IP fragments always pass through the tool, even those its filter does not match.
 - In the window, the files it saves (window state, profiles, CSV) stay yours under `sudo` and
   `pkexec`, and GitHub and Donate print their address instead of starting a browser as root.
@@ -1043,7 +1047,7 @@ Every way of ending has its own code - a pipeline does not need to parse text:
 | `4` | scenario | the scenario file is missing or malformed |
 | `5` | io | an artifact could not be written (repro report, saved config) |
 | `6` | assertion | the run succeeded but `--min-packets` / `--fail-on-no-traffic` did not pass |
-| `7` | permission | administrator rights (Windows), or root or CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW (Linux), are required and missing |
+| `7` | permission | administrator rights (Windows), or root or CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN and CAP_NET_RAW (Linux), are required and missing |
 | `130` | interrupted | Ctrl+C (SIGINT) |
 | `143` | terminated | SIGTERM (job cancellation, `docker stop`), Ctrl+Break, or closing the console window |
 

@@ -133,6 +133,9 @@ class _FakeBackend:
     def open_failure_hint(self, exc, elevated=None):
         return ""
 
+    def send_refused_hint(self, exc):
+        return ""
+
     def doctor_rows(self):
         return None
 
@@ -303,7 +306,8 @@ def test_every_backend_answers_the_whole_contract():
     check("the contract names what the call sites ask",
           {"open_network", "socket_source_factory", "filter_compiles", "stamp_now",
            "stamp_frequency", "text", "overload_counters", "is_permission_error",
-           "open_failure_hint", "doctor_rows", "platform_note", "name", "TEXTS",
+           "open_failure_hint", "send_refused_hint", "doctor_rows", "platform_note", "name",
+           "TEXTS",
            "has_capture_rights", "startup_note", "rights_banner", "counts_overload",
            "CLEANUP_LINE", "CLEANUP_BLOCKER", "DIAGNOSTICS_HELP"} <= set(members),
           f"({members})")
@@ -422,6 +426,15 @@ def test_only_the_linux_driver_counts_what_it_let_past_or_dropped():
           WinDivertBackend.overload_counters(_Counting()) is None)
 
 
+def _cap_eff(*bits):
+    return "CapEff:\t%016x\n" % sum(1 << bit for bit in bits)
+
+
+# What /proc shows for root on Ubuntu 26.04 (Linux 7.0): every capability, bits 0-40.
+ROOTS_CAPS = (1 << 41) - 1
+NET_ADMIN, NET_RAW, SYS_ADMIN, PERFMON, BPF = 12, 13, 21, 38, 39
+
+
 def test_only_linux_reads_an_open_failure_as_missing_rights(monkeypatch):
     monkeypatch.setattr(capture_backend, "_euid", lambda: 1000)       # not root, on any machine
     for code in (errno.EPERM, errno.EACCES):
@@ -436,11 +449,18 @@ def test_only_linux_reads_an_open_failure_as_missing_rights(monkeypatch):
            for c in (errno.EPERM, errno.EOPNOTSUPP, errno.EINVAL, errno.ENOENT)]
           == ["dialogs.ebpf_needs_root", "dialogs.ebpf_kernel", "dialogs.ebpf_filter_refused", ""])
     monkeypatch.setattr(capture_backend, "_euid", lambda: 0)
+    monkeypatch.setattr(capture_backend, "_capabilities", lambda root, status: ROOTS_CAPS)
     refused = OSError(errno.EPERM, "Operation not permitted")
     check("root refused by the kernel (lockdown, an LSM) is not 'missing rights'",
           not EBPFDivertBackend.is_permission_error(refused))
     check("and is told so, not to use sudo",
           EBPFDivertBackend.open_failure_hint(refused) == "dialogs.ebpf_refused_as_root")
+    monkeypatch.setattr(capture_backend, "_capabilities", lambda root, status: 0)
+    check("root without the capabilities (a container) is told that, not the kernel's policy",
+          EBPFDivertBackend.open_failure_hint(refused) == "dialogs.ebpf_root_without_caps")
+    check("and it IS a missing right (exit 7, as without root), the capabilities, not sudo",
+          EBPFDivertBackend.is_permission_error(refused))
+    monkeypatch.setattr(capture_backend, "_capabilities", lambda root, status: ROOTS_CAPS)
     check("root's other failures keep their own hints",
           EBPFDivertBackend.open_failure_hint(OSError(errno.EINVAL, "x")) == "dialogs.ebpf_filter_refused")
     seen = []
@@ -479,25 +499,67 @@ def test_the_windows_backend_asks_the_window_s_rights_questions_as_the_window_di
 
 
 def test_the_linux_backend_reads_rights_the_way_the_doctor_row_does(monkeypatch):
-    """One answer (``_rights``) for the window's red line and ``--doctor``'s row."""
-    none, caps = "CapEff:\t0000000000000000\n", "CapEff:\t0000008000003000\n"   # bits 12, 13, 39
-    check("root", capture_backend._rights(0, "/", none) == "root")
-    check("the three capabilities", capture_backend._rights(1000, "/", caps).startswith("CAP_BPF"))
+    """One answer (``_rights``) for the window's red line and ``--doctor``'s row. The
+    sets are MEASURED (2026-11-03, Ubuntu 26.04 and WSL, every combination, a whole
+    session each): the three this row named before opened nothing, and a process
+    without CAP_NET_RAW opened and then could put no packet back."""
+    none, every = _cap_eff(), "CapEff:\t%016x\n" % ROOTS_CAPS
+    four = _cap_eff(NET_ADMIN, NET_RAW, PERFMON, BPF)
+    sys_admin = _cap_eff(NET_ADMIN, NET_RAW, SYS_ADMIN)
+    named_before = _cap_eff(NET_ADMIN, NET_RAW, BPF)          # the open: EACCES
+    without_raw = _cap_eff(NET_ADMIN, PERFMON, BPF)          # opens; every send refused
+    check("root, with root's capabilities", capture_backend._rights(0, "/", every) == "root")
+    check("root without them (a container) cannot capture",
+          capture_backend._rights(0, "/", none) is None)
+    check("the four capabilities, by name", capture_backend._rights(1000, "/", four)
+          == "CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN and CAP_NET_RAW")
+    check("CAP_SYS_ADMIN in place of CAP_BPF and CAP_PERFMON",
+          capture_backend._rights(1000, "/", sys_admin)
+          == "CAP_SYS_ADMIN, CAP_NET_ADMIN and CAP_NET_RAW")
+    check("the three named before are not enough",
+          capture_backend._rights(1000, "/", named_before) is None)
+    check("nor everything but CAP_NET_RAW", capture_backend._rights(1000, "/", without_raw) is None)
+    check("nor CAP_SYS_ADMIN without CAP_NET_RAW",
+          capture_backend._rights(1000, "/", _cap_eff(NET_ADMIN, SYS_ADMIN)) is None)
     check("neither", capture_backend._rights(1000, "/", none) is None)
-    check("two of three is not enough",
-          capture_backend._rights(1000, "/", "CapEff:\t0000000000003000\n") is None)
     real = capture_backend._rights
-    for status, euid, expected in ((none, 0, True), (none, 1000, False), (caps, 1000, True)):
+    for status, euid, expected in ((every, 0, True), (none, 0, False), (none, 1000, False),
+                                   (four, 1000, True), (named_before, 1000, False)):
         monkeypatch.setattr(capture_backend, "_euid", lambda e=euid: e)
         monkeypatch.setattr(capture_backend, "_rights", lambda e, r, s, st=status: real(e, r, st))
         check(f"euid {euid}, {status.strip()}: has_capture_rights is {expected}",
               EBPFDivertBackend.has_capture_rights() is expected)
         row = capture_backend._privileges_row(euid, "/", status)
         check("and the doctor row agrees", (row[1] == "ok") is expected, f"({row})")
+    monkeypatch.setattr(capture_backend, "_euid", lambda: 1000)
     check("the note for a window that can capture",
           EBPFDivertBackend.startup_note(True) == "log.ebpf_note_experimental")
     check("and for one that cannot", EBPFDivertBackend.startup_note(False) == "log.ebpf_note_root")
     check("its own banner", EBPFDivertBackend.rights_banner() == "warn.ebpf_not_root")
+    monkeypatch.setattr(capture_backend, "_euid", lambda: 0)
+    check("root that cannot capture is not told it is not root",
+          EBPFDivertBackend.startup_note(False) == "log.ebpf_note_root_without_caps"
+          and EBPFDivertBackend.rights_banner() == "warn.ebpf_root_without_caps")
+
+
+def test_linux_stops_only_for_a_send_it_knows_will_be_refused_for_good(monkeypatch):
+    """eBPFDivert puts packets back through a raw socket: without CAP_NET_RAW every
+    send is refused (MEASURED 2026-11-03). With it, a refusal has another cause - a
+    firewall rule drops what this program sends - and the session goes on past it."""
+    refused = PermissionError(errno.EPERM, "ebpfdivert_send: Operation not permitted")
+    monkeypatch.setattr(capture_backend, "_capabilities",
+                        lambda root, status: sum(1 << b for b in (NET_ADMIN, PERFMON, BPF)))
+    check("no CAP_NET_RAW: EPERM is for good",
+          EBPFDivertBackend.send_refused_hint(refused) == "log.ebpf_send_refused")
+    check("and EACCES", EBPFDivertBackend.send_refused_hint(OSError(errno.EACCES, "no"))
+          == "log.ebpf_send_refused")
+    check("another failure is one lost packet",
+          EBPFDivertBackend.send_refused_hint(OSError(errno.ENETDOWN, "down")) == "")
+    check("and so is one with no errno", EBPFDivertBackend.send_refused_hint(RuntimeError("x")) == "")
+    monkeypatch.setattr(capture_backend, "_capabilities", lambda root, status: ROOTS_CAPS)
+    check("with CAP_NET_RAW an EPERM is something else",
+          EBPFDivertBackend.send_refused_hint(refused) == "")
+    check("Windows never stops for it", WinDivertBackend.send_refused_hint(refused) == "")
 
 
 def _rows(**kw):
@@ -512,16 +574,31 @@ def test_the_linux_doctor_rows_say_what_is_missing_and_fail_what_stops_a_capture
     monkeypatch.setitem(sys.modules, "pydivert", _ebpf_pydivert()[0])
     (tmp_path / "sys" / "kernel" / "btf").mkdir(parents=True)
     (tmp_path / "sys" / "kernel" / "btf" / "vmlinux").write_bytes(b"")
-    ready = _rows(release="6.8.0-1064-azure", root=str(tmp_path), euid=0)
+    roots = "CapEff:\t%016x\n" % ROOTS_CAPS
+    ready = _rows(release="6.8.0-1064-azure", root=str(tmp_path), euid=0, status=roots)
     check("a ready machine: kernel, BTF, root and pydivert all ok",
           [ready[n][1] for n in ("kernel", "btf", "privileges", "pydivert")] == ["ok"] * 4,
           f"({ready})")
     check("and it names the eBPFDivert version", "0.0.5" in ready["pydivert"][2])
 
-    caps = (1 << 12) | (1 << 13) | (1 << 39)
     by_caps = _rows(release="6.8.0", root=str(tmp_path), euid=1000,
-                    status="CapEff:\t%016x\n" % caps)
-    check("not root, but CAP_BPF + CAP_NET_ADMIN + CAP_NET_RAW: ok", by_caps["privileges"][1] == "ok")
+                    status=_cap_eff(NET_ADMIN, NET_RAW, PERFMON, BPF))
+    check("not root, but the four capabilities: ok", by_caps["privileges"][1] == "ok")
+    named_before = _rows(release="6.8.0", root=str(tmp_path), euid=1000,
+                         status=_cap_eff(NET_ADMIN, NET_RAW, BPF))["privileges"]
+    check("the three it named before: a capture cannot start, and the row names all four",
+          named_before[1] == "fail" and "CAP_PERFMON" in named_before[2], f"({named_before})")
+    contained = _rows(release="6.8.0", root=str(tmp_path), euid=0, status=_cap_eff())["privileges"]
+    check("root without them fails, and is not told to use sudo",
+          contained[1] == "fail" and "container" in contained[2] and "sudo" not in contained[2]
+          and "cannot run" in contained[2], f"({contained})")
+    # Without CAP_NET_RAW alone START works and the first packet stops the session, so
+    # "cannot start" would promise the wrong thing: the row names both outcomes.
+    no_raw = _rows(release="6.8.0", root=str(tmp_path), euid=0,
+                   status=_cap_eff(NET_ADMIN, PERFMON, BPF))["privileges"]
+    check("root without CAP_NET_RAW alone fails too, saying a session can start and stop",
+          no_raw[1] == "fail" and "START fails, or the session stops at its first packet"
+          in no_raw[2], f"({no_raw})")
 
     monkeypatch.setitem(sys.modules, "pydivert", _ebpf_pydivert(lib=False)[0])
     bare = _rows(release="5.4.0-42-generic", root=str(tmp_path / "nothing"), euid=1000,
@@ -534,10 +611,10 @@ def test_the_linux_doctor_rows_say_what_is_missing_and_fail_what_stops_a_capture
     check("each in the words Windows uses for it",
           all("cannot start" in bare[n][2] for n in ("kernel", "btf", "privileges")), f"({bare})")
     monkeypatch.setitem(sys.modules, "pydivert", None)
-    gone = _rows(release="6.8.0", root=str(tmp_path), euid=0)
+    gone = _rows(release="6.8.0", root=str(tmp_path), euid=0, status=roots)
     check("no pydivert: a failure with the install command", gone["pydivert"][1] == "fail"
           and "pip install pydivert" in gone["pydivert"][2], f"({gone['pydivert']})")
-    check("a ready machine fails nothing, root or the three capabilities",
+    check("a ready machine fails nothing, root or the four capabilities",
           all(row[1] == "ok" for rows in (ready, by_caps) for row in rows.values()))
 
 
@@ -562,7 +639,8 @@ def test_doctor_off_windows_takes_the_linux_backends_rows(monkeypatch, tmp_path)
     class _Linux(EBPFDivertBackend):
         @staticmethod
         def doctor_rows():
-            return EBPFDivertBackend.doctor_rows(release="6.8.0", root=str(tmp_path), euid=0)
+            return EBPFDivertBackend.doctor_rows(release="6.8.0", root=str(tmp_path), euid=0,
+                                                 status="CapEff:\t%016x\n" % ROOTS_CAPS)
     monkeypatch.setattr(capture_backend, "current", lambda: _Linux())
     monkeypatch.setattr(driver, "is_windows", lambda: False)
     ok, checks = driver.doctor()

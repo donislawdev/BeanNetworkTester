@@ -22,7 +22,7 @@ from beantester.i18n import T
 from beantester.cli import (_Terminated, _print_conn_rows, build_arg_parser,
                             config_from_args, run_cli)
 from beantester.engine import BeanEngine
-from fakes import check
+from fakes import FakeDivert, FakePacket, check
 
 
 class FakeClock:
@@ -536,16 +536,74 @@ def test_linux_answers_an_unprivileged_open_with_permission(monkeypatch):
     check("Windows: no sudo advice", "sudo" not in errs["windivert"], f"({errs['windivert']!r})")
 
     # Root refused by the kernel itself (lockdown, an LSM policy): sudo would change
-    # nothing, so it is a RUNTIME failure that says what it is.
+    # nothing and no right is missing, so it is a RUNTIME failure that says what it
+    # is. Root that a container started without the capabilities lacks a right for
+    # certain: PERMISSION, as without root, told its own reason instead of sudo.
     monkeypatch.setattr(capture_backend, "_euid", lambda: 0)
     monkeypatch.setattr(capture_backend, "current", lambda: capture_backend.EBPFDivertBackend())
-    out, err = io.StringIO(), io.StringIO()
-    clock = FakeClock()
-    code = run_cli(["--loss", "5", "--duration", "1"], sleep=clock.sleep, clock=clock,
-                   engine=_RefusedOpen(), out=out, err=err)
-    check("Linux as root: EPERM at the open -> RUNTIME", code == exitcodes.RUNTIME, f"(code={code})")
-    check("and it names the refusal, not sudo", T("dialogs.ebpf_refused_as_root") in err.getvalue()
-          and T("dialogs.ebpf_needs_root") not in err.getvalue(), f"({err.getvalue()!r})")
+    for caps, said, want in (((1 << 41) - 1, "dialogs.ebpf_refused_as_root", exitcodes.RUNTIME),
+                             (0, "dialogs.ebpf_root_without_caps", exitcodes.PERMISSION)):
+        monkeypatch.setattr(capture_backend, "_capabilities", lambda root, status, c=caps: c)
+        out, err = io.StringIO(), io.StringIO()
+        clock = FakeClock()
+        code = run_cli(["--loss", "5", "--duration", "1"], sleep=clock.sleep, clock=clock,
+                       engine=_RefusedOpen(), out=out, err=err)
+        check(f"Linux as root ({said}): EPERM at the open -> exit {want}", code == want,
+              f"(code={code})")
+        check("and it names the refusal, not sudo", T(said) in err.getvalue()
+              and T("dialogs.ebpf_needs_root") not in err.getvalue(), f"({err.getvalue()!r})")
+
+
+def test_a_session_the_system_will_not_let_put_packets_back_exits_permission(monkeypatch):
+    """MEASURED 2026-11-03 (Ubuntu 26.04, WSL): without CAP_NET_RAW the open works and
+    every packet put back is refused. The engine stops at the first one
+    (``test_engine``); the run ends with the exit a missing right gets at the open, 7,
+    so a job tells it from a driver that broke mid-run, which stays RUNTIME. A real
+    engine, so the code comes from the fault the engine records, not from a fake's
+    attribute."""
+
+    class _NoRawSocket(capture_backend.WinDivertBackend):
+        @staticmethod
+        def send_refused_hint(exc):
+            return "log.ebpf_send_refused" if isinstance(exc, PermissionError) else ""
+
+    class _SendsRefused(FakeDivert):
+        def send(self, p, recalculate_checksum=True):
+            raise PermissionError(errno.EPERM, "ebpfdivert_send: Operation not permitted")
+
+    class _RecvBreaks(FakeDivert):
+        def recv(self):
+            raise OSError("the driver went away")
+
+    class _On(BeanEngine):
+        # A given engine keeps its own log: run_cli wires log.info only into one it makes.
+        def __init__(self, divert):
+            self.lines = []
+            super().__init__(log_fn=self.lines.append)
+            self._fake = divert
+
+        def start(self, flt, divert=None, **kw):
+            return super().start(flt, divert=self._fake, **kw)
+
+    monkeypatch.setattr(capture_backend, "current", lambda: _NoRawSocket())
+    for divert, want, said in (
+            (_SendsRefused([FakePacket(size=100, port=7990 + i) for i in range(20)]),
+             exitcodes.PERMISSION, "CAP_NET_RAW"),
+            (_RecvBreaks([]), exitcodes.RUNTIME, "the driver went away")):
+        out, err = io.StringIO(), io.StringIO()
+        clock = FakeClock()
+        engine = _On(divert)
+        code = run_cli(["--simulate", "--duration", "0", "--interval", "1", "--format", "json"],
+                       sleep=clock.sleep, clock=clock, engine=engine, out=out, err=err)
+        records = [json.loads(line) for line in out.getvalue().splitlines() if line.strip()]
+        summary = records[-1] if records else {}
+        name = type(divert).__name__
+        check(f"{name}: exit {want}", code == want, f"(code={code})")
+        check(f"{name}: the summary says the run faulted, under that exit's name",
+              summary.get("stop_reason") == "fault"
+              and summary.get("exit_name") == exitcodes.name_of(want), f"({summary})")
+        check(f"{name}: and says why", any(said in line for line in engine.lines),
+              f"({engine.lines[-4:]})")
 
 
 def test_the_console_also_says_what_to_do_about_a_driver_that_will_not_open(monkeypatch):

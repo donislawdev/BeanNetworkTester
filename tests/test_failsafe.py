@@ -417,7 +417,9 @@ def test_a_linux_window_says_what_capturing_needs_and_the_advice_that_fits():
         from beantester import capture_backend
         capture_backend._CURRENT = capture_backend._EBPFDIVERT
         real_rights = capture_backend._rights
-        capture_backend._rights = lambda e, r, s: real_rights(e, r, "CapEff:\\t0000000000000000\\n")
+        # root holds root's capabilities, as /proc shows it; anyone else none
+        capture_backend._rights = lambda e, r, s: real_rights(
+            e, r, "CapEff:\\t000001ffffffffff\\n" if e == 0 else "CapEff:\\t0000000000000000\\n")
         shown = []
         dialogs.show_error = lambda parent, title, message: shown.append(message)
         refused = PermissionError(1, "ebpfdivert_open: Operation not permitted")
@@ -447,6 +449,17 @@ def test_a_linux_window_says_what_capturing_needs_and_the_advice_that_fits():
         app._logview.drain()
         assert any(bnt.T("log.ebpf_note_experimental") in line for line in app._log_lines)
         assert app.running is False
+
+        # root that a container started without the capabilities: told that, and
+        # neither "not root" nor the kernel's policy
+        capture_backend._rights = lambda e, r, s: real_rights(e, r, "CapEff:\\t0000000000000000\\n")
+        app._is_admin = app._detect_admin()
+        assert app._is_admin is False
+        assert capture_backend.current().rights_banner() == "warn.ebpf_root_without_caps"
+        app._finish_start(refused)
+        assert bnt.T("dialogs.ebpf_root_without_caps") in shown[-1], shown[-1]
+        assert bnt.T("dialogs.ebpf_refused_as_root") not in shown[-1], shown[-1]
+        assert bnt.T("dialogs.ebpf_needs_root") not in shown[-1], shown[-1]
     """)
 
 

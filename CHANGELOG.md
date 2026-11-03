@@ -20,6 +20,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   that went past its limit a second time read 4 GiB too little for each time after the first.
   On Windows that is the data sent again (the Resent column), and with it Data sent.
 
+- **Linux, experimental: the right capabilities for capturing without root.** Capturing
+  needs CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN and CAP_NET_RAW. The program asked only for
+  CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW: with just those, START was refused, and the
+  message asked for the same three. Diagnostics, `--doctor`, the messages and the README
+  now name all four.
+
+- **Linux, experimental: a session that cannot put packets back stops and says why.**
+  Without CAP_NET_RAW a session started, held all of its target's traffic and ended "ok".
+  It now stops at the first such packet with exit code 7, the code for missing rights, and
+  says which capability is missing.
+
+- **Linux, experimental: root without the capabilities is told so.** In a container started
+  without them, Diagnostics said capturing was allowed, and a refused START blamed the
+  kernel's security policy. Both now say that root is missing the capabilities, and a
+  refused START ends with exit code 7, the code for missing rights, instead of 1.
+
+- **Linux, experimental: what happens after a killed session, said as it is.** Diagnostics
+  said the kernel removes a killed session's programs within about 3 seconds. Traffic does
+  flow normally again within about 3 seconds, but the programs stay until the next session
+  removes them. A session that stops removes its own at once.
+
 ## [1.0.0] - 2026-11-03
 
 ### Added

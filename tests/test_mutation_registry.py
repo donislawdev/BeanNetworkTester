@@ -6062,9 +6062,9 @@ MUTATIONS = [
         # reads as a stalled injector and stops a healthy session.
         "label": "engine: the inject thread's busy marker is never cleared",
         "file": "beantester/engine.py",
-        "old": ("                    self._warn_send_failed(e)\n"
+        "old": ("                    self._send_failed(e, session)\n"
                 "            session.busy = None"),
-        "new": "                    self._warn_send_failed(e)",
+        "new": "                    self._send_failed(e, session)",
         "test": "test_a_packet_waiting_out_its_delay_is_not_a_stalled_injector",
     },
     {
@@ -6275,14 +6275,14 @@ MUTATIONS = [
     {
         "label": "capture_backend: Linux never reads EPERM as missing rights",
         "file": "beantester/capture_backend.py",
-        "old": "        return _euid() != 0\n",
+        "old": "        return _euid() != 0 or _root_without_rights()\n",
         "new": "        return False\n",
         "test": "test_linux_answers_an_unprivileged_open_with_permission",
     },
     {
         "label": "capture_backend: root refused by the kernel is told to use sudo",
         "file": "beantester/capture_backend.py",
-        "old": "        return _euid() != 0\n",
+        "old": "        return _euid() != 0 or _root_without_rights()\n",
         "new": "        return True\n",
         "test": "test_only_linux_reads_an_open_failure_as_missing_rights",
     },
@@ -6397,11 +6397,110 @@ MUTATIONS = [
         "test": "test_the_linux_backend_reads_rights_the_way_the_doctor_row_does",
     },
     {
-        "label": "capture_backend: two of the three capabilities are enough",
+        "label": "capture_backend: some of the capabilities are enough",
         "file": "beantester/capture_backend.py",
-        "old": "    if caps & needed == needed:\n",
-        "new": "    if caps & needed:\n",
+        "old": "        if caps & needed == needed:\n",
+        "new": "        if caps & needed:\n",
         "test": "test_the_linux_backend_reads_rights_the_way_the_doctor_row_does",
+    },
+    {
+        # MEASURED 2026-11-03: without CAP_PERFMON the open is refused (EACCES) - the
+        # three capabilities the row named before.
+        "label": "capture_backend: a capture is allowed without CAP_PERFMON",
+        "file": "beantester/capture_backend.py",
+        "old": "_CAPTURE_RIGHTS = ((_SENDS | (1 << _CAP_BPF) | (1 << _CAP_PERFMON),\n",
+        "new": "_CAPTURE_RIGHTS = ((_SENDS | (1 << _CAP_BPF),\n",
+        "test": "test_the_linux_backend_reads_rights_the_way_the_doctor_row_does",
+    },
+    {
+        # MEASURED 2026-11-03: without CAP_NET_RAW the open succeeds and no packet goes back.
+        "label": "capture_backend: a capture is allowed without CAP_NET_RAW",
+        "file": "beantester/capture_backend.py",
+        "old": "_SENDS = (1 << _CAP_NET_ADMIN) | (1 << _CAP_NET_RAW)\n",
+        "new": "_SENDS = (1 << _CAP_NET_ADMIN)\n",
+        "test": "test_the_linux_backend_reads_rights_the_way_the_doctor_row_does",
+    },
+    {
+        "label": "capture_backend: root is named by its capabilities, not as root",
+        "file": "beantester/capture_backend.py",
+        "old": "            return \"root\" if euid == 0 else names\n",
+        "new": "            return names\n",
+        "test": "test_the_linux_backend_reads_rights_the_way_the_doctor_row_does",
+    },
+    {
+        "label": "capture_backend: root without the capabilities is told it is not root",
+        "file": "beantester/capture_backend.py",
+        "old": "        return \"warn.ebpf_root_without_caps\" if _euid() == 0 else \"warn.ebpf_not_root\"\n",
+        "new": "        return \"warn.ebpf_not_root\"\n",
+        "test": "test_the_linux_backend_reads_rights_the_way_the_doctor_row_does",
+    },
+    {
+        "label": "capture_backend: a container's root is told about the kernel's policy",
+        "file": "beantester/capture_backend.py",
+        "old": ("            return cls.ROOT_WITHOUT_RIGHTS_HINT if _root_without_rights() "
+                "else cls.ROOT_REFUSED_HINT\n"),
+        "new": "            return cls.ROOT_REFUSED_HINT\n",
+        "test": "test_only_linux_reads_an_open_failure_as_missing_rights",
+    },
+    {
+        # A firewall rule that drops what this program sends answers EPERM too.
+        "label": "capture_backend: every refused send stops the session",
+        "file": "beantester/capture_backend.py",
+        "old": "        return \"\" if _capabilities(\"/\", None) & (1 << _CAP_NET_RAW) else cls.SEND_REFUSED_HINT\n",
+        "new": "        return cls.SEND_REFUSED_HINT\n",
+        "test": "test_linux_stops_only_for_a_send_it_knows_will_be_refused_for_good",
+    },
+    {
+        "label": "engine: a send refused for good leaves the session holding its traffic",
+        "file": "beantester/engine.py",
+        "old": "        if refused:\n",
+        "new": "        if False:\n",
+        "test": "test_a_send_refused_for_good_stops_the_session_and_says_why",
+    },
+    {
+        "label": "engine: a send refused for good is not recorded as a missing right",
+        "file": "beantester/engine.py",
+        "old": "session=session, rights_missing=True)",
+        "new": "session=session)",
+        "test": "test_a_send_refused_for_good_stops_the_session_and_says_why",
+    },
+    {
+        "label": "engine: a new session keeps the last one's missing right",
+        "file": "beantester/engine.py",
+        "old": "            self.fault = None\n            self.fault_rights_missing = False\n",
+        "new": "            self.fault = None\n",
+        "test": "test_a_send_refused_for_good_stops_the_session_and_says_why",
+    },
+    {
+        # The exit 7 names: a job tells a missing right from a driver that broke.
+        "label": "cli: a session stopped for a missing right exits RUNTIME again",
+        "file": "beantester/cli.py",
+        "old": "        code = exitcodes.PERMISSION if engine.fault_rights_missing else exitcodes.RUNTIME\n",
+        "new": "        code = exitcodes.RUNTIME\n",
+        "test": "test_a_session_the_system_will_not_let_put_packets_back_exits_permission",
+    },
+    {
+        "label": "cli: every session fault exits PERMISSION",
+        "file": "beantester/cli.py",
+        "old": "        code = exitcodes.PERMISSION if engine.fault_rights_missing else exitcodes.RUNTIME\n",
+        "new": "        code = exitcodes.PERMISSION\n",
+        "test": "test_a_session_the_system_will_not_let_put_packets_back_exits_permission",
+    },
+    {
+        # Root a container started without the capabilities lacks a right for certain.
+        "label": "capture_backend: a container's root refused at the open exits RUNTIME again",
+        "file": "beantester/capture_backend.py",
+        "old": "        return _euid() != 0 or _root_without_rights()\n",
+        "new": "        return _euid() != 0\n",
+        "test": "test_only_linux_reads_an_open_failure_as_missing_rights",
+    },
+    {
+        # Without CAP_NET_RAW alone START works: "cannot start" promises the wrong thing.
+        "label": "capture_backend: the doctor's root row says START fails, and no more",
+        "file": "beantester/capture_backend.py",
+        "old": "\"a capture session cannot run: START fails, or the \"",
+        "new": "\"a capture session cannot start \"",
+        "test": "test_the_linux_doctor_rows_say_what_is_missing_and_fail_what_stops_a_capture",
     },
     {
         "label": "capture_backend: an unelevated Windows window is not told to elevate",
@@ -9625,7 +9724,7 @@ MUTATIONS = [
     {
         "label": "diagnostics: the Linux sheet says root is the only way to capture rights",
         "file": "lang/en.json",
-        "old": "    Capture rights: capturing traffic needs root, or the capabilities CAP_BPF, CAP_NET_ADMIN and CAP_NET_RAW. Start the program with sudo.\\n",
+        "old": "    Capture rights: capturing traffic needs root, or the capabilities CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN and CAP_NET_RAW. Start the program with sudo.\\n",
         "new": "    Capture rights: capturing traffic needs root. Start the program with sudo.\\n",
         "test": "test_the_linux_help_names_every_row_that_can_stop_a_session",
     },
