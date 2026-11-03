@@ -104,7 +104,10 @@ class Watch:
         self.state = STARTING
         self.code = 0
         self.detail = ""
-        self.first = self.previous = self.last = None
+        self.previous = self.last = None
+        # Each counter's growth since the first reading: the steps between readings added
+        # up, so one that wraps more than once while watched is not cut to its width.
+        self.counted = collections.Counter()
         self.handle = None          # how the system finds it again (``Reading.handle``)
         self.history = collections.deque(maxlen=HISTORY)    # (at, smoothed, sample)
         # When Windows last measured a round trip, and the bytes sent by then.
@@ -131,10 +134,13 @@ class Watch:
         self.state, self.code, self.detail = reading.state, reading.code, reading.detail
         if reading.state != tcpestats.OK:
             return
-        if self.first is None:
-            self.first, self.since = sample, at
+        if self.since is None:
+            self.since = at
         if self.last is None or sample.rtt_samples != self.last.rtt_samples:
             self.measured_at, self.sent_when_measured = at, sample.bytes_out
+        if self.last is not None:
+            for field in sample.widths:
+                self.counted[field] += _grown(self.last, sample, field)
         self.previous, self.last, self.read_at = self.last, sample, at
         if sample.smoothed_rtt is not None:
             # A reading with no newest sample (the field still unset) draws the
@@ -148,11 +154,12 @@ class Watch:
         return self.last is not None and field not in self.last.absent
 
     def since_watching(self, field):
-        """A counter's change since the first reading - modulo its width
-        (``Sample.widths``): Windows' 32-bit counters wrap, Linux's timeouts at 16."""
+        """A counter's growth since the first reading (``counted``): Windows' 32-bit
+        counters wrap, Linux's timeouts at 16, and the bytes sent again on Windows pass
+        4 GiB - a wrap - on a long watch of a lossy connection."""
         if self.last is None:
             return None
-        return (getattr(self.last, field) - getattr(self.first, field)) % _span(self.last, field)
+        return self.counted[field]
 
     def unmeasured_for(self):
         """Whole seconds since Windows last measured a round trip, when data went out
@@ -171,7 +178,7 @@ class Watch:
     def since_previous(self, field):
         if self.last is None or self.previous is None:
             return 0
-        return (getattr(self.last, field) - getattr(self.previous, field)) % _span(self.last, field)
+        return _grown(self.previous, self.last, field)
 
 
 def _span(sample, field):
@@ -179,10 +186,27 @@ def _span(sample, field):
     return 2 ** sample.widths.get(field, 32)
 
 
+def _grown(old, new, field):
+    """How much a counter grew from one reading to the next - modulo its width
+    (``Sample.widths``). The data sent is not one counter: it is the data sent once and
+    the data sent again, each at its own width - Windows' resends count in 32 bits
+    (``BytesRetrans``) and wrap long before the 64-bit rest."""
+    if field == "bytes_out":
+        return ((_sent_once(new) - _sent_once(old)) % _span(new, field)
+                + _grown(old, new, "resent_bytes"))
+    return (getattr(new, field) - getattr(old, field)) % _span(new, field)
+
+
+def _sent_once(sample):
+    """The data sent for the first time: the data sent, less what of it was sent again."""
+    return sample.bytes_out - sample.resent_bytes
+
+
 def _went_back(old, new):
-    """A 64-bit byte counter never goes down on one connection: when it does, the
-    same four numbers now name a new connection."""
-    return new.bytes_out < old.bytes_out or new.bytes_in < old.bytes_in
+    """The data sent once and the data received never go down on one connection: when
+    they do, the same four numbers now name a new connection. Not the data sent - the
+    resends in it wrap at 32 bits on Windows."""
+    return _sent_once(new) < _sent_once(old) or new.bytes_in < old.bytes_in
 
 
 class Watchlist:

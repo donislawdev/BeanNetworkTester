@@ -70,6 +70,52 @@ def test_a_port_taken_by_a_new_connection_stops_the_watch_instead_of_mixing_numb
           first.state == tcpestats.NOT_COUNTING and first.reading)
 
 
+def test_a_resend_counter_that_wraps_is_neither_a_new_connection_nor_a_huge_number():
+    """Windows' data sent is the data sent once (64 bits) plus the data sent again,
+    whose counter has 32 (``BytesRetrans``): when that one wraps, the sum drops by
+    about 2**32 on the same connection."""
+    once = 5 * 2 ** 32 + 1000
+    watch = Watch(C, "app.exe", 7, 0.0)
+    watch.take(ok(out=once + 2 ** 32 - 10, resent=2 ** 32 - 10), 1.0)
+    watch.take(ok(out=once + 2000 + 20, resent=20), 2.0)
+    check("the same connection: still read", watch.state == tcpestats.OK and watch.reading,
+          f"({watch.state})")
+    sent = watch.since_watching("bytes_out")
+    check("data sent: 2000 B sent once and 30 B sent again", sent == 2030, f"({sent})")
+    [data] = [d for d in tcphealth.details(watch) if d.key == "data"]
+    check("and the details say it", data.value.startswith("2030 / "), f"({data.value})")
+    check("so does the report", "sent 2030 B" in tcphealth.report_lines(_listed(watch))[-1])
+
+
+def test_a_counter_that_wraps_twice_while_watched_keeps_both_wraps():
+    """A counter's growth is the steps between readings added up: the first reading
+    and the last alone would read a growth past the counter's width as the rest of it
+    - on Windows 4 GiB of the bytes sent again, and of the data sent, gone."""
+    watch = Watch(C, "app.exe", 7, 0.0)
+    for second, resent in enumerate((0, 2 ** 32 - 10, 20), start=1):
+        watch.take(ok(out=1000 * second + resent, resent=resent), float(second))
+    resent = watch.since_watching("resent_bytes")
+    check("resent since watching: both wraps", resent == 2 ** 32 + 20, f"({resent})")
+    check("and since the previous reading", watch.since_previous("resent_bytes") == 30)
+    sent = watch.since_watching("bytes_out")
+    check("data sent: 2000 B sent once and all of it sent again", sent == 2 ** 32 + 2020,
+          f"({sent})")
+    [data] = [d for d in tcphealth.details(watch) if d.key == "data"]
+    check("the details say it", data.value.startswith(f"{2 ** 32 + 2020} / "), f"({data.value})")
+    check("so does the list", tcphealth.cells(watch)[5] == f"{2 ** 32 + 20} B")
+    report = tcphealth.report_lines(_listed(watch))[-1]
+    check("and the report", f"sent {2 ** 32 + 2020} B" in report
+          and f"resent {2 ** 32 + 20} B" in report, f"({report})")
+
+
+def _listed(*watches):
+    watchlist = Watchlist()
+    for watch in watches:
+        watchlist.watches[watch.key] = watch
+    watchlist.read_at = 3.0
+    return watchlist
+
+
 def test_the_chart_keeps_a_minute_of_measured_round_trips_and_says_its_span():
     watch = Watch(C, "app.exe", 7, 0.0)
     watch.take(ok(count=False), 0.0)
@@ -166,8 +212,9 @@ def test_only_a_tcp_row_with_a_far_end_and_a_connection_behind_it_is_offered():
 
 def test_the_details_and_the_report_say_the_numbers_since_watching():
     watch = Watch(Connection("2001:db8::20", 52188, "2001:db8::7", 443), "app.exe", 7, 0.0)
-    watch.take(ok(resent=1460, timeouts=1, out=1000, received=5000, dupacks=4), 1.0)
-    watch.take(ok(resent=4380, timeouts=1, out=3000, received=9000, dupacks=7), 2.0)
+    # The data sent counts the data sent again too, as both systems count it.
+    watch.take(ok(resent=1460, timeouts=1, out=1000 + 1460, received=5000, dupacks=4), 1.0)
+    watch.take(ok(resent=4380, timeouts=1, out=3000 + 4380, received=9000, dupacks=7), 2.0)
     rows = {d.key: d for d in tcphealth.details(watch)}
     check("the remote address offered to the Control page, without brackets",
           rows["remote"].value == "[2001:db8::7]:443" and rows["remote"].address == "2001:db8::7")
@@ -179,7 +226,8 @@ def test_the_details_and_the_report_say_the_numbers_since_watching():
           "lowest" not in rows and "range" in rows)
     check("a counter that did not grow: no brackets", rows["timeouts"].value == "0"
           and rows["dupacks"].value == "3 (+3)", f"({rows['timeouts']}, {rows['dupacks']})")
-    check("bytes sent and received since watching", rows["data"].value == "2000 / 4000 B")
+    check("bytes sent (2000 once, 2920 again) and received since watching",
+          rows["data"].value == "4920 / 4000 B", f"({rows['data']})")
     check("the Note column says nothing but the marker (every other note was cut)",
           all(d.note == () for d in rows.values()), [d for d in rows.values() if d.note])
     lines = tcphealth.report_lines(Watchlist())
@@ -192,7 +240,7 @@ def test_the_details_and_the_report_say_the_numbers_since_watching():
           "app.exe [2001:db8::20]:52188 -> [2001:db8::7]:443: ok" in text
           and "smoothed 200 ms" in text and "resent 2920 B, timeouts 0" in text
           and "segments" not in text
-          and "sent 2000 B, received 4000 B" in text, "\n" + text)
+          and "sent 4920 B, received 4000 B" in text, "\n" + text)
 
 
 def test_a_round_trip_windows_stopped_measuring_while_data_went_out_is_said_to_be_old():
@@ -285,10 +333,10 @@ def test_a_linux_reading_says_only_what_its_kernel_keeps():
     count of measurements - so none of those is said, not even as "not measured yet". It
     does count the segments sent again, which Windows never fills."""
     watch = Watch(C, "app", 7, 0.0)
-    watch.take(linux(total_retrans=3, bytes_retrans=4344), 1.0)
-    for second in range(2, 9):
-        watch.take(linux(total_retrans=5, bytes_retrans=7240, bytes_sent=1000 + 500 * second),
-                   float(second))
+    watch.take(linux(total_retrans=3, bytes_retrans=4344, bytes_sent=10000), 1.0)
+    for second in range(2, 9):              # the 2896 B sent again are data sent too
+        watch.take(linux(total_retrans=5, bytes_retrans=7240,
+                         bytes_sent=10000 + 2896 + 500 * (second - 2)), float(second))
     rows = {d.key: d for d in tcphealth.details(watch)}
     check("what Linux keeps, in its order",
           list(rows) == ["process", "local", "remote", "state", "srtt", "lowest", "rttvar", "rto",
@@ -306,7 +354,7 @@ def test_a_linux_reading_says_only_what_its_kernel_keeps():
     text = tcphealth.report(_one(watch))
     check("the report says the same and no more",
           "smoothed 210 ms, lowest 180 ms, variation 3 ms, resend timer 201 ms, segment size "
-          "1448 B" in text and "resent 2896 B (2 segments), timeouts 0, sent 4000 B, received 0 B"
+          "1448 B" in text and "resent 2896 B (2 segments), timeouts 0, sent 5896 B, received 0 B"
           in text and not any(word in text for word in ("last", "highest", "measured",
                                                         "fast resends", "duplicate ACKs")),
           "\n" + text)
@@ -319,8 +367,8 @@ def test_linux_counters_wrap_at_their_own_widths():
     """The kernel's timeout count is 16 bits, its resent bytes 64: a difference taken at
     Windows' 32 would be a huge jump in one and a wrap that never was in the other."""
     watch = Watch(C, "app", 7, 0.0)
-    watch.take(linux(total_rto=65534, bytes_retrans=1), 1.0)
-    watch.take(linux(total_rto=2, bytes_retrans=2 ** 32 + 5), 2.0)
+    watch.take(linux(total_rto=65534, bytes_retrans=1, bytes_sent=1000 + 1), 1.0)
+    watch.take(linux(total_rto=2, bytes_retrans=2 ** 32 + 5, bytes_sent=1000 + 2 ** 32 + 5), 2.0)
     check("timeouts across the 16-bit wrap", watch.since_watching("timeouts") == 4
           and watch.since_previous("timeouts") == 4, f"({watch.since_watching('timeouts')})")
     check("resent bytes past 4 GiB", watch.since_watching("resent_bytes") == 2 ** 32 + 4,

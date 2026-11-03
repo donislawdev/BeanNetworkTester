@@ -34,7 +34,10 @@ class FakeIphlpapi:
                                                    "PktsRetrans": 12, "BytesRetrans": 16488,
                                                    "Timeouts": 1, "FastRetran": 9,
                                                    "DupAcksIn": 27, "CurMss": 1460}
-        self.data = data if data is not None else {"DataBytesOut": 2400, "DataBytesIn": 18100}
+        # Windows' own DataBytesOut runs above what went out (see the data-sent test).
+        self.data = data if data is not None else {"DataBytesOut": 141000, "DataBytesIn": 18100,
+                                                   "ThruBytesAcked": 120000, "SndUna": 1000000,
+                                                   "SndMax": 1002920}
         self.calls = []
 
     def _set(self, name, ref, kind, rw, version, size, offset):
@@ -82,7 +85,8 @@ def test_watching_turns_counting_on_for_both_kinds_and_reads_them():
     lib = FakeIphlpapi()
     got = tcpestats.watch(V4, system(lib))
     check("ok, with the numbers", got.state == tcpestats.OK and got.sample == tcpestats.Sample(
-        214, 231, 18, 402, 31, 342, 16488, 1, 9, 27, 1460, 2400, 18100, 3), f"({got})")
+        214, 231, 18, 402, 31, 342, 16488, 1, 9, 27, 1460, 120000 + 2920 + 16488, 18100, 3),
+          f"({got})")
     sets = [c for c in lib.calls if c[0] == "Set"]
     check("Set for PATH and DATA, TRUE, version 0, the RW's size, offset 0",
           sets == [("Set", tcpestats.PATH, 20, 1, 0, 1, 0), ("Set", tcpestats.DATA, 20, 1, 0, 1, 0)],
@@ -108,6 +112,26 @@ def test_a_reading_is_believed_only_while_both_kinds_count():
         got = tcpestats.read(V4, system(lib))
         check(f"flag FALSE on kind {kind}: not counting, and no numbers",
               got == tcpestats.Reading(tcpestats.NOT_COUNTING), f"({got})")
+
+
+def test_data_sent_is_what_went_out_not_windows_own_byte_count():
+    """MEASURED 2026-11-03 on Windows Server 2025 (4 MiB to a Linux peer through a 2% loss
+    session): DataBytesOut said 4 404 110 B where the session counted 2960 packets carrying
+    4 318 413 B of data - ThruBytesAcked + BytesRetrans to the byte - and with no loss it
+    was 0.1% above too. These are that connection's numbers."""
+    path = {"CountRtt": 40, "SmoothedRtt": 2, "CurRto": 300, "BytesRetrans": 124100,
+            "FastRetran": 52, "CurMss": 1460}
+    measured = FakeIphlpapi(path=path, data={
+        "DataBytesOut": 4404110, "DataBytesIn": 8, "ThruBytesAcked": 4194313,
+        "SndUna": 2737971764, "SndNxt": 2737971764, "SndMax": 2737971764})
+    got = tcpestats.read(V4, system(measured))
+    check("acknowledged + sent again: what went out", got.sample.bytes_out == 4318413,
+          f"({got.sample.bytes_out})")
+    in_flight = FakeIphlpapi(path=dict(path, BytesRetrans=0), data={
+        "DataBytesOut": 9000, "ThruBytesAcked": 5000, "SndUna": 2 ** 32 - 1000, "SndMax": 1920})
+    got = tcpestats.read(V4, system(in_flight))
+    check("data not acknowledged yet counts too, across the sequence numbers' wrap",
+          got.sample.bytes_out == 5000 + 2920, f"({got.sample.bytes_out})")
 
 
 def test_an_ended_connection_answers_1168_or_50_and_anything_else_is_a_failure():

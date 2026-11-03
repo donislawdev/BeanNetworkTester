@@ -11,6 +11,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   about 10 ms too long: the time the program spent preparing the request was counted as time
   on the network. IPv4 was not affected.
 
+- **TCP health on Windows: Data sent counts what really went out.** On a connection that lost
+  data it read up to about 5% too much, and a little too much without losses: Windows' own
+  count of the data sent includes bytes that never left. It is now the data the other end
+  confirmed, the data still on its way and the data sent again.
+
+- **TCP health: counts that pass 4 GiB more than once stay whole.** On a long watch, a count
+  that went past its limit a second time read 4 GiB too little for each time after the first.
+  On Windows that is the data sent again (the Resent column), and with it Data sent.
+
 ## [1.0.0] - 2026-11-03
 
 ### Added
