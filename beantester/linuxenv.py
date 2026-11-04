@@ -44,10 +44,13 @@ from . import crashlog, winenv
 # the program's own exit codes (exitcodes.py) is either.
 NOT_STARTED = (126, 127)
 
-# What the copy answers when it ran as root but its window could not reach the
-# person's display: pkexec's own "did not run", so the person's process opens the
-# window itself, without root, instead of leaving the person with no window at all.
-NO_WINDOW = 127
+# What the copy answers when it ran as root but its window could not open (the
+# person's display out of its reach): the person's process then opens the window
+# itself, without root, instead of leaving the person with no window at all. A code
+# of its own - not pkexec's 126/127, none of exitcodes.py - because the copy DID
+# start and has already said why: answered as 127 until 2026-11-04, it made the
+# person's process add "pkexec did not start the window as root" below that line.
+NO_WINDOW = 125
 
 # The variables pkexec keeps from its caller, apart from SHELL, TERM, COLORTERM,
 # DISPLAY and XAUTHORITY: nothing of those is needed, and each is a way to be refused.
@@ -179,6 +182,8 @@ def ask_for_root(argv, run=_run, which=shutil.which, environ=None):
         return None
     finally:
         signal.signal(signal.SIGINT, previous)
+    if code == NO_WINDOW:
+        return None                 # the copy ran, said why, and the window opens here
     if code in NOT_STARTED:
         print(f"pkexec did not start the window as root (exit {code}): "
               "it opens without administrator rights", file=sys.stderr)

@@ -140,6 +140,50 @@ def test_rst_cooldown_sends_once_then_drops_silently():
     assert m["rst_sent"] == 1, m["rst_sent"]
 
 
+def test_a_reset_switched_on_before_a_connection_lets_it_open_and_resets_it():
+    """RST switched on, THEN a connection made: the handshake goes through and the
+    reset fires on its last ACK - the connection opens and is reset.
+
+    MEASURED 2026-11-04 (impairment rig on Windows, the Ubuntu VM and WSL): at 100%
+    a NEW connection never opened - TimeoutError at connect(), five RSTs sent -
+    while one opened before the switch heard ConnectionResetError from the first.
+    The SYN-ACK was the first packet that did not count as a SYN: it was dropped,
+    and the RST forged from it carried no ACK, which a client in SYN_SENT ignores.
+    """
+    def segment(outbound, syn, ack, seq, ack_num):
+        p = _tcp_packet(5000, 6000, is_outbound=outbound, syn=syn)
+        p.tcp = _SyntheticTCP(syn=syn, ack=ack, seq_num=seq, ack_num=ack_num)
+        if not outbound:            # the far end speaking: its address and port first
+            p.src_addr, p.dst_addr = p.dst_addr, p.src_addr
+            p.src_port, p.dst_port = p.dst_port, p.src_port
+        return p
+
+    syn = segment(True, True, False, 1000, 0)
+    synack = segment(False, True, True, 7000, 1001)
+    ack = segment(True, False, True, 1001, 7001)
+    div = RecordingTcpDivert([syn, synack, ack])
+    eng = BeanEngine()
+    eng.set_rst(100, 30.0)
+    eng.start("test", divert=div)
+    _drain(eng, 3)
+    # until send() has recorded the SYN-ACK, not only the queue emptied
+    deadline = time.time() + 5.0
+    while synack not in div.sent and time.time() < deadline:
+        time.sleep(0.01)
+    eng.stop()
+
+    passed = [p for p in div.sent if not p.tcp.rst]
+    resets = [p for p in div.sent if p.tcp.rst]
+    assert synack in passed, ("the SYN-ACK was held, so the connection cannot open",
+                              [(p.tcp.syn, p.tcp.ack) for p in passed])
+    assert ack not in passed, "the handshake's last ACK must be what the reset fires on"
+    assert len(resets) == 1, len(resets)
+    # built from that ACK: from the far end, at the sequence the client expects next
+    rst = resets[0]
+    assert (rst.tcp.seq_num, rst.src_port, rst.dst_port) == (7001, 6000, 5000), (
+        rst.tcp.seq_num, rst.src_port, rst.dst_port)
+
+
 def _raw_tcp_ack(sport=54321, dport=39854, seq=1000, ack=2000):
     """A minimal, valid IPv4+TCP ACK - enough for _build_rst_packet to work on."""
     import struct

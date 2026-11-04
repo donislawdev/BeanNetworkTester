@@ -3226,6 +3226,25 @@ MUTATIONS = [
         "test": "test_the_reset_that_answers_a_syn_acknowledges_it",
     },
     {
+        # The SYN-ACK arms the reset again: a connection made while RST is on never
+        # opens (connect() times out, rst_sent counting) instead of being reset.
+        "label": "rst: a new connection's SYN-ACK arms the reset again",
+        "file": "beantester/core.py",
+        "old": "                trigger = not (is_syn or is_synack) and (",
+        "new": "                trigger = not is_syn and (",
+        "test": "test_a_reset_switched_on_before_a_connection_lets_it_open_and_resets_it",
+    },
+    {
+        # The same, one step earlier: packet_meta stops telling a SYN-ACK apart (the
+        # reading before 2026-11-04 - a SYN-ACK is neither a SYN nor a SYN-ACK).
+        "label": "rst: packet_meta does not tell a SYN-ACK apart",
+        "file": "beantester/core.py",
+        "old": "                    is_synack = bool(getattr(tcp, \"ack\", False))\n"
+               "                    is_syn = not is_synack",
+        "new": "                    is_syn = not getattr(tcp, \"ack\", False)",
+        "test": "test_a_reset_switched_on_before_a_connection_lets_it_open_and_resets_it",
+    },
+    {
         # A refusal counted as a connection torn down. Both numbers reach the user
         # (connections_reset in the CSV and the repro report), and neither would
         # mean anything afterwards.
@@ -7787,18 +7806,35 @@ MUTATIONS = [
                "        root = tk.Tk(className=desktop.WINDOW_CLASS)\n"
                "        App(root)\n"
                "    except Exception as exc:\n"
-               "        code = _window_did_not_open(exc)\n"
-               "        # A copy pkexec started whose Tk cannot reach the person's display answers\n"
-               "        # pkexec's own \"did not run\": the person's process then opens the window.\n"
+               "        # A copy pkexec started whose Tk cannot start (the person's display out of its\n"
+               "        # reach) answers NO_WINDOW: the person's process then opens the window. Not a\n"
+               "        # failure, so no crash report: until 2026-11-04 this went through\n"
+               "        # _window_did_not_open first, which said \"The window could not open\" and left\n"
+               "        # a crash report in the person's data folder a moment before the window\n"
+               "        # opened (measured by the `linux_pkexec` rig's no_window case). The line names\n"
+               "        # no cause on purpose: a Tk that cannot start for any OTHER reason fails the\n"
+               "        # same way in the person's process, which then reports it as theirs.\n"
                "        if root is None and type(exc).__name__ == \"TclError\" and linuxenv.started_by_pkexec():\n"
+               "            print(\"The window could not open as administrator: it opens without \"\n"
+               "                  \"administrator rights\", file=sys.stderr)\n"
                "            return linuxenv.NO_WINDOW\n"
-               "        return code\n",
+               "        return _window_did_not_open(exc)\n",
         "new": "    except Exception as exc:\n"
                "        return _window_did_not_open(exc)\n"
                "    winenv.set_dpi_awareness()\n"
                "    root = tk.Tk(className=desktop.WINDOW_CLASS)\n"
                "    App(root)\n",
         "test": "test_a_tk_that_cannot_start_is_said_and_recorded",
+    },
+    {
+        # pkexec's copy without a screen reports a failed window again: "The window
+        # could not open" and a crash report, a moment before the window opens fine.
+        "label": "cli: pkexec's copy without a screen leaves a crash report again",
+        "file": "beantester/cli.py",
+        "old": "            print(\"The window could not open as administrator: it opens without \"\n"
+               "                  \"administrator rights\", file=sys.stderr)\n",
+        "new": "            _window_did_not_open(exc)\n",
+        "test": "test_a_copy_that_cannot_reach_the_screen_hands_the_window_back",
     },
     {
         # P3-40: the box must say what stderr says, under the program's name.
@@ -10464,6 +10500,15 @@ MUTATIONS = [
         "label": "pkexec: 126/127 taken for the copy's own exit code",
         "file": "beantester/linuxenv.py",
         "old": "    if code in NOT_STARTED:\n",
+        "new": "    if False:\n",
+        "test": "test_what_pkexec_answers_decides_who_opens_the_window",
+    },
+    {
+        # The copy that could not open its window answers a code of its own; taken
+        # for the copy's exit code, it leaves the person with no window at all.
+        "label": "pkexec: a copy without a window leaves the person without one",
+        "file": "beantester/linuxenv.py",
+        "old": "    if code == NO_WINDOW:\n",
         "new": "    if False:\n",
         "test": "test_what_pkexec_answers_decides_who_opens_the_window",
     },

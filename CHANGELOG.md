@@ -7,6 +7,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **TCP reset (RST) resets a connection that opens while it is on.** A connection a
+  program made after the reset was switched on never opened: its connect attempt waited
+  until it timed out, and the counters showed resets that the program never received.
+  Now the connection opens and is reset, so the program sees "connection reset", the
+  same as a connection that was already open. On Windows and Linux.
+
+- **Linux, experimental: no crash report when the window opens without administrator
+  rights.** When the copy started as administrator could not reach your screen, the
+  window opened without administrator rights as it should, but the terminal first said
+  "The window could not open", then that pkexec did not start the window, and a crash
+  report was left in your data folder. Now one line says that the window could not open
+  as administrator and opens without administrator rights, and no crash report is left.
+
 - **Port check no longer says Free when Windows did not list its sockets.** Windows keeps
   four lists of sockets (TCP and UDP, IPv4 and IPv6), and one of them can fail to load
   while the others load. The rows of that list read Free or Reserved by Windows, although
