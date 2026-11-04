@@ -3226,6 +3226,25 @@ MUTATIONS = [
         "test": "test_the_reset_that_answers_a_syn_acknowledges_it",
     },
     {
+        # The SYN-ACK arms the reset again: a connection made while RST is on never
+        # opens (connect() times out, rst_sent counting) instead of being reset.
+        "label": "rst: a new connection's SYN-ACK arms the reset again",
+        "file": "beantester/core.py",
+        "old": "                trigger = not (is_syn or is_synack) and (",
+        "new": "                trigger = not is_syn and (",
+        "test": "test_a_reset_switched_on_before_a_connection_lets_it_open_and_resets_it",
+    },
+    {
+        # The same, one step earlier: packet_meta stops telling a SYN-ACK apart (the
+        # reading before 2026-11-04 - a SYN-ACK is neither a SYN nor a SYN-ACK).
+        "label": "rst: packet_meta does not tell a SYN-ACK apart",
+        "file": "beantester/core.py",
+        "old": "                    is_synack = bool(getattr(tcp, \"ack\", False))\n"
+               "                    is_syn = not is_synack",
+        "new": "                    is_syn = not getattr(tcp, \"ack\", False)",
+        "test": "test_a_reset_switched_on_before_a_connection_lets_it_open_and_resets_it",
+    },
+    {
         # A refusal counted as a connection torn down. Both numbers reach the user
         # (connections_reset in the CSV and the repro report), and neither would
         # mean anything afterwards.

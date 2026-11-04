@@ -1101,7 +1101,7 @@ class BeanCore:
         return finish + (release - now)
 
     def decide(self, size, is_outbound, local_port, now, rng,
-               remote_ip=None, remote_port=None, is_syn=False, is_tcp=False):
+               remote_ip=None, remote_port=None, is_syn=False, is_tcp=False, is_synack=False):
         with self._lock:
             # 1) process targeting
             if self.target_active and local_port not in self.target_ports:
@@ -1294,7 +1294,16 @@ class BeanCore:
                 # fire on, so arming here would trade a working reset for a hang.
                 # The cooldown check above still applies to a SYN: a retransmit of
                 # a connection already being held down stays held down.
-                trigger = not is_syn and (
+                # Nor from the SYN-ACK, for the same reason one step later: it was
+                # the first packet of a NEW connection that did not count as a SYN,
+                # so a reset switched on before the connection opened fired there -
+                # dropping the SYN-ACK, with an RST the client in SYN_SENT ignores
+                # (no ACK) or, on loopback, one aimed at the server. MEASURED
+                # 2026-11-04 on Windows, the Ubuntu VM and WSL alike: TimeoutError at
+                # connect() and five RSTs sent, where a connection opened BEFORE the
+                # switch heard ConnectionResetError from the first one. Armed from the
+                # handshake's last ACK instead, the connection opens and is reset.
+                trigger = not (is_syn or is_synack) and (
                     (now < self._reset_now_deadline)
                     or (self.rst_prob > 0 and rng.random() < self.rst_prob))
                 if trigger:
@@ -1393,7 +1402,9 @@ class BeanCore:
     def packet_meta(packet):
         """What the capture loop needs from a packet, read once.
 
-        ``(is_out, local_port, remote_port, remote_ip, proto, is_syn, is_tcp)``. The
+        ``(is_out, local_port, remote_port, remote_ip, proto, is_syn, is_tcp,
+        is_synack)`` - ``is_syn`` a SYN alone (a connection asked for), ``is_synack``
+        the SYN-ACK that answers it. The
         REMOTE end is the destination on an outbound packet and the source on an
         inbound one. A packet that will not answer a read keeps the defaults (no
         ports, no address, protocol "IP"), and the failure is recorded once - under
@@ -1414,7 +1425,7 @@ class BeanCore:
         """
         is_out = bool(getattr(packet, "is_outbound", True))
         local_port = remote_port = remote_ip = None
-        is_syn = is_tcp = False
+        is_syn = is_tcp = is_synack = False
         try:
             if is_out:
                 local_port, remote_port = packet.src_port, packet.dst_port
@@ -1431,8 +1442,10 @@ class BeanCore:
                 is_tcp = True
                 proto = "TCP"
                 tcp = packet.tcp
-                if getattr(tcp, "syn", False) and not getattr(tcp, "ack", False):
-                    is_syn = True
+                if getattr(tcp, "syn", False):
+                    # ACK read only here: a data packet pays the one read it always did
+                    is_synack = bool(getattr(tcp, "ack", False))
+                    is_syn = not is_synack
             elif getattr(packet, "udp", None) is not None:
                 proto = "UDP"
             elif getattr(packet, "icmp", None) is not None or getattr(packet, "icmpv6", None) is not None:
@@ -1440,7 +1453,7 @@ class BeanCore:
         except Exception as _exc:
             from . import crashlog
             crashlog.once("engine.packet", _exc)
-        return is_out, local_port, remote_port, remote_ip, proto, is_syn, is_tcp
+        return is_out, local_port, remote_port, remote_ip, proto, is_syn, is_tcp, is_synack
 
     @staticmethod
     def build_rst_fields(pkt):

@@ -1821,7 +1821,8 @@ class BeanEngine:
             if now >= wait.next_at:
                 wait.sample(packet, now)
             size = len(packet.raw)
-            is_out, local_port, remote_port, remote_ip, proto, is_syn, is_tcp = meta(packet)
+            (is_out, local_port, remote_port, remote_ip, proto, is_syn, is_tcp,
+             is_synack) = meta(packet)
 
             key = BeanCore._flowkey(local_port, remote_ip, remote_port)
             if key is None and remote_ip is not None:
@@ -1843,7 +1844,7 @@ class BeanEngine:
 
             dec = self.core.decide(size, is_out, local_port, now, rng,
                                    remote_ip=remote_ip, remote_port=remote_port,
-                                   is_syn=is_syn, is_tcp=is_tcp)
+                                   is_syn=is_syn, is_tcp=is_tcp, is_synack=is_synack)
             # One lock acquisition for all three counters instead of one each.
             # This runs per packet, and scoped_seen - the denominator of the loss
             # figure - is only knowable once decide() has ruled on targeting, so

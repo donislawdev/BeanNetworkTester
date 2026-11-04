@@ -616,6 +616,9 @@ def test_a_reset_is_never_armed_from_a_syn():
     syn = core.decide(100, True, 5000, 0.0, rng, is_syn=True, **kw)
     check("a SYN does not arm a reset", not (syn.drop and syn.reason == "rst"),
           f"(drop={syn.drop}, reason={syn.reason})")
+    synack = core.decide(100, False, 5000, 0.0, rng, is_synack=True, **kw)
+    check("nor does the SYN-ACK that answers it", not (synack.drop and synack.reason == "rst"),
+          f"(drop={synack.drop}, reason={synack.reason})")
 
     data = core.decide(100, True, 5001, 0.0, rng, is_syn=False, **kw)
     check("an ordinary packet still does",
@@ -1537,7 +1540,7 @@ def test_a_later_fragment_of_a_tcp_segment_carries_no_ports():
                          64, 6, 0, bytes([192, 0, 2, 1]), bytes([198, 51, 100, 7]))
         return pydivert.Packet(ip + payload, (1, 0), pydivert.Direction.OUTBOUND)
 
-    # (is_out, local_port, remote_port, remote_ip, proto, is_syn, is_tcp)
+    # (is_out, local_port, remote_port, remote_ip, proto, is_syn, is_tcp, is_synack)
     first = BeanCore.packet_meta(fragment(0))
     later = BeanCore.packet_meta(fragment(185))
     check("the first fragment is TCP with its ports",
