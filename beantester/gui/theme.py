@@ -166,11 +166,11 @@ SPACE = {
     "apart": 22,
 }
 
-# The ``pad`` of a wrapping label packed with ``padx=space("page")``, in design pixels
-# (``labels.wrapping_label`` scales it): the page's margin on BOTH sides and the label's
-# own padding. Wrapped at the margins alone, a Polish line of the Ping tool asked for
-# 707 px of 704 (measured 2026-10-19).
-PAGE_WRAP_PAD = 2 * SPACE["page"] + SPACE["tight"]
+# The ``pad`` of a wrapping label packed with ``padx=space("page")``, as its parts in
+# design pixels (``labels.pad_pixels`` scales each, as each margin is scaled): the
+# page's margin on BOTH sides and the label's own padding. Wrapped at the margins
+# alone, a Polish line of the Ping tool asked for 707 px of 704 (measured 2026-10-19).
+PAGE_WRAP_PAD = (SPACE["page"], SPACE["page"], SPACE["tight"])
 # The inner padding of a section card's body (``gui/accordion.py``, x and y) and of a
 # secondary window's content (``gui/windows.py``), in design pixels. A wrapping label
 # placed inside them loses that padding on both sides, exactly as it loses the margins
@@ -180,7 +180,7 @@ PAGE_WRAP_PAD = 2 * SPACE["page"] + SPACE["tight"]
 # page margin cut the last pixels of full lines on the Tools tab (measured on Linux).
 CARD_PADDING = (10, 7)
 WINDOW_PADDING = 10
-CARD_WRAP_PAD = 2 * CARD_PADDING[0] + SPACE["tight"]
+CARD_WRAP_PAD = (CARD_PADDING[0], CARD_PADDING[0], SPACE["tight"])
 
 # Entry widths in CHARACTERS (Tk's own unit for them - they follow the font, so
 # they are not scaled). `help_button` is the "?" the expression fields carry

@@ -138,7 +138,7 @@ class SettingsWindow(PanelWindow):
         # pattern, a process-only target or no destination at all cannot be
         # expressed as a driver filter, and the option then does nothing. Until
         # now the only way to learn that was to start a session and read the log.
-        self._scope_status = wrapping_label(body, "", style="Hint.TLabel")
+        self._scope_status = wrapping_label(body, "", style="Hint.TLabel", pad=CARD_WRAP_PAD)
         self._sync_scope_status()
 
     def _narrowing_verdict(self):

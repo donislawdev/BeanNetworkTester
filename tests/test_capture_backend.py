@@ -395,6 +395,15 @@ def test_linux_silences_the_library_only_before_an_open_it_has_no_right_to(monke
     check("a person given the capabilities: so does it",
           as_(1000, (1 << NET_ADMIN) | (1 << NET_RAW) | (1 << BPF) | (1 << PERFMON)) == [],
           f"({told})")
+    # CAP_NET_RAW only puts packets back: without it the open succeeds (measured in WSL,
+    # as the person), and a silence handed out before it would hold for the session.
+    for caps, which in (((1 << NET_ADMIN) | (1 << BPF) | (1 << PERFMON), "CAP_BPF"),
+                        ((1 << NET_ADMIN) | (1 << SYS_ADMIN), "CAP_SYS_ADMIN")):
+        check(f"a person with the {which} set and no CAP_NET_RAW: the open succeeds, the "
+              "library keeps its voice", as_(1000, caps) == [], f"({told})")
+    check("a person without CAP_NET_ADMIN: the open is refused, so silenced",
+          as_(1000, (1 << NET_RAW) | (1 << BPF) | (1 << PERFMON)) == [(silent, 0)],
+          f"({told})")
 
     monkeypatch.setattr(capture_backend, "_euid", lambda: 1000)
     monkeypatch.setattr(capture_backend, "_capabilities", lambda root, status: 0)

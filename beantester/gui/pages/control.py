@@ -22,7 +22,7 @@ from ..form import ControlForm
 from ..labels import wrapping_label
 from ..scaling import scaled
 from ..scrollable import ScrollableFrame
-from ..theme import popdown_height, popdown_width
+from ..theme import CARD_WRAP_PAD, popdown_height, popdown_width
 from ..tooltip import add_tooltip
 
 # 🔴 The query lives here, at module level, on purpose. It must survive a rebuild
@@ -464,7 +464,7 @@ class ControlPage:
     # -- extra widgets referenced by fields.SECTIONS ------------------------- #
     def _build_target(self, body):
         """The "this target matches nothing" banner (packed only when it does)."""
-        self.app.target_warning = wrapping_label(body, "", style="Bad.TLabel")
+        self.app.target_warning = wrapping_label(body, "", style="Bad.TLabel", pad=CARD_WRAP_PAD)
         # A rebuilt banner starts empty, so forget what the OLD one was showing -
         # otherwise the next _drain_target_warning() would see "no change" and the
         # warning would stay invisible for the rest of the session.

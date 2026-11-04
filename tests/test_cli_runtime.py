@@ -1708,6 +1708,13 @@ def test_the_words_both_systems_read_name_no_windows_driver():
     helps = {action.option_strings[0]: action.help for action in build_arg_parser()._actions
              if action.option_strings and action.option_strings[0] in ("--simulate", "--doctor")}
     check("both help lines read", len(helps) == 2, f"({helps})")
+    # Saying less is not the fix: each still names what it is about.
+    check("--simulate help: no capture driver and no rights needed",
+          "no capture driver" in helps["--simulate"] and "rights" in helps["--simulate"],
+          f"({helps['--simulate']!r})")
+    check("--doctor help: checks the capture rights and the capture driver",
+          "capture rights" in helps["--doctor"] and "capture driver" in helps["--doctor"],
+          f"({helps['--doctor']!r})")
     for what, text in [("--simulate", said), ("--dry-run", valid), *helps.items()]:
         check(f"{what}: no WinDivert in words Linux prints too", "WinDivert" not in text,
               f"({text!r})")

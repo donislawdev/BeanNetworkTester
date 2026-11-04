@@ -70,7 +70,8 @@ class AboutWindow(PanelWindow):
         # BOTH sides, plus the few pixels a wrapped ttk.Label asks for on top of its
         # wraplength (measured, not guessed: at pad=30 the widest wrapped line still
         # overhung by 12 px - and the pad of 40 that followed forgot the window's 20).
-        line = partial(wrapping_label, body, pad=2 * (WINDOW_PADDING + 12) + SPACE["tight"])
+        line = partial(wrapping_label, body,
+                       pad=(WINDOW_PADDING, 12, 12, WINDOW_PADDING, SPACE["tight"]))
         line(text=T("about.author", author=AUTHOR), style="TLabel").pack(
             side="top", fill="x", anchor="w", padx=pad)
         line(text=COPYRIGHT, style="Muted.TLabel").pack(
