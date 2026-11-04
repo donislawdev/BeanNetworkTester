@@ -203,7 +203,7 @@ zurück.
     Zählerraster wählt seine Spaltenzahl passend zur Fensterbreite. Eine Schaltfläche "Export CSV".
   - **Session** - Seed, Dauer, verbrauchte Datenmenge, Spitzenwerte + die Schaltflächen "Mark bug",
     "Save repro report" und "Copy CLI command".
-  - **Events** - das Ereignisprotokoll (START/STOP/CHANGE/SCENARIO/BUG/RESET).
+  - **Events** - das Ereignisprotokoll (START/STOP/CHANGE/SCENARIO/BUG/RESET/PATH).
 - **Connections** - eine Ansicht, mit welchen IP:Port-Adressen das getestete System spricht. Jede Spalte ist
   unten unter [Spalten der Verbindungen](#spalten-der-verbindungen) dokumentiert, und jede hat
   außerdem einen Tooltip an der Kopfzeile. Datenverkehr, der überhaupt keine Ports hat - Ping
@@ -931,7 +931,7 @@ Jede Art des Endes hat ihren eigenen Code - eine Pipeline muss keinen Text auswe
 | `4` | scenario | die Szenario-Datei fehlt oder ist fehlerhaft |
 | `5` | io | ein Artefakt konnte nicht geschrieben werden (Reproduktionsbericht, gespeicherte Konfiguration) |
 | `6` | assertion | der Lauf war erfolgreich, aber `--min-packets` / `--fail-on-no-traffic` wurde nicht bestanden |
-| `7` | permission | Administratorrechte (Windows) bzw. root oder CAP_BPF, CAP_NET_ADMIN und CAP_NET_RAW (Linux) sind erforderlich und fehlen |
+| `7` | permission | Administratorrechte (Windows) bzw. root oder CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN und CAP_NET_RAW (Linux) sind erforderlich und fehlen |
 | `130` | interrupted | Strg+C (SIGINT) |
 | `143` | terminated | SIGTERM (Abbruch eines Jobs, `docker stop`), Strg+Break oder Schließen des Konsolenfensters |
 
@@ -1024,7 +1024,7 @@ gesperrt.
 | `--interval N` | wie oft berichtet wird, in Sekunden (größer als 0, höchstens 86 400 - dieselbe Obergrenze wie bei `--duration`, sodass ein Intervall, das nie auslösen könnte, abgelehnt statt akzeptiert wird) |
 | `--log-conns` | die beobachteten Verbindungen am Ende ausgeben |
 | `--repro-out FILE` | einen Reproduktionsbericht (JSON) speichern |
-| `--simulate` | synthetischer Datenverkehr statt WinDivert (Test ohne Windows, ohne Treiber, ohne Admin) |
+| `--simulate` | synthetischer Datenverkehr statt einer echten Erfassung (kein Erfassungstreiber, keine Administrator- oder root-Rechte) |
 | `--gui` | die GUI öffnen. Gilt **nur allein** - die GUI hat eigene Bedienelemente, deshalb ist die Kombination mit Einstellungs-Flags ein Aufruffehler (Exit 2) und kein stiller Lauf ohne Fenster |
 | `--version` | die Version ausgeben und beenden |
 
@@ -1121,7 +1121,7 @@ Reproduktionsbericht mit demselben Befehl.
 
 ## Spalten der Verbindungen
 
-Siebzehn Spalten, alle per Klick auf die Kopfzeile sortierbar, und jede mit derselben Erklärung als
+Achtzehn Spalten, alle per Klick auf die Kopfzeile sortierbar, und jede mit derselben Erklärung als
 Tooltip an dieser Kopfzeile.
 
 | Spalte | Inhalt |
@@ -1129,6 +1129,7 @@ Tooltip an dieser Kopfzeile.
 | `process` | Der Prozess, dem der lokale Port gehört. `?` bedeutet, dass der Name nicht aufgelöst werden konnte - als Administrator ausführen. |
 | `PID` | Prozess-ID, der den lokalen Port gehört, aufgelöst beim Erfassen des Pakets. |
 | `proto` | Transportprotokoll: TCP / UDP / ICMP / IP. |
+| `ICE` | Für einen Anruf oder eine andere ICE-Verbindung (WebRTC und Ähnliches): welcher Pfad diese Verbindung ist, gelesen aus ihren STUN-Nachrichten. `LAN` - Prüfungen an eine Adresse in diesem Netzwerk. `NAT` - Prüfungen an die eigene öffentliche Adresse dieses Netzwerks, die der Router wieder hereinschickt. `WAN` - Prüfungen an die öffentliche Adresse eines anderen. `TURN` - die Verbindung zu einem TURN-Relay. `STUN` - eine Frage an einen STUN-Server nach der öffentlichen Adresse dieses Netzwerks. Leer, wenn die Verbindung kein STUN trug. Ein TURN-Relay über TCP oder TLS wird nicht erkannt. |
 | `remote IP` | Die Adresse, mit der dieser Rechner spricht. Klicken Sie mit rechts auf eine Zeile, um die Störungen darauf zu beschränken. |
 | `r.port` | Port auf der Gegenseite (443 = HTTPS, 53 = DNS, 80 = HTTP). Leer bei Datenverkehr ohne Ports, etwa Ping. |
 | `l.port` | Port auf diesem Rechner - verbindet die Verbindung mit einem Prozess. Leer bei Ping/ICMP, weshalb diese Zeilen meist auch keinen Prozessnamen haben. |
@@ -1156,6 +1157,21 @@ Fügen Sie Verlust oder ein Geschwindigkeitslimit hinzu, gehen sie auseinander, 
 zwischen ihnen ist der Schaden an dieser Verbindung**. (Vor der Aufteilung gab es nur ein Paar, das
 die erfassten Bytes unter Überschriften führte, die „zugestellt“ bedeuteten: Eine Zeile konnte 5 MB
 empfangen anzeigen, während ihre Anwendung 0,4 MB bekam.)
+
+**Welchen Pfad ein Anruf nahm.** Ein ICE-Agent probiert mehrere Pfade zu seiner Gegenstelle
+gleichzeitig aus und behält einen, daher kann ein Anruf vier oder fünf Zeilen mit einer
+`ICE`-Bezeichnung zeigen. Ein Anruf, der schon lief, als die Sitzung startete, bekommt seine
+Bezeichnungen ein paar Sekunden später, bei der nächsten Prüfung, die er sendet, um die Verbindung
+zu halten, und sein Relay ebenso. Einmal pro Sekunde betrachtet das Programm die bezeichneten
+Verbindungen, die Medien trugen, und wie viel jede in den letzten drei Sekunden zugestellt hat
+(1500 Bytes oder mehr zählen als Daten, und die Prüfungen, die einen Anruf am Leben halten, sind
+weit weniger). Eine Verbindung wird genannt, sobald sie zwei Sekunden in Folge vorn liegt, und die
+genannte behält ihren Platz, solange sie noch Daten trägt, es sei denn, eine andere trägt mehr als
+doppelt so viel. Jeder Wechsel setzt einen `PATH`-Eintrag ins Ereignisprotokoll, etwa
+`ICE path: LAN 192.168.0.20:50000 -> TURN 203.0.113.10:3478`, und in den Reproduktionsbericht.
+Hat fünf Sekunden lang kein Pfad Daten getragen, lautet der Eintrag `ICE path: no data (was ...)`.
+Ein Pfad, den diese Sitzung sperrt, stellt nichts zu, daher wird er nie genannt. Suchen Sie mit
+`ice:turn` (oder `ice:lan`, `ice:nat`...), um nur eine Art von Pfad zu sehen.
 
 ## CSV-Exporte
 
@@ -1249,6 +1265,7 @@ Tabelle** - sie schreiben aus, was die Tabelle abkürzt:
 | `captured_down_bytes`, `captured_up_bytes`, `captured_total_bytes` | `down seen`, `up seen` (plus deren Summe) |
 | `avg_bytes` | `avg[B]` |
 | `duration_s`, `idle_s` | `time[s]`, `idle[s]` |
+| `ice` | `ICE` (`LAN`, `NAT`, `WAN`, `TURN`, `STUN` oder leer) - die **letzte** Spalte, damit ein Leser, der die Spalten nach ihrer Position nimmt, nicht verschoben wird |
 
 ## Format der Szenario-Datei
 
@@ -1584,6 +1601,7 @@ beantester/              das Implementierungspaket
   damage.py              wie stark eine Sitzung geschädigt hat: Verwerfungsgründe, Anteile von Verlust/Beschädigung
   engine.py              Erfassungs-/Einspeise-Threads, Statistik (BeanEngine)
   connlog.py             das Verbindungsprotokoll der Sitzung: eine Zeile pro Fluss, und seine Obergrenze
+  ice.py                 die ICE-Spalte: welche UDP-Flüsse STUN tragen, und der Pfad, den die Daten nehmen
   driverwait.py          wie lange Pakete in der Warteschlange des Treibers warteten, bevor das Werkzeug sie bekam
   matchers.py            Filterausdrücke (Liste/Bereich/!/>/</Platzhalter/re:) - gemeinsam
                          genutzt von den Feldern für Prozess, IP und Port, eine einzige Quelle der Wahrheit
