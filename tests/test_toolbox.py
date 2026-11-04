@@ -332,6 +332,30 @@ def test_the_tester_answers_and_names_the_term_that_decided():
     """))
 
 
+def test_an_empty_block_field_reads_as_blocking_nothing():
+    """A session blocks nothing by an empty block field; the panel said "Matches" and
+    "An empty field matches everything" there until 2026-11-04."""
+    run_gui(PANEL + textwrap.dedent("""
+        panel = open_tester()
+        pick(panel, "block_ip")
+        type_in(panel, "expression", "")
+        type_in(panel, "value", "10.0.5.7")
+        panel.evaluate()
+        assert panel.verdict.cget("text") == T("tools.exprtest.no_match")
+        notes, details = panel.notes.cget("text"), panel.details.cget("text")
+        assert T("tools.exprtest.note_takes_no_part") in notes, notes
+        assert T("tools.exprtest.note_everything") not in notes, notes
+        assert T("tools.exprtest.no_term") not in details, details
+
+        pick(panel, "dst_ip")
+        panel.evaluate()
+        assert panel.verdict.cget("text") == T("tools.exprtest.match")
+        notes = panel.notes.cget("text")
+        assert T("tools.exprtest.note_everything") in notes, notes
+        assert T("tools.exprtest.note_takes_no_part") not in notes, notes
+    """))
+
+
 def test_use_replaces_the_field_and_refuses_an_empty_or_unreadable_expression():
     """Empty, in the Process field, means ALL traffic once applied - a button that
     clears the target is not what this panel is for (CLAUDE.md, rule 6)."""

@@ -6,7 +6,7 @@ that matters most here: a VALUE that cannot be read is not a "no") live here.
 """
 import pytest
 
-from beantester.fields import expression_fields
+from beantester.fields import IMPAIRS_MATCHED, expression_fields
 from beantester.i18n import set_language
 from beantester.matchers import KIND_PROCESS
 from beantester.nettools import exprtest
@@ -124,6 +124,42 @@ def test_empty_and_exclusion_only_expressions_are_flagged():
     assert one_name.state == MATCH and not one_name.bounds_nothing, one_name
     narrow = evaluate("dst_ip", "10.0.0.0/8", "10.1.1.1")
     assert not narrow.bounds_nothing and not narrow.everything, narrow
+
+
+def test_an_empty_field_takes_every_value_where_it_bounds_and_none_where_it_blocks():
+    """A session skips an empty block matcher (``BeanCore.decide``), so an empty
+    Blocked IP blocks nothing, while an empty destination or target bounds nothing and
+    takes every value. Until 2026-11-04 the tester said "Matches" for both."""
+    for key, value in (("block_ip", "10.0.5.7"), ("block_port", "443")):
+        empty = evaluate(key, "  ", value)
+        check(f"{key}: empty takes no part", empty.state == NO_MATCH and empty.takes_no_part
+              and not empty.everything and not empty.selected_by, f"({empty})")
+        waiting = evaluate(key, "", "")
+        check(f"{key}: says so before a value is typed",
+              waiting.state == NO_VALUE and waiting.takes_no_part, f"({waiting})")
+        check(f"{key}: an unreadable value is still the value's problem",
+              evaluate(key, "", "not a value").state == BAD_VALUE)
+        check(f"{key}: a filled-in block is tested as usual",
+              evaluate(key, value, value).state == MATCH)
+    for key, value in (("dst_ip", "10.0.5.7"), ("dst_port", "443"), ("target", "chrome.exe")):
+        empty = evaluate(key, "", value)
+        check(f"{key}: empty takes every value", empty.state == MATCH and empty.everything
+              and not empty.takes_no_part, f"({empty})")
+
+
+def test_every_expression_field_says_what_its_empty_value_means():
+    """The tester reads "empty" from the registry: a field that bounds a session
+    (``narrows``) takes every value, one that acts only on what it names
+    (IMPAIRS_MATCHED) takes none. A new expression field that is neither would be read
+    as a bound without anybody deciding it, and the note for the second kind speaks of
+    a BLOCK, so those must stay the block card's."""
+    for field in expression_fields():
+        matched_only = field.impairs == IMPAIRS_MATCHED
+        check(f"{field.key}: exactly one of narrows and IMPAIRS_MATCHED",
+              field.narrows != matched_only, f"({field.narrows}, {field.impairs!r})")
+        if matched_only:
+            check(f"{field.key} sits in the block card", field.section == "block",
+                  f"({field.section})")
 
 
 def test_address_families_never_cross_and_never_raise():

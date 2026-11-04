@@ -7,6 +7,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Filter tester: an empty Blocked IP or Blocked port field no longer reads "Matches".**
+  The tester said "Matches" and "An empty field matches everything", but a session blocks
+  nothing by an empty block field. Now it says "Does not match" and that an empty block
+  field blocks nothing. An empty target or destination field still matches everything,
+  as a session treats it.
+
 - **Long lines of notes are no longer cut at the right edge.** The last letters of a long
   line could be cut off: in the status line and notes of every tool on the Tools tab, the
   notes above the Statistics and Connections tables, the notes and red lines of the Control
