@@ -277,7 +277,7 @@
   "frames.advanced": "高级（NAT / 连接）",
   "frames.asymmetry": "非对称（上传使用不同数值）",
   "frames.block": "阻断（防火墙）",
-  "frames.call": "通话部分 (ICE)",
+  "frames.call": "通话部分（ICE，全不勾选 = 全部流量）",
   "frames.destination": "目标地址筛选",
   "frames.event_log": "事件日志（带时间戳）",
   "frames.flapping": "链路中断（周期断线）",

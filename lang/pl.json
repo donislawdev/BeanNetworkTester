@@ -277,7 +277,7 @@
   "frames.advanced": "Zaawansowane (NAT / połączenia)",
   "frames.asymmetry": "Asymetria (inne wartości dla wysyłania)",
   "frames.block": "Blokowanie (firewall)",
-  "frames.call": "Część rozmowy (ICE)",
+  "frames.call": "Część rozmowy  (ICE, nic nie zaznaczone = cały ruch)",
   "frames.destination": "Celuj w adres docelowy",
   "frames.event_log": "Dziennik zdarzeń (ze znacznikami czasu)",
   "frames.flapping": "Przerwy w łączu (flapping)",

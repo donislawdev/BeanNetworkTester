@@ -277,7 +277,7 @@
   "frames.advanced": "Advanced (NAT / connections)",
   "frames.asymmetry": "Asymmetry (different values for upload)",
   "frames.block": "Blocking (firewall)",
-  "frames.call": "Part of a call (ICE)",
+  "frames.call": "Part of a call  (ICE, none ticked = all traffic)",
   "frames.destination": "Destination targeting",
   "frames.event_log": "Event log (timestamped)",
   "frames.flapping": "Link outages (flapping)",
