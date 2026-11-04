@@ -106,6 +106,9 @@ def settings_to_cli(settings, seed=None, simulate=False, scenario=None, loop=Fal
     for key, flag in (("block_reject", "--block-reject"), ("asym", "--asym"),
                       ("lan_mode", "--lan-mode"), ("ipv4_only", "--ipv4-only"),
                       ("ipv6_only", "--ipv6-only"),
+                      ("call_checks", "--call-checks"),
+                      ("call_turn_control", "--call-turn-control"),
+                      ("call_media", "--call-media"),
                       ("internet_only", "--internet-only"),
                       ("narrow_filter", "--narrow-filter")):
         if g(key):

@@ -7,12 +7,14 @@ through a TURN relay. The Connections tab lists every one of those as an ordinar
 UDP row, so which path won was a guess. This module answers it from bytes the
 capture already holds: it reads the packets of each UDP flow until it knows what the
 flow is, labels the flows that speak STUN, and once a second names the flow the data
-actually went through.
+actually went through. The same bytes answer a second question, for the scope that
+impairs only part of a call: which part one datagram is (``call_part``).
 
 It sends nothing, asks the operating system for nothing and imports nothing of this
 package but ``utils``: it runs on the capture thread (``tests/test_hot_path.py``). It
-has no lock of its own either. ``ConnectionLog`` is its only caller and makes every
-call with its lock held, so the rows and this state change together.
+has no lock of its own either. ``ConnectionLog`` is the only caller of ``IceWatch``
+and makes every call with its lock held, so the rows and this state change together;
+``call_part`` keeps no state, and ``BeanCore.decide`` calls it under the core's lock.
 
 The facts it rests on, read in the RFCs rather than remembered:
 
@@ -44,6 +46,9 @@ ALLOCATE = 0x003
 SEND = 0x006
 DATA = 0x007
 TURN_METHODS = frozenset({ALLOCATE, 0x004, SEND, DATA, 0x008, 0x009})
+# The TURN methods that get and keep the relay - Allocate, Refresh, CreatePermission
+# and ChannelBind - against Send and Data, which only carry what the relay relays.
+TURN_CONTROL = TURN_METHODS - {SEND, DATA}
 READ_ATTRIBUTES = frozenset({BINDING, ALLOCATE, SEND, DATA})
 REQUEST, INDICATION, SUCCESS, ERROR = 0, 1, 2, 3
 XOR_MAPPED_ADDRESS = 0x0020
@@ -91,6 +96,14 @@ PROBE_ICE = 256     # after the first STUN message
 # packets a second this tool sustains.
 SIGNAL_MAX = 100_000
 PUBLIC_MAX = 16     # this network's public addresses, as STUN answers told them
+
+# Which part of a call one datagram is (``call_part``), for the scope that impairs
+# only some of a call (``BeanCore.set_call_parts``). Bits, so a session asks for
+# any mix of the first three; the fourth is an answer only, never asked for.
+CALL_CHECKS = 1         # STUN that is not TURN's: connectivity and consent checks
+CALL_TURN_CONTROL = 2   # TURN's own requests and answers: getting and keeping a relay
+CALL_MEDIA = 4          # DTLS and RTP/RTCP, straight or carried by a relay
+CALL_LOOKS_MEDIA = 8    # media by its first byte alone: the flow decides (see call_part)
 
 # The path timeline, on the watchdog thread.
 TICK_S = 1.0
@@ -228,6 +241,58 @@ def _channel_framed(raw, at):
         return False
     inner = raw[at + 4]
     return inner < 4 or 20 <= inner <= 63 or 128 <= inner <= 191
+
+
+def call_part(raw):
+    """Which part of a call the datagram ``raw`` is, from its bytes alone.
+
+    ``CALL_CHECKS`` for a STUN message that is not TURN's own: Binding (connectivity
+    and consent checks, keepalives, the question to a STUN server) and any other
+    method, a vendor's ping included. ``CALL_TURN_CONTROL`` for Allocate, Refresh,
+    CreatePermission and ChannelBind, answers and errors included. A Send or Data
+    indication is what it carries (the first byte of its DATA), and so is a ChannelData
+    frame with a whole STUN message in it. These prove themselves: random bytes pass
+    for STUN less often than once in 2^34 (``stun``).
+
+    ``CALL_LOOKS_MEDIA`` for DTLS or RTP by the first byte, straight or in a frame,
+    which proves nothing: QUIC's short header lands in the frame's range, RFC 9287 lets
+    QUIC set its fixed bit at random and so reach every other range, and VPNs run on
+    DTLS. The caller asks whether the flow has carried STUN before it calls that media.
+
+    0 for anything else, and for what cannot be read - TCP (a relay over TCP or TLS
+    keeps its messages inside a stream), a fragment, an IPv6 extension header: what
+    cannot be identified is no part of a call, so a scope that asked for one leaves it
+    alone. Never raises, on any bytes: it runs inside ``BeanCore.decide``, where an
+    exception would end the session.
+    """
+    start = _start(raw)
+    if start < 0:
+        return 0
+    first = raw[start]
+    # Media first and with no function called: it is most of what a call sends, and a
+    # call costs ~1 us on the capture thread (memory: capture-thread-call-cost).
+    if 20 <= first <= 63 or 128 <= first <= 191:
+        return CALL_LOOKS_MEDIA
+    if first < 4:
+        message = stun(memoryview(raw)[start:_end(raw, start)])
+        if message is None:
+            return 0
+        method, carried = message[0], message[4]
+        if method in TURN_CONTROL:
+            return CALL_TURN_CONTROL
+        if method == SEND or method == DATA:
+            # -1 when there is no DATA, which is neither
+            return (CALL_CHECKS if 0 <= carried < 4
+                    else CALL_MEDIA if _looks_like_media(carried) else 0)
+        return CALL_CHECKS
+    if 64 <= first <= 79:
+        if not _channel_framed(raw, start):
+            return 0
+        if raw[start + 4] >= 4:
+            return CALL_LOOKS_MEDIA     # the frame carries DTLS or RTP (_channel_framed)
+        end = start + 4 + ((raw[start + 2] << 8) | raw[start + 3])
+        return CALL_CHECKS if stun(memoryview(raw)[start + 4:end]) is not None else 0
+    return 0
 
 
 def _same_prefix(raw):

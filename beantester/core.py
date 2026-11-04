@@ -1,7 +1,8 @@
 """Decision core - pure, testable without WinDivert.
 
-``BeanCore.decide()`` inspects a single packet's metadata and returns a
-``Decision``. The pipeline order (numbered below) is part of the contract:
+``BeanCore.decide()`` inspects a single packet's metadata - and its bytes, for the
+scope that impairs only part of a call - and returns a ``Decision``. The pipeline
+order (numbered below) is part of the contract:
 1) process targeting -> 2) destination targeting -> 2b) LAN mode / Internet only
 -> 2c) blocking (firewall) -> 3) NAT -> 4) RST -> 5) flapping -> 6) MTU
 -> 7) SYN -> 8) loss -> 9) corruption -> 10) latency/jitter/spike
@@ -15,6 +16,7 @@ import time
 from contextlib import contextmanager
 from typing import List, NamedTuple, Optional
 
+from .ice import CALL_CHECKS, CALL_LOOKS_MEDIA, CALL_MEDIA, CALL_TURN_CONTROL, call_part
 from .matchers import (KIND_INT, KIND_IP, PORT_BOUNDS, Matcher, parse_matcher,
                        port_expression)
 from .utils import clamp01, is_lan_ip, is_local_ip
@@ -450,6 +452,18 @@ class BeanCore:
         # counting it as a bound would silence the blast-radius warning for a
         # session that has bounded nothing. Same reasoning `--target *` gets.
         self.family_wanted = None
+        # The parts of a call in scope (ice.CALL_* bits), 0 = no such scope. Part of
+        # the same question again, asked of the packet's bytes rather than its ends.
+        # Unlike the family it IS a bound: STUN and TURN prove themselves, and media
+        # counts only on a flow that has carried STUN - which ``_call_flow`` answers
+        # with the connection log's row (``set_call_flows``). Without that answer no
+        # media is in scope: what cannot be identified must not be damaged.
+        self.call_parts = 0
+        self._call_flow = None
+        # Whether any of the three above is aimed: the one attribute decide() step 2
+        # reads per packet when nothing is. Kept by their setters (``_re_aim``), the
+        # only code that writes them.
+        self._aimed = False
         self.lan_only = False       # LAN mode: cuts internet traffic (public addresses)
         # The mirror switch: cuts the local network and leaves the internet up.
         # NOT the exact opposite of the line above - loopback survives both (see
@@ -735,6 +749,7 @@ class BeanCore:
             self.dst_port = port_matcher.raw
             self.dst_ip_matcher = ip_matcher
             self.dst_port_matcher = port_matcher
+            self._re_aim()
 
     def set_ip_family(self, ipv4_only=False, ipv6_only=False):
         """Restrict the targeting to one address family (default: neither).
@@ -758,6 +773,35 @@ class BeanCore:
                 # the opposite of what the request means. Two mutually exclusive
                 # "only" switches leave nothing, so the set is emptied on purpose.
                 self.family_wanted = frozenset() if len(wanted) == 2 else frozenset(wanted)
+            self._re_aim()
+
+    def set_call_parts(self, checks=False, turn_control=False, media=False):
+        """Impair only these parts of a call (none = no such scope). See ``ice.call_part``
+        for what each part is on the wire."""
+        parts = ((CALL_CHECKS if checks else 0) | (CALL_TURN_CONTROL if turn_control else 0)
+                 | (CALL_MEDIA if media else 0))
+        with self._lock:
+            self.call_parts = parts
+            self._re_aim()
+
+    def set_call_flows(self, row_of):
+        """``row_of(flowkey)``: the connection log's row for a flow, or ``None`` - the
+        engine passes ``ConnectionLog.rows.get``, once. A row with an ICE label
+        (``row["ice"]``, written by ``ice.IceWatch``) is a flow that has carried STUN.
+        ``None`` here leaves media out of every call scope.
+
+        A dict's own ``get`` rather than a method of the log: it is asked for every
+        media packet a call scope sees, and a call to a Python function costs ~1 us on
+        the capture thread (measured 2026-11-04, ``ice.PROBE_FIRST``), a built-in one
+        far less. Read without the log's lock, which is safe and deliberate - see
+        ``ConnectionLog``."""
+        with self._lock:
+            self._call_flow = row_of
+
+    def _re_aim(self):
+        """Whether anything in decide() step 2 is aimed. The lock is held."""
+        self._aimed = bool(self.dst_active or self.family_wanted is not None
+                           or self.call_parts)
 
     def set_lan(self, enabled):
         with self._lock:
@@ -767,8 +811,8 @@ class BeanCore:
         with self._lock:
             self.internet_only = bool(enabled)
 
-    def _out_of_scope(self, remote_ip, remote_port):
-        """Is this remote end outside what the session is aiming at?
+    def _out_of_scope(self, remote_ip, remote_port, raw, is_tcp, local_port):
+        """Is this packet outside what the session is aiming at?
 
         Called only when something IS aimed (see the caller's left half), so the
         cost of the checks here is paid by the session that asked for them.
@@ -783,6 +827,12 @@ class BeanCore:
         ``utils.is_lan_ip`` takes with an address it cannot classify: what cannot
         be identified must not be damaged. Without a family chosen it is left to
         the destination matchers, exactly as before.
+
+        The parts of a call come last because they read the packet's bytes. The
+        same rule holds there: bytes this cannot read (``None``) are no part of a
+        call, and neither is TCP - a relay reached over TCP or TLS keeps its
+        messages inside a stream - which is also what keeps a browser's HTTPS from
+        paying for the parse.
         """
         if self.family_wanted is not None and (
                 remote_ip is None or (":" in remote_ip) not in self.family_wanted):
@@ -791,12 +841,27 @@ class BeanCore:
         # family alone brings us here with no destination set, and the matchers
         # must stay as ignorable then as they were before this gate existed -
         # ``set_dest(False, ...)`` keeps whatever expressions it was handed.
-        if not self.dst_active:
-            return False
-        if self.dst_ip_matcher and not self.dst_ip_matcher.matches(remote_ip):
+        if self.dst_active and (
+                (self.dst_ip_matcher and not self.dst_ip_matcher.matches(remote_ip))
+                or (self.dst_port_matcher
+                    and not self.dst_port_matcher.matches(remote_port))):
             return True
-        return bool(self.dst_port_matcher
-                    and not self.dst_port_matcher.matches(remote_port))
+        # 🔴 Never behind an early "no destination, so in scope": with only the call
+        # scope armed this is the one test between the packet and every impairment
+        # of the session, and skipping it impairs everything it was meant to spare.
+        parts = self.call_parts
+        if not parts:
+            return False
+        if is_tcp or raw is None:
+            return True
+        part = call_part(raw)
+        if part == CALL_LOOKS_MEDIA:
+            # asked only now: STUN and TURN control prove themselves, and most
+            # packets a call scope turns down never get this far
+            row_of = self._call_flow
+            row = row_of((local_port, remote_ip, remote_port)) if row_of is not None else None
+            part = CALL_MEDIA if row is not None and row["ice"] else 0
+        return not part & parts
 
     def _address_class_cut(self, remote_ip):
         """Which address-class switch cuts this packet, or ``None``.
@@ -1020,9 +1085,10 @@ class BeanCore:
         self._reset_until.maybe_rotate(now)
 
     def targeting_active(self):
-        """True when any targeting (process or destination) is narrowing traffic."""
+        """True when any targeting (process, destination or the parts of a call) is
+        narrowing traffic."""
         with self._lock:
-            return bool(self.target_active or self.dst_active)
+            return bool(self.target_active or self.dst_active or self.call_parts)
 
     def process_target_active(self):
         """True when a PROCESS target (step 1) is narrowing what gets impaired.
@@ -1101,7 +1167,8 @@ class BeanCore:
         return finish + (release - now)
 
     def decide(self, size, is_outbound, local_port, now, rng,
-               remote_ip=None, remote_port=None, is_syn=False, is_tcp=False, is_synack=False):
+               remote_ip=None, remote_port=None, is_syn=False, is_tcp=False, is_synack=False,
+               raw=None):
         with self._lock:
             # 1) process targeting
             if self.target_active and local_port not in self.target_ports:
@@ -1144,20 +1211,21 @@ class BeanCore:
                 if not ((is_syn or not is_tcp) and self._owner_targeted is not None
                         and self._owner_targeted(local_port)):
                     return Decision(False, False, [now], scoped=False)
-            # 2) targeting: the destination expressions and the address family.
+            # 2) targeting: the destination expressions, the address family and the
+            # parts of a call.
             #
-            # One gate and one branch for all three, and that is not tidiness:
+            # One gate and one branch for all of them, and that is not tidiness:
             # this function sits close under the complexity ceiling pinned in
             # pyproject.toml, where the rule is that splitting lowers the number
-            # rather than raising it. The three tests answer the same question
-            # ("is this remote end in scope?") and returned the identical verdict
-            # already, so the fold changes nothing a packet can tell apart.
+            # rather than raising it. The tests answer the same question ("is this
+            # packet in scope?") and returned the identical verdict already, so the
+            # fold changes nothing a packet can tell apart.
             #
-            # The left half keeps the common case cheap, exactly like step 2b: two
-            # attribute reads with no targeting armed, and the call happens only in
-            # a session that asked for it.
-            if (self.dst_active or self.family_wanted is not None) and self._out_of_scope(
-                    remote_ip, remote_port):
+            # The left half keeps the common case cheap: ONE attribute read with no
+            # targeting armed (``_re_aim`` keeps it), and the call happens only in a
+            # session that asked for it.
+            if self._aimed and self._out_of_scope(remote_ip, remote_port, raw, is_tcp,
+                                                   local_port):
                 return Decision(False, False, [now], scoped=False)
 
             # 2b) the two address-class switches: LAN mode (cut the internet) and

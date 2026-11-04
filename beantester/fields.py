@@ -317,6 +317,23 @@ FIELD_DEFS = (
     Field("ipv6_only", BOOL, "fields.ipv6_only", "destination",
           tip="tips.ipv6_only", span=False, cli="ipv6-only"),
 
+    # -- part of a call ---------------------------------------------------- #
+    # Which parts of a call (ICE: WebRTC and the like) the impairments reach, read
+    # from the packet's bytes in decide() step 2 (ice.call_part). None on = no such
+    # scope; any on = only those parts, and nothing else on the machine.
+    #
+    # narrows=True, unlike the family pair above, and the difference is the point:
+    # "IPv4 only" still reaches every IPv4 connection, while these reach only the
+    # packets of calls. STUN and TURN control prove themselves (a whole message, the
+    # magic cookie, the exact length), and media counts only on a flow that has
+    # carried STUN, so QUIC, VPNs on DTLS and this session's own HTTPS stay out.
+    Field("call_checks", BOOL, "fields.call_checks", "call",
+          tip="tips.call_checks", cli="call-checks", narrows=True),
+    Field("call_turn_control", BOOL, "fields.call_turn_control", "call",
+          tip="tips.call_turn_control", cli="call-turn-control", narrows=True),
+    Field("call_media", BOOL, "fields.call_media", "call",
+          tip="tips.call_media", cli="call-media", narrows=True),
+
     # -- blocking (firewall) ---------------------------------------------- #
     # Drop traffic to matching destinations outright. IP OR port (each takes part
     # only when non-empty), applied after the targeting gate - see BeanCore.decide
@@ -477,6 +494,11 @@ SECTIONS = (
     # span=True and keep a row each regardless, so this changes nothing they do.
     Section("destination", "frames.destination",
             ("dst_ip", "dst_port", "ipv4_only", "ipv6_only"), columns=2),
+    # Right after the destination: both say what is aimed at, one by the remote end
+    # and this one by what the packet is. One column, because each label names a
+    # protocol and the three read as a list.
+    Section("call", "frames.call",
+            ("call_checks", "call_turn_control", "call_media"), columns=1),
     Section("block", "frames.block", ("block_ip", "block_port", "block_reject"),
             columns=1),
     Section("advanced", "frames.advanced",
