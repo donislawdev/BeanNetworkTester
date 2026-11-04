@@ -322,7 +322,7 @@ monitor is gone it returns to the centre of the current screen.
     counter grid picks its column count to fit the window width. An "Export CSV" button.
   - **Session** - seed, duration, data used, peaks + "Mark bug", "Save repro report", "Copy CLI
     command" buttons.
-  - **Events** - the event log (START/STOP/CHANGE/SCENARIO/BUG/RESET).
+  - **Events** - the event log (START/STOP/CHANGE/SCENARIO/BUG/RESET/PATH).
 - **Connections** - a view of which IP:port the tested system talks to. Every column is documented
   in [Connections columns](#connections-columns) below, and each one also has a tooltip on its
   header. Traffic that has no ports at all - ping (ICMP) - is listed too, one
@@ -1234,7 +1234,7 @@ the `--scenario` file as you typed it, `--loop` and `--simulate` when the run ha
 
 ## Connections columns
 
-Seventeen columns, all sortable by clicking the header, and each with the same explanation as a
+Eighteen columns, all sortable by clicking the header, and each with the same explanation as a
 tooltip on that header.
 
 | column | what it holds |
@@ -1242,6 +1242,7 @@ tooltip on that header.
 | `process` | The process that owns the local port. `?` means the name could not be resolved - run as Administrator. |
 | `PID` | Process id owning the local port, resolved when the packet was captured. |
 | `proto` | Transport protocol: TCP / UDP / ICMP / IP. |
+| `ICE` | For a call or another ICE connection (WebRTC and the like): which path this connection is, read from its STUN messages. `LAN` - checks to an address on this network. `NAT` - checks to this network's own public address, which the router sends back in. `WAN` - checks to someone else's public address. `TURN` - the connection to a TURN relay. `STUN` - a question to a STUN server about this network's public address. Empty when the connection carried no STUN. A TURN relay over TCP or TLS is not recognised. |
 | `remote IP` | The address this machine is talking to. Right-click a row to limit the impairments to it. |
 | `r.port` | Port on the remote side (443 = HTTPS, 53 = DNS, 80 = HTTP). Empty for traffic with no ports, such as ping. |
 | `l.port` | Port on this machine - what links the connection to a process. Empty for ping/ICMP, which is also why those rows usually have no process name. |
@@ -1267,6 +1268,14 @@ counts, never on the text in the cell.
 loss or a speed limit and they part, and **the gap between them is the damage done to that
 connection**. (Before they were split there was one pair, holding captured bytes under headings that
 meant delivered: a row could read 5 MB received while its application got 0.4 MB.)
+
+**Which path a call took.** An ICE agent tries several paths to its peer at once and keeps one,
+so a call can show four or five rows with an `ICE` label. Once a second the program looks at the
+labelled connections that carried media and names the one with the most delivered data. When that
+changes, the event log gets a `PATH` entry, such as
+`ICE path: LAN 192.168.0.20:50000 -> TURN 203.0.113.10:3478`, and so does the reproduction
+report. A path this session blocks delivers nothing, so it is never the one named. Search with
+`ice:turn` (or `ice:lan`, `ice:nat`...) to see one kind of path only.
 
 ## CSV exports
 
@@ -1359,6 +1368,7 @@ table shortens:
 | `captured_down_bytes`, `captured_up_bytes`, `captured_total_bytes` | `down seen`, `up seen` (plus their total) |
 | `avg_bytes` | `avg[B]` |
 | `duration_s`, `idle_s` | `time[s]`, `idle[s]` |
+| `ice` | `ICE` (`LAN`, `NAT`, `WAN`, `TURN`, `STUN` or empty) - the **last** column, so a reader that takes the columns by position is not moved by it |
 
 ## Scenario file format
 
@@ -1677,6 +1687,7 @@ beantester/              the implementation package
   damage.py              how much a session damaged: drop reasons, loss/corruption shares
   engine.py              capture/inject threads, statistics (BeanEngine)
   connlog.py             the session's connection log: one row per flow, and its cap
+  ice.py                 the ICE column: which UDP flows carry STUN, and the path the data takes
   driverwait.py          how long packets waited in the driver's queue before the tool got them
   capture_backend.py     which packet-capture driver this platform uses - the one place that knows
   capabilities.py        which system APIs the Tools tab's tools find here - the one place that asks

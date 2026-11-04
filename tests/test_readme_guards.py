@@ -163,7 +163,7 @@ def test_both_readmes_document_every_csv_column():
 
 
 def test_both_readmes_document_every_connections_column():
-    """Same rule for the table itself: 17 columns, all sortable, all explained.
+    """Same rule for the table itself: 18 columns, all sortable, all explained.
 
     The check is on the i18n LABEL rather than the internal key, because the
     label is what the reader sees in the app and has to find in the docs.

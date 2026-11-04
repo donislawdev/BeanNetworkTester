@@ -272,7 +272,7 @@ def choose_columns(parent, title, prompt, columns, visible):
     on entry. A small modal rather than an entry in the window registry: it is
     opened, answered and closed, so remembered geometry and raise-instead-of-open
     would be machinery for nobody. It is also not a menu of checkbuttons - with
-    seventeen columns that is a list you scroll past, and the tkinter double this
+    eighteen columns that is a list you scroll past, and the tkinter double this
     project tests GUIs on knows only ``add_command``, so a menu version would ship
     with nothing checking it.
 
@@ -288,7 +288,7 @@ def choose_columns(parent, title, prompt, columns, visible):
     vars_by_id = {}
     grid = ttk.Frame(body)
     grid.pack(fill="both", expand=True, pady=(scaled(10), 0))
-    # Two columns of checkboxes: seventeen in one strip is taller than the minimum
+    # Two columns of checkboxes: eighteen in one strip is taller than the minimum
     # supported window (convention: 1366x768) and would need its own scrollbar.
     per_column = (len(columns) + 1) // 2
     ok_holder = {}

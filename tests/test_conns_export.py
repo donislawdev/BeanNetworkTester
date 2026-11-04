@@ -27,7 +27,7 @@ def test_export_connections_csv_writes_the_current_view():
             # svchost was untouched: delivered == captured
             dict(local_port=51001, remote_ip="8.8.8.8", remote_port=53, proto="UDP",
                  packets=2, bytes=600, bytes_in=100, bytes_out=500,
-                 sent=600, sent_in=100, sent_out=500, dropped=0,
+                 sent=600, sent_in=100, sent_out=500, dropped=0, ice="STUN", ice_n=0,
                  scoped=False, pid=None, first=5.0, last=8.0, dir="out", proc="svchost.exe"),
         ]
         app.conn_query = ""
@@ -43,7 +43,7 @@ def test_export_connections_csv_writes_the_current_view():
                            "delivered_total_bytes",
                            "captured_down_bytes", "captured_up_bytes",
                            "captured_total_bytes",
-                           "avg_bytes", "duration_s", "idle_s"], rows[0]
+                           "avg_bytes", "duration_s", "idle_s", "ice"], rows[0]
         # sorted by delivered upload desc: chrome (1024) before svchost (500)
         assert rows[1][0] == "chrome.exe" and rows[2][0] == "svchost.exe", rows
         chrome, svc = rows[1], rows[2]
@@ -60,6 +60,8 @@ def test_export_connections_csv_writes_the_current_view():
         # avg_bytes is CAPTURED bytes per captured packet (3072 / 4 = 768)
         assert chrome[15] == "768", chrome
         assert chrome[16] == "7.0" and chrome[17] == "1.0", chrome
+        # the ICE token is the LAST column, blank where the flow carried no STUN
+        assert chrome[18] == "" and svc[18] == "STUN", (chrome, svc)
         # atomic overwrite leaves no temp file behind
         assert not os.path.exists(path + ".tmp")
     ''')

@@ -531,3 +531,22 @@ def test_events_sort_by_what_their_columns_show():
         backwards = [words[idx](e[idx]) for e in sort_events(events, col, True)]
         check(f"{col}: reversed is the same order backwards", backwards == shown[::-1],
               f"({backwards})")
+
+
+def test_the_ice_field_finds_a_path_and_plain_text_is_unchanged():
+    """``ice:turn`` finds the relays. The token is NOT in the plain-text blob, so a
+    search typed before the ICE column existed finds what it found then: "lan" or
+    "nat" would otherwise start hitting every connection of a call."""
+    from beantester.views import _connection_blob
+    relay = dict(_conn(50002, "1.0.0.1", "call.exe", 300, 300, proto="UDP"), ice="TURN")
+    lan = dict(_conn(50001, "10.0.0.20", "call.exe", 900, 900, proto="UDP"), ice="LAN")
+    plain = _conn(50003, "8.8.8.8", "dns.exe", 90, 0, proto="UDP")
+    rows = [relay, lan, plain]
+    found = [c["local_port"] for c in filter_sort_connections(rows, query="ice:turn")]
+    check("ice:turn finds the relay only", found == [50002], f"({found})")
+    found = [c["local_port"] for c in filter_sort_connections(rows, query="ice:lan,turn")]
+    check("a list of tokens finds both", sorted(found) == [50001, 50002], f"({found})")
+    check("the blob of a labelled row is the blob without the label",
+          _connection_blob(lan) == _connection_blob(dict(lan, ice="")))
+    found = filter_sort_connections(rows, query="lan")
+    check("plain 'lan' matches no row it did not match before", found == [], f"({found})")

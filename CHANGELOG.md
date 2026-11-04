@@ -5,6 +5,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Added
+
+- **Connections: an ICE column shows which path a call takes.** For a call or another ICE
+  connection (WebRTC and the like), the column says what each connection is: LAN (to this
+  network), NAT (to this network's own public address, which the router sends back in), WAN
+  (to someone else's public address), TURN (to a relay) or STUN (a question to a STUN
+  server). The program reads the STUN messages it captures and sends nothing. Search with
+  `ice:turn` to see the relays only. A TURN relay over TCP or TLS is not recognised.
+
+- **The event log says when a call moves to another path.** A PATH entry, for example
+  `ICE path: LAN 192.168.0.20:50000 -> TURN 203.0.113.10:3478`, names the connection that
+  now carries the call's data, and the reproduction report has it too. A path the session
+  blocks delivers nothing, so it is never the one named.
+
+- **The ICE column in the CSV, in `--log-conns` and in a saved column layout.** The
+  connections CSV has a new last column, `ice`, and `--log-conns` ends the line of such a
+  connection with `ice=TURN`. If you chose which columns the table shows, the new column is
+  shown once; hide it and it stays hidden.
+
 ### Fixed
 
 - **Filter tester: an empty Blocked IP or Blocked port field no longer reads "Matches".**

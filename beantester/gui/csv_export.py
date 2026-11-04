@@ -141,7 +141,10 @@ CONN_CSV_HEADER = ["process", "pid", "proto", "remote_ip", "remote_port",
                    "delivered_total_bytes",
                    "captured_down_bytes", "captured_up_bytes",
                    "captured_total_bytes",
-                   "avg_bytes", "duration_s", "idle_s"]
+                   "avg_bytes", "duration_s", "idle_s",
+                   # LAST, not beside "proto" where the table shows it: a reader that
+                   # takes the columns by position keeps working (owner, 2026-11-04)
+                   "ice"]
 
 
 # One export at a time, and the thing being protected is the FILE, not the window:
@@ -237,7 +240,8 @@ def _write_connections_now(app, payload):
                     c.get("bytes_in", 0), c.get("bytes_out", 0), c.get("bytes", 0),
                     avg_packet_bytes(c),
                     f"{max(0.0, last - c.get('first', now)):.1f}",
-                    f"{max(0.0, now - last):.1f}")])
+                    f"{max(0.0, now - last):.1f}",
+                    c.get("ice") or "")])
         hand_back(tmp)                  # before it takes the place of theirs
         os.replace(tmp, path)
         app.log(f"{T('log.conns_saved_to')} {path} ({len(rows)})")

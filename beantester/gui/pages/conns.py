@@ -68,6 +68,7 @@ SCOPE_TIPS = scope.keys_for_states({
 # it would silently drop their layout and their sort on the next start. Internal
 # ids are not shown to anybody - convention 2.
 COLUMNS = {"proc": "conns.process", "pid": "conns.pid", "proto": "conns.proto",
+           "ice": "conns.ice",
            "remote_ip": "conns.remote_ip", "remote_port": "conns.remote_port",
            "local_port": "conns.local_port", "packets": "conns.packets",
            "scoped": "conns.scoped", "dropped": "conns.dropped",
@@ -91,10 +92,18 @@ NUMERIC = frozenset({"pid", "remote_port", "local_port", "packets", "dropped",
 # of one width. `proto` follows `pid` and `scoped` follows `packets`, and with the
 # numbers moved right the first screenshot showed "67400 TCP" and "550 tak" -
 # two columns reading as one value. Centring restores the gap that ttk gives no
-# padding for, and on a column of equal-width values it costs nothing.
-CENTERED = frozenset({"proto", "scoped"})
+# padding for, and on a column of equal-width values it costs nothing. `ice`
+# follows `proto` and holds tokens of the same kind and width (ice.py).
+CENTERED = frozenset({"proto", "ice", "scoped"})
 
-MIN_CHARS = {"proc": 16, "pid": 7, "proto": 5, "remote_ip": 18, "remote_port": 6,
+# The columns a layout saved before `conn_columns_known` existed could have known.
+# A column that is not among them was added since: the user never saw it, so they
+# cannot have chosen to hide it, and it is shown once (columns_to_show).
+COLUMNS_BEFORE_KNOWN = ("proc", "pid", "proto", "remote_ip", "remote_port", "local_port",
+                        "packets", "scoped", "dropped", "down", "up", "kb", "down_seen",
+                        "up_seen", "avg", "dur", "idle")
+
+MIN_CHARS = {"proc": 16, "pid": 7, "proto": 5, "ice": 5, "remote_ip": 18, "remote_port": 6,
              "local_port": 6, "packets": 7, "scoped": 7, "dropped": 8, "down": 8,
              "up": 8, "kb": 8, "down_seen": 11, "up_seen": 11,
              "avg": 7, "dur": 6, "idle": 6}
@@ -103,7 +112,8 @@ MIN_CHARS = {"proc": 16, "pid": 7, "proto": 5, "remote_ip": 18, "remote_port": 6
 # on the whole tree, so it popped up over the rows and explained nothing about
 # the column actually under the pointer.
 COLUMN_TIPS = {"proc": "tips.col_process", "pid": "tips.col_pid",
-               "proto": "tips.col_proto", "remote_ip": "tips.col_remote_ip",
+               "proto": "tips.col_proto", "ice": "tips.col_ice",
+               "remote_ip": "tips.col_remote_ip",
                "remote_port": "tips.col_remote_port", "local_port": "tips.col_local_port",
                "packets": "tips.col_packets", "scoped": "tips.col_scoped",
                "dropped": "tips.col_dropped", "down": "tips.col_down",
@@ -111,6 +121,22 @@ COLUMN_TIPS = {"proc": "tips.col_process", "pid": "tips.col_pid",
                "down_seen": "tips.col_down_seen", "up_seen": "tips.col_up_seen",
                "avg": "tips.col_avg",
                "dur": "tips.col_dur", "idle": "tips.col_idle"}
+
+
+def columns_to_show(saved, known):
+    """The columns a saved layout opens with: what the user chose, plus every column
+    added since that layout was saved - once. ``None`` when nothing was saved (every
+    column shows).
+
+    ``known`` is the list of columns that existed when the layout was saved (ui.json
+    ``conn_columns_known``, written with it); a ui.json from before it existed knew
+    ``COLUMNS_BEFORE_KNOWN``. Without this a new column stayed hidden from everyone
+    who had ever chosen columns, because the table shows only what was saved.
+    """
+    if not isinstance(saved, list) or not saved:
+        return None
+    seen = set(known) if isinstance(known, list) else set(COLUMNS_BEFORE_KNOWN)
+    return saved + [column for column in COLUMNS if column not in seen]
 
 
 def port_cell(port):
@@ -319,10 +345,16 @@ class ConnsPage:
         # A layout saved by an earlier run. Unknown ids are dropped by the table
         # (a column may have been removed since), and an empty or missing entry
         # simply leaves every column showing.
-        saved = app.ui.get("conn_columns")
-        if isinstance(saved, list) and saved:
-            self.table.set_visible_columns(saved)
+        shown = columns_to_show(app.ui.get("conn_columns"), app.ui.get("conn_columns_known"))
+        if shown is not None:
+            self.table.set_visible_columns(shown)
+            self._remember_columns()
         self._build_menu()
+
+    def _remember_columns(self):
+        """The layout on screen, and the columns it was chosen from (columns_to_show)."""
+        self.app.ui.set("conn_columns", list(self.table.visible_columns()))
+        self.app.ui.set("conn_columns_known", list(COLUMNS))
 
     # -- context menu -------------------------------------------------------- #
     TARGET_INDEX = 3           # "Target this process" (after the separator)
@@ -421,7 +453,7 @@ class ConnsPage:
         if chosen is None:
             return                      # cancelled: leave the table as it was
         self.table.set_visible_columns(chosen)
-        self.app.ui.set("conn_columns", list(self.table.visible_columns()))
+        self._remember_columns()
 
     def focus_search(self, _event=None):
         """Ctrl+F: show this page and put the caret in its search box.
@@ -534,7 +566,8 @@ class ConnsPage:
         # narrowing chrome->firefox drops the highlight without erasing the record.
         scoped = T("conns.yes") if c.get("scoped") else T("conns.no")
         return (connection_proc(c, self.app.proc_map) or "?",
-                c.get("pid") or "", c.get("proto", "IP"), c.get("remote_ip"),
+                c.get("pid") or "", c.get("proto", "IP"), c.get("ice") or "",
+                c.get("remote_ip"),
                 port_cell(c.get("remote_port")), port_cell(c.get("local_port")), packets,
                 scoped, c.get("dropped", 0),
                 # delivered first (what the application got), captured after it -

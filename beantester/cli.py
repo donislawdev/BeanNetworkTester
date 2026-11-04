@@ -488,8 +488,11 @@ def _print_conn_rows(conns, log):
         l_port = c.get("local_port")
         r_port = "-" if r_port is None else r_port
         l_port = "-" if l_port is None else l_port
+        # The ICE token last, and only where there is one (ice.py): a reader of the
+        # other fields by position is not moved by it.
+        ice = f" ice={c['ice']}" if c.get("ice") else ""
         log.info(f"  {c.get('dir', '?'):3} {c['remote_ip']}:{r_port:<6} "
-                 f"local:{l_port:<6} packets={c['packets']:<6} bytes={c['bytes']}")
+                 f"local:{l_port:<6} packets={c['packets']:<6} bytes={c['bytes']}{ice}")
 
 
 def _sample_record(elapsed, down, up, s):

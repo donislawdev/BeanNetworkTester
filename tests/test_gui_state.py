@@ -932,6 +932,33 @@ def test_the_chosen_columns_are_remembered_and_restored():
     """)
 
 
+def test_a_column_added_since_the_layout_was_saved_is_shown_once():
+    """A saved layout lists what to SHOW, so a column added later stayed hidden from
+    everyone who had ever chosen columns - they never saw it, so they never chose to
+    hide it. It is shown once, and from then on the layout is theirs again.
+    """
+    run_gui("""
+        from beantester.gui import dialogs
+        from beantester.gui.pages.conns import COLUMNS
+
+        # a ui.json from before the ICE column, and before conn_columns_known
+        app.ui.set("conn_columns", ["proc", "proto", "remote_ip", "packets"])
+        app.ui.data.pop("conn_columns_known", None)
+        app._build_ui()
+        page = app.pages["connections"]
+        assert page.table.visible_columns() == [
+            "proc", "proto", "ice", "remote_ip", "packets"], page.table.visible_columns()
+        assert app.ui.get("conn_columns_known") == list(COLUMNS)
+
+        # hidden by the user: it stays hidden over a restart
+        dialogs.choose_columns = lambda *a, **k: ["proc", "proto", "remote_ip", "packets"]
+        page._choose_columns()
+        app._build_ui()
+        assert app.pages["connections"].table.visible_columns() == [
+            "proc", "proto", "remote_ip", "packets"]
+    """)
+
+
 def test_the_gui_says_the_same_thing_before_an_unbounded_start():
     """The warning is not a CLI feature: in the GUI the same run is one click.
 
