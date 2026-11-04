@@ -86,8 +86,10 @@ def xor_mapped(ip, port=32853, txid=TXID):
 PRIORITY = attribute(0x0024, bytes.fromhex("6e0001ff"))
 
 
-def channel_data(inner, channel=0x4000):
-    return struct.pack(">HH", channel, len(inner)) + inner
+def channel_data(inner, channel=0x4000, pad=False):
+    """RFC 8656 section 12.4; over UDP the padding to four is optional (12.5) and is
+    not counted in the Length."""
+    return struct.pack(">HH", channel, len(inner)) + inner + bytes(-len(inner) % 4 if pad else 0)
 
 
 def udp4(src, dst, payload, sport=50000, dport=3478, proto=17, ihl=5, frag=0,
@@ -410,11 +412,123 @@ def test_the_channeldata_range_is_quic_on_a_flow_without_turn():
 
 def test_dtls_and_rtp_mean_nothing_without_stun():
     flow = Flow(IceWatch(), PEER_LAN, 50001)
-    for _ in range(ice.PROBE_MEDIA + 10):
+    for _ in range(ice.PROBE_CALL + 10):
         flow.out(RTP)
     check("no label", flow.label == "")
-    check("read for the media budget, then never", flow.reads == ice.PROBE_MEDIA,
+    check("read for the call budget, then never", flow.reads == ice.PROBE_CALL,
           f"({flow.reads})")
+
+
+def test_a_flow_that_opened_like_a_call_is_dropped_at_its_first_packet_that_is_not():
+    odd = {"80-127": bytes([0x60]) + bytes(30), "4-19 (ZRTP)": bytes([0x10]) + bytes(30),
+           "192-255": bytes([0xc3]) + bytes(30),
+           "0-3 that is not STUN": bytes([0x01]) + bytes(30),
+           "64-79 with no frame": bytes([0x40, 0x00, 0x7f, 0x7f]) + bytes(30)}
+    for name, payload in odd.items():
+        flow = Flow(IceWatch(), PEER_LAN, 50001).out(RTP).out(DTLS)
+        check(f"{name}: read while it fits a call", not flow.done)
+        flow.out(payload).out(message(BINDING_REQUEST, PRIORITY))
+        check(f"{name}: done at the first packet that does not",
+              flow.done and flow.reads == 3 and flow.label == "", f"({flow.reads})")
+
+
+def test_a_video_call_that_was_going_is_labelled_at_its_next_consent_check():
+    # five seconds of ~800 packets a second (1080p video both ways) before a check that
+    # comes every 4-6 s (RFC 7675): it used to be read for 1024 packets, about a second
+    flow = Flow(IceWatch(), PEER_LAN, 50001)
+    for _ in range(2000):
+        flow.out(RTP).back(RTP)
+    check("still read", not flow.done, f"({flow.row['ice_n']})")
+    flow.back(message(BINDING_REQUEST, PRIORITY)).out(RTP)
+    check("LAN, and done", flow.label == ice.LAN and flow.done, f"({flow.label!r})")
+
+
+def test_a_keepalive_on_a_call_that_was_going_leaves_it_the_time_to_its_check():
+    # a Binding indication is no check (RFC 8445 section 11 allows it as a keepalive):
+    # it used to cut the call's budget to PROBE_ICE
+    flow = Flow(IceWatch(), PEER_LAN, 50001).out(RTP).back(message(BINDING_INDICATION))
+    check("STUN at the keepalive", flow.label == ice.STUN, f"({flow.label!r})")
+    for _ in range(1000):
+        flow.out(RTP)
+    flow.out(message(BINDING_REQUEST, PRIORITY))
+    check("LAN at the check that came after", flow.label == ice.LAN, f"({flow.label!r})")
+
+
+def test_a_relay_the_call_was_already_using_is_turn_at_the_check_it_carries():
+    watch = IceWatch()
+    relay = Flow(watch, TURN_SERVER)
+    for _ in range(3000):
+        relay.out(channel_data(RTP)).back(channel_data(RTP, pad=True))
+    check("no label from frames alone", relay.label == "" and not relay.done)
+    relay.out(channel_data(message(BINDING_REQUEST, PRIORITY)))
+    check("TURN at the check inside a frame", relay.label == ice.TURN, f"({relay.label!r})")
+    check("not a path before media", not relay.done and relay.key not in watch._paths)
+    relay.back(channel_data(RTP))
+    check("a path at the media after it", relay.done and relay.key in watch._paths)
+
+
+def test_a_relay_whose_first_packet_is_the_check_is_turn_at_once():
+    for name, flow in (("IPv4", Flow(IceWatch(), TURN_SERVER)),
+                       ("IPv6", Flow(IceWatch(), V6_ELSEWHERE, local=V6_HOME, v6=True))):
+        flow.back(channel_data(message(BINDING_SUCCESS, xor_mapped(PUBLIC)), pad=True))
+        check(f"{name}: TURN", flow.label == ice.TURN, f"({flow.label!r})")
+
+
+def test_a_frame_whose_data_only_starts_like_stun_ends_the_reading():
+    flow = Flow(IceWatch(), TURN_SERVER).out(channel_data(RTP))
+    flow.out(channel_data(b"\x00\x01" + bytes(42)))     # STUN's first byte, no cookie
+    check("no label, and done", flow.label == "" and flow.done and flow.reads == 2,
+          f"({flow.label!r}, {flow.reads})")
+
+
+def test_a_check_through_the_relay_teaches_no_public_address():
+    # the peer's answer through the relay names the RELAY's address, not this network's
+    watch = IceWatch()
+    Flow(watch, TURN_SERVER).out(channel_data(RTP)).back(
+        channel_data(message(BINDING_SUCCESS, xor_mapped(PUBLIC))))
+    flow = Flow(watch, PUBLIC, 50001).out(message(BINDING_REQUEST, PRIORITY))
+    check("WAN, not NAT", flow.label == ice.WAN, f"({flow.label!r})")
+
+
+def test_a_channeldata_frame_is_read_by_its_length():
+    def framed(payload, **kw):
+        return ice._channel_framed(udp4(HOME, TURN_SERVER, payload, **kw), 28)
+
+    cases = {
+        "the length as it is": (framed(channel_data(RTP)), True),
+        "padded to four": (framed(channel_data(RTP, pad=True)), True),
+        "a length of four needs no padding": (framed(channel_data(RTP[:4])), True),
+        "one byte too many": (framed(channel_data(RTP) + b"\x00"), False),
+        "padded past four": (framed(channel_data(RTP, pad=True) + bytes(4)), False),
+        "a length past the datagram": (framed(channel_data(RTP)[:-1]), False),
+        "nothing in it": (framed(channel_data(b"")), False),
+        "carrying what no call carries": (framed(channel_data(b"\x60" + RTP[1:])), False),
+        "carrying STUN": (framed(channel_data(message(BINDING_REQUEST))), True),
+        "carrying DTLS": (framed(channel_data(DTLS)), True),
+        "cut before the data": (ice._channel_framed(udp4(HOME, TURN_SERVER, RTP)[:32], 28),
+                                False),
+    }
+    for name, (got, wanted) in cases.items():
+        check(name, got is wanted, f"({got})")
+
+
+def test_quic_short_headers_are_never_a_relay():
+    """RFC 9000/9001: 0b01, a spin bit and five masked bits, so 64-79 for a quarter of
+    the packets or more; then the connection ID, the same in every packet of a flow,
+    where ChannelData has its length."""
+    rng = random.Random(9000)
+    watch = IceWatch()
+    flows = []
+    for n in range(500):
+        flow = Flow(watch, PEER_WAN, 443 + n)
+        cid = bytes(rng.randrange(256) for _ in range(8))
+        for _ in range(20):
+            flow.out(bytes([0x40 | rng.randrange(16)]) + cid +
+                     bytes(rng.randrange(256) for _ in range(rng.randrange(20, 1200))))
+        flows.append(flow)
+    check("no label", all(f.label == "" for f in flows))
+    check("each done by its second packet", all(f.done and f.reads <= 2 for f in flows),
+          f"({max(f.reads for f in flows)})")
 
 
 def test_a_flow_that_is_not_ice_is_read_for_its_first_packet_only():
@@ -425,14 +539,15 @@ def test_a_flow_that_is_not_ice_is_read_for_its_first_packet_only():
     check("no label", flow.label == "")
 
 
-def test_only_the_first_packet_can_buy_the_media_budget():
-    # a budget of ten, whatever PROBE_FIRST is: the rule is about the first PACKET
-    flow = Flow(IceWatch(), "1.1.1.1", 53)
-    flow.row["ice_n"] = 10
-    flow.out(bytes([0x7a]) + bytes(30))
-    for _ in range(20):
-        flow.out(RTP)
-    check("ten reads, not the media budget", flow.reads == 10, f"({flow.reads})")
+def test_only_the_first_packet_can_buy_the_call_budget():
+    # a budget of ten on a flow whose first packet is behind it: media spends one,
+    # and neither way buys
+    for name, payload in (("media", RTP), ("a frame", channel_data(RTP))):
+        flow = Flow(IceWatch(), TURN_SERVER)
+        flow.row["ice_n"], flow.row["packets"] = 10, 1
+        for _ in range(20):
+            flow.out(payload)
+        check(f"{name}: ten reads, not the call budget", flow.reads == 10, f"({flow.reads})")
 
 
 def test_ipv4_with_options_takes_the_full_way_to_the_same_answers():
@@ -448,11 +563,27 @@ def test_ipv4_with_options_takes_the_full_way_to_the_same_answers():
     media = dict(row, ice="", ice_n=ice.PROBE_FIRST)
     watch.observe(media, (50002, PEER_LAN, 50001), udp4(HOME, PEER_LAN, RTP, ihl=7), True)
     check("a first packet that looks like media buys the budget",
-          media["ice_n"] == ice.PROBE_MEDIA - 1, f"({media['ice_n']})")
+          media["ice_n"] == ice.PROBE_CALL - 1, f"({media['ice_n']})")
     media["packets"] = 2
     for _ in range(20):
         watch.observe(media, (50002, PEER_LAN, 50001), udp4(HOME, PEER_LAN, RTP, ihl=7), True)
-    check("and only the first", media["ice_n"] == ice.PROBE_MEDIA - 21, f"({media['ice_n']})")
+    check("and only the first", media["ice_n"] == ice.PROBE_CALL - 21, f"({media['ice_n']})")
+    watch.observe(media, (50002, PEER_LAN, 50001),
+                  udp4(HOME, PEER_LAN, bytes([0x60]) + bytes(30), ihl=7), True)
+    check("a packet no call carries ends it", media["ice_n"] == 0, f"({media['ice_n']})")
+    relay = dict(row, ice="", ice_n=ice.PROBE_FIRST, remote_ip=TURN_SERVER)
+    watch.observe(relay, (50003, TURN_SERVER, 3478),
+                  udp4(HOME, TURN_SERVER, channel_data(RTP), ihl=7), True)
+    check("a frame buys it too", relay["ice_n"] == ice.PROBE_CALL - 1, f"({relay['ice_n']})")
+    relay["packets"] = 2
+    watch.observe(relay, (50003, TURN_SERVER, 3478),
+                  udp4(HOME, TURN_SERVER, channel_data(message(BINDING_REQUEST, PRIORITY)), ihl=7),
+                  True)
+    check("and the check inside a frame is TURN", relay["ice"] == ice.TURN, f"({relay['ice']!r})")
+    quic = dict(row, ice="", ice_n=10, packets=2)
+    watch.observe(quic, (50004, PEER_WAN, 443),
+                  udp4(HOME, PEER_WAN, bytes([0x40, 0x00, 0x7f, 0x7f]) + bytes(30), ihl=7), True)
+    check("64-79 without a frame ends it", quic["ice_n"] == 0, f"({quic['ice_n']})")
 
 
 def test_a_call_that_was_going_is_labelled_at_its_next_consent_check():
@@ -546,6 +677,24 @@ def test_a_move_to_the_relay_is_named_with_both_ends():
     watch = IceWatch()
     lan, relay = lan_path(watch), turn_path(watch)
     events = run(watch, [{lan: 5000}] * 4 + [{relay: 5000}] * 6)
+    check("named", [t for _, t in events] == [
+        "ICE path: LAN 10.0.0.20:50001",
+        "ICE path: LAN 10.0.0.20:50001 -> TURN 1.1.1.1:3478"], f"({events})")
+
+
+def test_a_session_started_during_a_call_still_names_its_move_to_the_relay():
+    """Every start empties the connection log, so a session started during a call
+    meets both paths mid-stream: the direct one as media, the relay as ChannelData.
+    Each is labelled at the next check it carries, and the move is named."""
+    watch = IceWatch()
+    lan, relay = Flow(watch, PEER_LAN, 50001), Flow(watch, TURN_SERVER)
+    for _ in range(400):
+        lan.out(RTP).back(RTP)
+    relay.out(channel_data(RTP))
+    lan.back(message(BINDING_REQUEST, PRIORITY)).out(RTP)
+    events = run(watch, [{lan: 5000}] * 4)
+    relay.out(channel_data(message(BINDING_REQUEST, PRIORITY))).back(channel_data(RTP))
+    events += run(watch, [{relay: 5000}] * 6, start=5)
     check("named", [t for _, t in events] == [
         "ICE path: LAN 10.0.0.20:50001",
         "ICE path: LAN 10.0.0.20:50001 -> TURN 1.1.1.1:3478"], f"({events})")

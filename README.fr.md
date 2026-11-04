@@ -205,7 +205,7 @@ revient au centre de l'écran actuel.
     "Export CSV".
   - **Session** - graine, durée, données utilisées, pics, plus les boutons "Mark bug", "Save repro
     report" et "Copy CLI command".
-  - **Events** - le journal d'événements (START/STOP/CHANGE/SCENARIO/BUG/RESET).
+  - **Events** - le journal d'événements (START/STOP/CHANGE/SCENARIO/BUG/RESET/PATH).
 - **Connections** - une vue des IP:port avec lesquels le système testé communique. Chaque colonne
   est documentée dans [Colonnes de la page Connections](#colonnes-de-la-page-connections) plus bas,
   et chacune a aussi une infobulle sur son en-tête. Le trafic qui n'a aucun port - le ping (ICMP) -
@@ -933,7 +933,7 @@ Chaque façon de se terminer a son propre code - un pipeline n'a pas besoin d'an
 | `4` | scenario | le fichier de scénario est absent ou mal formé |
 | `5` | io | un artefact n'a pas pu être écrit (rapport de reproduction, configuration enregistrée) |
 | `6` | assertion | l'exécution a abouti mais `--min-packets` / `--fail-on-no-traffic` n'est pas passé |
-| `7` | permission | les droits d'administrateur (Windows), ou root ou CAP_BPF, CAP_NET_ADMIN et CAP_NET_RAW (Linux), sont requis et absents |
+| `7` | permission | les droits d'administrateur (Windows), ou root ou CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN et CAP_NET_RAW (Linux), sont requis et absents |
 | `130` | interrupted | Ctrl+C (SIGINT) |
 | `143` | terminated | SIGTERM (annulation d'une tâche, `docker stop`), Ctrl+Break, ou fermeture de la fenêtre de la console |
 
@@ -1026,7 +1026,7 @@ connexions qui arrivent de l'extérieur, restent bloqués en silence.
 | `--interval N` | fréquence des rapports, en secondes (supérieure à 0, au plus 86 400 - le même plafond que `--duration`, de sorte qu'un intervalle qui ne pourrait jamais se déclencher est refusé au lieu d'être accepté) |
 | `--log-conns` | affiche les connexions observées à la fin |
 | `--repro-out FILE` | enregistre un rapport de reproduction (JSON) |
-| `--simulate` | trafic synthétique à la place de WinDivert (tester sans Windows, sans pilote, sans administrateur) |
+| `--simulate` | trafic synthétique à la place d'une vraie capture (sans pilote de capture, sans droits d'administrateur ni de root) |
 | `--gui` | ouvre l'interface. Valide **seule uniquement** - l'interface a ses propres commandes, la combiner avec des options de réglages est donc une erreur d'usage (sortie 2) plutôt qu'une exécution silencieuse sans fenêtre |
 | `--version` | affiche la version et quitte |
 
@@ -1123,7 +1123,7 @@ reproduction complet avec la même commande.
 
 ## Colonnes de la page Connections
 
-Dix-sept colonnes, toutes triables en cliquant sur l'en-tête, et chacune avec la même explication en
+Dix-huit colonnes, toutes triables en cliquant sur l'en-tête, et chacune avec la même explication en
 infobulle sur cet en-tête.
 
 | colonne | ce qu'elle contient |
@@ -1131,6 +1131,7 @@ infobulle sur cet en-tête.
 | `process` | Le processus qui possède le port local. `?` signifie que le nom n'a pas pu être résolu - exécutez en tant qu'administrateur. |
 | `PID` | Identifiant du processus qui possède le port local, résolu au moment où le paquet a été capturé. |
 | `proto` | Protocole de transport : TCP / UDP / ICMP / IP. |
+| `ICE` | Pour un appel ou une autre connexion ICE (WebRTC et semblables) : quel chemin est cette connexion, lu dans ses messages STUN. `LAN` - des vérifications vers une adresse de ce réseau. `NAT` - des vérifications vers l'adresse publique de ce réseau, que le routeur renvoie vers l'intérieur. `WAN` - des vérifications vers l'adresse publique de quelqu'un d'autre. `TURN` - la connexion à un relais TURN. `STUN` - une question à un serveur STUN sur l'adresse publique de ce réseau. Vide quand la connexion n'a porté aucun STUN. Un relais TURN sur TCP ou TLS n'est pas reconnu. |
 | `remote IP` | L'adresse avec laquelle cette machine communique. Faites un clic droit sur une ligne pour limiter les dégradations à cette adresse. |
 | `r.port` | Port côté distant (443 = HTTPS, 53 = DNS, 80 = HTTP). Vide pour le trafic sans port, comme le ping. |
 | `l.port` | Port sur cette machine - ce qui relie la connexion à un processus. Vide pour le ping/ICMP, ce qui explique aussi pourquoi ces lignes n'ont généralement pas de nom de processus. |
@@ -1158,6 +1159,22 @@ Ajoutez de la perte ou une limite de débit et elles se séparent, et **l'écart
 les dégâts causés à cette connexion**. (Avant leur séparation, il n'y avait qu'une seule paire, qui
 contenait les octets capturés sous des intitulés qui parlaient d'octets livrés : une ligne pouvait
 afficher 5 MB reçus alors que son application en avait obtenu 0,4.)
+
+**Quel chemin un appel a pris.** Un agent ICE essaie plusieurs chemins vers son correspondant à la
+fois et en garde un, donc un appel peut afficher quatre ou cinq lignes avec une étiquette `ICE`. Un
+appel qui était déjà en cours quand la session a démarré reçoit ses étiquettes quelques secondes
+plus tard, à la prochaine vérification qu'il envoie pour garder la connexion, et son relais aussi.
+Une fois par seconde, le programme regarde les connexions étiquetées qui ont porté des médias et
+combien chacune a livré pendant les trois dernières secondes (1500 octets ou plus comptent comme
+des données, et les vérifications qui maintiennent un appel en vie en font bien moins). Une
+connexion est nommée dès qu'elle mène deux secondes de suite, et celle qui est nommée garde sa place
+tant qu'elle porte encore des données, sauf si une autre en porte plus du double. Chaque changement
+met une entrée `PATH` dans le journal d'événements, par exemple
+`ICE path: LAN 192.168.0.20:50000 -> TURN 203.0.113.10:3478`, et dans le rapport de reproduction.
+Quand aucun chemin n'a porté de données pendant cinq secondes, l'entrée indique
+`ICE path: no data (was ...)`. Un chemin que cette session bloque ne livre rien, il n'est donc
+jamais celui qui est nommé. Cherchez avec `ice:turn` (ou `ice:lan`, `ice:nat`...) pour ne voir
+qu'un seul type de chemin.
 
 ## Exports CSV
 
@@ -1250,6 +1267,7 @@ Les mêmes lignes que la table, mais **les en-têtes ne sont pas les libellés d
 | `captured_down_bytes`, `captured_up_bytes`, `captured_total_bytes` | `down seen`, `up seen` (plus leur total) |
 | `avg_bytes` | `avg[B]` |
 | `duration_s`, `idle_s` | `time[s]`, `idle[s]` |
+| `ice` | `ICE` (`LAN`, `NAT`, `WAN`, `TURN`, `STUN` ou vide) - la **dernière** colonne, pour qu'un lecteur qui prend les colonnes par leur position ne soit pas décalé |
 
 ## Format du fichier de scénario
 
@@ -1582,6 +1600,7 @@ beantester/              le paquet d'implémentation
   damage.py              ampleur des dégâts d'une session : raisons d'abandon, parts de perte/corruption
   engine.py              threads de capture/réinjection, statistiques (BeanEngine)
   connlog.py             le journal des connexions de la session : une ligne par flux, et son plafond
+  ice.py                 la colonne ICE : quels flux UDP portent du STUN, et le chemin que prennent les données
   driverwait.py          combien de temps les paquets ont attendu dans la file du pilote avant l'outil
   matchers.py            expressions de filtre (liste/plage/!/>/</générique/re:) - partagées
                          par les champs processus, IP et port : une seule source de vérité

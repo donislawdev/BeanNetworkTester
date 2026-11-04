@@ -17,7 +17,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 - **The event log says when a call moves to another path.** A PATH entry, for example
   `ICE path: LAN 192.168.0.20:50000 -> TURN 203.0.113.10:3478`, names the connection that
   now carries the call's data, and the reproduction report has it too. A path the session
-  blocks delivers nothing, so it is never the one named.
+  blocks delivers nothing, so it is never the one named. A call that was already going when
+  the session started gets its labels a few seconds later, through a relay too.
 
 - **The ICE column in the CSV, in `--log-conns` and in a saved column layout.** The
   connections CSV has a new last column, `ice`, and `--log-conns` ends the line of such a
@@ -25,6 +26,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   shown once; hide it and it stays hidden.
 
 ### Fixed
+
+- **The translated READMEs name all four capabilities a Linux capture needs.** Exit code 7 in
+  the seven translations listed three of them, without CAP_PERFMON. `--simulate` there no
+  longer speaks of WinDivert, which Linux does not use.
 
 - **A damaged column layout in the window state file no longer stops the program from
   starting.** A column entry the program cannot read is left out, and with none left the

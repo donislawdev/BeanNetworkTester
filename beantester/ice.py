@@ -66,18 +66,24 @@ WAN = "WAN"     # checks to a public address that is not this network's
 #
 # A new UDP flow is read for ONE packet: the first datagram of every ICE flow is
 # STUN (a connectivity check, or an Allocate to a relay), and a call that was going
-# before the session started opens with media, which buys PROBE_MEDIA. It was 4
-# first, and the count of CALLS is what costs: MEASURED 2026-11-04 in the engine
-# (CPython 3.15.2, ``internal_tools`` probes ``2026-11-04-ice-path``, a new UDP flow
-# every two packets), one call to an EMPTY probe per packet took 4.7% off
+# before the session started opens with what a call carries, which buys PROBE_CALL.
+# It was 4 first, and the count of CALLS is what costs: MEASURED 2026-11-04 in the
+# engine (CPython 3.15.2, ``internal_tools`` probes ``2026-11-04-ice-path``, a new UDP
+# flow every two packets), one call to an EMPTY probe per packet took 4.7% off
 # the pipeline's ceiling - a call costs ~1 us there, against ~50 ns in a loop of its
 # own - while one call per flow took nothing measurable.
 PROBE_FIRST = 1
-# A flow whose FIRST packet already looks like DTLS or RTP: a call that was going
-# before the session started. Its first STUN is the next consent check (RFC 7675,
-# about every 5 s), so it is read for longer. A random first byte looks like media
-# 42% of the time (108 of 256 values), which is why this is a budget and not a rule.
-PROBE_MEDIA = 1024
+# A flow whose FIRST packet is media (DTLS or RTP) or a TURN ChannelData frame that
+# carries media or STUN: a call that was going when the session started - every
+# start empties the connection log - straight to the peer or through a relay. Its
+# first STUN is the next consent check (RFC 7675: every 5 s, each interval drawn from
+# 0.8-1.2 of it, from BOTH ends), and ~800 packets a second of 1080p video both ways
+# would use up a thousand packets in a second, so it is read for 8192 - about ten
+# seconds of such a call. It is read only while every packet fits a call (media, a
+# carrying frame, STUN): the first that does not ends it. A random first byte looks
+# like media 42% of the time (108 of 256 values), and such a flow is dropped at its
+# next packet of another kind (58% each) instead of being read for the budget.
+PROBE_CALL = 8192
 PROBE_ICE = 256     # after the first STUN message
 # ICE signalling spends no budget, so a relay that only carries keepalives is still
 # read when the call moves onto it half an hour later. This is its own ceiling: about
@@ -201,6 +207,29 @@ def _looks_like_media(first):
     return 20 <= first <= 63 or 128 <= first <= 191
 
 
+def _channel_framed(raw, at):
+    """The UDP payload at ``at`` is one TURN ChannelData frame that carries what a call
+    carries: its Length (RFC 8656 section 12.4: the data alone, header and padding left
+    out) matches the datagram, with or without the padding to four that UDP may add
+    (section 12.5), and the data starts with STUN, DTLS or RTP. The caller has seen
+    the first byte in 64-79, channel numbers 0x4000-0x4FFF.
+
+    QUIC's short header shares that first byte for a quarter of its packets or more
+    (RFC 9000/9001: 0b01 and a spin bit, the five low bits masked), but where the
+    Length would stand is its connection ID - the same in every packet of a flow while
+    the sizes change - so it passes about four times in 65 536. Only the lengths are
+    read; the headers before ``at`` are not checked here.
+    """
+    if len(raw) < at + 5:
+        return False
+    size = ((raw[at - 4] << 8) | raw[at - 3]) - 8   # the UDP payload, by the UDP length
+    length = (raw[at + 2] << 8) | raw[at + 3]
+    if not length or (size != length + 4 and size != ((length + 3) & ~3) + 4):
+        return False
+    inner = raw[at + 4]
+    return inner < 4 or 20 <= inner <= 63 or 128 <= inner <= 191
+
+
 def _same_prefix(raw):
     """An IPv6 packet whose two ends share a /64: one link, global addresses or not.
 
@@ -247,6 +276,11 @@ class IceWatch:
     "Media" means DTLS or RTP, and on a relay only what the relay CARRIES: before a
     call starts, a relay carries the connectivity checks to the peer, and counting
     those as data would name the relay as the path before any data moved.
+
+    A call that was going when the session started shows no STUN until its next
+    consent check, so a flow that opens with what a call carries - media, or a
+    ChannelData frame on the way to a relay - is read for longer (``PROBE_CALL``),
+    and only while every packet still fits a call.
     """
 
     def __init__(self):
@@ -280,11 +314,14 @@ class IceWatch:
     # -- the packet path: one call per packet of a flow still being read ---- #
     def observe(self, row, key, raw, is_out):
         # THE SHORT WAY, with no header checked and no function called: an unlabelled
-        # flow whose payload cannot start STUN either buys the media budget (its first
-        # packet looks like DTLS or RTP) or spends one, whatever the headers say - a
-        # wrong purchase (a fragment, an IPv6 extension header) only reads a flow
-        # longer, within the budget. The two fixed offsets are IPv4 without options
-        # and IPv6 (28 and 48); anything else takes the full way below.
+        # flow whose payload cannot start STUN or a ChannelData frame either buys the
+        # call budget (its first packet is media), spends one (media again) or is done
+        # (anything a call does not carry), whatever the headers say - a wrong verdict
+        # (a fragment, an IPv6 extension header) reads a flow longer, within the budget,
+        # or ends it sooner: only the label of a flow that sends such packets is at
+        # stake, and calls send neither. The two fixed offsets are IPv4 without options
+        # and IPv6 (28 and 48); anything else, and a frame that looks right (one call,
+        # for the 64-79 bytes only), takes the full way below, which checks the headers.
         # MEASURED 2026-11-04 in the engine (CPython 3.15.2, a new UDP flow every two
         # packets, ``internal_tools`` probes ``2026-11-04-ice-path``): a Python
         # call costs ~1 us on the capture thread there, against ~50 ns in a loop of
@@ -294,15 +331,18 @@ class IceWatch:
         at = 28 if lead == 0x45 else 48 if lead >> 4 == 6 else 0
         if at and not row["ice"] and len(raw) > at:
             first = raw[at]
-            if first >= 4:
-                if row["packets"] == 1 and (20 <= first <= 63 or 128 <= first <= 191):
-                    row["ice_n"] = PROBE_MEDIA - 1  # this packet was the first of them
+            framed = 64 <= first <= 79 and _channel_framed(raw, at)
+            if first >= 4 and not framed:
+                if not (20 <= first <= 63 or 128 <= first <= 191):
+                    row["ice_n"] = 0                # nothing a call carries
+                elif row["packets"] == 1:
+                    row["ice_n"] = PROBE_CALL - 1   # this packet was the first of them
                 else:
                     row["ice_n"] -= 1
                 return
         start = _start(raw)
         if start < 0:
-            row["ice_n"] -= 1
+            row["ice_n"] -= 1       # unreadable: no evidence either way
             return
         first = raw[start]
         # A flow has a _Flow exactly when it carried STUN, and STUN labels the row at
@@ -314,8 +354,38 @@ class IceWatch:
             self._on_stun(row, key, flow, message, raw, is_out)
         elif flow is not None:
             self._on_data(row, key, flow, raw, start, first)
-        elif row["packets"] == 1 and _looks_like_media(first):
-            row["ice_n"] = PROBE_MEDIA - 1      # this packet was the first of them
+        elif 64 <= first <= 79:
+            self._on_channel(row, key, raw, start)
+        elif not _looks_like_media(first):
+            row["ice_n"] = 0                    # nothing a call carries (0-3: not STUN)
+        elif row["packets"] == 1:
+            row["ice_n"] = PROBE_CALL - 1       # this packet was the first of them
+        else:
+            row["ice_n"] -= 1
+
+    def _on_channel(self, row, key, raw, start):
+        """ChannelData on a flow with no label: the relay of a call that was going when
+        the session started (RFC 9443 gives 64-79 to ChannelData only to or from a TURN
+        server; anywhere else it is QUIC). A frame buys reading time, and only a STUN
+        message inside one - the consent checks a call sends through its relay - makes
+        the label. What that STUN says about addresses is not learned: an answer that
+        came through the relay names the RELAY's address, not this network's."""
+        if not _channel_framed(raw, start):
+            row["ice_n"] = 0                    # 64-79 without a frame: QUIC, not a call
+            return
+        inner = raw[start + 4]
+        end = start + 4 + ((raw[start + 2] << 8) | raw[start + 3])
+        message = stun(memoryview(raw)[start + 4:end]) if inner < 4 else None
+        if message is not None:
+            flow = self._flows[key] = _Flow(row)
+            flow.turn = True
+            row["ice_n"] = PROBE_ICE
+            self._signalled(row, flow)
+            self._settle(row, key, flow, raw)
+        elif inner < 4:
+            row["ice_n"] = 0                    # STUN's range with no STUN in it
+        elif row["packets"] == 1:
+            row["ice_n"] = PROBE_CALL - 1       # this packet was the first of them
         else:
             row["ice_n"] -= 1
 
@@ -323,7 +393,9 @@ class IceWatch:
         method, kind, check, mapped, carried = message
         if flow is None:
             flow = self._flows[key] = _Flow(row)
-            row["ice_n"] = PROBE_ICE
+            # never less than a call that was going had left: a keepalive or a query
+            # on it is no check, and its check is still to come
+            row["ice_n"] = max(row["ice_n"], PROBE_ICE)
         self._signalled(row, flow)
         # Only an answer that came IN names this network's address. The answers this
         # machine sends name the PEER's address as this machine saw it.

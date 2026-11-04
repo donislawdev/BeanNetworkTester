@@ -169,7 +169,7 @@ Python 3.13 及更新版本以及 `.exe` 则以微秒计时。
     计数器网格会根据窗口宽度自动选择列数。另有一个“导出 CSV”按钮。
   - **会话**：随机种子、持续时间、已用数据量、峰值，外加“标记故障时刻”“保存复现报告...”
     “复制 CLI 命令”按钮。
-  - **事件**：事件日志（开始/停止/更改/场景/故障/重置）。
+  - **事件**：事件日志（开始/停止/更改/场景/故障/重置/路径）。
 - **连接**：查看被测系统正在与哪些 IP:端口通信。每一列都在下面的
   [连接列](#连接列)中有说明，每个列标题上也有相应的工具提示。没有端口的流量，
   即 ping（ICMP），同样会被列出，每个地址占一行，端口单元格留空。
@@ -751,7 +751,7 @@ BeanNetworkTester.exe --preset "3G network" --duration 60
 | `4` | scenario | 场景文件缺失或格式错误 |
 | `5` | io | 无法写入某个产物（复现报告、保存的配置） |
 | `6` | assertion | 运行成功，但 `--min-packets` / `--fail-on-no-traffic` 未通过 |
-| `7` | permission | 需要管理员权限（Windows），或 root 或 CAP_BPF、CAP_NET_ADMIN、CAP_NET_RAW（Linux），但没有 |
+| `7` | permission | 需要管理员权限（Windows），或 root 或 CAP_BPF、CAP_PERFMON、CAP_NET_ADMIN、CAP_NET_RAW（Linux），但没有 |
 | `130` | interrupted | Ctrl+C（SIGINT） |
 | `143` | terminated | SIGTERM（作业取消、`docker stop`）、Ctrl+Break，或关闭控制台窗口 |
 
@@ -841,7 +841,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--interval N` | 报告的间隔，单位秒（大于 0，不超过 86 400，与 `--duration` 的上限相同，所以永远无法触发的间隔会被拒绝，而不是被接受） |
 | `--log-conns` | 结束时打印观察到的连接 |
 | `--repro-out FILE` | 保存复现报告（JSON） |
-| `--simulate` | 用合成流量代替 WinDivert（无需 Windows、无需驱动、无需管理员权限即可测试） |
+| `--simulate` | 用合成流量代替真实捕获（无需捕获驱动，无需管理员或 root 权限） |
 | `--gui` | 打开图形界面。**只能单独使用**：图形界面有自己的控件，所以与设置类参数组合会被视为用法错误（退出码 2），而不是悄悄以无头方式运行 |
 | `--version` | 打印版本并退出 |
 
@@ -933,13 +933,14 @@ BeanNetworkTester.exe --simulate --scenario scenarios/cafe-wifi.json
 
 ## 连接列
 
-共十七列，都可以点击列标题排序，每个列标题上的工具提示里也有同样的说明。
+共十八列，都可以点击列标题排序，每个列标题上的工具提示里也有同样的说明。
 
 | 列 | 内容 |
 |---|---|
 | `进程` | 拥有本地端口的进程。`?` 表示无法解析出名称，请以管理员身份运行。 |
 | `PID` | 拥有本地端口的进程 ID，在捕获数据包时解析。 |
 | `协议` | 传输协议：TCP / UDP / ICMP / IP。 |
+| `ICE` | 通话或其他 ICE 连接（WebRTC 等）中，这条连接是哪条路径，依据它的 STUN 消息判断。`LAN` - 发往本网络地址的连通性检查。`NAT` - 发往本网络自身公网地址的检查，由路由器转回内网。`WAN` - 发往他人公网地址的检查。`TURN` - 通往 TURN 中继的连接。`STUN` - 向 STUN 服务器询问本网络的公网地址。连接上没有 STUN 时为空白。不识别基于 TCP 或 TLS 的 TURN 中继。 |
 | `远程 IP` | 这台机器正在与之通信的地址。右键点击某一行，可以把弱网影响限定在该地址上。 |
 | `远程端口` | 远端的端口（443 = HTTPS，53 = DNS，80 = HTTP）。没有端口的流量（如 ping）为空。 |
 | `本地端口` | 这台机器上的端口，也就是把连接与进程联系起来的东西。ping/ICMP 为空，这也是这些行通常没有进程名的原因。 |
@@ -963,6 +964,16 @@ BeanNetworkTester.exe --simulate --scenario scenarios/cafe-wifi.json
 **已送达/观测这一对，正是这张表的要点。** 没有施加任何弱网影响时，两者相等。加入丢包或限速后，
 它们就会分开，**两者之间的差距就是这条连接受到的损害**。（拆分之前只有一对数值，
 它放的是捕获到的字节数，列标题却表示已送达：一行可能显示收到 5 MB，而对应的应用实际只得到 0.4 MB。）
+
+**通话走了哪条路径。** ICE 代理会同时尝试通往对端的几条路径并保留其中一条，所以一个通话可能显示
+四五行带 `ICE` 标签的连接。会话开始时已经在进行的通话，会在几秒后、它为保持连接而发出下一次检查时
+得到标签，它的中继也一样。程序每秒查看一次带标签且承载过媒体的连接，以及每条连接在最近三秒内送达了
+多少数据（1500 字节或以上算作数据，而维持通话的检查远少于此）。一条连接连续两秒领先就会被点名；
+被点名的连接只要仍在承载数据，就保持它的位置，除非另一条承载的数据超过它的两倍。每次变化都会在
+事件日志和复现报告中写入一条“路径”（`PATH`）条目，例如
+`ICE path: LAN 192.168.0.20:50000 -> TURN 203.0.113.10:3478`。如果五秒内没有任何路径承载数据，
+条目会写成 `ICE path: no data (was ...)`。被本会话阻断的路径送达不了任何数据，所以永远不会被点名。
+用 `ice:turn`（或 `ice:lan`、`ice:nat`...）搜索，只看一种路径。
 
 ## CSV 导出
 
@@ -1048,6 +1059,7 @@ BeanNetworkTester.exe --simulate --scenario scenarios/cafe-wifi.json
 | `captured_down_bytes`, `captured_up_bytes`, `captured_total_bytes` | `观测下载`, `观测上传`（以及它们的合计） |
 | `avg_bytes` | `均值[B]` |
 | `duration_s`, `idle_s` | `时长[s]`, `空闲[s]` |
+| `ice` | `ICE`（`LAN`、`NAT`、`WAN`、`TURN`、`STUN` 或空白），是**最后**一列，这样按位置读取各列的程序不会错位 |
 
 ## 场景文件格式
 
@@ -1336,6 +1348,7 @@ beantester/              实现包
   damage.py              一次会话造成了多大损害：丢弃原因、丢包/损坏的占比
   engine.py              捕获/注入线程、统计（BeanEngine）
   connlog.py             会话的连接日志：每条流一行，及其上限
+  ice.py                 ICE 列：哪些 UDP 流承载 STUN，以及数据走的路径
   driverwait.py          数据包在交给工具之前，在驱动队列中等了多久
   matchers.py            过滤表达式（列表/范围/!/>/</通配符/re:），由进程、
                          IP 和端口字段共用，是唯一的事实来源

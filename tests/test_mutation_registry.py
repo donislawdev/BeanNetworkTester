@@ -11261,19 +11261,127 @@ MUTATIONS = [
         "test": "test_media_on_a_flow_that_only_asked_a_stun_server_still_spends_budget",
     },
     {
-        "label": "ice: any packet that looks like media buys the media budget",
+        "label": "ice: any packet that looks like media buys the call budget",
         "file": "beantester/ice.py",
-        "old": "                if row[\"packets\"] == 1 and (20 <= first <= 63 or 128 <= first <= 191):\n",
-        "new": "                if 20 <= first <= 63 or 128 <= first <= 191:\n",
-        "test": "test_only_the_first_packet_can_buy_the_media_budget",
+        "old": "                elif row[\"packets\"] == 1:\n"
+               "                    row[\"ice_n\"] = PROBE_CALL - 1",
+        "new": "                elif True:\n"
+               "                    row[\"ice_n\"] = PROBE_CALL - 1",
+        "test": "test_only_the_first_packet_can_buy_the_call_budget",
     },
     {
         # The full way (IPv4 with options, and anything the short way passes on).
         "label": "ice: on the full way, any packet that looks like media buys the budget",
         "file": "beantester/ice.py",
-        "old": "        elif row[\"packets\"] == 1 and _looks_like_media(first):\n",
-        "new": "        elif _looks_like_media(first):\n",
+        "old": "            row[\"ice_n\"] = 0                    # nothing a call carries (0-3: not STUN)\n"
+               "        elif row[\"packets\"] == 1:\n",
+        "new": "            row[\"ice_n\"] = 0                    # nothing a call carries (0-3: not STUN)\n"
+               "        elif True:\n",
         "test": "test_ipv4_with_options_takes_the_full_way_to_the_same_answers",
+    },
+    {
+        "label": "ice: any ChannelData frame buys the call budget",
+        "file": "beantester/ice.py",
+        "old": "            row[\"ice_n\"] = 0                    # STUN's range with no STUN in it\n"
+               "        elif row[\"packets\"] == 1:\n",
+        "new": "            row[\"ice_n\"] = 0                    # STUN's range with no STUN in it\n"
+               "        elif True:\n",
+        "test": "test_only_the_first_packet_can_buy_the_call_budget",
+    },
+    {
+        # Random UDP that opened in a media range would be read for the whole budget.
+        "label": "ice: a packet no call carries only spends one",
+        "file": "beantester/ice.py",
+        "old": "                    row[\"ice_n\"] = 0                # nothing a call carries\n",
+        "new": "                    row[\"ice_n\"] -= 1\n",
+        "test": "test_a_flow_that_opened_like_a_call_is_dropped_at_its_first_packet_that_is_not",
+    },
+    {
+        "label": "ice: on the full way, a packet no call carries only spends one",
+        "file": "beantester/ice.py",
+        "old": "            row[\"ice_n\"] = 0                    # nothing a call carries (0-3: not STUN)\n",
+        "new": "            row[\"ice_n\"] -= 1\n",
+        "test": "test_a_flow_that_opened_like_a_call_is_dropped_at_its_first_packet_that_is_not",
+    },
+    {
+        "label": "ice: 64-79 without a frame only spends one",
+        "file": "beantester/ice.py",
+        "old": "            row[\"ice_n\"] = 0                    # 64-79 without a frame: QUIC, not a call\n",
+        "new": "            row[\"ice_n\"] -= 1\n",
+        "test": "test_ipv4_with_options_takes_the_full_way_to_the_same_answers",
+    },
+    {
+        "label": "ice: a frame with STUN's first byte and no STUN only spends one",
+        "file": "beantester/ice.py",
+        "old": "            row[\"ice_n\"] = 0                    # STUN's range with no STUN in it\n",
+        "new": "            row[\"ice_n\"] -= 1\n",
+        "test": "test_a_frame_whose_data_only_starts_like_stun_ends_the_reading",
+    },
+    {
+        # A relay the call was already using would never be read past its first packet.
+        "label": "ice: the short way turns a ChannelData frame down",
+        "file": "beantester/ice.py",
+        "old": "            if first >= 4 and not framed:\n",
+        "new": "            if first >= 4:\n",
+        "test": "test_a_relay_the_call_was_already_using_is_turn_at_the_check_it_carries",
+    },
+    {
+        "label": "ice: a ChannelData frame is taken whatever its length",
+        "file": "beantester/ice.py",
+        "old": "    if not length or (size != length + 4 and size != ((length + 3) & ~3) + 4):\n",
+        "new": "    if not length:\n",
+        "test": "test_a_channeldata_frame_is_read_by_its_length",
+    },
+    {
+        "label": "ice: a padded ChannelData frame is turned down",
+        "file": "beantester/ice.py",
+        "old": "    if not length or (size != length + 4 and size != ((length + 3) & ~3) + 4):\n",
+        "new": "    if not length or size != length + 4:\n",
+        "test": "test_a_channeldata_frame_is_read_by_its_length",
+    },
+    {
+        "label": "ice: a frame is taken whatever it carries",
+        "file": "beantester/ice.py",
+        "old": "    return inner < 4 or 20 <= inner <= 63 or 128 <= inner <= 191\n",
+        "new": "    return True\n",
+        "test": "test_a_channeldata_frame_is_read_by_its_length",
+    },
+    {
+        # QUIC on 443 is everywhere: a frame alone would label it TURN.
+        "label": "ice: a ChannelData frame alone makes a relay",
+        "file": "beantester/ice.py",
+        "old": "        message = stun(memoryview(raw)[start + 4:end]) if inner < 4 else None\n"
+               "        if message is not None:\n",
+        "new": "        message = stun(memoryview(raw)[start + 4:end]) if inner < 4 else None\n"
+               "        if True:\n",
+        "test": "test_a_relay_the_call_was_already_using_is_turn_at_the_check_it_carries",
+    },
+    {
+        "label": "ice: the STUN inside a frame is taken from its first byte",
+        "file": "beantester/ice.py",
+        "old": "        message = stun(memoryview(raw)[start + 4:end]) if inner < 4 else None\n",
+        "new": "        message = (1, 0, False, None, -1) if inner < 4 else None\n",
+        "test": "test_a_frame_whose_data_only_starts_like_stun_ends_the_reading",
+    },
+    {
+        # The answer through a relay names the RELAY's address: learned, every check
+        # to that server would read NAT.
+        "label": "ice: a check through the relay teaches the public address",
+        "file": "beantester/ice.py",
+        "old": "            flow.turn = True\n"
+               "            row[\"ice_n\"] = PROBE_ICE\n",
+        "new": "            flow.turn = True\n"
+               "            if message[3]:\n"
+               "                self._learn(message[3])\n"
+               "            row[\"ice_n\"] = PROBE_ICE\n",
+        "test": "test_a_check_through_the_relay_teaches_no_public_address",
+    },
+    {
+        "label": "ice: the first STUN on a call that was going cuts its budget",
+        "file": "beantester/ice.py",
+        "old": "            row[\"ice_n\"] = max(row[\"ice_n\"], PROBE_ICE)\n",
+        "new": "            row[\"ice_n\"] = PROBE_ICE\n",
+        "test": "test_a_keepalive_on_a_call_that_was_going_leaves_it_the_time_to_its_check",
     },
     {
         "label": "ice: two IPv6 ends on one /64 are not one network",

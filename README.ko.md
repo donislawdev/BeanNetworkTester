@@ -177,7 +177,7 @@ Full HD / 2K / 4K에서는 커집니다), 열 너비, 표 행 높이, 차트 여
     정합니다. "Export CSV" 버튼이 있습니다.
   - **Session** - 시드, 지속 시간, 사용한 데이터, 최고치, 그리고 "Mark bug", "Save repro report",
     "Copy CLI command" 버튼.
-  - **Events** - 이벤트 로그(START/STOP/CHANGE/SCENARIO/BUG/RESET).
+  - **Events** - 이벤트 로그(START/STOP/CHANGE/SCENARIO/BUG/RESET/PATH).
 - **Connections** - 테스트 중인 시스템이 어떤 IP:포트와 통신하는지 보여 주는 화면입니다. 모든 열은 아래의
   [Connections 열](#connections-열)에 설명되어 있고, 각 열 머리글에도 툴팁이 있습니다. 포트가 아예
   없는 트래픽인 ping(ICMP)도 주소마다 한 행씩 나열되며 포트 칸은 비어 있습니다.
@@ -802,7 +802,7 @@ BeanNetworkTester.exe --preset "3G network" --duration 60
 | `4` | scenario | 시나리오 파일이 없거나 형식이 잘못되었습니다 |
 | `5` | io | 산출물을 쓸 수 없었습니다(재현 보고서, 저장한 설정) |
 | `6` | assertion | 실행은 성공했지만 `--min-packets` / `--fail-on-no-traffic`을 통과하지 못했습니다 |
-| `7` | permission | 관리자 권한(Windows), 또는 root나 CAP_BPF, CAP_NET_ADMIN, CAP_NET_RAW(Linux)가 필요한데 없습니다 |
+| `7` | permission | 관리자 권한(Windows), 또는 root나 CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN, CAP_NET_RAW(Linux)가 필요한데 없습니다 |
 | `130` | interrupted | Ctrl+C (SIGINT) |
 | `143` | terminated | SIGTERM(작업 취소, `docker stop`), Ctrl+Break 또는 콘솔 창 닫기 |
 
@@ -890,7 +890,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--interval N` | 보고 간격(초)(0보다 크고 86 400 이하 - `--duration`과 같은 상한이므로, 절대 발생할 수 없는 간격은 받아들이지 않고 거부합니다) |
 | `--log-conns` | 끝에서 관찰된 연결을 출력합니다 |
 | `--repro-out FILE` | 재현 보고서(JSON)를 저장합니다 |
-| `--simulate` | WinDivert 대신 합성 트래픽 사용(Windows, 드라이버, 관리자 권한 없이 테스트) |
+| `--simulate` | 실제 캡처 대신 합성 트래픽 사용(캡처 드라이버도, 관리자 권한이나 root 권한도 필요 없음) |
 | `--gui` | GUI를 엽니다. **단독으로만** 유효합니다. GUI에는 자체 컨트롤이 있으므로, 설정 플래그와 함께 쓰면 조용히 헤드리스로 실행하는 대신 사용법 오류(종료 코드 2)가 됩니다 |
 | `--version` | 버전을 출력하고 종료합니다 |
 
@@ -983,7 +983,7 @@ BeanNetworkTester.exe --simulate --scenario scenarios/cafe-wifi.json
 
 ## Connections 열
 
-열이 열일곱 개이며, 모두 머리글을 클릭해 정렬할 수 있고, 각 머리글에는 같은 설명이 툴팁으로
+열이 열여덟 개이며, 모두 머리글을 클릭해 정렬할 수 있고, 각 머리글에는 같은 설명이 툴팁으로
 붙어 있습니다.
 
 | 열 | 내용 |
@@ -991,6 +991,7 @@ BeanNetworkTester.exe --simulate --scenario scenarios/cafe-wifi.json
 | `process` | 로컬 포트를 소유한 프로세스. `?`는 이름을 확인하지 못했다는 뜻이며, 관리자 권한으로 실행하세요. |
 | `PID` | 로컬 포트를 소유한 프로세스 id이며, 패킷이 캡처된 시점에 확인됩니다. |
 | `proto` | 전송 프로토콜: TCP / UDP / ICMP / IP. |
+| `ICE` | 통화나 다른 ICE 연결(WebRTC 등)에서 이 연결이 어떤 경로인지를 그 STUN 메시지에서 읽은 것입니다. `LAN` - 이 네트워크 안의 주소로 보내는 확인. `NAT` - 이 네트워크 자신의 공인 주소로 보내는 확인이며, 라우터가 안으로 되돌려 보냅니다. `WAN` - 다른 사람의 공인 주소로 보내는 확인. `TURN` - TURN 릴레이로 가는 연결. `STUN` - 이 네트워크의 공인 주소를 STUN 서버에 묻는 것. 연결이 STUN을 나르지 않았으면 비어 있습니다. TCP나 TLS 위의 TURN 릴레이는 인식하지 못합니다. |
 | `remote IP` | 이 컴퓨터가 통신하는 상대 주소. 행을 마우스 오른쪽 버튼으로 누르면 열화를 그 주소로 제한할 수 있습니다. |
 | `r.port` | 원격 쪽 포트(443 = HTTPS, 53 = DNS, 80 = HTTP). ping처럼 포트가 없는 트래픽은 비어 있습니다. |
 | `l.port` | 이 컴퓨터 쪽 포트 - 연결을 프로세스와 이어 주는 값입니다. ping/ICMP는 비어 있으며, 그런 행에 보통 프로세스 이름이 없는 이유이기도 합니다. |
@@ -1015,6 +1016,18 @@ CSV 내보내기는 영향을 받지 않으며, 둘 다 셀의 텍스트가 아�
 제한을 더하면 둘이 벌어지고, **둘 사이의 차이가 그 연결이 입은 피해**입니다. (나누기 전에는 쌍이 하나뿐이었고,
 전달된 양을 뜻하는 제목 아래에 캡처한 바이트를 담고 있었습니다. 그래서 어떤 행에는 5 MB를 받았다고
 표시되는데 애플리케이션은 0.4 MB만 받은 경우가 있었습니다.)
+
+**통화가 어떤 경로를 탔는지.** ICE 에이전트는 상대에게 가는 여러 경로를 한꺼번에 시도하고 하나를
+남기므로, 통화 하나에 `ICE` 레이블이 붙은 행이 네다섯 개 보일 수 있습니다. 세션이 시작될 때 이미
+진행 중이던 통화는 몇 초 뒤, 연결을 유지하려고 보내는 다음 확인 때 레이블을 받으며, 그 릴레이도
+마찬가지입니다. 프로그램은 1초에 한 번, 미디어를 나른 레이블 붙은 연결과 각 연결이 최근 3초 동안
+전달한 양을 봅니다(1500바이트 이상을 데이터로 치며, 통화를 유지하는 확인은 그보다 훨씬 적습니다).
+연결은 2초 연속으로 앞서면 이름이 붙고, 이름이 붙은 연결은 데이터를 계속 나르는 동안, 다른 연결이
+그 두 배를 넘게 나르지 않는 한 자리를 지킵니다. 바뀔 때마다 이벤트 로그와 재현 보고서에 `PATH`
+항목이 들어갑니다. 예: `ICE path: LAN 192.168.0.20:50000 -> TURN 203.0.113.10:3478`. 어떤 경로도
+5초 동안 데이터를 나르지 않으면 항목은 `ICE path: no data (was ...)`가 됩니다. 이 세션이 차단하는
+경로는 아무것도 전달하지 않으므로 이름이 붙지 않습니다. 한 종류의 경로만 보려면 `ice:turn`(또는
+`ice:lan`, `ice:nat`...)으로 검색하세요.
 
 ## CSV 내보내기
 
@@ -1101,6 +1114,7 @@ CSV 내보내기는 영향을 받지 않으며, 둘 다 셀의 텍스트가 아�
 | `captured_down_bytes`, `captured_up_bytes`, `captured_total_bytes` | `down seen`, `up seen` (그리고 그 합계) |
 | `avg_bytes` | `avg[B]` |
 | `duration_s`, `idle_s` | `time[s]`, `idle[s]` |
+| `ice` | `ICE`(`LAN`, `NAT`, `WAN`, `TURN`, `STUN` 또는 비어 있음) - **마지막** 열이므로, 열을 위치로 읽는 프로그램이 밀리지 않습니다 |
 
 ## 시나리오 파일 형식
 
@@ -1398,6 +1412,7 @@ beantester/              구현 패키지
   damage.py              세션이 입힌 피해: 버림 이유, 손실/손상 비율
   engine.py              캡처/주입 스레드, 통계(BeanEngine)
   connlog.py             세션의 연결 로그: 흐름당 한 행, 그리고 그 상한
+  ice.py                 ICE 열: 어떤 UDP 흐름이 STUN을 나르는지, 그리고 데이터가 지나는 경로
   driverwait.py          도구가 받기 전에 패킷이 드라이버 큐에서 기다린 시간
   matchers.py            필터 표현식(목록/범위/!/>/</와일드카드/re:) - 공용
                          프로세스, IP, 포트 필드가 함께 쓰는 단일 기준
