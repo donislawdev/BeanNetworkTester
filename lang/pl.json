@@ -910,6 +910,7 @@
   "tools.exprtest.note_bounds_nothing": "To wyrażenie niczego nie zawęża: tylko wyklucza albo obejmuje każdą wartość lub prawie każdą.",
   "tools.exprtest.note_everything": "Puste pole pasuje do wszystkiego.",
   "tools.exprtest.note_process_tree": "W trakcie sesji proces jest objęty także wtedy, gdy pasuje któryś z jego procesów nadrzędnych, chyba że wykluczysz go przez „!”. Tester sprawdza samo wyrażenie.",
+  "tools.exprtest.note_takes_no_part": "Puste pole blokady niczego nie blokuje. Pakiet jest blokowany, gdy jego adres albo port pasuje do wypełnionego pola blokady.",
   "tools.exprtest.out_of_range": "To pole przyjmuje liczby od {low} do {high}.",
   "tools.exprtest.pid": "PID:",
   "tools.exprtest.read_as": "Odczytane jako: {expression}",

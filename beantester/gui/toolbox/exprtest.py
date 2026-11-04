@@ -196,7 +196,8 @@ class ExprTestPanel:
             lines.append(T("tools.exprtest.selected_by", terms=", ".join(verdict.selected_by)))
         if verdict.excluded_by:
             lines.append(T("tools.exprtest.excluded_by", terms=", ".join(verdict.excluded_by)))
-        if verdict.state == exprtest.NO_MATCH and not verdict.excluded_by:
+        if (verdict.state == exprtest.NO_MATCH and not verdict.excluded_by
+                and not verdict.takes_no_part):
             lines.append(T("tools.exprtest.no_term"))
         if (verdict.state == exprtest.MATCH and not verdict.everything
                 and not verdict.selected_by):
@@ -209,7 +210,9 @@ class ExprTestPanel:
         if verdict.state == exprtest.BAD_EXPRESSION:
             return []
         lines = []
-        if verdict.everything:
+        if verdict.takes_no_part:
+            lines.append(T("tools.exprtest.note_takes_no_part"))
+        elif verdict.everything:
             lines.append(T("tools.exprtest.note_everything"))
         elif verdict.bounds_nothing:
             lines.append(T("tools.exprtest.note_bounds_nothing"))

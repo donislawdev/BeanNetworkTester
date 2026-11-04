@@ -910,6 +910,7 @@
   "tools.exprtest.note_bounds_nothing": "This expression narrows nothing down: it only excludes, or it covers every value or almost every one.",
   "tools.exprtest.note_everything": "An empty field matches everything.",
   "tools.exprtest.note_process_tree": "During a session a process is also targeted when one of its parent processes matches, unless you excluded it with \"!\". This tester checks the expression alone.",
+  "tools.exprtest.note_takes_no_part": "An empty block field blocks nothing. A packet is blocked when its address or its port matches a filled-in block field.",
   "tools.exprtest.out_of_range": "This field takes numbers from {low} to {high}.",
   "tools.exprtest.pid": "PID:",
   "tools.exprtest.read_as": "Read as: {expression}",

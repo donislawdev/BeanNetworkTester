@@ -18,7 +18,7 @@ import ipaddress
 import re
 from typing import NamedTuple
 
-from ..fields import EXPR, FIELDS
+from ..fields import EXPR, FIELDS, IMPAIRS_MATCHED
 from ..matchers import KIND_INT, KIND_IP, KIND_PROCESS, parse_matcher
 
 # The states a verdict can be in. Four of them are an answer about the EXPRESSION
@@ -52,6 +52,7 @@ class Verdict(NamedTuple):
     selected_by: tuple = ()     # positive terms the value satisfies
     excluded_by: tuple = ()     # "!" terms the value satisfies
     everything: bool = False    # the expression is empty: the field matches everything
+    takes_no_part: bool = False  # empty, in a field that acts only on what it names
     bounds_nothing: bool = False  # it parses, and selects nothing in particular
     problem: str = ""           # the parser's own sentence (arrives translated)
     problem_key: str = ""       # i18n key of what is wrong with the VALUE
@@ -128,7 +129,15 @@ def evaluate(field_key, expression, value="", pid=""):
         matcher = parse_matcher(expression, field.expr_kind, field.label, field.bounds)
     except ValueError as exc:
         return Verdict(BAD_EXPRESSION, problem=str(exc))
-    shape = {"canonical": matcher.describe(), "everything": matcher.is_empty,
+    # Empty means opposite things in the two kinds of field. Where the field bounds
+    # what a session reaches (the target, the destination), it is "no bound": every
+    # value. Where the field acts only on what it names (a block, IMPAIRS_MATCHED),
+    # it names nothing, and `BeanCore.decide` skips an empty block matcher - so a
+    # session blocks nothing by it. The tester said "Matches, an empty field matches
+    # everything" there until 2026-11-04.
+    idle = matcher.is_empty and field.impairs == IMPAIRS_MATCHED
+    shape = {"canonical": matcher.describe(), "everything": matcher.is_empty and not idle,
+             "takes_no_part": idle,
              "bounds_nothing": not matcher.is_empty and matcher.bounds_nothing}
     # A pid means something only to a process field. Left in the box after the
     # field was switched to an address, it must not turn the address's verdict
@@ -145,6 +154,8 @@ def evaluate(field_key, expression, value="", pid=""):
                        **shape)
     if probe is None:
         return Verdict(NO_VALUE, **shape)
+    if idle:
+        return Verdict(NO_MATCH, **shape)
     why = matcher.explain(*probe)
     return Verdict(MATCH if why.matched else NO_MATCH, selected_by=why.selected_by,
                    excluded_by=why.excluded_by, **shape)

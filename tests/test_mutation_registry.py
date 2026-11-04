@@ -3503,12 +3503,56 @@ MUTATIONS = [
         "test": "test_a_pid_left_behind_does_not_touch_a_field_that_has_none",
     },
     {
+        # A session skips an empty block matcher; the tester said "Matches" there.
+        "label": "exprtest: an empty block field matches everything again",
+        "file": "beantester/nettools/exprtest.py",
+        "old": "    idle = matcher.is_empty and field.impairs == IMPAIRS_MATCHED\n",
+        "new": "    idle = False\n",
+        "test": "test_the_tester_answers_what_a_session_does_with_the_same_value",
+    },
+    {
+        "label": "exprtest: every empty field blocks nothing, the target and destination too",
+        "file": "beantester/nettools/exprtest.py",
+        "old": "    idle = matcher.is_empty and field.impairs == IMPAIRS_MATCHED\n",
+        "new": "    idle = matcher.is_empty\n",
+        "test": "test_an_empty_field_takes_every_value_where_it_bounds_and_none_where_it_blocks",
+    },
+    {
+        "label": "exprtest: an empty block field is flagged but still tested as everything",
+        "file": "beantester/nettools/exprtest.py",
+        "old": "    if idle:\n        return Verdict(NO_MATCH, **shape)\n",
+        "new": "    if False:\n        return Verdict(NO_MATCH, **shape)\n",
+        "test": "test_the_tester_answers_what_a_session_does_with_the_same_value",
+    },
+    {
+        "label": "exprtest: an empty block field also says it matches everything",
+        "file": "beantester/nettools/exprtest.py",
+        "old": '    shape = {"canonical": matcher.describe(), "everything": matcher.is_empty and not idle,\n',
+        "new": '    shape = {"canonical": matcher.describe(), "everything": matcher.is_empty,\n',
+        "test": "test_an_empty_field_takes_every_value_where_it_bounds_and_none_where_it_blocks",
+    },
+    {
+        "label": "toolbox: the tester does not say an empty block field blocks nothing",
+        "file": "beantester/gui/toolbox/exprtest.py",
+        "old": "        if verdict.takes_no_part:\n            lines.append(T(\"tools.exprtest.note_takes_no_part\"))\n",
+        "new": "        if False:\n            lines.append(T(\"tools.exprtest.note_takes_no_part\"))\n",
+        "test": "test_an_empty_block_field_reads_as_blocking_nothing",
+    },
+    {
+        "label": "toolbox: an empty block field also reads 'no part of the expression covers'",
+        "file": "beantester/gui/toolbox/exprtest.py",
+        "old": "                and not verdict.takes_no_part):\n",
+        "new": "                and True):\n",
+        "test": "test_an_empty_block_field_reads_as_blocking_nothing",
+    },
+    {
         # The logic package calls the window: the day a --tool form of it could no
         # longer exist without a display.
         "label": "exprtest: the logic imports the window",
         "file": "beantester/nettools/exprtest.py",
-        "old": "from ..fields import EXPR, FIELDS",
-        "new": "from ..fields import EXPR, FIELDS\nfrom ..gui import theme  # noqa: F401",
+        "old": "from ..fields import EXPR, FIELDS, IMPAIRS_MATCHED\n",
+        "new": "from ..fields import EXPR, FIELDS, IMPAIRS_MATCHED\n"
+               "from ..gui import theme  # noqa: F401\n",
         "test": "test_nettools_never_reaches_up_into_the_window",
     },
     {

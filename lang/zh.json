@@ -910,6 +910,7 @@
   "tools.exprtest.note_bounds_nothing": "该表达式没有缩小任何范围：它只做排除，或覆盖了所有值或几乎所有值。",
   "tools.exprtest.note_everything": "空字段匹配所有内容。",
   "tools.exprtest.note_process_tree": "在会话中，如果某个进程的父进程匹配，该进程也会被选中，除非你用“!”将其排除。此测试工具只检查表达式本身。",
+  "tools.exprtest.note_takes_no_part": "空的阻断字段不会阻断任何内容。只有当数据包的地址或端口与已填写的阻断字段匹配时，它才会被阻断。",
   "tools.exprtest.out_of_range": "此字段接受 {low} 到 {high} 之间的数字。",
   "tools.exprtest.pid": "PID:",
   "tools.exprtest.read_as": "解析结果：{expression}",
