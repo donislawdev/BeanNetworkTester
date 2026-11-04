@@ -49,7 +49,7 @@ exists.
 - **Block ports or IPs** - a small built-in firewall, plus LAN mode (no internet) and internet
   only (no local network).
 - **Aim at one app** - by process name, PID, IP, port, one address family, or one part of a call
-  (its STUN checks, its TURN relay's upkeep, its media).
+  (its STUN checks, its TURN control messages, its media).
 - **Presets and saved profiles** - 56k modem, Cafe WiFi, Satellite, In-flight Wi-Fi and more.
 - **Run scripted scenarios** - timed steps that change the network on their own.
 - **Schedule the speed limit** - a repeating timeline of rates, without writing a scenario.
@@ -668,8 +668,10 @@ middle of otherwise normal traffic.
   limit) to 10000000 KB/s, like the fixed fields. A step outside that is refused and named.
 
 **Part of a call (ICE)** - three switches that aim the impairments at one part of the calls that
-use ICE (WebRTC and similar), and at nothing else on the machine. With all three off, everything
-is impaired as usual. Each one reads the packet itself, sent straight or carried by a TURN relay:
+use ICE (WebRTC and similar). With all three off, everything is impaired as usual. Each one reads
+the packet itself, sent straight or carried by a TURN relay. The packet does not say which program
+sent it, so STUN and TURN from a program that is not in a call count too, for example a game
+asking a STUN server for its public address. Set the target process to keep to one program:
 - *Checks (STUN)* - STUN messages: the connectivity checks ICE uses to find and keep a path, the
   consent checks a call sends every few seconds, keepalives and questions to a STUN server. With
   them lost a call cannot connect, and a call already going has to stop sending 30 seconds after
@@ -679,9 +681,10 @@ is impaired as usual. Each one reads the packet itself, sent straight or carried
   relay even when STUN to the same server works. Lost during a call through a relay, it stops
   passing data within about 5 minutes, when its permission runs out (RFC 8656).
 - *Media* - what a call carries once it is connected: the DTLS handshake, audio and video (RTP)
-  and data channels. At 100% loss the call still looks connected, because its checks get answers,
-  and its picture freezes. With some loss or delay it tests the jitter buffer and leaves the
-  consent alone.
+  and data channels. At 100% loss a call already going still looks connected, because its checks
+  get answers, and its picture freezes. A call that starts during that loss never finishes its
+  DTLS handshake, so its media never starts. With some loss or delay it tests the jitter buffer
+  and leaves the consent alone.
 
 Media counts only on a connection that has carried STUN, so QUIC, VPNs on DTLS and other UDP that
 happens to look like media are left alone. A call that was already going when the session started
@@ -1115,7 +1118,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--latency-up` `--jitter-up` | ms | delay and its variation, for packets this machine SENDS. Used only with `--asym` |
 | `--spike-prob-up` `--spike-ms-up` | % / ms | the occasional longer delay, for packets this machine SENDS. Used only with `--asym` |
 | `--ipv4-only` `--ipv6-only` | - | impair one address family only. The other keeps flowing untouched - this aims the tool, it does not block a protocol. Works with `--dst-ip` empty too, which means all addresses. Both flags at once exclude each other, nothing is impaired, and the log says so |
-| `--call-checks` `--call-turn-control` `--call-media` | - | impair only these parts of the calls that use ICE (WebRTC and similar): their STUN checks, the messages that keep a TURN relay, their media. Any of them narrows to those packets and nothing else on the machine. See **Part of a call** in [All options explained](#all-options-explained) |
+| `--call-checks` `--call-turn-control` `--call-media` | - | impair only these parts of the calls that use ICE (WebRTC and similar): their STUN checks, their TURN control messages, their media. Any of them narrows to those packets, whichever program sends them (add `--target` to keep to one). See **Part of a call** in [All options explained](#all-options-explained) |
 | `--lan-mode` | - | LAN mode: cut off the internet (public addresses), keep the local network |
 | `--internet-only` | - | the mirror: cut off the local network (10.x, 172.16-31.x, 192.168.x, link-local, CGNAT), keep the internet. Loopback keeps working. Careful: DNS asked of your router is local traffic, so the internet can stop working with it |
 | `--narrow-filter` | - | push `--dst-ip`/`--dst-port` into the WinDivert filter so the driver never hands over traffic that could not be impaired (much faster at high packet rates). START-time only. While it is on, statistics and connections cover the narrowed traffic only |
@@ -1213,7 +1216,7 @@ BeanNetworkTester.exe --loss 20 --dst-port "!53"
 :: high-PID processes, traffic to IPv6
 BeanNetworkTester.exe --jitter 80 --target ">1000" --dst-ip "2001:db8::/32"
 
-:: a call that looks connected while its picture freezes (its checks still get answers)
+:: a call already going looks connected while its picture freezes (its checks still get answers)
 BeanNetworkTester.exe --call-media --loss 100 --duration 60
 
 :: consent checks unanswered: the call has to stop sending within 30 s

@@ -341,6 +341,7 @@ class _TargetedEngine:
     def set_asymmetry(self, *_a, **_k): pass
     def set_dest(self, *_a, **_k): pass
     def set_ip_family(self, *_a, **_k): pass
+    def set_call_parts(self, *_a, **_k): pass
     def set_lan(self, *_a, **_k): pass
     def set_internet_only(self, *_a, **_k): pass
     def set_block(self, *_a, **_k): pass
@@ -1905,6 +1906,11 @@ def _real_run(monkeypatch, argv, engine=None):
     out, err = io.StringIO(), io.StringIO()
     code = run_cli(argv, sleep=clock.sleep, clock=clock, engine=engine,
                    out=out, err=err)
+    # A run that dies before its session warns about nothing, so it passes every
+    # "silent" check below. A fake missing a new setter did exactly that and kept
+    # a broken warning green, which is why no run here may die unseen.
+    check("the run did not die outside the session",
+          "unexpected failure" not in err.getvalue(), f"({err.getvalue()!r})")
     return code, out.getvalue(), err.getvalue(), engine
 
 

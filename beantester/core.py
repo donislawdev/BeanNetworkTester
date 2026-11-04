@@ -456,8 +456,8 @@ class BeanCore:
         # the same question again, asked of the packet's bytes rather than its ends.
         # Unlike the family it IS a bound: STUN and TURN prove themselves, and media
         # counts only on a flow that has carried STUN - which ``_call_flow`` answers
-        # with the connection log's row (``set_call_flows``). Without that answer no
-        # media is in scope: what cannot be identified must not be damaged.
+        # with the connection log's row (``read_call_flows_from``). Without that answer
+        # no media is in scope: what cannot be identified must not be damaged.
         self.call_parts = 0
         self._call_flow = None
         # Whether any of the three above is aimed: the one attribute decide() step 2
@@ -784,7 +784,7 @@ class BeanCore:
             self.call_parts = parts
             self._re_aim()
 
-    def set_call_flows(self, row_of):
+    def read_call_flows_from(self, row_of):
         """``row_of(flowkey)``: the connection log's row for a flow, or ``None`` - the
         engine passes ``ConnectionLog.rows.get``, once. A row with an ICE label
         (``row["ice"]``, written by ``ice.IceWatch``) is a flow that has carried STUN.
@@ -794,7 +794,11 @@ class BeanCore:
         media packet a call scope sees, and a call to a Python function costs ~1 us on
         the capture thread (measured 2026-11-04, ``ice.PROBE_FIRST``), a built-in one
         far less. Read without the log's lock, which is safe and deliberate - see
-        ``ConnectionLog``."""
+        ``ConnectionLog``.
+
+        Not a ``set_*``: those are settings, and each one has a forwarder on the
+        engine that ``apply_settings`` drives. This is the engine's own wiring, which
+        no setting reaches."""
         with self._lock:
             self._call_flow = row_of
 

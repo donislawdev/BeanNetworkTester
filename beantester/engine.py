@@ -207,7 +207,7 @@ class BeanEngine:
         # Whether a flow has carried STUN, for the call scope (decide() step 2): the
         # ICE labels live with these rows. Once per engine, because neither the core,
         # the log nor its dict is ever replaced; every start empties the dict in place.
-        self.core.set_call_flows(self._conns_log.rows.get)
+        self.core.read_call_flows_from(self._conns_log.rows.get)
         self._overflow_warned = 0.0     # rate-limit for the queue-overflow warning
         self._send_warned = 0.0         # rate-limit for the failed-injection warning
         self._rst_warned = 0.0          # rate-limit for the failed-reset warning

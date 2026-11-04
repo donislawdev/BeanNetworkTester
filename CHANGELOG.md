@@ -27,11 +27,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 - **Impair one part of a call.** Three new switches, in "Part of a call (ICE)" on the
   Control page and as `--call-checks`, `--call-turn-control` and `--call-media`, aim every
-  impairment at one part of the calls that use ICE (WebRTC and the like) and at nothing
-  else: the STUN checks (a call whose consent checks get no answers), the messages that
-  keep a TURN relay (a relay that runs out), or the media (a call that looks connected
-  while its picture freezes). QUIC and VPNs are left alone. A call over TCP is not
-  recognised.
+  impairment at one part of the calls that use ICE (WebRTC and the like): the STUN checks
+  (a call whose consent checks get no answers), the TURN control messages (a relay that
+  runs out), or the media (a call already going that looks connected while its picture
+  freezes). Every program's STUN counts as a check. QUIC and VPNs are left alone. A call
+  over TCP is not recognised.
 
 ### Fixed
 

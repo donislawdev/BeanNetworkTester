@@ -208,7 +208,7 @@ def test_the_call_scope_does_not_retain_per_packet_either():
         core = BeanCore()
         core.set_params(0, 0, 100, 0, 0, 0, 0)  # duplication: every packet in scope moves
         core.set_call_parts(checks=True, media=True)
-        core.set_call_flows(rows)
+        core.read_call_flows_from(rows)
         return core
 
     asked, labelled = [], {"ice": "LAN"}

@@ -36,8 +36,8 @@ class ConnectionLog:
 
     * ``log``, ``charge``, ``snapshot``, ``trim`` and ``ice_tick`` take the lock.
     * ``credit_delivered`` deliberately does NOT - see its docstring.
-    * Nor does the core's call scope, which looks a flow's row up through
-      ``rows.get`` (``BeanCore.set_call_flows``) to see whether it has carried STUN.
+    * Nor does the core's call scope, which looks a flow's row up through ``rows.get``
+      (``BeanCore.read_call_flows_from``) to see whether it has carried STUN.
       On the CAPTURE thread, inside the core's lock - convention 20 again: taking this
       one there would put a lock order core -> log on the packet path. The ICE label
       it reads has one writer, ``log`` on that same thread, and ``trim`` (watchdog

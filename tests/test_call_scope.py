@@ -32,7 +32,7 @@ def scoped_core(checks=False, turn_control=False, media=False, rows=lambda key: 
     core = BeanCore()
     core.set_params(100, 0, 0, 0, 0, 0, 0)
     core.set_call_parts(checks, turn_control, media)
-    core.set_call_flows(rows)
+    core.read_call_flows_from(rows)
     return core
 
 

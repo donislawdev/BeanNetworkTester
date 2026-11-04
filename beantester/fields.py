@@ -320,13 +320,15 @@ FIELD_DEFS = (
     # -- part of a call ---------------------------------------------------- #
     # Which parts of a call (ICE: WebRTC and the like) the impairments reach, read
     # from the packet's bytes in decide() step 2 (ice.call_part). None on = no such
-    # scope; any on = only those parts, and nothing else on the machine.
+    # scope; any on = only those parts. The bytes do not name the program, so any
+    # program's STUN is a check, in a call or not (the target process narrows that).
     #
     # narrows=True, unlike the family pair above, and the difference is the point:
-    # "IPv4 only" still reaches every IPv4 connection, while these reach only the
-    # packets of calls. STUN and TURN control prove themselves (a whole message, the
-    # magic cookie, the exact length), and media counts only on a flow that has
-    # carried STUN, so QUIC, VPNs on DTLS and this session's own HTTPS stay out.
+    # "IPv4 only" still reaches every IPv4 connection, while these reach only STUN,
+    # TURN control and a call's media. STUN and TURN control prove themselves (a
+    # whole message, the magic cookie, the exact length), and media counts only on a
+    # flow that has carried STUN, so QUIC, VPNs on DTLS and this session's own HTTPS
+    # stay out.
     Field("call_checks", BOOL, "fields.call_checks", "call",
           tip="tips.call_checks", cli="call-checks", narrows=True),
     Field("call_turn_control", BOOL, "fields.call_turn_control", "call",

@@ -11725,7 +11725,7 @@ MUTATIONS = [
     {
         "label": "engine: the call scope is never told which flows carried STUN",
         "file": "beantester/engine.py",
-        "old": "        self.core.set_call_flows(self._conns_log.rows.get)\n",
+        "old": "        self.core.read_call_flows_from(self._conns_log.rows.get)\n",
         "new": "",
         "test": "test_through_the_engine_a_call_loses_its_media_and_keeps_its_checks",
     },

@@ -165,16 +165,17 @@ def _add_scope_arguments(p):
     # Targeting too, by what a packet IS: the parts of a call that uses ICE (WebRTC
     # and the like). Any of the three narrows to those parts and nothing else.
     p.add_argument("--call-checks", action="store_true",
-                   help="impair only the STUN of calls that use ICE (WebRTC and "
-                        "similar): connectivity and consent checks, keepalives, "
-                        "questions to a STUN server, through a relay too. Without "
-                        "answers to its consent checks a call must stop sending "
-                        "after 30 s")
+                   help="impair only STUN messages: the connectivity and consent "
+                        "checks of calls that use ICE (WebRTC and similar), "
+                        "keepalives, questions to a STUN server, through a relay too. "
+                        "Any program's STUN counts (add --target to keep to one). "
+                        "Without answers to its consent checks a call must stop "
+                        "sending after 30 s")
     p.add_argument("--call-turn-control", action="store_true",
-                   help="impair only the messages that get and keep a TURN relay "
-                        "(Allocate, Refresh, CreatePermission, ChannelBind), not what "
-                        "it carries. Without them a relay stops passing data within "
-                        "about 5 minutes")
+                   help="impair only TURN control messages, which get and keep a "
+                        "relay (Allocate, Refresh, CreatePermission, ChannelBind), not "
+                        "what it carries. Without them a relay stops passing data "
+                        "within about 5 minutes")
     p.add_argument("--call-media", action="store_true",
                    help="impair only what a call carries: DTLS, audio and video (RTP), "
                         "data channels, straight or through a relay. Only on a flow "
