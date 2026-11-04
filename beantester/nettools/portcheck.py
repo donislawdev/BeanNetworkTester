@@ -260,8 +260,14 @@ def _row(where, code, held, unread):
 
 
 def not_free(rows):
-    """How many rows a program could not simply take."""
-    return sum(1 for row in rows if row.verdict != FREE)
+    """How many rows a program could not simply take. Not the Unknown ones: whether a
+    program could take those is what is not known (``unknown``)."""
+    return sum(1 for row in rows if row.verdict not in (FREE, UNREAD))
+
+
+def unknown(rows):
+    """How many rows may be free or taken: their socket table did not answer."""
+    return sum(1 for row in rows if row.verdict == UNREAD)
 
 
 # Per column, the value to sort by. None sorts LAST in both directions: an empty

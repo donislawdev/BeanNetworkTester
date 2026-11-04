@@ -4750,6 +4750,21 @@ MUTATIONS = [
         "test": "test_a_table_that_did_not_answer_cannot_say_free_or_reserved",
     },
     {
+        # "Not free" is what a program could not take; an unknown row may be either.
+        "label": "portcheck: an unknown port is counted as not free",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "    return sum(1 for row in rows if row.verdict not in (FREE, UNREAD))\n",
+        "new": "    return sum(1 for row in rows if row.verdict != FREE)\n",
+        "test": "test_a_table_that_did_not_answer_cannot_say_free_or_reserved",
+    },
+    {
+        "label": "portcheck: every port that is not free is counted as unknown",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "    return sum(1 for row in rows if row.verdict == UNREAD)\n",
+        "new": "    return sum(1 for row in rows if row.verdict != FREE)\n",
+        "test": "test_a_table_that_did_not_answer_cannot_say_free_or_reserved",
+    },
+    {
         "label": "portcheck: a failed table is named although it was not checked",
         "file": "beantester/nettools/portcheck.py",
         "old": "                 tuple(t for t in sorted(unread) if t[0] in protocols and t[1] in checked))\n",
@@ -4805,6 +4820,13 @@ MUTATIONS = [
         "file": "beantester/gui/toolbox/portcheck.py",
         "old": "        if answer.unread:\n",
         "new": "        if False:\n",
+        "test": "test_a_socket_table_that_did_not_answer_is_named_and_its_rows_read_unknown",
+    },
+    {
+        "label": "portcheck panel: the count does not say how many ports are unknown",
+        "file": "beantester/gui/toolbox/portcheck.py",
+        "old": "        self.count.config(text=T(\"tools.portcheck.count_unknown\" if unknown\n",
+        "new": "        self.count.config(text=T(\"tools.portcheck.count_unknown\" if False\n",
         "test": "test_a_socket_table_that_did_not_answer_is_named_and_its_rows_read_unknown",
     },
     {

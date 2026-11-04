@@ -1435,7 +1435,8 @@ def test_a_socket_table_that_did_not_answer_is_named_and_its_rows_read_unknown()
         want = T("tools.portcheck.note_unread", tables=tables,
                  verdict=T("tools.portcheck.verdict.unread"))
         assert want in panel.note.cget("text"), panel.note.cget("text")
-        assert panel.count.cget("text") == T("tools.portcheck.count", taken=2, total=4)
+        assert panel.count.cget("text") == T("tools.portcheck.count_unknown", taken=1,
+                                             unknown=1, total=4), panel.count.cget("text")
     """))
 
 

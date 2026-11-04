@@ -203,6 +203,9 @@ def test_a_table_that_did_not_answer_cannot_say_free_or_reserved(monkeypatch):
           == (pc.FREE, pc.RESERVED, pc.IN_USE), f"({seen})")
     check("and the check names the one that did not", result.unread == (("TCP", 4),),
           f"({result.unread})")
+    counted = (pc.not_free(result.rows), pc.unknown(result.rows))
+    check("an unknown row is counted as unknown, not as not free", counted == (4, 2),
+          f"({counted})")
 
 
 def test_only_the_tables_that_were_checked_are_named_as_unread():
