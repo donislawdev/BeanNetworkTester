@@ -179,6 +179,47 @@ def test_time_wait_holds_nothing_and_a_refusal_beside_it_is_closing():
           all(not r.owners for r in result.rows), f"({[r.owners for r in result.rows]})")
 
 
+def test_a_table_that_did_not_answer_cannot_say_free_or_reserved(monkeypatch):
+    """Windows reads four socket tables and names the ones that failed. A row of such a
+    table cannot read Free (a dual-stack server is invisible to a bind) or Reserved
+    (another program's exclusive socket answers the same): both rest on the table
+    naming nobody. What the bind alone proves stays as it was."""
+    monkeypatch.setattr(pc, "WINDOWS", True)
+    answers = {("TCP", 4, 3001): 10048, ("TCP", 4, 3002): 10013, ("TCP", 6, 3002): 10013,
+               ("TCP", 4, 3003): 10022}
+    result = run("3000-3003", answers, failed=("tcp/v4",),
+                 rows=[sock(3000, family=6, ip="::", proc="node.exe")])
+    seen = verdicts(result)
+    check("a bind that worked: unknown, not free", seen[(3000, "TCP", 4)] == pc.UNREAD,
+          f"({seen})")
+    check("access refused: unknown, not reserved", seen[(3002, "TCP", 4)] == pc.UNREAD,
+          f"({seen})")
+    check("a refusal is in use whatever the table says", seen[(3001, "TCP", 4)] == pc.UNSEEN,
+          f"({seen})")
+    check("an answer this tool does not know stays one", seen[(3003, "TCP", 4)] == pc.FAILED,
+          f"({seen})")
+    check("the tables that answered keep their verdicts",
+          (seen[(3000, "UDP", 4)], seen[(3002, "TCP", 6)], seen[(3000, "TCP", 6)])
+          == (pc.FREE, pc.RESERVED, pc.IN_USE), f"({seen})")
+    check("and the check names the one that did not", result.unread == (("TCP", 4),),
+          f"({result.unread})")
+    counted = (pc.not_free(result.rows), pc.unknown(result.rows))
+    check("an unknown row is counted as unknown, not as not free", counted == (4, 2),
+          f"({counted})")
+
+
+def test_only_the_tables_that_were_checked_are_named_as_unread():
+    failed = ("tcp/v4", "udp/v6")
+    check("a protocol left out is not named",
+          run("80", protocols=("TCP",), failed=failed).unread == (("TCP", 4),))
+    check("nor an IP version this machine does not have",
+          run("80", {("TCP", 6, 80): errno.EAFNOSUPPORT}, failed=failed).unread
+          == (("TCP", 4),))
+    check("every table named, in order", run("80", failed=("udp/v6", "tcp/v6", "tcp/v4")).unread
+          == (("TCP", 4), ("TCP", 6), ("UDP", 6)))
+    check("all answered: none", run("80").unread == ())
+
+
 def test_access_denied_is_a_reservation_on_windows_only(monkeypatch):
     """WSAEACCES on a port nobody holds is a range Windows set aside (KB 3039044,
     measured). Off Windows, EACCES is a port this account may not use."""

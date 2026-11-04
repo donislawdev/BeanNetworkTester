@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Port check no longer says Free when Windows did not list its sockets.** Windows keeps
+  four lists of sockets (TCP and UDP, IPv4 and IPv6), and one of them can fail to load
+  while the others load. The rows of that list read Free or Reserved by Windows, although
+  the list that names a program holding the port was missing. They now read Unknown, the
+  count above the table shows them as unknown instead of not free, and a line above the
+  table says which list is missing. Press Check again.
+
 - **Linux, experimental: Port check names a server that listens on both IP versions.** A
   server on `[::]` that takes IPv4 connections too, as Node does, showed its IPv4 row as
   "In use (owner not shown)". That row now names the program, as on Windows. Once such a
