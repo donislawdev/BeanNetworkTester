@@ -130,12 +130,23 @@ def columns_to_show(saved, known):
 
     ``known`` is the list of columns that existed when the layout was saved (ui.json
     ``conn_columns_known``, written with it); a ui.json from before it existed knew
-    ``COLUMNS_BEFORE_KNOWN``. Without this a new column stayed hidden from everyone
-    who had ever chosen columns, because the table shows only what was saved.
+    ``COLUMNS_BEFORE_KNOWN``, and so does a ``known`` that is not a list of ids.
+    Without this a new column stayed hidden from everyone who had ever chosen
+    columns, because the table shows only what was saved.
+
+    Only strings are column ids. ui.json is meant to be hand-edited and its cleaning
+    checks only that these are lists, so a dict inside one reached a ``set`` and
+    stopped the program from starting (unhashable).
     """
-    if not isinstance(saved, list) or not saved:
+    if not isinstance(saved, list):
         return None
-    seen = set(known) if isinstance(known, list) else set(COLUMNS_BEFORE_KNOWN)
+    saved = [column for column in saved if isinstance(column, str)]
+    if not saved:
+        return None
+    if isinstance(known, list) and all(isinstance(column, str) for column in known):
+        seen = set(known)
+    else:
+        seen = set(COLUMNS_BEFORE_KNOWN)
     return saved + [column for column in COLUMNS if column not in seen]
 
 

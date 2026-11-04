@@ -11253,6 +11253,14 @@ MUTATIONS = [
         "test": "test_signalling_spends_no_budget_but_has_a_ceiling_of_its_own",
     },
     {
+        # An address query makes no path, so media on its flow never ended the reading.
+        "label": "ice: media on a flow that only asked a STUN server spends nothing",
+        "file": "beantester/ice.py",
+        "old": "            if row[\"ice\"] == STUN:\n",
+        "new": "            if False:\n",
+        "test": "test_media_on_a_flow_that_only_asked_a_stun_server_still_spends_budget",
+    },
+    {
         "label": "ice: any packet that looks like media buys the media budget",
         "file": "beantester/ice.py",
         "old": "                if row[\"packets\"] == 1 and (20 <= first <= 63 or 128 <= first <= 191):\n",
@@ -11420,6 +11428,22 @@ MUTATIONS = [
         "file": "beantester/gui/pages/conns.py",
         "old": "    return saved + [column for column in COLUMNS if column not in seen]\n",
         "new": "    return saved\n",
+        "test": "test_columns_to_show_adds_only_what_the_saved_layout_never_knew",
+    },
+    {
+        # A dict in a hand-edited ui.json is unhashable: it stopped the program from
+        # starting when the table made a set of the ids.
+        "label": "conns: a saved column id that is not a string reaches the table",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "    saved = [column for column in saved if isinstance(column, str)]\n",
+        "new": "",
+        "test": "test_columns_to_show_adds_only_what_the_saved_layout_never_knew",
+    },
+    {
+        "label": "conns: a list of known columns is trusted whatever it holds",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "    if isinstance(known, list) and all(isinstance(column, str) for column in known):\n",
+        "new": "    if isinstance(known, list):\n",
         "test": "test_columns_to_show_adds_only_what_the_saved_layout_never_knew",
     },
     {

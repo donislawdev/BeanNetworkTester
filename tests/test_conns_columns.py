@@ -325,6 +325,13 @@ def test_columns_to_show_adds_only_what_the_saved_layout_never_knew():
             (conns.columns_to_show(["proc"], "garbage"), ["proc", "ice"]),
         "a layout that knew every column is left alone":
             (conns.columns_to_show(["proc"], list(conns.COLUMNS)), ["proc"]),
+        # a hand-edited ui.json: a dict is unhashable, and it reached a set
+        "a saved id that is not a string is left out":
+            (conns.columns_to_show(["proc", {}, 7], list(conns.COLUMNS)), ["proc"]),
+        "a layout of nothing but such ids is no layout":
+            (conns.columns_to_show([{}], list(conns.COLUMNS)), None),
+        "a known list with one in it counts as that old layout":
+            (conns.columns_to_show(["proc"], ["proc", {}]), ["proc", "ice"]),
     }
     for name, (got, wanted) in cases.items():
         assert got == wanted, (name, got)

@@ -477,6 +477,17 @@ def test_signalling_spends_no_budget_but_has_a_ceiling_of_its_own(monkeypatch):
     check("never read past the ceiling", quick.done and quick.reads == 50, f"({quick.reads})")
 
 
+def test_media_on_a_flow_that_only_asked_a_stun_server_still_spends_budget():
+    """Media ends the reading only on a flow it makes a path, and an address query
+    makes none: without spending, such a flow was read on every packet it carried."""
+    flow = Flow(IceWatch(), STUN_SERVER).out(message(BINDING_REQUEST))
+    for _ in range(ice.PROBE_ICE + 10):
+        flow.out(RTP)
+    check("still STUN", flow.label == ice.STUN, f"({flow.label!r})")
+    check("and no longer read", flow.done and flow.reads == ice.PROBE_ICE + 1, f"({flow.reads})")
+    check("no path", flow.key not in flow.watch._paths)
+
+
 def test_a_packet_without_a_udp_payload_spends_budget():
     watch = IceWatch()
     row = dict(remote_ip=PEER_LAN, remote_port=1, packets=1, sent=0, ice="", ice_n=1)

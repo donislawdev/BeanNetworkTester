@@ -195,8 +195,8 @@ class ConnectionLog:
                 # while the application got 409 600 B.
                 # 20 keys, in ONE constructor call, and the count has a ceiling that
                 # is not obvious: MEASURED 2026-11-04 (CPython 3.14.10 and 3.15.2,
-                # tracemalloc, rows made here, 10k-200k of them,
-                # internal_tools/sondy/2026-11-04-ice-path/row_memory.py), the two
+                # tracemalloc, rows made here, 10k-200k of them, ``internal_tools``
+                # probes ``2026-11-04-ice-path``), the two
                 # ICE keys cost nothing - 705-729 B a row at 18 keys and at 20 - while
                 # a 22nd key costs 454 B more on every row: the table doubles.
                 c = dict(remote_ip=remote_ip, remote_port=remote_port,

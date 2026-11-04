@@ -61,14 +61,15 @@ WAN = "WAN"     # checks to a public address that is not this network's
 
 # How long a flow is read. Every number bounds work on the capture thread, and a
 # flow whose budget (row["ice_n"]) reaches zero is never read again. A packet that
-# is neither ICE signalling nor media spends one; see IceWatch.observe for the rest.
+# is not ICE signalling spends one, unless it is the media that makes a flow a path
+# (which ends the reading); see IceWatch.observe for the rest.
 #
 # A new UDP flow is read for ONE packet: the first datagram of every ICE flow is
 # STUN (a connectivity check, or an Allocate to a relay), and a call that was going
 # before the session started opens with media, which buys PROBE_MEDIA. It was 4
 # first, and the count of CALLS is what costs: MEASURED 2026-11-04 in the engine
-# (CPython 3.15.2, internal_tools/sondy/2026-11-04-ice-path/split_engine.py, a new
-# UDP flow every two packets), one call to an EMPTY probe per packet took 4.7% off
+# (CPython 3.15.2, ``internal_tools`` probes ``2026-11-04-ice-path``, a new UDP flow
+# every two packets), one call to an EMPTY probe per packet took 4.7% off
 # the pipeline's ceiling - a call costs ~1 us there, against ~50 ns in a loop of its
 # own - while one call per flow took nothing measurable.
 PROBE_FIRST = 1
@@ -285,7 +286,7 @@ class IceWatch:
         # longer, within the budget. The two fixed offsets are IPv4 without options
         # and IPv6 (28 and 48); anything else takes the full way below.
         # MEASURED 2026-11-04 in the engine (CPython 3.15.2, a new UDP flow every two
-        # packets, internal_tools/sondy/2026-11-04-ice-path/split_engine.py): a Python
+        # packets, ``internal_tools`` probes ``2026-11-04-ice-path``): a Python
         # call costs ~1 us on the capture thread there, against ~50 ns in a loop of
         # its own, so the full way - three calls - for the 42% of random first bytes
         # that look like media took 10% off the pipeline's ceiling on its own.
@@ -347,6 +348,10 @@ class IceWatch:
         if _looks_like_media(first):
             flow.media = True
             self._settle(row, key, flow, raw)
+            if row["ice"] == STUN:
+                # media is no path on a flow that only asked a STUN server, so it
+                # spends: a flow that never shows a check is not read for ever
+                row["ice_n"] -= 1
         else:
             row["ice_n"] -= 1
 

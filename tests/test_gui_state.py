@@ -959,6 +959,19 @@ def test_a_column_added_since_the_layout_was_saved_is_shown_once():
     """)
 
 
+def test_a_damaged_column_layout_does_not_stop_the_window_from_being_built():
+    """ui.json is meant to be hand-edited, and its cleaning checks only that the two
+    column entries are lists. A dict inside one reached a set (unhashable) while the
+    Connections page was built, so the program did not start."""
+    run_gui("""
+        app.ui.set("conn_columns", ["proc", {}, "pid"])
+        app.ui.set("conn_columns_known", [{}])
+        app._build_ui()
+        assert app.pages["connections"].table.visible_columns() == ["proc", "pid", "ice"], \\
+            app.pages["connections"].table.visible_columns()
+    """)
+
+
 def test_the_gui_says_the_same_thing_before_an_unbounded_start():
     """The warning is not a CLI feature: in the GUI the same run is one click.
 

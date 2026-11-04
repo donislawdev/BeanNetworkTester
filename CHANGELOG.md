@@ -26,6 +26,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **A damaged column layout in the window state file no longer stops the program from
+  starting.** A column entry the program cannot read is left out, and with none left the
+  Connections table shows every column.
+
 - **Filter tester: an empty Blocked IP or Blocked port field no longer reads "Matches".**
   The tester said "Matches" and "An empty field matches everything", but a session blocks
   nothing by an empty block field. Now it says "Does not match" and that an empty block
