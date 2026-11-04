@@ -246,11 +246,10 @@ class PortCheckPanel:
         self.table.set_empty_text("tools.portcheck.empty_unavailable")
         self.table.set_model(rows, render=render, key_of=lambda r: r.key,
                              tag_of=lambda r: ROW_TAGS.get(r.verdict, ""))
-        unknown = portcheck.unknown(rows)
-        self.count.config(text=T("tools.portcheck.count_unknown" if unknown
-                                 else "tools.portcheck.count",
-                                 taken=portcheck.not_free(rows), unknown=unknown,
-                                 total=len(rows)))
+        taken, unknown = portcheck.not_free(rows), portcheck.unknown(rows)
+        self.count.config(text=T("tools.portcheck.count_unknown", taken=taken, unknown=unknown,
+                                 total=len(rows)) if unknown
+                          else T("tools.portcheck.count", taken=taken, total=len(rows)))
         self.note.config(text="\n".join(self._notes(answer, stale=self._check_failed())))
 
     def _check_failed(self):

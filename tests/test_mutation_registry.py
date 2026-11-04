@@ -4825,8 +4825,8 @@ MUTATIONS = [
     {
         "label": "portcheck panel: the count does not say how many ports are unknown",
         "file": "beantester/gui/toolbox/portcheck.py",
-        "old": "        self.count.config(text=T(\"tools.portcheck.count_unknown\" if unknown\n",
-        "new": "        self.count.config(text=T(\"tools.portcheck.count_unknown\" if False\n",
+        "old": "                                 total=len(rows)) if unknown\n",
+        "new": "                                 total=len(rows)) if False\n",
         "test": "test_a_socket_table_that_did_not_answer_is_named_and_its_rows_read_unknown",
     },
     {
