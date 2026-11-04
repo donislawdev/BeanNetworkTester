@@ -1392,12 +1392,17 @@ def _run_gui(argv, relaunched=False):
         root = tk.Tk(className=desktop.WINDOW_CLASS)
         App(root)
     except Exception as exc:
-        code = _window_did_not_open(exc)
         # A copy pkexec started whose Tk cannot reach the person's display answers
-        # pkexec's own "did not run": the person's process then opens the window.
+        # pkexec's own "did not run": the person's process then opens the window. Not
+        # a failure, so no crash report: until 2026-11-04 this went through
+        # _window_did_not_open first, which said "The window could not open" and left
+        # a crash report in the person's data folder a moment before the window
+        # opened (measured by the `linux_pkexec` rig's no_window case).
         if root is None and type(exc).__name__ == "TclError" and linuxenv.started_by_pkexec():
+            print(f"As administrator the window could not reach your screen ({exc})",
+                  file=sys.stderr)
             return linuxenv.NO_WINDOW
-        return code
+        return _window_did_not_open(exc)
     root.mainloop()
     return exitcodes.OK
 

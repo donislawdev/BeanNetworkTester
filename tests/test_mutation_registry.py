@@ -7806,18 +7806,33 @@ MUTATIONS = [
                "        root = tk.Tk(className=desktop.WINDOW_CLASS)\n"
                "        App(root)\n"
                "    except Exception as exc:\n"
-               "        code = _window_did_not_open(exc)\n"
                "        # A copy pkexec started whose Tk cannot reach the person's display answers\n"
-               "        # pkexec's own \"did not run\": the person's process then opens the window.\n"
+               "        # pkexec's own \"did not run\": the person's process then opens the window. Not\n"
+               "        # a failure, so no crash report: until 2026-11-04 this went through\n"
+               "        # _window_did_not_open first, which said \"The window could not open\" and left\n"
+               "        # a crash report in the person's data folder a moment before the window\n"
+               "        # opened (measured by the `linux_pkexec` rig's no_window case).\n"
                "        if root is None and type(exc).__name__ == \"TclError\" and linuxenv.started_by_pkexec():\n"
+               "            print(f\"As administrator the window could not reach your screen ({exc})\",\n"
+               "                  file=sys.stderr)\n"
                "            return linuxenv.NO_WINDOW\n"
-               "        return code\n",
+               "        return _window_did_not_open(exc)\n",
         "new": "    except Exception as exc:\n"
                "        return _window_did_not_open(exc)\n"
                "    winenv.set_dpi_awareness()\n"
                "    root = tk.Tk(className=desktop.WINDOW_CLASS)\n"
                "    App(root)\n",
         "test": "test_a_tk_that_cannot_start_is_said_and_recorded",
+    },
+    {
+        # pkexec's copy without a screen reports a failed window again: "The window
+        # could not open" and a crash report, a moment before the window opens fine.
+        "label": "cli: pkexec's copy without a screen leaves a crash report again",
+        "file": "beantester/cli.py",
+        "old": "            print(f\"As administrator the window could not reach your screen ({exc})\",\n"
+               "                  file=sys.stderr)\n",
+        "new": "            _window_did_not_open(exc)\n",
+        "test": "test_a_copy_that_cannot_reach_the_screen_hands_the_window_back",
     },
     {
         # P3-40: the box must say what stderr says, under the program's name.

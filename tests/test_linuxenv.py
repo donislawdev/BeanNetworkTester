@@ -358,13 +358,20 @@ def test_the_window_waits_for_the_copy_and_opens_here_only_when_it_did_not_run(m
     check("nothing to ask: nothing asked", cli._run_gui([]) == exitcodes.OK and not asked)
 
 
-def test_a_copy_that_cannot_reach_the_screen_hands_the_window_back(monkeypatch):
+def test_a_copy_that_cannot_reach_the_screen_hands_the_window_back(monkeypatch, capsys):
+    """...and says so in one line, with no crash report: the window opens a moment
+    later as the person. MEASURED 2026-11-04 (`linux_pkexec`, no_window case): the copy
+    used to say "The window could not open" and leave crashes.ndjson and
+    latest-crash.txt in the person's data folder."""
     failed, _taken = _gui(monkeypatch, tk_fails=True)
     monkeypatch.setattr(linuxenv, "wants_root", lambda: False)
     monkeypatch.setattr(linuxenv, "started_by_pkexec", lambda: True)
     check("pkexec's copy without a screen: pkexec's own 'did not run'",
           cli._run_gui([]) == linuxenv.NO_WINDOW == 127)
-    check("and it still says why", failed == ["TclError"], f"({failed})")
+    said = capsys.readouterr().err
+    check("not reported as a window that failed (no crash report)", failed == [], f"({failed})")
+    check("but it says why, in one line",
+          said.count("\n") == 1 and "could not reach your screen" in said, f"({said!r})")
     monkeypatch.setattr(linuxenv, "started_by_pkexec", lambda: False)
     check("a window that cannot open anywhere else: as before",
           cli._run_gui([]) == exitcodes.RUNTIME)
