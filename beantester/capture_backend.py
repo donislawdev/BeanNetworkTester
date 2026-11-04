@@ -271,6 +271,7 @@ class EBPFDivertBackend:
         # traffic out (measured; pydivert's docs say it is always included), and the
         # default is every interface plus loopback. Never the ``Divert`` facade
         # either: it forwards every attribute through __getattr__, on the packet path.
+        _quiet_without_rights()
         return pydivert.EBPFDivert(filt)
 
     @staticmethod
@@ -512,6 +513,51 @@ def _rights(euid, root, status):
 def _root_without_rights():
     """Root, and still without what a capture needs: whatever started it took that away."""
     return _euid() == 0 and _rights(0, "/", None) is None
+
+
+# The printer ``_quiet_without_rights`` hands eBPFDivert, once it is made.
+_SILENT_PRINT = None
+
+
+def _quiet_without_rights():
+    """Silence eBPFDivert's library before an open this process has no right to make.
+
+    Without the rights the open fails, and libbpf (built into libebpfdivert) first
+    writes two lines of its own to stderr - MEASURED 2026-11-04 on Ubuntu 26.04 and
+    in WSL: "Failed to bump RLIMIT_MEMLOCK (err = -EPERM)" and "Couldn't load trivial
+    BPF program. Make sure your kernel supports BPF (CONFIG_BPF_SYSCALL=y)" - on
+    kernels that support it. The person reads that above this program's own sentence,
+    which names the real cause, and blames the kernel. With the rights the library
+    keeps its voice: a refusal then comes from the kernel itself (lockdown, an LSM
+    policy), and its words are the ones that say why.
+
+    ``ebpfdivert_set_print`` takes the printer for libbpf's lines and eBPFDivert's own.
+    Its API reference says NULL silences them; its code (``src/ebpfdivert.c``) puts the
+    default printer back instead, which writes warnings to stderr - MEASURED: with NULL
+    both lines still came. So it is handed a printer that prints nothing. That holds
+    for the whole process, which is right here: a process does not gain rights while it
+    runs. A library without the call, or none at all (the open then says why), is left
+    as it is.
+    """
+    global _SILENT_PRINT
+    if _rights(_euid(), "/", None) is not None:
+        return
+    try:
+        import ctypes
+        from pydivert import bpf
+        set_print = bpf.libebpfdivert.ebpfdivert_set_print
+    except (ImportError, AttributeError):
+        return
+    if _SILENT_PRINT is None:
+        # int (*)(enum ebpfdivert_print_level, const char *format, va_list args). The
+        # format and the list are never read, so the list's shape on each ABI does not
+        # matter. Kept in a global: the library calls it for as long as the process
+        # lives, and a collected callback would be a jump into freed memory.
+        printer = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p)
+        _SILENT_PRINT = printer(lambda _level, _format, _args: 0)
+    set_print.argtypes = [type(_SILENT_PRINT)]
+    set_print.restype = None
+    set_print(_SILENT_PRINT)
 
 
 def _privileges_row(euid, root, status):

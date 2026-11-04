@@ -7,6 +7,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Long lines of notes are no longer cut at the right edge.** The last letters of a long
+  line could be cut off in the status line and the notes of every tool on the Tools tab, in
+  the notes above the Statistics and Connections tables, in the notes of the Control page's
+  sections and in the About window. On Linux the Polish note under "Clean up the driver" on
+  the Diagnostics tool lost its last letters. These lines now wrap a little earlier, inside
+  the window.
+
+- **Linux, experimental: one clear message when a capture starts without the rights.** Two
+  lines from the BPF library came before the program's own message, and the second one said
+  to make sure the kernel supports BPF, which it does. Now only the program's message is
+  shown: it names the rights a capture needs, and the exit code is 7 as before. When the
+  program has the rights and the kernel still refuses, the library's lines are still shown,
+  because then they say why.
+
+- **The command line no longer names WinDivert on Linux.** `--simulate` said "no
+  WinDivert", and `--dry-run` and the help for `--simulate` and `--doctor` named WinDivert
+  or administrator rights. They now say "capture driver" and "rights", which fit both
+  Windows and Linux.
+
 - **TCP reset (RST) resets a connection that opens while it is on.** A connection a
   program made after the reset was switched on never opened: its connect attempt waited
   until it timed out, and the counters showed resets that the program never received.

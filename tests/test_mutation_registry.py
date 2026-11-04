@@ -11005,6 +11005,66 @@ MUTATIONS = [
         "new": "        if type(exc).__name__ == \"TclError\" and linuxenv.started_by_pkexec():\n",
         "test": "test_a_copy_that_cannot_reach_the_screen_hands_the_window_back",
     },
+    {
+        # The person again reads libbpf blaming the kernel above the program's sentence.
+        "label": "capture_backend: an open without the rights leaves the library loud",
+        "file": "beantester/capture_backend.py",
+        "old": "    if _rights(_euid(), \"/\", None) is not None:\n        return\n    try:\n        import ctypes\n",
+        "new": "    if True:\n        return\n    try:\n        import ctypes\n",
+        "test": "test_linux_silences_the_library_only_before_an_open_it_has_no_right_to",
+    },
+    {
+        "label": "capture_backend: root with the rights loses the library's words too",
+        "file": "beantester/capture_backend.py",
+        "old": "    if _rights(_euid(), \"/\", None) is not None:\n        return\n    try:\n        import ctypes\n",
+        "new": "    if False:\n        return\n    try:\n        import ctypes\n",
+        "test": "test_linux_silences_the_library_only_before_an_open_it_has_no_right_to",
+    },
+    {
+        # What the API reference says works, and the library's code does not do.
+        "label": "capture_backend: eBPFDivert is handed NULL, which puts its stderr printer back",
+        "file": "beantester/capture_backend.py",
+        "old": "    set_print(_SILENT_PRINT)\n",
+        "new": "    set_print(None)\n",
+        "test": "test_linux_silences_the_library_only_before_an_open_it_has_no_right_to",
+    },
+    {
+        "label": "tools: a tool's status line wraps past the page margin again",
+        "file": "beantester/gui/toolbox/base.py",
+        "old": "        self.label = wrapping_label(parent, \"\", pad=PAGE_WRAP_PAD)\n",
+        "new": "        self.label = wrapping_label(parent, \"\")\n",
+        "test": "test_every_wrapping_label_wraps_inside_its_own_margins",
+    },
+    {
+        # The Linux finding itself: the Polish note under "Clean up the driver".
+        "label": "diagnostics: the cleanup note wraps past the page margin again",
+        "file": "beantester/gui/toolbox/diagnostics.py",
+        "old": "        self.clean_note = wrapping_label(self.frame, T(self.blocker) if self.blocker else \"\",\n"
+               "                                         pad=PAGE_WRAP_PAD)\n",
+        "new": "        self.clean_note = wrapping_label(self.frame, T(self.blocker) if self.blocker else \"\")\n",
+        "test": "test_every_wrapping_label_wraps_inside_its_own_margins",
+    },
+    {
+        "label": "theme: a card's wrap pad counts the card's padding on one side only",
+        "file": "beantester/gui/theme.py",
+        "old": "CARD_WRAP_PAD = 2 * CARD_PADDING[0] + SPACE[\"tight\"]\n",
+        "new": "CARD_WRAP_PAD = CARD_PADDING[0] + SPACE[\"tight\"]\n",
+        "test": "test_every_wrapping_label_wraps_inside_its_own_margins",
+    },
+    {
+        "label": "about: the prose's wrap pad forgets the window's own padding again",
+        "file": "beantester/gui/panels/about.py",
+        "old": "pad=2 * (WINDOW_PADDING + 12) + SPACE[\"tight\"])\n",
+        "new": "pad=2 * 12 + 16)\n",
+        "test": "test_every_wrapping_label_wraps_inside_its_own_margins",
+    },
+    {
+        "label": "cli: --simulate names WinDivert, on Linux too",
+        "file": "beantester/cli.py",
+        "old": "        log.info(\"SIMULATION mode (synthetic traffic, no capture driver).\")\n",
+        "new": "        log.info(\"SIMULATION mode (synthetic traffic, no WinDivert).\")\n",
+        "test": "test_the_words_both_systems_read_name_no_windows_driver",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

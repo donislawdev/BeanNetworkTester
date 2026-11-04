@@ -27,7 +27,7 @@ from ...tcprow import Connection
 from .. import dialogs
 from ..field_actions import block_ip_address, leave_process_alone
 from ..labels import wrapping_label
-from ..theme import CHARS, ROWS, set_menu_entry_available, space, style_menu
+from ..theme import CHARS, PAGE_WRAP_PAD, ROWS, set_menu_entry_available, space, style_menu
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
 from .base import Debounce, Poller, StatusLine, job, remembered
@@ -110,7 +110,7 @@ class SocketsPanel:
         self.status = StatusLine(self.frame)
         self.status.label.pack(fill="x", padx=space("page"), pady=(space("row"), 0))
         # What the rows on screen are missing, or how old they are.
-        self.note = wrapping_label(self.frame, "")
+        self.note = wrapping_label(self.frame, "", pad=PAGE_WRAP_PAD)
         self.note.pack(fill="x", padx=space("page"), pady=(space("hair"), 0))
 
         holder = ttk.Frame(self.frame)

@@ -20,7 +20,8 @@ from ...nettools import exprtest
 from .. import dialogs
 from ..field_actions import fill_field
 from ..labels import wrapping_label
-from ..theme import CHARS, popdown_height, popdown_width, space, unhighlight_combobox
+from ..theme import (CHARS, PAGE_WRAP_PAD, popdown_height, popdown_width, space,
+                     unhighlight_combobox)
 from ..tooltip import add_tooltip
 from .base import Debounce, remembered
 
@@ -97,9 +98,9 @@ class ExprTestPanel:
 
         self.verdict = ttk.Label(self.frame, text="", style="Muted.TLabel")
         self.verdict.pack(anchor="w", padx=space("page"), pady=(space("row"), 0))
-        self.details = wrapping_label(self.frame, "")
+        self.details = wrapping_label(self.frame, "", pad=PAGE_WRAP_PAD)
         self.details.pack(anchor="w", padx=space("page"), pady=(space("hair"), 0))
-        self.notes = wrapping_label(self.frame, "")
+        self.notes = wrapping_label(self.frame, "", pad=PAGE_WRAP_PAD)
         self.notes.pack(anchor="w", padx=space("page"), pady=(space("hair"), 0))
         self.use = ttk.Button(self.frame, text=T("tools.exprtest.use"), command=self.use_it)
         self.use.pack(anchor="w", padx=space("page"), pady=(space("row"), 0))

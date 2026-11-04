@@ -40,7 +40,7 @@ from ..model_worker import AsyncModel
 from ..labels import sync_note, wrapping_label
 from ..scaling import scaled
 from .. import scope
-from ..theme import CONN_COLORS, set_menu_entry_available, space, style_menu
+from ..theme import CONN_COLORS, PAGE_WRAP_PAD, set_menu_entry_available, space, style_menu
 from ..toolbox import ping as ping_tool
 from ..toolbox import tcphealth
 from ..tooltip import add_tooltip
@@ -290,7 +290,7 @@ class ConnsPage:
         # Same reasoning as on the Statistics page: the note says what the table
         # COVERS, so it renders the coverage verdict rather than one of its inputs.
         state = self.app.coverage().state
-        note = wrapping_label(self.frame, T(SCOPE_NOTES[state]))
+        note = wrapping_label(self.frame, T(SCOPE_NOTES[state]), pad=PAGE_WRAP_PAD)
         note.pack(anchor="w", padx=scaled(10), pady=(0, scaled(4)))
         add_tooltip(note, SCOPE_TIPS[state])
         self._scope_note = note

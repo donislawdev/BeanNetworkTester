@@ -34,7 +34,7 @@ from .. import dialogs
 from ..chart import chart_canvas, draw_rtt_chart
 from ..clipboard import copy_confirmed
 from ..labels import wrapping_label
-from ..theme import CHARS, HEALTH_COLORS, ROWS, size, space
+from ..theme import CHARS, HEALTH_COLORS, PAGE_WRAP_PAD, ROWS, size, space
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree, make_room
 from .base import Poller, StatusLine, job, remembered
@@ -160,7 +160,7 @@ class TcpHealthPanel:
         self.blocker = tcphealth.blocker()
         self.admin_note = None
         if self.blocker:
-            self.admin_note = wrapping_label(self.frame, T(self.blocker))
+            self.admin_note = wrapping_label(self.frame, T(self.blocker), pad=PAGE_WRAP_PAD)
             self.admin_note.pack(fill="x", padx=space("page"), pady=(space("hair"), 0))
         self.status = StatusLine(self.frame)
         self.status.label.pack(fill="x", padx=space("page"), pady=(space("row"), 0))

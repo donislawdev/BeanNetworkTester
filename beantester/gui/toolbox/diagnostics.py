@@ -22,7 +22,7 @@ from .. import dialogs
 from ..clipboard import copy_confirmed
 from ..labels import wrapping_label
 from ..scrollable import ScrollableFrame
-from ..theme import CHARS, space
+from ..theme import CHARS, PAGE_WRAP_PAD, space
 from ..tooltip import add_tooltip
 from .base import Poller, StatusLine, job, remembered
 
@@ -145,7 +145,8 @@ class DiagnosticsPanel:
         self.status = StatusLine(self.frame)
         self.status.label.pack(fill="x", padx=space("page"), pady=(space("row"), 0))
         # What the last cleanup said, or why there cannot be one from here.
-        self.clean_note = wrapping_label(self.frame, T(self.blocker) if self.blocker else "")
+        self.clean_note = wrapping_label(self.frame, T(self.blocker) if self.blocker else "",
+                                         pad=PAGE_WRAP_PAD)
         self.clean_note.pack(fill="x", padx=space("page"), pady=(space("hair"), 0))
         self.verdict = ttk.Label(self.frame, text="", style="Muted.TLabel")
         self.verdict.pack(anchor="w", padx=space("page"), pady=(space("row"), 0))

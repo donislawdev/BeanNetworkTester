@@ -171,6 +171,16 @@ SPACE = {
 # own padding. Wrapped at the margins alone, a Polish line of the Ping tool asked for
 # 707 px of 704 (measured 2026-10-19).
 PAGE_WRAP_PAD = 2 * SPACE["page"] + SPACE["tight"]
+# The inner padding of a section card's body (``gui/accordion.py``, x and y) and of a
+# secondary window's content (``gui/windows.py``), in design pixels. A wrapping label
+# placed inside them loses that padding on both sides, exactly as it loses the margins
+# it is packed with, so the card has its own ``pad`` and About counts the window's.
+# Every wrapping label the main window and those windows build is checked against its
+# margins by ``tests/test_gui_release_fixes.py``: the default pad of 16 under the
+# page margin cut the last pixels of full lines on the Tools tab (measured on Linux).
+CARD_PADDING = (10, 7)
+WINDOW_PADDING = 10
+CARD_WRAP_PAD = 2 * CARD_PADDING[0] + SPACE["tight"]
 
 # Entry widths in CHARACTERS (Tk's own unit for them - they follow the font, so
 # they are not scaled). `help_button` is the "?" the expression fields carry
