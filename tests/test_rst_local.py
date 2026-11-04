@@ -166,6 +166,10 @@ def test_a_reset_switched_on_before_a_connection_lets_it_open_and_resets_it():
     eng.set_rst(100, 30.0)
     eng.start("test", divert=div)
     _drain(eng, 3)
+    # until send() has recorded the SYN-ACK, not only the queue emptied
+    deadline = time.time() + 5.0
+    while synack not in div.sent and time.time() < deadline:
+        time.sleep(0.01)
     eng.stop()
 
     passed = [p for p in div.sent if not p.tcp.rst]

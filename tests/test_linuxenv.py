@@ -133,6 +133,14 @@ def test_what_pkexec_answers_decides_who_opens_the_window(capsys, started_from_s
     check("and keeps the terminal, for as long as it runs", kw == {}, f"({kw})")
     check("a copy that did not run is said on stderr",
           "did not start the window as root (exit 127)" in capsys.readouterr().err)
+    # The copy RAN and could not open its window: it has said so itself, so the window
+    # opens here without the line above - a code of its own, which pkexec never uses.
+    check("NO_WINDOW is no code of pkexec's or of the program's",
+          linuxenv.NO_WINDOW not in linuxenv.NOT_STARTED
+          and linuxenv.NO_WINDOW not in exitcodes.NAMES)
+    got = linuxenv.ask_for_root(["--gui"], _Run(linuxenv.NO_WINDOW), have, env)
+    check("the copy without a window: it opens here, and nothing more is said",
+          got is None and capsys.readouterr().err == "", f"({got})")
     nothing = _Run()
     check("no pkexec: nothing to ask through",
           linuxenv.ask_for_root([], nothing, lambda name: None, env) is None and not nothing.calls)
@@ -366,12 +374,13 @@ def test_a_copy_that_cannot_reach_the_screen_hands_the_window_back(monkeypatch, 
     failed, _taken = _gui(monkeypatch, tk_fails=True)
     monkeypatch.setattr(linuxenv, "wants_root", lambda: False)
     monkeypatch.setattr(linuxenv, "started_by_pkexec", lambda: True)
-    check("pkexec's copy without a screen: pkexec's own 'did not run'",
-          cli._run_gui([]) == linuxenv.NO_WINDOW == 127)
+    check("pkexec's copy without a screen: NO_WINDOW, so the person's process opens it",
+          cli._run_gui([]) == linuxenv.NO_WINDOW)
     said = capsys.readouterr().err
     check("not reported as a window that failed (no crash report)", failed == [], f"({failed})")
-    check("but it says why, in one line",
-          said.count("\n") == 1 and "could not reach your screen" in said, f"({said!r})")
+    check("but it says so, in one line, with what happens next",
+          said == "The window could not open as administrator: it opens without "
+                  "administrator rights\n", f"({said!r})")
     monkeypatch.setattr(linuxenv, "started_by_pkexec", lambda: False)
     check("a window that cannot open anywhere else: as before",
           cli._run_gui([]) == exitcodes.RUNTIME)
