@@ -25,7 +25,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   connection with `ice=TURN`. If you chose which columns the table shows, the new column is
   shown once; hide it and it stays hidden.
 
-- **Impair one part of a call.** Three new switches, in "Part of a call (ICE)" on the
+- **Impair one part of a call.** Three new switches, in "Call targeting (ICE)" on the
   Control page and as `--call-checks`, `--call-turn-control` and `--call-media`, aim every
   impairment at one part of the calls that use ICE (WebRTC and the like): the STUN checks
   (a call whose consent checks get no answers), the TURN control messages (a relay that

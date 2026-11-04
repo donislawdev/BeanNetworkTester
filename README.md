@@ -667,11 +667,13 @@ middle of otherwise normal traffic.
   so explicitly. A step's time is more than 0 and at most 86400 s, and each speed is from 0 (no
   limit) to 10000000 KB/s, like the fixed fields. A step outside that is refused and named.
 
-**Part of a call (ICE)** - three switches that aim the impairments at one part of the calls that
-use ICE (WebRTC and similar). With all three off, everything is impaired as usual. Each one reads
-the packet itself, sent straight or carried by a TURN relay. The packet does not say which program
-sent it, so STUN and TURN from a program that is not in a call count too, for example a game
-asking a STUN server for its public address. Set the target process to keep to one program:
+**Call targeting (ICE)** - three switches that aim the impairments at one part of the calls that
+use ICE (WebRTC and similar). With any of them ticked, only the ticked parts are impaired and the
+rest of the traffic is left alone, blocking and LAN mode included. With all three off, everything
+is impaired as usual. Each one reads the packet itself, sent straight or carried by a TURN relay.
+The packet does not say which program sent it, so STUN and TURN from a program that is not in a
+call count too, for example a game asking a STUN server for its public address. Set the target
+process to keep to one program:
 - *Checks (STUN)* - STUN messages: the connectivity checks ICE uses to find and keep a path, the
   consent checks a call sends every few seconds, keepalives and questions to a STUN server. With
   them lost a call cannot connect, and a call already going has to stop sending 30 seconds after
@@ -689,11 +691,10 @@ asking a STUN server for its public address. Set the target process to keep to o
 Media counts only on a connection that has carried STUN, so QUIC, VPNs on DTLS and other UDP that
 happens to look like media are left alone. A call that was already going when the session started
 counts from its next consent check, a few seconds later. The switches combine with the target
-process and the destination (all of them must match), and every impairment, blocking and LAN mode
-included, then reaches only those packets. Not recognised, and so never reached by these switches:
-a call without ICE (plain SIP and RTP), ICE over TCP, a relay reached over TCP or TLS, and IP
-fragments. Aim at those by their address or port. `--simulate` makes no call traffic, so nothing in
-it is part of a call.
+process and the destination: a packet has to match all of them. Not recognised, and so never
+reached by these switches: a call without ICE (plain SIP and RTP), ICE over TCP, a relay reached
+over TCP or TLS, and IP fragments. Aim at those by their address or port. `--simulate` makes no
+call traffic, so nothing in it is part of a call.
 
 **Session:**
 - *Duration (s)* - after this many seconds the program **stops itself** (exactly as if you clicked
@@ -1118,7 +1119,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--latency-up` `--jitter-up` | ms | delay and its variation, for packets this machine SENDS. Used only with `--asym` |
 | `--spike-prob-up` `--spike-ms-up` | % / ms | the occasional longer delay, for packets this machine SENDS. Used only with `--asym` |
 | `--ipv4-only` `--ipv6-only` | - | impair one address family only. The other keeps flowing untouched - this aims the tool, it does not block a protocol. Works with `--dst-ip` empty too, which means all addresses. Both flags at once exclude each other, nothing is impaired, and the log says so |
-| `--call-checks` `--call-turn-control` `--call-media` | - | impair only these parts of the calls that use ICE (WebRTC and similar): their STUN checks, their TURN control messages, their media. Any of them narrows to those packets, whichever program sends them (add `--target` to keep to one). See **Part of a call** in [All options explained](#all-options-explained) |
+| `--call-checks` `--call-turn-control` `--call-media` | - | impair only these parts of the calls that use ICE (WebRTC and similar): their STUN checks, their TURN control messages, their media. Any of them narrows every impairment, blocking and LAN mode included, to those packets, whichever program sends them (add `--target` to keep to one). See **Call targeting** in [All options explained](#all-options-explained) |
 | `--lan-mode` | - | LAN mode: cut off the internet (public addresses), keep the local network |
 | `--internet-only` | - | the mirror: cut off the local network (10.x, 172.16-31.x, 192.168.x, link-local, CGNAT), keep the internet. Loopback keeps working. Careful: DNS asked of your router is local traffic, so the internet can stop working with it |
 | `--narrow-filter` | - | push `--dst-ip`/`--dst-port` into the WinDivert filter so the driver never hands over traffic that could not be impaired (much faster at high packet rates). START-time only. While it is on, statistics and connections cover the narrowed traffic only |
