@@ -26,14 +26,20 @@ import heapq
 import random
 import threading
 
+from .ice import PROBE_FIRST, IceWatch
+
 
 class ConnectionLog:
     """Flow rows for one session: ``flowkey -> dict``.
 
     Threading, and it is not uniform - each rule is measured where it is written:
 
-    * ``log``, ``charge``, ``snapshot`` and ``trim`` take the lock.
+    * ``log``, ``charge``, ``snapshot``, ``trim`` and ``ice_tick`` take the lock.
     * ``credit_delivered`` deliberately does NOT - see its docstring.
+
+    The ICE column (``ice.IceWatch``) lives under the same lock: its state is per
+    flow, it is written from ``log`` and forgotten with the rows, so one lock keeps
+    the two from ever disagreeing about which flows exist.
     """
 
     # The cap IS the memory budget: 200k flows is what a long capture on a busy
@@ -58,6 +64,7 @@ class ConnectionLog:
         self._rng_evict = random.Random(0)
         self._process_for = process_for
         self._pid_for = pid_for
+        self._ice = IceWatch()
 
     def __len__(self):
         return len(self.rows)
@@ -65,6 +72,14 @@ class ConnectionLog:
     def clear(self):
         with self._lock:
             self.rows.clear()
+            self._ice.clear()
+
+    def ice_tick(self, now):
+        """The event log's line when the ICE path with the data changed, or ``None``
+        (``IceWatch.tick``). For the WATCHDOG thread: at most once a second it reads
+        the few flows that are path candidates, under the lock, for microseconds."""
+        with self._lock:
+            return self._ice.tick(now)
 
     def snapshot(self, limit=200):
         """Rows of the connection log.
@@ -153,9 +168,18 @@ class ConnectionLog:
             allowed = max(0, len(self.rows) - int(self.MAX_CONNS * self.EVICT_KEEP))
             for key in doomed[:allowed]:
                 self.rows.pop(key, None)
+            self._ice.prune(self.rows)
 
     def log(self, key, remote_ip, remote_port, local_port, is_out, size, now,
-            proto="IP", dropped=False, scoped=False):
+            proto="IP", dropped=False, scoped=False, packet=None):
+        """Count one packet on its flow's row, creating the row on the first.
+
+        ``packet`` is what the ICE column reads (``ice.IceWatch.observe``): the bytes
+        as the application sent them, so the caller passes it BEFORE any corruption.
+        A row is read only while ``ice_n`` is above zero - a UDP row starts at
+        ``ice.PROBE_FIRST``, any other at 0 - so a flow that is done costs one dict
+        read per packet.
+        """
         if key is None:
             return
         with self._lock:
@@ -169,13 +193,20 @@ class ConnectionLog:
                 # The two used to be one set of numbers under headings the session
                 # panel used for delivered - a row could read 5 122 600 B received
                 # while the application got 409 600 B.
+                # 20 keys, in ONE constructor call, and the count has a ceiling that
+                # is not obvious: MEASURED 2026-11-04 (CPython 3.14.10 and 3.15.2,
+                # tracemalloc, rows made here, 10k-200k of them, ``internal_tools``
+                # probes ``2026-11-04-ice-path``), the two
+                # ICE keys cost nothing - 705-729 B a row at 18 keys and at 20 - while
+                # a 22nd key costs 454 B more on every row: the table doubles.
                 c = dict(remote_ip=remote_ip, remote_port=remote_port,
                          local_port=local_port, proto=proto, packets=0, bytes=0,
                          bytes_in=0, bytes_out=0, sent=0, sent_in=0, sent_out=0,
                          dropped=0, first=now, last=now,
                          dir="", scoped=bool(scoped),
                          proc=self._process_for(local_port),
-                         pid=self._pid_for(local_port))
+                         pid=self._pid_for(local_port),
+                         ice="", ice_n=PROBE_FIRST if proto == "UDP" else 0)
                 self.rows[key] = c
             elif not c["proc"] and local_port is not None:
                 # the socket may not have been in the table yet when the flow
@@ -209,6 +240,16 @@ class ConnectionLog:
             c["last"] = now
             c["dir"] = "out" if is_out else "in"
             c["proto"] = proto
+            if c["ice_n"] > 0 and packet is not None:
+                try:
+                    self._ice.observe(c, key, packet.raw, is_out)
+                except Exception as _exc:
+                    # This is the CAPTURE thread: an exception here would end the
+                    # session. A label is worth less than that - this flow is not
+                    # read again, and the failure is recorded once.
+                    c["ice_n"] = 0
+                    from . import crashlog
+                    crashlog.once("connlog.ice", _exc)
 
     def credit_delivered(self, key, size, is_out):
         """Credit bytes that actually went back on the wire to their flow's row.

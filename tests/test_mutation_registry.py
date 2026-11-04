@@ -1377,7 +1377,7 @@ MUTATIONS = [
     {
         "label": "columns: the saved layout stops being restored",
         "file": "beantester/gui/pages/conns.py",
-        "old": "            self.table.set_visible_columns(saved)",
+        "old": "            self.table.set_visible_columns(shown)",
         "new": "            pass",
         "test": "test_the_chosen_columns_are_remembered_and_restored",
     },
@@ -1833,8 +1833,8 @@ MUTATIONS = [
     {
         "label": "tables: a number is left touching the text beside it",
         "file": "beantester/gui/pages/conns.py",
-        "old": "CENTERED = frozenset({\"proto\", \"scoped\"})",
-        "new": "CENTERED = frozenset({\"proto\"})",
+        "old": "CENTERED = frozenset({\"proto\", \"ice\", \"scoped\"})",
+        "new": "CENTERED = frozenset({\"proto\", \"ice\"})",
         "test": "test_numeric_columns_are_right_aligned_and_the_registry_is_honest",
     },
     {
@@ -11170,6 +11170,312 @@ MUTATIONS = [
                "                         \"driver, temp leftovers, clock step) and exit\")\n",
         "new": "                    help=\"check the environment (pydivert, temp leftovers, clock step) and exit\")\n",
         "test": "test_the_words_both_systems_read_name_no_windows_driver",
+    },
+    # -- the ICE column (ice.py, 2026-11-04) -------------------------------- #
+    {
+        "label": "ice: a message without the magic cookie passes for STUN",
+        "file": "beantester/ice.py",
+        "old": "    if size < 20 or payload[0] & 0xC0 or payload[4:8] != COOKIE:\n",
+        "new": "    if size < 20 or payload[0] & 0xC0:\n",
+        "test": "test_what_is_not_stun_is_none",
+    },
+    {
+        # A datagram longer than the message it carries is not one message.
+        "label": "ice: the STUN length only has to fit the datagram",
+        "file": "beantester/ice.py",
+        "old": "    if size & 3 or ((payload[2] << 8) | payload[3]) + 20 != size:\n",
+        "new": "    if size & 3 or ((payload[2] << 8) | payload[3]) + 20 > size:\n",
+        "test": "test_what_is_not_stun_is_none",
+    },
+    {
+        "label": "ice: the class is read from swapped bits",
+        "file": "beantester/ice.py",
+        "old": "    kind = ((bits & 0x0100) >> 7) | ((bits & 0x0010) >> 4)\n",
+        "new": "    kind = ((bits & 0x0010) >> 3) | ((bits & 0x0100) >> 8)\n",
+        "test": "test_every_class_and_turn_method_as_the_rfcs_number_them",
+    },
+    {
+        "label": "ice: an IPv6 XOR-MAPPED-ADDRESS is XORed without the transaction ID",
+        "file": "beantester/ice.py",
+        "old": "        mask = int.from_bytes(payload[4:20], \"big\")\n",
+        "new": "        mask = int.from_bytes(payload[4:8], \"big\") << 96\n",
+        "test": "test_the_rfc_5769_answers_name_the_mapped_address",
+    },
+    {
+        # The answer this machine sends names the PEER's address.
+        "label": "ice: an answer this machine sent teaches its public address",
+        "file": "beantester/ice.py",
+        "old": "        if mapped is not None and kind == SUCCESS and not is_out:\n",
+        "new": "        if mapped is not None and kind == SUCCESS:\n",
+        "test": "test_only_an_answer_that_came_in_names_this_networks_address",
+    },
+    {
+        "label": "ice: a public address learned late leaves the hairpin labelled WAN",
+        "file": "beantester/ice.py",
+        "old": "        hairpins = [k for k, f in self._wan.items() "
+               "if canonical_ip(f.row[\"remote_ip\"]) == address]\n",
+        "new": "        hairpins = []\n",
+        "test": "test_a_public_address_learned_late_turns_wan_into_nat_even_on_a_finished_flow",
+    },
+    {
+        # RFC 9443: 64-79 is ChannelData only to or from a TURN server, QUIC elsewhere.
+        "label": "ice: ChannelData is read on a flow that never spoke TURN",
+        "file": "beantester/ice.py",
+        "old": "        if flow.turn and 64 <= first <= 79 and _end(raw, start) - start > 4:\n",
+        "new": "        if 64 <= first <= 79 and _end(raw, start) - start > 4:\n",
+        "test": "test_the_channeldata_range_is_quic_on_a_flow_without_turn",
+    },
+    {
+        # The relay would be named the path before any data moved.
+        "label": "ice: a check carried through the relay counts as media",
+        "file": "beantester/ice.py",
+        "old": "            first = raw[start + 4]      # ChannelData: what the relay carries\n",
+        "new": "            first = 22\n",
+        "test": "test_a_relay_is_turn_and_is_done_only_at_the_media_it_carries",
+    },
+    {
+        "label": "ice: a check carried through the relay spends the budget",
+        "file": "beantester/ice.py",
+        "old": "            if first < 4:\n"
+               "                self._signalled(row, flow)  # a check to the peer, through the relay\n"
+               "                return\n",
+        "new": "            pass\n",
+        "test": "test_a_relay_is_turn_and_is_done_only_at_the_media_it_carries",
+    },
+    {
+        # A relay that only carried keepalives would stop being read after ~10
+        # minutes, and a call moving onto it later would never be seen.
+        "label": "ice: STUN signalling spends the budget",
+        "file": "beantester/ice.py",
+        "old": "        self._signalled(row, flow)\n        # Only an answer that came IN",
+        "new": "        self._signalled(row, flow)\n        row[\"ice_n\"] -= 1\n"
+               "        # Only an answer that came IN",
+        "test": "test_signalling_spends_no_budget_but_has_a_ceiling_of_its_own",
+    },
+    {
+        # An address query makes no path, so media on its flow never ended the reading.
+        "label": "ice: media on a flow that only asked a STUN server spends nothing",
+        "file": "beantester/ice.py",
+        "old": "            if row[\"ice\"] == STUN:\n",
+        "new": "            if False:\n",
+        "test": "test_media_on_a_flow_that_only_asked_a_stun_server_still_spends_budget",
+    },
+    {
+        "label": "ice: any packet that looks like media buys the media budget",
+        "file": "beantester/ice.py",
+        "old": "                if row[\"packets\"] == 1 and (20 <= first <= 63 or 128 <= first <= 191):\n",
+        "new": "                if 20 <= first <= 63 or 128 <= first <= 191:\n",
+        "test": "test_only_the_first_packet_can_buy_the_media_budget",
+    },
+    {
+        # The full way (IPv4 with options, and anything the short way passes on).
+        "label": "ice: on the full way, any packet that looks like media buys the budget",
+        "file": "beantester/ice.py",
+        "old": "        elif row[\"packets\"] == 1 and _looks_like_media(first):\n",
+        "new": "        elif _looks_like_media(first):\n",
+        "test": "test_ipv4_with_options_takes_the_full_way_to_the_same_answers",
+    },
+    {
+        "label": "ice: two IPv6 ends on one /64 are not one network",
+        "file": "beantester/ice.py",
+        "old": "    return len(raw) >= 40 and raw[0] >> 4 == 6 and raw[8:16] == raw[24:32]\n",
+        "new": "    return False\n",
+        "test": "test_ipv6_on_one_link_is_lan_even_on_global_addresses",
+    },
+    {
+        "label": "ice: checks outrank TURN on a flow that carried both",
+        "file": "beantester/ice.py",
+        "old": "        if flow.turn:\n"
+               "            label = TURN\n"
+               "        elif flow.check:\n"
+               "            label = flow.where or self._where(key, flow, raw)\n",
+        "new": "        if flow.check:\n"
+               "            label = flow.where or self._where(key, flow, raw)\n"
+               "        elif flow.turn:\n"
+               "            label = TURN\n",
+        "test": "test_turn_outranks_the_checks_that_came_first",
+    },
+    {
+        "label": "ice: forgetting a gone row's flow forgets nothing",
+        "file": "beantester/ice.py",
+        "old": "        gone = [key for key in self._flows if key not in rows]\n",
+        "new": "        gone = []\n",
+        "test": "test_prune_and_clear_forget_what_they_should",
+    },
+    {
+        "label": "ice: the timeline switches at the first tick a path leads",
+        "file": "beantester/ice.py",
+        "old": "        if self._held < SWITCH_TICKS:\n            return None\n",
+        "new": "",
+        "test": "test_a_path_has_to_lead_twice_in_a_row",
+    },
+    {
+        "label": "ice: the active path flips on any lead, however small",
+        "file": "beantester/ice.py",
+        "old": "        holds = active_bytes >= ACTIVE_BYTES and best_bytes <= 2 * active_bytes\n",
+        "new": "        holds = False\n",
+        "test": "test_two_paths_with_data_do_not_flip_on_a_lead_under_twice",
+    },
+    {
+        "label": "ice: the timeline counts offered bytes instead of delivered ones",
+        "file": "beantester/ice.py",
+        "old": "    history.append(flow.row[\"sent\"])\n",
+        "new": "    history.append(flow.row[\"bytes\"])\n",
+        "test": "test_a_path_this_session_blocks_carries_nothing",
+    },
+    {
+        "label": "ice: data that stops is never said to have stopped",
+        "file": "beantester/ice.py",
+        "old": "        text = f\"ICE path: no data (was {self._shown})\"\n"
+               "        self._active, self._shown, self._quiet_since = None, \"\", None\n"
+               "        return text\n",
+        "new": "        return None\n",
+        "test": "test_data_that_stops_is_named_after_the_quiet_time",
+    },
+    {
+        "label": "connlog: a trim leaves the ICE state of the rows it dropped",
+        "file": "beantester/connlog.py",
+        "old": "            self._ice.prune(self.rows)\n",
+        "new": "",
+        "test": "test_trim_and_clear_take_the_ice_state_with_the_rows",
+    },
+    {
+        "label": "connlog: a new session keeps the last one's ICE state",
+        "file": "beantester/connlog.py",
+        "old": "            self.rows.clear()\n            self._ice.clear()\n",
+        "new": "            self.rows.clear()\n",
+        "test": "test_trim_and_clear_take_the_ice_state_with_the_rows",
+    },
+    {
+        # The capture thread is where log() runs: a raise there ends the session.
+        "label": "connlog: a probe that raises reaches the capture thread",
+        "file": "beantester/connlog.py",
+        "old": "                try:\n"
+               "                    self._ice.observe(c, key, packet.raw, is_out)\n"
+               "                except Exception as _exc:\n",
+        "new": "                if True:\n"
+               "                    self._ice.observe(c, key, packet.raw, is_out)\n"
+               "                if False:\n",
+        "test": "test_a_probe_that_raises_never_reaches_the_capture_thread",
+    },
+    {
+        "label": "connlog: a TCP row is read by the ICE probe",
+        "file": "beantester/connlog.py",
+        "old": "                         ice=\"\", ice_n=PROBE_FIRST if proto == \"UDP\" else 0)\n",
+        "new": "                         ice=\"\", ice_n=PROBE_FIRST)\n",
+        "test": "test_a_tcp_row_is_never_read",
+    },
+    {
+        # The order before 2026-11-04: the row was logged after the corruption, so
+        # at --corrupt 100 a STUN message reached the probe with a flipped bit.
+        "label": "engine: the ICE column reads the corrupted bytes",
+        "file": "beantester/engine.py",
+        "old": "            self._conns_log.log(key, remote_ip, remote_port, local_port, is_out,\n"
+               "                                size, now, proto, scoped=dec.scoped, packet=packet)\n"
+               "            # Whether this packet's BYTES were changed decides whether the\n"
+               "            # injector has to recompute its checksums - see _enqueue. Corruption\n"
+               "            # is the only thing in this tool that edits a captured packet\n"
+               "            # (core.corrupt_packet, via the payload setter); everything else\n"
+               "            # either drops it, delays it or duplicates it unchanged.\n"
+               "            modified = False\n"
+               "            if dec.corrupt and self.core.corrupt_packet(packet, rng):\n"
+               "                self._bump(\"corrupted\")\n"
+               "                modified = True\n",
+        "new": "            modified = False\n"
+               "            if dec.corrupt and self.core.corrupt_packet(packet, rng):\n"
+               "                self._bump(\"corrupted\")\n"
+               "                modified = True\n"
+               "            self._conns_log.log(key, remote_ip, remote_port, local_port, is_out,\n"
+               "                                size, now, proto, scoped=dec.scoped, packet=packet)\n",
+        "test": "test_the_ice_column_reads_the_bytes_the_application_sent",
+    },
+    {
+        "label": "engine: a dropped packet is not shown to the ICE probe",
+        "file": "beantester/engine.py",
+        "old": "                                    scoped=dec.scoped, packet=packet)\n"
+               "                continue\n",
+        "new": "                                    scoped=dec.scoped)\n"
+               "                continue\n",
+        "test": "test_a_dropped_packet_is_read_too",
+    },
+    {
+        # Without its own try, a timeline fault kills the watchdog thread - and with
+        # it the deadline and the fail-open checks.
+        "label": "engine: the ICE timeline runs outside a try of its own",
+        "file": "beantester/engine.py",
+        "old": "            try:\n"
+               "                path = self._conns_log.ice_tick(time.monotonic())\n"
+               "                if path:\n"
+               "                    self.log_event(\"PATH\", path)\n"
+               "            except Exception as _exc:\n"
+               "                crashlog.note(_exc, \"engine.ice\")\n",
+        "new": "            path = self._conns_log.ice_tick(time.monotonic())\n"
+               "            if path:\n"
+               "                self.log_event(\"PATH\", path)\n",
+        "test": "test_a_failing_timeline_leaves_the_watchdog_its_deadline",
+    },
+    {
+        # Ping splits its results at a mark: a path change would split them for a
+        # change that alters nothing the session does to traffic.
+        "label": "engine: a PATH event becomes a session mark",
+        "file": "beantester/engine.py",
+        "old": "MARK_KINDS = frozenset({\"START\", \"CHANGE\", \"SCENARIO\", \"STOP\"})",
+        "new": "MARK_KINDS = frozenset({\"START\", \"CHANGE\", \"SCENARIO\", \"STOP\", \"PATH\"})",
+        "test": "test_the_watchdog_logs_the_path_as_an_event_that_is_no_session_mark",
+    },
+    {
+        "label": "conns: a column added since the layout was saved stays hidden",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "    return saved + [column for column in COLUMNS if column not in seen]\n",
+        "new": "    return saved\n",
+        "test": "test_columns_to_show_adds_only_what_the_saved_layout_never_knew",
+    },
+    {
+        # A dict in a hand-edited ui.json is unhashable: it stopped the program from
+        # starting when the table made a set of the ids.
+        "label": "conns: a saved column id that is not a string reaches the table",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "    saved = [column for column in saved if isinstance(column, str)]\n",
+        "new": "",
+        "test": "test_columns_to_show_adds_only_what_the_saved_layout_never_knew",
+    },
+    {
+        "label": "conns: a list of known columns is trusted whatever it holds",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "    if isinstance(known, list) and all(isinstance(column, str) for column in known):\n",
+        "new": "    if isinstance(known, list):\n",
+        "test": "test_columns_to_show_adds_only_what_the_saved_layout_never_knew",
+    },
+    {
+        # Without the list, the next start sees ICE as new again: a column the user
+        # hid would come back on every start.
+        "label": "conns: the layout is saved without the columns it was chosen from",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        self.app.ui.set(\"conn_columns_known\", list(COLUMNS))\n",
+        "new": "",
+        "test": "test_a_column_added_since_the_layout_was_saved_is_shown_once",
+    },
+    {
+        "label": "views: ice: is no search field",
+        "file": "beantester/views.py",
+        "old": "    \"ice\":     (KIND_PROCESS, lambda c, m: c.get(\"ice\")),\n",
+        "new": "",
+        "test": "test_the_ice_field_finds_a_path_and_plain_text_is_unchanged",
+    },
+    {
+        "label": "csv: the connections export loses its ice column",
+        "file": "beantester/gui/csv_export.py",
+        "old": "                    f\"{max(0.0, now - last):.1f}\",\n"
+               "                    c.get(\"ice\") or \"\")])",
+        "new": "                    f\"{max(0.0, now - last):.1f}\")])",
+        "test": "test_export_connections_csv_writes_the_current_view",
+    },
+    {
+        "label": "cli: --log-conns drops the ICE token",
+        "file": "beantester/cli.py",
+        "old": "        ice = f\" ice={c['ice']}\" if c.get(\"ice\") else \"\"\n",
+        "new": "        ice = \"\"\n",
+        "test": "test_the_conns_listing_ends_an_ice_row_with_its_token",
     },
 ]
 

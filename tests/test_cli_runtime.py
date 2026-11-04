@@ -209,6 +209,24 @@ def test_the_connection_listing_survives_a_row_with_no_ports():
           "1.1.1.1:443" in body and "local:5000" in body, f"({body})")
 
 
+def test_the_conns_listing_ends_an_ice_row_with_its_token():
+    lines = []
+
+    class _Log:
+        def info(self, msg):
+            lines.append(msg)
+
+    rows = [dict(remote_ip="1.0.0.1", remote_port=3478, local_port=50002,
+                 packets=9, bytes=900, dir="out", proto="UDP", ice="TURN"),
+            dict(remote_ip="8.8.8.8", remote_port=53, local_port=50003,
+                 packets=2, bytes=120, dir="in", proto="UDP", ice="")]
+    _print_conn_rows(rows, _Log())
+    check("the relay row ends with its token", lines[1].endswith("bytes=900 ice=TURN"),
+          f"({lines[1]!r})")
+    check("a row without one is printed as before", lines[2].endswith("bytes=120"),
+          f"({lines[2]!r})")
+
+
 def test_a_finished_run_takes_one_connection_snapshot_for_every_artefact(
         tmp_path, monkeypatch):
     """--log-conns and --repro-out are cut from ONE snapshot (performance review W-D9).

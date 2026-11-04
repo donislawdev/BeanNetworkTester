@@ -36,51 +36,59 @@ def test_connection_columns_tag_and_footer():
                  packets=2, bytes=90, bytes_in=90, bytes_out=0,
                  sent=90, sent_in=90, sent_out=0, dropped=0,
                  scoped=False, pid=777, first=97.0, last=99.0, dir="in", proc="dns.exe"),
+            # A relay of a call (ice.py): its token in the ICE cell.
+            dict(local_port=5003, remote_ip="1.0.0.1", remote_port=3478, proto="UDP",
+                 packets=6, bytes=600, bytes_in=300, bytes_out=300,
+                 sent=600, sent_in=300, sent_out=300, dropped=0, ice="TURN", ice_n=0,
+                 scoped=False, pid=778, first=97.0, last=99.0, dir="in", proc="call.exe"),
         ]
         app.engine.connections_snapshot = lambda limit=None: rows
         req = {"engine": app.engine, "query": "", "sort": {"col": "dropped", "reverse": True},
                "limit": app.row_limit(), "now": 100.0, "proc_map": {}}
         page._apply(page._build_model(req))
 
-        # the render tuple must line up with the 17 columns
-        assert len(page.table.columns) == 17, page.table.columns
+        # the render tuple must line up with the 18 columns
+        assert len(page.table.columns) == 18, page.table.columns
         model = {vals[0]: (vals, tags) for _key, vals, tags in page.table.rows}
 
         chrome_vals, chrome_tags = model["chrome.exe"]
         svc_vals, svc_tags = model["svchost.exe"]
         dns_vals, _dns_tags = model["dns.exe"]
+        call_vals, _call_tags = model["call.exe"]
 
-        # order: proc, pid, proto, r_ip, r_port, l_port, packets, scoped, dropped, ...
+        # order: proc, pid, proto, ice, r_ip, r_port, l_port, packets, scoped, dropped, ...
         assert str(chrome_vals[1]) == "1234", chrome_vals            # pid
-        assert chrome_vals[7] == bnt.T("conns.yes"), chrome_vals     # impaired?
-        assert str(chrome_vals[8]) == "3", chrome_vals               # dropped
+        assert chrome_vals[3] == "" and dns_vals[3] == "", dns_vals  # no ICE: blank
+        assert call_vals[3] == "TURN", call_vals                     # ICE
+        assert chrome_vals[8] == bnt.T("conns.yes"), chrome_vals     # impaired?
+        assert str(chrome_vals[9]) == "3", chrome_vals               # dropped
         assert svc_vals[1] == "", svc_vals                           # pid None -> blank
 
         # column and highlight AGREE for every row - one stored signal:
-        assert chrome_vals[7] == bnt.T("conns.yes") and "impaired" in chrome_tags, \
+        assert chrome_vals[8] == bnt.T("conns.yes") and "impaired" in chrome_tags, \
             (chrome_vals, chrome_tags)
         # svchost: stored "yes" AND highlighted, even though its port is out of the
         # current target (this is the fix - it used to be "yes" with an empty tag).
-        assert svc_vals[7] == bnt.T("conns.yes") and "impaired" in svc_tags, \
+        assert svc_vals[8] == bnt.T("conns.yes") and "impaired" in svc_tags, \
             (svc_vals, svc_tags)
 
         # Each traffic cell carries the unit that fits its OWN value, so the
         # kilobyte flows and the ninety-byte one are readable in one column.
-        # (index: proc 0 ... dropped 8, down 9, up 10, total 11, down seen 12,
-        # up seen 13, avg 14)
-        assert chrome_vals[9] == "8.00 KB", chrome_vals
-        assert chrome_vals[10] == "2.00 KB", chrome_vals
-        assert svc_vals[10] == "4.00 KB", svc_vals
-        assert dns_vals[9] == "90 B" and dns_vals[10] == "0 B", dns_vals
-        assert dns_vals[11] == "90 B" and dns_vals[12] == "90 B", dns_vals
+        # (index: proc 0 ... dropped 9, down 10, up 11, total 12, down seen 13,
+        # up seen 14, avg 15)
+        assert chrome_vals[10] == "8.00 KB", chrome_vals
+        assert chrome_vals[11] == "2.00 KB", chrome_vals
+        assert svc_vals[11] == "4.00 KB", svc_vals
+        assert dns_vals[10] == "90 B" and dns_vals[11] == "0 B", dns_vals
+        assert dns_vals[12] == "90 B" and dns_vals[13] == "90 B", dns_vals
         # avg is a PACKET size and stays in bytes: "45", not "45 B" and not "0.04 KB"
-        assert dns_vals[14] == "45", dns_vals
+        assert dns_vals[15] == "45", dns_vals
 
         # footer sums every filtered flow, including the one the old rendering
-        # rounded away (down 8192 + 0 + 90 B, up 2048 + 4096 + 0 B)
+        # rounded away (down 8192 + 0 + 90 + 300 B, up 2048 + 4096 + 0 + 300 B)
         footer = page.totals.kw["text"]
-        assert "8.09 KB" in footer and "6.00 KB" in footer, footer
-        assert "14.1 KB" in footer, footer
+        assert "8.38 KB" in footer and "6.29 KB" in footer, footer
+        assert "14.7 KB" in footer, footer
     ''')
 
 
@@ -100,9 +108,9 @@ def test_a_portless_row_renders_empty_port_cells_and_is_not_searchable_as_none()
         page._apply(page._build_model(req))
 
         _key, vals, _tags = page.table.rows[0]
-        # order: proc, pid, proto, r_ip, r_port, l_port, packets, ...
+        # order: proc, pid, proto, ice, r_ip, r_port, l_port, packets, ...
         assert vals[2] == "ICMP", vals
-        assert vals[4] == "" and vals[5] == "", ("port cells must be blank", vals)
+        assert vals[5] == "" and vals[6] == "", ("port cells must be blank", vals)
         assert "None" not in [str(v) for v in vals], vals
 
         from beantester.views import filter_sort_connections
@@ -298,8 +306,35 @@ def test_an_empty_table_says_so_instead_of_showing_a_blank_rectangle():
                      "totals": {"down": 0, "up": 0, "total": 0}, "scope_active": False})
         assert note.kw.get("text") == bnt.T("tables.no_conns_match"),             "wrong reason with a search typed: %r" % note.kw.get("text")
 
-        table.set_model([("k", ("a",) * 17)], render=lambda i: i[1],
+        table.set_model([("k", ("a",) * len(table.columns))], render=lambda i: i[1],
                         key_of=lambda i: i[0])
         assert "place" not in note.kw, \
             "the note stayed over a table that has rows again"
     ''')
+
+
+def test_columns_to_show_adds_only_what_the_saved_layout_never_knew():
+    from beantester.gui.pages import conns
+
+    cases = {
+        "nothing saved: every column shows": (conns.columns_to_show(None, None), None),
+        "an empty layout is no layout": (conns.columns_to_show([], list(conns.COLUMNS)), None),
+        "a layout from before the list of known columns gets the new ones":
+            (conns.columns_to_show(["proc", "pid"], None), ["proc", "pid", "ice"]),
+        "a list that is not a list counts as that old layout":
+            (conns.columns_to_show(["proc"], "garbage"), ["proc", "ice"]),
+        "a layout that knew every column is left alone":
+            (conns.columns_to_show(["proc"], list(conns.COLUMNS)), ["proc"]),
+        # a hand-edited ui.json: a dict is unhashable, and it reached a set
+        "a saved id that is not a string is left out":
+            (conns.columns_to_show(["proc", {}, 7], list(conns.COLUMNS)), ["proc"]),
+        "a layout of nothing but such ids is no layout":
+            (conns.columns_to_show([{}], list(conns.COLUMNS)), None),
+        "a known list with one in it counts as that old layout":
+            (conns.columns_to_show(["proc"], ["proc", {}]), ["proc", "ice"]),
+    }
+    for name, (got, wanted) in cases.items():
+        assert got == wanted, (name, got)
+    # frozen: it is what a layout saved by those builds knew, whatever is added later
+    assert len(conns.COLUMNS_BEFORE_KNOWN) == 17 and "ice" not in conns.COLUMNS_BEFORE_KNOWN, \
+        "COLUMNS_BEFORE_KNOWN is the list the old layouts knew: never add to it"

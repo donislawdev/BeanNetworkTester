@@ -1687,6 +1687,15 @@ class BeanEngine:
                 self.core.drain_retired()
             except Exception as _exc:
                 crashlog.note(_exc, "engine")
+            # The ICE path timeline (ice.IceWatch.tick, at most once a second). Its
+            # OWN try, for the reason the port refresh above has one: a fault in a
+            # label must not cost the memory work its tick.
+            try:
+                path = self._conns_log.ice_tick(time.monotonic())
+                if path:
+                    self.log_event("PATH", path)
+            except Exception as _exc:
+                crashlog.note(_exc, "engine.ice")
             # What an overloaded driver let past this tool or dropped (eBPFDivert
             # counts both; a no-op where the driver counts neither, see driverwait).
             self._driver_wait.watch_overflow(self._divert, time.monotonic())
@@ -1873,8 +1882,20 @@ class BeanEngine:
                 self._bump(DROP_BY_REASON.get(dec.reason, "drop_loss"))
                 self._conns_log.log(key, remote_ip, remote_port, local_port,
                                     is_out, size, now, proto, dropped=True,
-                                    scoped=dec.scoped)
+                                    scoped=dec.scoped, packet=packet)
                 continue
+            # The row is created BEFORE the packet is queued, and that order is
+            # load-bearing: with no latency set the injector can deliver a packet
+            # while the capture thread is still on this line, and _log_delivered
+            # has nowhere to credit it if the row does not exist yet. (It usually
+            # loses that race - it has to wake on _cv first - which is exactly the
+            # kind of "usually" that becomes a flake later.)
+            # And BEFORE the corruption below: the ICE column reads the bytes the
+            # application sent, and a STUN message with a flipped bit is no longer
+            # one - at --corrupt 100 no flow would ever be labelled. Corruption
+            # keeps the size, so the counters are the same either way.
+            self._conns_log.log(key, remote_ip, remote_port, local_port, is_out,
+                                size, now, proto, scoped=dec.scoped, packet=packet)
             # Whether this packet's BYTES were changed decides whether the
             # injector has to recompute its checksums - see _enqueue. Corruption
             # is the only thing in this tool that edits a captured packet
@@ -1888,14 +1909,6 @@ class BeanEngine:
             # copy (step 12). Kept as an explicit first call plus a branch rather
             # than a loop over an enumerate: all but the duplicating sessions have
             # exactly one release, and this is the per-packet path.
-            # The row is created BEFORE the packet is queued, and that order is
-            # load-bearing: with no latency set the injector can deliver a packet
-            # while the capture thread is still on this line, and _log_delivered
-            # has nowhere to credit it if the row does not exist yet. (It usually
-            # loses that race - it has to wake on _cv first - which is exactly the
-            # kind of "usually" that becomes a flake later.)
-            self._conns_log.log(key, remote_ip, remote_port, local_port, is_out,
-                                size, now, proto, scoped=dec.scoped)
             rels = dec.releases
             # 🔴 DROP PYDIVERT'S CACHED HEADERS before the packet waits in the queue
             # (performance review 2026-09-26, W-A1/W-A3). Every header the reads above

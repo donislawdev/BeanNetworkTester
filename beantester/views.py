@@ -19,7 +19,7 @@ SORT_CHUNK = 16384
 # -- field-qualified search ----------------------------------------------------- #
 #
 # The plain search matches one substring against a blob of process, protocol,
-# direction, addresses and ports. That is 6 of the table's 17 columns: a PID is on
+# direction, addresses and ports. That is 6 of the table's 18 columns: a PID is on
 # screen and cannot be searched for, and neither can "only the impaired rows" or
 # "only rows that dropped something" - which are the questions a tester actually
 # has when the table holds a hundred thousand flows.
@@ -39,6 +39,9 @@ SEARCH_FIELDS = {
     "proc":    (KIND_PROCESS, None),        # special: matched with (pid, name)
     "pid":     (KIND_INT, lambda c, m: c.get("pid")),
     "proto":   (KIND_PROCESS, lambda c, m: c.get("proto")),
+    # Its own field and NOT part of the plain-text blob: "lan" or "nat" typed as
+    # plain text would start matching rows it never matched before.
+    "ice":     (KIND_PROCESS, lambda c, m: c.get("ice")),
     "dir":     (KIND_PROCESS, lambda c, m: c.get("dir")),
     "ip":      (KIND_IP, lambda c, m: c.get("remote_ip")),
     "port":    (KIND_INT, lambda c, m: c.get("remote_port")),
