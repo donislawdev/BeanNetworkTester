@@ -1692,6 +1692,34 @@ def test_dry_run_says_what_it_did_not_check():
           "--doctor" in err.getvalue(), f"({err.getvalue()!r})")
 
 
+def test_the_words_both_systems_read_name_no_windows_driver():
+    """--simulate, --dry-run and the help for --simulate and --doctor are the same on
+    Windows and Linux, and they named WinDivert, the Windows capture driver - also on
+    Linux, where there is none: "SIMULATION mode (synthetic traffic, no WinDivert)."
+    on Ubuntu 26.04. They name the capture driver, which each system has its own of."""
+    _, _, err = cli(["--simulate", "--duration", "1", "--interval", "1"])
+    [said] = [line for line in err.splitlines() if "SIMULATION mode" in line] or [""]
+    check("--simulate: says it needs no capture driver", "no capture driver" in said,
+          f"({err!r})")
+    _, _, err = cli(["--simulate", "--dry-run"])
+    [valid] = [line for line in err.splitlines() if "Configuration is valid" in line] or [""]
+    check("--dry-run: points at the rights and the driver a session needs",
+          "capture driver" in valid, f"({err!r})")
+    helps = {action.option_strings[0]: action.help for action in build_arg_parser()._actions
+             if action.option_strings and action.option_strings[0] in ("--simulate", "--doctor")}
+    check("both help lines read", len(helps) == 2, f"({helps})")
+    # Saying less is not the fix: each still names what it is about.
+    check("--simulate help: no capture driver and no rights needed",
+          "no capture driver" in helps["--simulate"] and "rights" in helps["--simulate"],
+          f"({helps['--simulate']!r})")
+    check("--doctor help: checks the capture rights and the capture driver",
+          "capture rights" in helps["--doctor"] and "capture driver" in helps["--doctor"],
+          f"({helps['--doctor']!r})")
+    for what, text in [("--simulate", said), ("--dry-run", valid), *helps.items()]:
+        check(f"{what}: no WinDivert in words Linux prints too", "WinDivert" not in text,
+              f"({text!r})")
+
+
 def test_print_config_dumps_the_effective_settings():
     code, out, _ = cli(["--print-config", "--preset", "presets.3g", "--loss", "7"])
     settings = json.loads(out)

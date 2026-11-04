@@ -1138,7 +1138,7 @@ connections arriving from outside, are still blocked in silence.
 | `--interval N` | how often to report, in seconds (greater than 0, at most 86 400 - the same ceiling `--duration` has, so an interval that could never fire is refused instead of accepted) |
 | `--log-conns` | print the observed connections at the end |
 | `--repro-out FILE` | save a reproduction report (JSON) |
-| `--simulate` | synthetic traffic instead of WinDivert (test with no Windows, no driver, no admin) |
+| `--simulate` | synthetic traffic instead of a real capture (no capture driver, no administrator or root rights) |
 | `--gui` | open the GUI. Valid **on its own only** - the GUI has its own controls, so combining it with settings flags is a usage error (exit 2) rather than a silent headless run |
 | `--version` | print the version and exit |
 | `--install-desktop` | the Linux package only: add the program to your desktop's applications menu, then exit. Run it **without** `sudo`, from the folder you keep the program in. After moving the folder, run it again |

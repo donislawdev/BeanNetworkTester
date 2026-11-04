@@ -355,6 +355,65 @@ def test_linux_opens_ebpfdivert_with_the_filter_and_nothing_else(monkeypatch):
     check("and the handle comes back unopened", isinstance(handle, module.EBPFDivert))
 
 
+def test_linux_silences_the_library_only_before_an_open_it_has_no_right_to(monkeypatch):
+    """Without the rights, libbpf printed two lines before the open failed, the second
+    one blaming the kernel ("Make sure your kernel supports BPF"), and this program's
+    own sentence came after them (measured on Ubuntu 26.04 and in WSL). With the
+    rights a refusal is the kernel's own, and the library's words are the ones that
+    say why - so they stay.
+
+    The library is handed a printer that prints nothing, never NULL: eBPFDivert's API
+    reference says NULL silences, its code puts the stderr printer back (measured on
+    the VM: both lines still came)."""
+    module, made = _ebpf_pydivert()
+    told = []
+    # What the call was given, and how many opens had happened by then.
+    module.bpf.libebpfdivert.ebpfdivert_set_print = lambda fn: told.append((fn, len(made)))
+    monkeypatch.setitem(sys.modules, "pydivert", module)
+    monkeypatch.setattr(capture_backend, "_SILENT_PRINT", None)
+
+    def as_(euid, caps):
+        monkeypatch.setattr(capture_backend, "_euid", lambda: euid)
+        monkeypatch.setattr(capture_backend, "_capabilities", lambda root, status: caps)
+        told.clear()
+        made.clear()
+        EBPFDivertBackend.open_network("udp.DstPort == 9")
+        check(f"euid {euid}: the open still happens - it decides, not this guess",
+              len(made) == 1, f"({made})")
+        return list(told)
+
+    first = as_(1000, 0)
+    check("a person: the library gets its printer BEFORE the open",
+          len(first) == 1 and first[0][1] == 0, f"({first})")
+    silent = first[0][0]
+    check("a printer, not NULL - NULL puts the stderr printer back", silent is not None)
+    check("and it prints nothing", silent(1, None, None) == 0)
+    check("root a container took the rights from: silenced too (exit 7 says why), by the "
+          "same printer - the library keeps calling the one it was given",
+          as_(0, 0) == [(silent, 0)], f"({told})")
+    check("root with them: the library keeps its voice", as_(0, ROOTS_CAPS) == [], f"({told})")
+    check("a person given the capabilities: so does it",
+          as_(1000, (1 << NET_ADMIN) | (1 << NET_RAW) | (1 << BPF) | (1 << PERFMON)) == [],
+          f"({told})")
+    # CAP_NET_RAW only puts packets back: without it the open succeeds (measured in WSL,
+    # as the person), and a silence handed out before it would hold for the session.
+    for caps, which in (((1 << NET_ADMIN) | (1 << BPF) | (1 << PERFMON), "CAP_BPF"),
+                        ((1 << NET_ADMIN) | (1 << SYS_ADMIN), "CAP_SYS_ADMIN")):
+        check(f"a person with the {which} set and no CAP_NET_RAW: the open succeeds, the "
+              "library keeps its voice", as_(1000, caps) == [], f"({told})")
+    check("a person without CAP_NET_ADMIN: the open is refused, so silenced",
+          as_(1000, (1 << NET_RAW) | (1 << BPF) | (1 << PERFMON)) == [(silent, 0)],
+          f"({told})")
+
+    monkeypatch.setattr(capture_backend, "_euid", lambda: 1000)
+    monkeypatch.setattr(capture_backend, "_capabilities", lambda root, status: 0)
+    for lib, what in ((True, "a library without the call"), (False, "no library at all")):
+        bare, opened = _ebpf_pydivert(lib=lib)
+        monkeypatch.setitem(sys.modules, "pydivert", bare)
+        EBPFDivertBackend.open_network("udp.DstPort == 9")
+        check(f"{what}: the open goes on and says why itself", len(opened) == 1, f"({opened})")
+
+
 def test_linux_polls_the_socket_table_instead_of_the_socket_events():
     check("no event source: SOCKET_CONNECT carries no local port here (owner's decision: poll)",
           EBPFDivertBackend.socket_source_factory() is None)

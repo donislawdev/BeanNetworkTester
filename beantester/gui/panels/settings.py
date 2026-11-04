@@ -31,7 +31,7 @@ from ..prefs import (ACTION, BOOL, CHOICE, NUMBER, PREF_GROUPS, PREFS_BY_KEY,
                      prefs_in_section)
 from ..scaling import scaled
 from ..scrollable import ScrollableFrame
-from ..theme import popdown_height, unhighlight_combobox
+from ..theme import CARD_WRAP_PAD, popdown_height, unhighlight_combobox
 from ..tooltip import add_tooltip
 from ..windows import PanelWindow, register_window
 from ... import crashlog
@@ -138,7 +138,7 @@ class SettingsWindow(PanelWindow):
         # pattern, a process-only target or no destination at all cannot be
         # expressed as a driver filter, and the option then does nothing. Until
         # now the only way to learn that was to start a session and read the log.
-        self._scope_status = wrapping_label(body, "", style="Hint.TLabel")
+        self._scope_status = wrapping_label(body, "", style="Hint.TLabel", pad=CARD_WRAP_PAD)
         self._sync_scope_status()
 
     def _narrowing_verdict(self):
@@ -224,7 +224,7 @@ class SettingsWindow(PanelWindow):
         if numbers:
             # Same error line the registry fields get from ControlForm: packed only
             # while it says something, so the card does not reserve a blank row.
-            err = wrapping_label(panel.body, "", style="Bad.TLabel")
+            err = wrapping_label(panel.body, "", style="Bad.TLabel", pad=CARD_WRAP_PAD)
             self._pref_errors[group_label] = (err, numbers)
 
     def _build_pref_row(self, card, pref):

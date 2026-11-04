@@ -1,6 +1,8 @@
 """GUI regressions for the 1.3 release fixes (run on the fake tkinter)."""
 from pathlib import Path
 
+import pytest
+
 from gui_harness import run_gui
 
 
@@ -442,6 +444,125 @@ def test_long_notes_wrap_instead_of_being_cut():
         assert wrap and wrap > 0, notes[0].kw
         assert wrap <= notes[0].master.winfo_width(), (wrap, notes[0].master.winfo_width())
     """)
+
+
+# The instrument of the test below: every ``bind_wraplength`` call from here on is
+# recorded with the line that made it, and ``across`` / ``inner`` read the margins a
+# label is placed in - Tk's padx and its container's ttk padding - as pixels.
+_RECORD_WRAPPING_LABELS = """
+        import os
+        import traceback
+        from beantester.gui import labels
+
+        built = []
+        plain = labels.bind_wraplength
+
+        def recording(label, container=None, pad=16):
+            # Named by the line that built it, the first one outside gui/labels.py.
+            where = next(f"{os.path.basename(frame.filename)}:{frame.lineno}"
+                         for frame in reversed(traceback.extract_stack()[:-1])
+                         if os.path.basename(frame.filename) != "labels.py")
+            built.append((label, container, pad, where))
+            return plain(label, container, pad)
+
+        labels.bind_wraplength = recording
+
+        def across(value):
+            # Tk's padx: one number for both sides, or a (left, right) pair.
+            if isinstance(value, (tuple, list)):
+                return sum(int(v) for v in value)
+            return 2 * int(value or 0)
+
+        def inner(holder):
+            # ttk's padding: left [top [right [bottom]]], right defaulting to left.
+            value = holder.kw.get("padding") if holder is not None else None
+            if value in (None, ""):
+                return 0
+            parts = [int(v) for v in (str(value).split() if isinstance(value, str) else
+                                      value if isinstance(value, (tuple, list)) else [value])]
+            return parts[0] + (parts[2] if len(parts) > 2 else parts[0])
+"""
+
+
+@pytest.mark.parametrize("dpi", [96.0, 168.0], ids=["100%", "175%"])
+def test_every_wrapping_label_wraps_inside_its_own_margins(dpi):
+    """A wrapping label wraps at its container's width minus ``pad``, so ``pad`` has to
+    cover the margins it is packed with, and the label's own padding on top.
+
+    The test above asks only "narrower than the container", which a label packed with
+    ``padx=space("page")`` passes while it is cut: the default pad of 16 is less than
+    its two 10 px margins. That shipped on the Tools tab - every tool's status line and
+    the notes under the buttons - and real Tk measured it on Linux, where the Polish
+    note under "Clean up the driver" lost the last 1-3 px of a full line. Every
+    wrapping label the window builds is checked here, so a new one packed on a page
+    margin without ``PAGE_WRAP_PAD`` fails in this test, not on a screen.
+
+    What is compared is what Tk is told - the container's width less the label's
+    wraplength - at 175 % too: a pad scaled as one sum was a pixel short there of the
+    margins, each scaled on its own (42 px against 18 + 18 + 7). And the labels packed
+    only while they say something - every error line, the "matches nothing" banner,
+    the narrowing verdict - are made to say it first, each through its own path:
+    unplaced, they were skipped, and two of them still had the default pad.
+    """
+    run_gui(_RECORD_WRAPPING_LABELS + """
+        from beantester.fields import FIELDS
+        from beantester.gui.form import SECTION_BY_ID, VALIDATED_KINDS
+        from beantester.gui.prefs import PREFS_BY_KEY
+        from beantester.gui.scaling import scaled
+        from beantester.gui.theme import SPACE
+
+        app._build_ui()
+        from beantester.gui.toolbox import TOOLS
+        for tool in TOOLS:                  # a tool's panel is built on its first view
+            app.pages["tools"].select(tool.id)
+        for window in ("settings", "about"):    # the windows with wrapping prose
+            assert app.open_window(window) is not None, window
+        settings = app.open_window("settings")
+
+        # The narrowing verdict first: an invalid destination below takes it away.
+        app.vars["narrow_filter"].set(True)
+        settings._sync_scope_status()
+        app.set_target_warning("matches nothing")
+        # Every section's error line, on the Control page and in Settings: its switch
+        # on, and a broken pattern, which every kind of validated field refuses ("((" is
+        # a process name, "-1" a seed).
+        for form in (app.form, settings.form):
+            for section_id in form.errors:
+                if section_id in app.toggles:
+                    app.toggles[section_id].set(True)
+                for key in SECTION_BY_ID[section_id].fields:
+                    if FIELDS[key].kind in VALIDATED_KINDS:
+                        app.vars[key].set("re:(")
+            form.validate_all()
+        for _error, keys in settings._pref_errors.values():
+            settings._pref_vars[keys[0]].set("x")
+            settings._on_pref_number(PREFS_BY_KEY[keys[0]])
+
+        squeezed, unplaced, checked = [], [], 0
+        for label, container, pad, where in built:
+            if not label.winfo_exists():
+                continue
+            placed = label.__dict__.get("pack_info") or label.__dict__.get("grid_info")
+            if not placed:
+                unplaced.append(where)
+                continue
+            holder = container if container is not None else label.master
+            # Only the container the label is placed in is measured here: a label
+            # wrapped to the width of another widget answers to that widget's layout.
+            if holder is not label.master:
+                continue
+            reserved = holder.winfo_width() - int(label.kw["wraplength"])
+            needs = across(placed.get("padx", 0)) + inner(holder) + scaled(SPACE["tight"])
+            if reserved < needs:
+                squeezed.append(f"{where}: {reserved} px kept off the wrap, its margins "
+                                f"and padding {needs} px")
+            checked += 1
+        assert scaled(100) == round({dpi} / 96 * 100), scaled(100)
+        assert not unplaced, ("never shown, so never checked - show it above: "
+                              + ", ".join(sorted(set(unplaced))))
+        assert checked > 40, f"only {checked} wrapping label(s) checked"
+        assert not squeezed, "\\n".join(sorted(set(squeezed)))
+    """.replace("{dpi}", str(dpi)), dpi=dpi)
 
 
 def test_the_ui_rebuild_does_not_pile_up_configure_handlers_on_the_root():

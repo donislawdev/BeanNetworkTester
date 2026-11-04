@@ -290,7 +290,8 @@ def build_arg_parser():
     p.add_argument("--log-conns", action="store_true", help="print observed connections at the end")
     p.add_argument("--repro-out", help="save a reproduction report (JSON) to a file at the end")
     p.add_argument("--simulate", action="store_true",
-                   help="synthetic traffic instead of WinDivert (test without Windows/admin)")
+                   help="synthetic traffic instead of a real capture (no capture driver, "
+                        "no administrator or root rights)")
 
     out = p.add_argument_group("output")
     out.add_argument("-v", "--verbose", action="count", default=0,
@@ -318,8 +319,8 @@ def build_arg_parser():
     ci.add_argument("--fail-on-no-traffic", action="store_true",
                     help="shorthand for --min-packets 1")
     ci.add_argument("--doctor", action="store_true",
-                    help="check the environment (admin, pydivert, WinDivert driver, "
-                         "temp leftovers, clock step) and exit")
+                    help="check the environment (capture rights, pydivert, the capture "
+                         "driver, temp leftovers, clock step) and exit")
     ci.add_argument("--cleanup-driver", action="store_true",
                     help="unload a leftover WinDivert driver service (frees its locked "
                          ".sys file without a reboot) and exit")
@@ -981,7 +982,7 @@ def _open_session(cfg, log, engine):
 
     divert = SyntheticDivert(seed=seed_val) if cfg["simulate"] else None
     if cfg["simulate"]:
-        log.info("SIMULATION mode (synthetic traffic, no WinDivert).")
+        log.info("SIMULATION mode (synthetic traffic, no capture driver).")
 
     # Said BEFORE the divert opens, while stopping still costs nothing. This is
     # the mode our own documentation calls the most dangerous, and until now the
@@ -1274,7 +1275,7 @@ def _run_command(args, log, sleep, clock, engine):
             warn_if_unbounded(cfg["settings"], log.warn)
         log.info("Configuration is valid (--dry-run: nothing was started). "
                  "This checks the settings, not the machine - run --doctor "
-                 "for Administrator rights and the WinDivert driver.")
+                 "for the rights and the capture driver a session needs.")
         return exitcodes.OK
 
     return _run_session(cfg, log, sleep, clock, engine)

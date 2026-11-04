@@ -47,7 +47,7 @@ from tkinter import ttk
 
 from ..i18n import T
 from .scaling import centred_in, geometry_fits, max_window_size, scaled
-from .theme import BG, apply_dark_titlebar, disable_maximize
+from .theme import BG, WINDOW_PADDING, apply_dark_titlebar, disable_maximize
 from .. import crashlog, winenv
 
 WINDOWS: dict[str, type] = {}   # id -> PanelWindow subclass (the registry)
@@ -111,7 +111,7 @@ class PanelWindow:
         except Exception as _exc:
             crashlog.note(_exc, "gui.windows")
 
-        self.body = ttk.Frame(win, padding=scaled(10))
+        self.body = ttk.Frame(win, padding=scaled(WINDOW_PADDING))
         self.body.pack(fill="both", expand=True)
         self.build(self.body)
 

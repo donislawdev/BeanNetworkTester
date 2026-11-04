@@ -19,6 +19,7 @@ from ...i18n import T
 from ...nettools import Refused
 from ..labels import wrapping_label
 from ..model_worker import AsyncModel
+from ..theme import PAGE_WRAP_PAD
 from ... import crashlog
 
 # The pause after the last key before a panel reacts to typing. The same quarter
@@ -239,7 +240,8 @@ class StatusLine:
     """
 
     def __init__(self, parent):
-        self.label = wrapping_label(parent, "")
+        # Every tool packs it on the page margin, so it wraps inside that margin.
+        self.label = wrapping_label(parent, "", pad=PAGE_WRAP_PAD)
 
     def working(self):
         self.label.config(text=T("tools.common.working"), style="Muted.TLabel")

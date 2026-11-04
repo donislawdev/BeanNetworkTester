@@ -33,7 +33,7 @@ from .configure import configure_changed
 from .labels import wrapping_label
 from .rates import DEFAULT_UNIT, RATE_FIELD_KEYS, rate_with_unit
 from .scaling import scaled
-from .theme import popdown_height, unhighlight_combobox
+from .theme import CARD_WRAP_PAD, popdown_height, unhighlight_combobox
 from .tooltip import add_tooltip
 from .. import crashlog
 
@@ -185,7 +185,7 @@ class ControlForm:
                 # the override reason (schedule) or the "locked mid-session"
                 # reason for start-only fields - which a disabled widget cannot
                 # explain itself, because ttk sends it no hover event.
-                note = wrapping_label(body, "", style="Hint.TLabel")
+                note = wrapping_label(body, "", style="Hint.TLabel", pad=CARD_WRAP_PAD)
                 # Packed ONCE, up front, and kept mapped for the section's life:
                 # an empty ttk.Label reserves the same one-line height as a full
                 # one, so toggling only its TEXT (below) never changes the section
@@ -195,7 +195,7 @@ class ControlForm:
                 note.pack(fill="x", pady=(scaled(5), 0))
                 self.notes[sec.id] = note
             if any(FIELDS[k].kind in VALIDATED_KINDS for k in sec.fields):
-                err = wrapping_label(body, "", style="Bad.TLabel")
+                err = wrapping_label(body, "", style="Bad.TLabel", pad=CARD_WRAP_PAD)
                 self.errors[sec.id] = err          # packed only when non-empty
 
         for sec in self._sections:

@@ -7,6 +7,7 @@ grouping the old LabelFrames gave.
 from tkinter import ttk
 
 from .scaling import scaled
+from .theme import CARD_PADDING
 
 OPEN_GLYPH = "\u25be"       # down triangle
 CLOSED_GLYPH = "\u25b8"     # right triangle
@@ -25,7 +26,7 @@ class CollapsibleSection:
                                  command=self.toggle)
         self.header.pack(fill="x")
         self.body = ttk.Frame(self.frame, style="Card.TFrame",
-                              padding=(scaled(10), scaled(7)))
+                              padding=(scaled(CARD_PADDING[0]), scaled(CARD_PADDING[1])))
         self._render_header()
         if self._open:
             self._show_body()

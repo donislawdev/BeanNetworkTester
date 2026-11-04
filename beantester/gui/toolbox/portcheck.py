@@ -19,7 +19,8 @@ from ...nettools import portcheck
 from .. import dialogs
 from ..field_actions import leave_process_alone
 from ..labels import wrapping_label
-from ..theme import CHARS, PORT_COLORS, ROWS, set_menu_entry_available, space, style_menu
+from ..theme import (CHARS, PAGE_WRAP_PAD, PORT_COLORS, ROWS, set_menu_entry_available, space,
+                     style_menu)
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
 from .base import Poller, StatusLine, job, remembered
@@ -119,7 +120,7 @@ class PortCheckPanel:
         self.status = StatusLine(self.frame)
         self.status.label.pack(fill="x", padx=space("page"), pady=(space("row"), 0))
         # What was checked, what was left out, or how old the rows are.
-        self.note = wrapping_label(self.frame, "")
+        self.note = wrapping_label(self.frame, "", pad=PAGE_WRAP_PAD)
         self.note.pack(fill="x", padx=space("page"), pady=(space("hair"), 0))
 
         holder_frame = ttk.Frame(self.frame)

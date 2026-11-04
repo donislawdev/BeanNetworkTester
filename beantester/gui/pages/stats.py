@@ -25,7 +25,7 @@ from ..rates import average_kbps, format_rate, rate_with_unit, RATE_FIELD_KEYS, 
 from ..scaling import scaled
 from ..scrollable import ScrollableFrame
 from .. import scope
-from ..theme import BG2, DOWN_C, EVENT_COLORS, UP_C, style_menu
+from ..theme import BG2, DOWN_C, EVENT_COLORS, PAGE_WRAP_PAD, UP_C, style_menu
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
 from ... import capture_backend, crashlog
@@ -229,7 +229,7 @@ class StatsPage:
         # the tool telling the user the exact opposite of the truth, right next to
         # the numbers it applies to.
         state = self.app.coverage().state
-        note = wrapping_label(parent, T(SCOPE_NOTES[state]))
+        note = wrapping_label(parent, T(SCOPE_NOTES[state]), pad=PAGE_WRAP_PAD)
         note.pack(anchor="w", padx=scaled(10), pady=(scaled(2), 0))
         add_tooltip(note, SCOPE_TIPS[state])
         # Kept so the tick can re-word it: the view preference can be toggled -

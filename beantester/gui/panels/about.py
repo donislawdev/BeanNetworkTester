@@ -30,7 +30,7 @@ from ...paths import user_data_dir
 from .. import links
 from ..labels import wrapping_label
 from ..scaling import scaled
-from ..theme import FIELD, FG, MONO_FONT, MUT
+from ..theme import FIELD, FG, MONO_FONT, MUT, SPACE, WINDOW_PADDING
 from ..windows import PanelWindow, register_window
 
 
@@ -66,10 +66,12 @@ class AboutWindow(PanelWindow):
         # English it was written from - the licence sentence and the privacy line
         # both ran off the right edge and were simply cut. A plain ttk.Label never
         # wraps; wrapping_label ties its wraplength to the window (see gui/labels.py).
-        # The pad allows for the padx below on BOTH sides, plus the few pixels a
-        # wrapped ttk.Label asks for on top of its wraplength (measured, not
-        # guessed: at pad=30 the widest wrapped line still overhung by 12 px).
-        line = partial(wrapping_label, body, pad=2 * 12 + 16)
+        # The pad allows for the window's own padding and the padx below, each on
+        # BOTH sides, plus the few pixels a wrapped ttk.Label asks for on top of its
+        # wraplength (measured, not guessed: at pad=30 the widest wrapped line still
+        # overhung by 12 px - and the pad of 40 that followed forgot the window's 20).
+        line = partial(wrapping_label, body,
+                       pad=(WINDOW_PADDING, 12, 12, WINDOW_PADDING, SPACE["tight"]))
         line(text=T("about.author", author=AUTHOR), style="TLabel").pack(
             side="top", fill="x", anchor="w", padx=pad)
         line(text=COPYRIGHT, style="Muted.TLabel").pack(

@@ -16,8 +16,21 @@ from ..i18n import T
 from .. import crashlog
 
 
+def pad_pixels(pad):
+    """``pad`` in pixels: design pixels, or a tuple of its parts in design pixels.
+
+    Parts are scaled one by one, the way Tk is handed each margin the label sits in:
+    the sum scaled at once comes out a pixel short of them at some scales (24 at 175 %
+    is 42 px, while two page margins and the label's reserve are 18 + 18 + 7 = 43 px).
+    """
+    if isinstance(pad, tuple):
+        return sum(scaled(part) for part in pad)
+    return scaled(pad)
+
+
 def bind_wraplength(label, container=None, pad=16):
-    """Keep ``label``'s wraplength equal to the width of ``container``."""
+    """Keep ``label``'s wraplength equal to the width of ``container``, less ``pad``
+    (see ``pad_pixels``)."""
     holder = container if container is not None else label.master
 
     def _resize(event=None):
@@ -35,7 +48,7 @@ def bind_wraplength(label, container=None, pad=16):
                 return
             width = int(getattr(event, "width", 0) or holder.winfo_width() or 0)
             if width > scaled(80):
-                label.config(wraplength=max(scaled(80), width - scaled(pad)))
+                label.config(wraplength=max(scaled(80), width - pad_pixels(pad)))
         except Exception as _exc:
             crashlog.note(_exc, "gui.labels")
 
