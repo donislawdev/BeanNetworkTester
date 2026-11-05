@@ -9,6 +9,10 @@ import ipaddress
 import random
 import struct
 
+from hypothesis import given
+from hypothesis import settings as hypothesis_settings
+from hypothesis import strategies as st
+
 from beantester import BeanEngine, crashlog, ice
 from beantester.connlog import ConnectionLog
 from beantester.ice import IceWatch
@@ -529,6 +533,92 @@ def test_quic_short_headers_are_never_a_relay():
     check("no label", all(f.label == "" for f in flows))
     check("each done by its second packet", all(f.done and f.reads <= 2 for f in flows),
           f"({max(f.reads for f in flows)})")
+
+
+# -- the parts of a call (call_part, read by the call scope in BeanCore) ------ #
+NOT_QUIC_FRAME = bytes([0x41, 0x23, 0x45, 0x67, 0x89]) + bytes(40)  # 64-79, Length off
+
+
+def test_every_part_of_a_call_is_named_from_its_bytes():
+    checks, control, media = ice.CALL_CHECKS, ice.CALL_TURN_CONTROL, ice.CALL_MEDIA
+    looks = ice.CALL_LOOKS_MEDIA
+    cases = [
+        ("a connectivity check", message(BINDING_REQUEST, PRIORITY), checks),
+        ("its answer", message(BINDING_SUCCESS, xor_mapped(PUBLIC)), checks),
+        ("a keepalive", message(BINDING_INDICATION), checks),
+        ("a question to a STUN server", message(BINDING_REQUEST), checks),
+        ("a method TURN does not define", message(0x0200), checks),
+        ("Allocate", message(ALLOCATE_REQUEST), control),
+        ("its answer", message(ALLOCATE_SUCCESS), control),
+        ("Refresh", message(REFRESH_REQUEST), control),
+        ("CreatePermission", message(CREATE_PERMISSION), control),
+        ("ChannelBind", message(CHANNEL_BIND), control),
+        ("an error answer to ChannelBind", message(0x0119), control),
+        ("a check sent through the relay",
+         message(SEND_INDICATION, attribute(0x0013, message(BINDING_REQUEST, PRIORITY))), checks),
+        ("RTP the relay brings", message(DATA_INDICATION, attribute(0x0013, RTP)), media),
+        ("DTLS the relay brings", message(DATA_INDICATION, attribute(0x0013, DTLS)), media),
+        ("a Send with no DATA", message(SEND_INDICATION), 0),
+        ("a Send carrying what no call carries",
+         message(SEND_INDICATION, attribute(0x0013, b"\x60" + RTP[1:])), 0),
+        ("a check in a ChannelData frame", channel_data(message(BINDING_REQUEST, PRIORITY)),
+         checks),
+        ("media in a frame", channel_data(RTP), looks),
+        ("media in a padded frame", channel_data(RTP, pad=True), looks),
+        ("a frame with STUN's first byte and no STUN", channel_data(bytes(24)), 0),
+        ("64-79 that is no frame", NOT_QUIC_FRAME, 0),
+        ("DTLS 1.2", DTLS, looks),
+        ("DTLS 1.3 (unified header)", bytes([0x2c]) + bytes(30), looks),
+        ("RTP", RTP, looks),
+        ("a QUIC long header", bytes([0xc3]) + bytes(40), 0),
+        ("a QUIC short header", bytes([0x5a]) + bytes(40), 0),
+        ("STUN's first byte without the cookie", bytes([0, 1, 0, 0]) + bytes(16), 0),
+    ]
+    for family, wire in (("IPv4", lambda p: udp4(HOME, PEER_LAN, p)),
+                         ("IPv4 with options", lambda p: udp4(HOME, PEER_LAN, p, ihl=6)),
+                         ("IPv6", lambda p: udp6(V6_HOME, V6_PEER, p))):
+        for what, payload, part in cases:
+            got = ice.call_part(wire(payload))
+            check(f"{family}, {what}: {part}", got == part, f"({got})")
+
+
+def test_what_cannot_be_read_is_no_part_of_a_call():
+    """A scope that asked for part of a call must not damage what it cannot identify."""
+    cases = {
+        "TCP": udp4(HOME, PEER_LAN, RTP, proto=6),
+        "a fragment after the first": udp4(HOME, PEER_LAN, RTP, frag=1),
+        "the first fragment of a datagram": udp4(HOME, PEER_LAN, RTP, frag=0x2000,
+                                                 udp_length=8 + 2000),
+        "IPv6 with an extension header": udp6(V6_HOME, V6_PEER, RTP, next_header=0),
+        "a UDP header and nothing in it": udp4(HOME, PEER_LAN, b""),
+        "no IP header": RTP,
+        "no bytes at all": b"",
+    }
+    for what, raw in cases.items():
+        got = ice.call_part(raw)
+        check(what, got == 0, f"({got})")
+
+
+# Whole STUN headers over random attributes, so the fuzz below reaches the attribute
+# walk too: a body of random bytes rarely has a length STUN accepts.
+STUN_BODIES = st.lists(st.binary(min_size=4, max_size=4), max_size=24).map(b"".join)
+
+
+@hypothesis_settings(max_examples=400, deadline=None)
+@given(st.one_of(
+    st.binary(max_size=120),
+    st.binary(max_size=90).map(lambda p: udp4(HOME, PEER_LAN, p)),
+    st.binary(max_size=90).map(lambda p: udp4(HOME, PEER_LAN, channel_data(p))),
+    STUN_BODIES.map(lambda b: udp4(HOME, PEER_LAN, message(SEND_INDICATION, b))),
+    STUN_BODIES.map(lambda b: udp4(HOME, PEER_LAN, message(BINDING_SUCCESS, b))),
+    STUN_BODIES.map(lambda b: udp6(V6_HOME, V6_PEER,
+                                   channel_data(message(BINDING_REQUEST, b))))))
+def test_no_bytes_make_call_part_raise(raw):
+    """It runs inside BeanCore.decide, where an exception ends the session."""
+    got = ice.call_part(raw)
+    check("one of the parts or nothing", got in (0, ice.CALL_CHECKS, ice.CALL_TURN_CONTROL,
+                                                  ice.CALL_MEDIA, ice.CALL_LOOKS_MEDIA),
+          f"({got})")
 
 
 def test_a_flow_that_is_not_ice_is_read_for_its_first_packet_only():

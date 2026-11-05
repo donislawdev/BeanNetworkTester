@@ -6,9 +6,10 @@ Allowed direction (nothing points back up):
 
 Invariants pinned here (all true today; keep them true):
 
-* ``core`` stays pure: among internal modules it may import only ``utils`` and
-  ``matchers`` (its decision leaf deps). It must never reach up to ``settings``,
-  ``engine``, ``cli`` or ``gui``.
+* ``core`` stays pure: among internal modules it may import only ``utils``,
+  ``matchers`` and ``ice`` (its decision leaf deps; ``ice`` reads a packet's bytes
+  for the call scope and imports nothing of the package but ``utils``). It must
+  never reach up to ``settings``, ``engine``, ``cli`` or ``gui``.
 * ``engine`` never imports ``gui`` or ``cli``.
 * No top-level (non-gui) module imports ``gui`` at module load. ``cli`` may launch
   the GUI, but only through a lazy import inside a function.
@@ -86,9 +87,13 @@ def _top_level_modules():
 
 def test_core_stays_pure():
     intra, _ = _module_level(_pkg_file("core.py"))
-    allowed = {"utils", "matchers"}
-    check("core.py imports only utils/matchers internally",
+    allowed = {"utils", "matchers", "ice"}
+    check("core.py imports only utils/matchers/ice internally",
           intra <= allowed, f"(also imports {sorted(intra - allowed)})")
+    # ...and ice stays a leaf, or core would reach whatever it grew to import
+    leaf, _ = _module_level(_pkg_file("ice.py"))
+    check("ice.py imports only utils internally", leaf <= {"utils"},
+          f"(also imports {sorted(leaf - {'utils'})})")
 
 
 def test_engine_never_imports_gui_or_cli():

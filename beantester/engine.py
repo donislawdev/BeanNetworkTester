@@ -204,6 +204,10 @@ class BeanEngine:
         # start and stop, so a second reference kept over there would be a new way
         # for the two to disagree.
         self._conns_log = ConnectionLog(self._process_for, self._pid_for)
+        # Whether a flow has carried STUN, for the call scope (decide() step 2): the
+        # ICE labels live with these rows. Once per engine, because neither the core,
+        # the log nor its dict is ever replaced; every start empties the dict in place.
+        self.core.read_call_flows_from(self._conns_log.rows.get)
         self._overflow_warned = 0.0     # rate-limit for the queue-overflow warning
         self._send_warned = 0.0         # rate-limit for the failed-injection warning
         self._rst_warned = 0.0          # rate-limit for the failed-reset warning
@@ -557,6 +561,9 @@ class BeanEngine:
 
     def set_ip_family(self, ipv4_only=False, ipv6_only=False):
         self.core.set_ip_family(ipv4_only=ipv4_only, ipv6_only=ipv6_only)
+
+    def set_call_parts(self, checks=False, turn_control=False, media=False):
+        self.core.set_call_parts(checks=checks, turn_control=turn_control, media=media)
 
     def set_lan(self, enabled):
         self.core.set_lan(enabled)
@@ -1829,7 +1836,8 @@ class BeanEngine:
             # on the line above.
             if now >= wait.next_at:
                 wait.sample(packet, now)
-            size = len(packet.raw)
+            raw = packet.raw
+            size = len(raw)
             (is_out, local_port, remote_port, remote_ip, proto, is_syn, is_tcp,
              is_synack) = meta(packet)
 
@@ -1853,7 +1861,8 @@ class BeanEngine:
 
             dec = self.core.decide(size, is_out, local_port, now, rng,
                                    remote_ip=remote_ip, remote_port=remote_port,
-                                   is_syn=is_syn, is_tcp=is_tcp, is_synack=is_synack)
+                                   is_syn=is_syn, is_tcp=is_tcp, is_synack=is_synack,
+                                   raw=raw)
             # One lock acquisition for all three counters instead of one each.
             # This runs per packet, and scoped_seen - the denominator of the loss
             # figure - is only knowable once decide() has ruled on targeting, so

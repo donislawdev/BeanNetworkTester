@@ -25,6 +25,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   connection with `ice=TURN`. If you chose which columns the table shows, the new column is
   shown once; hide it and it stays hidden.
 
+- **Impair one part of a call.** Three new switches, in "Call targeting (ICE)" on the
+  Control page and as `--call-checks`, `--call-turn-control` and `--call-media`, aim every
+  impairment at one part of the calls that use ICE (WebRTC and the like): the STUN checks
+  (a call whose consent checks get no answers), the TURN control messages (a relay that
+  runs out), or the media (a call already going that looks connected while its picture
+  freezes). Every program's STUN counts as a check. QUIC and VPNs are left alone. A call
+  over TCP is not recognised.
+
 ### Fixed
 
 - **The translated READMEs name all four capabilities a Linux capture needs.** Exit code 7 in

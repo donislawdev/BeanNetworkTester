@@ -196,6 +196,57 @@ ARMED_GATES = (
 )
 
 
+def test_the_call_scope_does_not_retain_per_packet_either():
+    """The call scope parses every UDP packet it is shown and asks the connection log
+    about media - two new places where a cache per flow could start to live. Fed
+    STUN, media and QUIC rather than the TCP above, which it never parses."""
+    from test_ice import BINDING_REQUEST, PRIORITY, RTP, message, udp4
+    wires = [udp4("10.0.0.10", "1.2.3.4", payload, 5000 + n, 443)
+             for n, payload in enumerate((message(BINDING_REQUEST, PRIORITY), RTP,
+                                          bytes([0xc3]) + bytes(40)) * 17)]
+    def armed(rows):
+        core = BeanCore()
+        core.set_params(0, 0, 100, 0, 0, 0, 0)  # duplication: every packet in scope moves
+        core.set_call_parts(checks=True, media=True)
+        core.read_call_flows_from(rows)
+        return core
+
+    asked, labelled = [], {"ice": "LAN"}
+    proof = armed(lambda key: asked.append(key) or labelled).decide(
+        len(wires[1]), True, 5001, 0.0, random.Random(7), remote_ip="1.2.3.4",
+        remote_port=443, raw=wires[1])
+    check("the case really reaches media through the flow question",
+          proof.scoped and len(proof.releases) == 2 and asked == [(5001, "1.2.3.4", 443)],
+          f"({proof}, {asked})")
+    # the engine's shape: a dict's own get over rows that carried STUN
+    core = armed({(5000 + n, "1.2.3.4", 443): labelled for n in range(len(wires))}.get)
+    rng = random.Random(7)
+
+    def run(count):
+        for i in range(count):
+            wire = wires[i % len(wires)]
+            core.decide(len(wire), True, 5000 + i % len(wires), i * 0.001, rng,
+                        remote_ip="1.2.3.4", remote_port=443, raw=wire)
+
+    gc.collect()
+    gc.disable()
+    run(200)
+    tracemalloc.start()
+    try:
+        blocks_before = sys.getallocatedblocks()
+        bytes_before = tracemalloc.get_traced_memory()[0]
+        run(CALLS)
+        blocks = sys.getallocatedblocks() - blocks_before
+        retained = tracemalloc.get_traced_memory()[0] - bytes_before
+    finally:
+        tracemalloc.stop()
+        gc.enable()
+    check(f"with the call scope armed, decide() retains at most {BLOCK_CEILING} blocks",
+          blocks <= BLOCK_CEILING, f"(retained {blocks} blocks)")
+    check(f"with the call scope armed, decide() retains at most {BYTE_CEILING} bytes",
+          retained <= BYTE_CEILING, f"(retained {retained} bytes)")
+
+
 def test_the_armed_gates_do_not_retain_per_packet_either():
     """Impairment on is still not a licence to keep a copy of every packet.
 

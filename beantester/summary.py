@@ -60,6 +60,20 @@ def _upload_parts(g, tr, num):
     return [tr("summary.asym_up", v=", ".join(inner))]
 
 
+# The parts of a call, in the order of their switches on the form.
+CALL_PARTS = (("call_checks", "summary.call_checks"),
+              ("call_turn_control", "summary.call_turn_control"),
+              ("call_media", "summary.call_media"))
+
+
+def _call_part(g, tr):
+    """``["call only: checks, media"]``, or nothing with no call scope. One phrase
+    for all three, since "only" said once per part would contradict itself; a
+    function of its own for the reason ``_upload_parts`` gives."""
+    named = [tr(phrase) for key, phrase in CALL_PARTS if g(key)]
+    return [tr("summary.call", v=", ".join(named))] if named else []
+
+
 def _block_part(block_ip, block_port, tr):
     """The block rule, read the way the engine applies it.
 
@@ -167,6 +181,7 @@ def settings_summary(s, lang=None, prefix_key="summary.prefix"):
     if dst_ip or dst_port:
         tgt = dst_ip or tr("summary.any_ip")
         parts.append(tr("summary.dest", v=tgt) + (f":{dst_port}" if dst_port else ""))
+    parts += _call_part(g, tr)
     block_ip = setting_expression("block_ip", g("block_ip"))
     block_port = setting_expression("block_port", g("block_port"))
     if block_ip or block_port:

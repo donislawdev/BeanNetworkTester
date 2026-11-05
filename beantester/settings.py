@@ -35,6 +35,7 @@ DEFAULT_SETTINGS = dict(
     buffer=1000,         # link buffer (ms) for the speed limit; 0 = unbounded. See fields.py
     filter="both", target="", dst_ip="", dst_port="", lan_mode=False,
     ipv4_only=False, ipv6_only=False,
+    call_checks=False, call_turn_control=False, call_media=False,   # all off = no call scope
     internet_only=False,            # the mirror of lan_mode; loopback survives both
     block_ip="", block_port="",     # firewall: drop traffic to matching IP/port
     block_reject=False,             # ...and answer instead of dropping in silence
@@ -189,8 +190,8 @@ def targeting_is_set(s):
     for key in F.NARROWING_KEYS:
         value = s.get(key, DEFAULT_SETTINGS[key])
         if key not in expressions:
-            # a narrowing field that is not an expression (none today): its plain
-            # on/off reading is the best answer available, and it is still an answer
+            # a narrowing field that is not an expression (the parts of a call): on
+            # is a bound, because what it lets through is only the packets of calls
             if F.is_active(FIELDS[key], value):
                 return True
             continue
@@ -802,6 +803,8 @@ def apply_settings(engine, s, log=lambda *_: None, live=None):
         if dest is not None:
             engine.set_dest(*dest)
         engine.set_ip_family(bool(g("ipv4_only")), bool(g("ipv6_only")))
+        engine.set_call_parts(bool(g("call_checks")), bool(g("call_turn_control")),
+                              bool(g("call_media")))
         engine.set_lan(bool(g("lan_mode")))
         engine.set_internet_only(bool(g("internet_only")))
         if block is not None:
