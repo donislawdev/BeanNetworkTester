@@ -47,6 +47,7 @@ from . import crash as gui_crash
 from . import applied, clipboard, configure, dialogs, links, session_repro
 from .icon import (apply_window_icon, make_gear_icon, show_idle_icon,
                    show_running_icon)
+from .labels import show_banner
 from .logview import LogView
 from .pages import PAGES, teardown as teardown_pages
 from .profiles import ProfileStore
@@ -1198,18 +1199,7 @@ class App:
         MAIN THREAD ONLY - it touches widgets. Worker threads set
         ``_pending_target_warning`` instead; ``_drain_target_warning`` applies it.
         """
-        if self.target_warning is None:
-            return
-        try:
-            if text:
-                self.target_warning.config(text=text)
-                if not self.target_warning.winfo_ismapped():
-                    self.target_warning.pack(fill="x", pady=(scaled(5), 0))
-            else:
-                self.target_warning.config(text="")
-                self.target_warning.pack_forget()
-        except Exception as _exc:
-            crashlog.note(_exc, "gui.app")
+        show_banner(self.target_warning, text, "gui.app")
 
     def _drain_engine_warning(self):
         """Show (or clear) "the tool is losing packets on its own". Main thread only.

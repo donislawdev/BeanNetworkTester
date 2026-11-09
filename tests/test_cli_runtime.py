@@ -452,6 +452,37 @@ def test_a_target_that_caught_nothing_is_called_out_at_the_end(monkeypatch):
           "caught nothing" not in err, f"({err!r})")
 
 
+def test_every_targeting_that_caught_nothing_is_called_out(monkeypatch):
+    """A destination nobody talks to and a call scope that meets no call impair
+    nothing exactly as silently as a process target with no process - and only the
+    process target was ever named. The family switches sit in the destination card
+    and leave packets out the same way, so they count as the destination."""
+    for argv, name in ((["--dst-ip", "10.9.9.9"], "destination targeting"),
+                       (["--dst-port", "5004"], "destination targeting"),
+                       (["--ipv6-only"], "destination targeting"),
+                       (["--call-checks", "--call-media"], "call targeting: checks, media"),
+                       (["--target", "probe.exe", "--call-turn-control"],
+                        "process target 'probe.exe'; call targeting: TURN control")):
+        _, _, err = _targeted_run(monkeypatch, _TargetedEngine(seen=500, scoped_seen=0),
+                                  argv + ["--duration", "2"])
+        check(f"{argv}: called out, by name",
+              f"the targeting caught nothing ({name})" in err, f"({err!r})")
+        check(f"{argv}: and its share is said",
+              f"In scope: 0 of 500 captured packets ({name})." in err, f"({err!r})")
+
+    _, _, err = _targeted_run(monkeypatch, _TargetedEngine(seen=500, scoped_seen=40),
+                              ["--call-checks", "--duration", "2"])
+    check("a call scope that DID catch something is not accused",
+          "caught nothing" not in err and "In scope: 40 of 500" in err, f"({err!r})")
+
+    # Without any targeting every packet is in scope, so "caught nothing" cannot be
+    # true - and this fake counts none in scope, which is what makes it a test.
+    _, _, err = _targeted_run(monkeypatch, _TargetedEngine(seen=500, scoped_seen=0),
+                              ["--loss", "5", "--duration", "2"])
+    check("no targeting: nobody to accuse and no share to give",
+          "caught nothing" not in err and "In scope:" not in err, f"({err!r})")
+
+
 def test_fail_on_no_traffic_is_shorthand_for_min_packets_one():
     args = build_arg_parser().parse_args(["--simulate", "--fail-on-no-traffic"])
     check("--fail-on-no-traffic == --min-packets 1",

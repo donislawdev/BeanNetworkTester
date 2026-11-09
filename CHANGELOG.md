@@ -33,7 +33,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   freezes). Every program's STUN counts as a check. QUIC and VPNs are left alone. A call
   over TCP is not recognised.
 
+- **The Call targeting card says when nothing ticked has gone by.** A red line in the card
+  shows while no packet of a ticked part has passed, because such a session impairs nothing.
+
+### Changed
+
+- **Connections: "impaired?" says how much of a connection was in scope.** A connection
+  with only some of its packets in scope shows the share, such as 97%, instead of "yes":
+  a call with only its checks targeted, or a connection that was already open when a
+  target was set. "yes" now means all of its packets. The connections CSV has a new last
+  column, `packets_in_scope`, and its `impaired` column keeps "yes" for any packet in
+  scope. The connections in `--format json` and in the reproduction report carry
+  `scoped_packets`.
+
+- **The command line says when any targeting caught nothing.** At the end of a run, "the
+  targeting caught nothing" now also covers a destination nobody talked to, the IPv4 and
+  IPv6 switches and the call switches, not only a process target. The `In scope` line names
+  them too.
+
 ### Fixed
+
+- **"Show only the targeted traffic" counts only the packets in scope.** After the target
+  changed during a session, the downloaded and uploaded figures, the chart and the CSV kept
+  counting the connections of the old target until the session ended. Now each packet counts
+  by whether it was in scope.
 
 - **The translated READMEs name all four capabilities a Linux capture needs.** Exit code 7 in
   the seven translations listed three of them, without CAP_PERFMON. `--simulate` there no

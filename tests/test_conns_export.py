@@ -20,10 +20,12 @@ def test_export_connections_csv_writes_the_current_view():
         app.engine.now_ref = lambda: 10.0
         app.engine.connections_snapshot = lambda limit=None: [
             # chrome was impaired: it offered 2048 down and only 1024 arrived
+            # ...and only 3 of its 4 packets were in scope: the target came after one
             dict(local_port=51000, remote_ip="1.1.1.1", remote_port=443, proto="TCP",
                  packets=4, bytes=3072, bytes_in=2048, bytes_out=1024,
                  sent=2048, sent_in=1024, sent_out=1024, dropped=3,
-                 scoped=True, pid=1234, first=2.0, last=9.0, dir="in", proc="chrome.exe"),
+                 scoped=True, scoped_packets=3, pid=1234, first=2.0, last=9.0, dir="in",
+                 proc="chrome.exe"),
             # svchost was untouched: delivered == captured
             dict(local_port=51001, remote_ip="8.8.8.8", remote_port=53, proto="UDP",
                  packets=2, bytes=600, bytes_in=100, bytes_out=500,
@@ -43,7 +45,8 @@ def test_export_connections_csv_writes_the_current_view():
                            "delivered_total_bytes",
                            "captured_down_bytes", "captured_up_bytes",
                            "captured_total_bytes",
-                           "avg_bytes", "duration_s", "idle_s", "ice"], rows[0]
+                           "avg_bytes", "duration_s", "idle_s", "ice",
+                           "packets_in_scope"], rows[0]
         # sorted by delivered upload desc: chrome (1024) before svchost (500)
         assert rows[1][0] == "chrome.exe" and rows[2][0] == "svchost.exe", rows
         chrome, svc = rows[1], rows[2]
@@ -60,8 +63,12 @@ def test_export_connections_csv_writes_the_current_view():
         # avg_bytes is CAPTURED bytes per captured packet (3072 / 4 = 768)
         assert chrome[15] == "768", chrome
         assert chrome[16] == "7.0" and chrome[17] == "1.0", chrome
-        # the ICE token is the LAST column, blank where the flow carried no STUN
+        # the ICE token after the columns above, blank where the flow carried no STUN
         assert chrome[18] == "" and svc[18] == "STUN", (chrome, svc)
+        # the packets in scope LAST: "impaired" stays yes/no, the count says how much.
+        # svchost's row has no count (made by hand), so its flag answers: none.
+        assert chrome[7] == "yes" and chrome[19] == "3", chrome
+        assert svc[19] == "0", svc
         # atomic overwrite leaves no temp file behind
         assert not os.path.exists(path + ".tmp")
     ''')

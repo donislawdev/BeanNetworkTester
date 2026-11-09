@@ -500,7 +500,7 @@ SECTIONS = (
     # and this one by what the packet is. One column, because each label names a
     # protocol and the three read as a list.
     Section("call", "frames.call",
-            ("call_checks", "call_turn_control", "call_media"), columns=1),
+            ("call_checks", "call_turn_control", "call_media"), columns=1, extra="call"),
     Section("block", "frames.block", ("block_ip", "block_port", "block_reject"),
             columns=1),
     Section("advanced", "frames.advanced",

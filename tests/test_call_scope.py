@@ -136,6 +136,41 @@ def test_the_scope_gate_follows_every_setter():
     check("and so does a family", untouched(judge(core, QUIC)))
 
 
+def test_the_core_knows_whether_a_ticked_part_has_passed():
+    """``call_met``: what the GUI's "nothing ticked has passed yet" line reads. Set
+    only by a packet the call scope lets in; started again by a NEW choice of parts
+    and by a new session, never by applying the same parts again."""
+    core = scoped_core(checks=True)
+    check("nothing has passed at first", core.call_met is False)
+    judge(core, QUIC)
+    judge(core, RTP)
+    check("QUIC and media are no checks", core.call_met is False)
+    judge(core, CHECK, is_tcp=True)
+    check("nor is STUN over TCP", core.call_met is False)
+    core.set_dest(True, "10.9.9.9")
+    judge(core, CHECK)
+    check("nor a check the destination turned down", core.call_met is False)
+    core.set_dest(False)
+    judge(core, CHECK)
+    check("a check in scope is", core.call_met is True)
+    core.set_call_parts(checks=True)
+    check("the same parts applied again keep it", core.call_met is True)
+    core.set_call_parts(checks=True, media=True)
+    check("other parts start the question again", core.call_met is False)
+    judge(core, CHECK)
+    core.reset_buckets(0.0)
+    check("and so does a new session", core.call_met is False)
+
+
+def test_the_engine_answers_none_without_a_call_scope():
+    engine = BeanEngine()
+    check("no call scope: no answer", engine.call_parts_met() is None)
+    engine.set_call_parts(media=True)
+    check("a call scope that met nothing: False", engine.call_parts_met() is False)
+    engine.core.call_met = True
+    check("and then True", engine.call_parts_met() is True)
+
+
 def test_the_call_scope_counts_as_targeting():
     core = BeanCore()
     check("off", not core.targeting_active())
@@ -189,6 +224,41 @@ def test_through_the_engine_a_call_loses_its_media_and_keeps_its_checks():
     check("and only they were in scope", stats["scoped_seen"] == 3, f"({stats['scoped_seen']})")
     check("the checks, the VPN and QUIC went through", len(divert.sent) == 5,
           f"({len(divert.sent)})")
+
+
+def test_a_split_call_counts_in_scope_only_the_packets_that_were():
+    """Checks and media share the call's flow. The row's flag said "in scope" for
+    the whole flow, and the delivered "in scope" totals were credited by that flag,
+    so with only the checks in scope every media byte counted as targeted traffic.
+    The row counts its packets in scope and the totals follow each packet."""
+    call = [flow_packet(CHECK), flow_packet(DTLS), flow_packet(RTP), flow_packet(CHECK),
+            flow_packet(RTP)]
+    other = flow_packet(QUIC, remote_port=444)
+    total = sum(len(p.raw) for p in call) + len(other.raw)
+    checks = 2 * len(flow_packet(CHECK).raw)
+    engine = BeanEngine()
+    engine.set_seed(7)
+    apply_settings(engine, dict(DEFAULT_SETTINGS, call_checks=True))
+    divert = FakeDivert(call + [other])
+    engine.start("test", divert=divert)
+    try:
+        wait_seen(engine, len(call) + 1)
+        check("everything was delivered", wait_until(
+            lambda: engine.stats_snapshot()["bytes_in"]
+            + engine.stats_snapshot()["bytes_out"] >= total))
+        stats = engine.stats_snapshot()
+        rows = {row["remote_port"]: row for row in engine.connections_snapshot(limit=None)}
+    finally:
+        engine.stop()
+    row = rows[50001]
+    check("the call's row is in scope", row["scoped"] is True, f"({row})")
+    check("for its two checks, not its five packets",
+          (row["packets"], row["scoped_packets"]) == (5, 2), f"({row})")
+    check("QUIC beside it had none in scope",
+          (rows[444]["scoped"], rows[444]["scoped_packets"]) == (False, 0), f"({rows[444]})")
+    scoped = stats["bytes_in_scoped"] + stats["bytes_out_scoped"]
+    check("the delivered bytes in scope are the checks' alone", scoped == checks,
+          f"({scoped} B, the checks are {checks} B of {total})")
 
 
 def test_a_call_scope_switched_on_mid_session_knows_the_calls_already_going():

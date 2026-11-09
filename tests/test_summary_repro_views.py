@@ -397,6 +397,25 @@ def test_filter_sort_connections_missing_keys():
     check("connections: missing/garbage data does not break the filter", ok)
 
 
+def test_a_share_in_scope_never_reads_like_all_or_none():
+    """The "impaired?" cell between "yes" and "no": whole percent rounded DOWN, never
+    "100%" (that is "yes") and never "0%" (that is "no")."""
+    from beantester.views import scope_share, share_text
+    for share, text in ((0.0001, "<1%"), (0.0099, "<1%"), (0.01, "1%"), (0.5, "50%"),
+                        (0.975, "97%"), (0.99, "99%"), (0.99999, "99%")):
+        check(f"share {share} reads {text}", share_text(share) == text,
+              f"({share_text(share)!r})")
+    check("every packet in scope is a share of one",
+          scope_share(dict(packets=4, scoped=True, scoped_packets=4)) == 1.0)
+    check("none is a share of nought",
+          scope_share(dict(packets=4, scoped=False, scoped_packets=0)) == 0.0)
+    check("a row without the count answers from its flag",
+          (scope_share(dict(packets=4, scoped=True)),
+           scope_share(dict(packets=4, scoped=False))) == (1.0, 0.0))
+    check("and a row without packets too",
+          scope_share(dict(scoped=True)) == 1.0 and scope_share({}) == 0.0)
+
+
 def test_repro_report_events_in_english():
     from beantester import build_repro_report, DEFAULT_SETTINGS
     sh = BeanEngine()
