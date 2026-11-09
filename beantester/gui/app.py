@@ -52,7 +52,7 @@ from .logview import LogView
 from .pages import PAGES, teardown as teardown_pages
 from .profiles import ProfileStore
 from .rates import SessionPeaks
-from . import scope
+from . import scope, toolbox
 from .scaling import (init_scaling, max_window_size, min_window_size, restored_geometry,
                       scaled)
 from .scrollable import WheelDispatcher
@@ -1587,12 +1587,14 @@ class App:
         # this line, and one already opening the driver holds that lock - the stop
         # waits for it, and the driver release comes after both.
         self._closing = True
-        try:
+        with crashlog.quiet("gui.app"):
+            # the Tools tab's runs (Ping, NAT and STUN) send nothing more: their
+            # workers would go on until the process ends
+            toolbox.stop_sending(self)
+        with crashlog.quiet("gui.app"):
             # secondary windows persist their geometry on the way out, so they
             # come back where the user left them
             self.windows.close_all()
-        except Exception as _exc:
-            crashlog.note(_exc, "gui.app")
         try:
             # always release the divert: a leaked handle keeps the WinDivert
             # driver loaded, which locks its .sys file until a reboot

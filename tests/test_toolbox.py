@@ -105,6 +105,35 @@ def test_the_tools_page_is_the_renderer_of_its_registry():
     """)
 
 
+def test_closing_the_window_stops_every_tool_that_sends():
+    """``App.on_close`` calls ``toolbox.stop_sending``, which reaches each tool marked
+    ``sends`` through its panel class's ``stop_window`` and no other: a run's worker
+    outlives the window, and a new tool that sends without a ``stop_window`` fails here."""
+    run_gui("""
+        from beantester.gui import toolbox
+        from beantester.gui.toolbox import ping as ping_panel
+        for tool in toolbox.TOOLS:
+            if tool.sends:
+                assert callable(getattr(tool.factory, "stop_window", None)), tool.id
+        stopped = []
+        class Sends:
+            stop_window = staticmethod(lambda window: stopped.append("sends"))
+        class Quiet:
+            stop_window = staticmethod(lambda window: stopped.append("quiet"))
+        toolbox.stop_sending(app, (toolbox.Tool("s", "l", Sends, toolbox.NETWORK, sends=True),
+                                   toolbox.Tool("q", "l", Quiet, toolbox.COMPUTER)))
+        assert stopped == ["sends"], stopped
+        pinging = ping_panel.window_run(app)
+        pinging.running = True
+        toolbox.stop_sending(app)
+        assert not pinging.running, "Ping's run is stopped by the real registry"
+        closed = []
+        toolbox.stop_sending = lambda window: closed.append(window)
+        app.on_close()
+        assert closed == [app]
+    """)
+
+
 def test_a_group_keeps_its_own_tool_and_ui_json_keeps_the_tool():
     """Each group's row remembers its own tool: back on a group, the tool left open
     there is on screen again, and that tool is what ``ui.json`` keeps. A file written

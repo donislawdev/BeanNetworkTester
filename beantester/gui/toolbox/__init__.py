@@ -24,10 +24,11 @@ this program - and the network group holds exactly the tools that send. It has n
 default: a tool without a group would land on no tab at all.
 
 ``sends`` came with Ping, the first tool that sends anything (2026-10-19), and has
-two readers. The page puts the tool's own sentence of what it sends
-(``tools.<id>.sends``) above it. And ``tests/test_no_telemetry.py`` holds the README
+three readers. The page puts the tool's own sentence of what it sends
+(``tools.<id>.sends``) above it. ``tests/test_no_telemetry.py`` holds the README
 promise to it: the tools marked here are the ones whose code may send, and the
-promise names each of them.
+promise names each of them. And ``stop_sending`` stops each of them when the window
+closes, through the panel class's ``stop_window(app)``.
 
 ``needs`` came with Linux (2026-10-20): the capability (``beantester/capabilities.py``)
 a tool cannot work without, ``""`` for one that works everywhere. Its reader is the
@@ -99,5 +100,15 @@ def tools_in(group_id, tools=None):
     return tuple(tool for tool in (TOOLS if tools is None else tools) if tool.group == group_id)
 
 
+def stop_sending(app, tools=None):
+    """The window is closing (``App.on_close``): every tool that sends stops now. A
+    tool's run belongs to the window and its worker is a daemon thread, which lives
+    until the process ends - without this, a job in the middle of a run would go on
+    sending after the window is gone."""
+    for tool in TOOLS if tools is None else tools:
+        if tool.sends:
+            tool.factory.stop_window(app)
+
+
 __all__ = ["COMPUTER", "GROUPS", "Group", "NETWORK", "PROGRAM", "TOOLS", "TOOL_BY_ID",
-           "Tool", "tools_in"]
+           "Tool", "stop_sending", "tools_in"]

@@ -295,6 +295,13 @@ def window_run(app):
     return _RUNS[app]
 
 
+def stop_window(app):
+    """The window is closing (``toolbox.stop_sending``): its ping sends nothing more."""
+    runner = _RUNS.get(app)
+    if runner is not None:
+        runner.stop()
+
+
 def offered(remote_ip):
     """Whether a row menu offers "Ping this address" for a row's remote address."""
     if not capabilities.available("ping"):
@@ -320,6 +327,7 @@ class PingPanel:
     LABEL = "tools.ping.tab"
     # Asked by the shared "not available" panel too (``gui/pages/toolbox.py``).
     help_keys = staticmethod(help_keys)
+    stop_window = staticmethod(stop_window)
 
     def __init__(self, app, parent):
         self.app = app

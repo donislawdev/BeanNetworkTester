@@ -83,8 +83,11 @@ kernel-mode driver (WinDivert)** to do so. Running it interrupts connectivity on
 machine by design - that is the tool working, not a vulnerability. Issues in the driver
 itself belong upstream: https://github.com/basil00/WinDivert.
 
-The program has **no telemetry** and sends nothing on its own - its one tool that sends, Ping on
-the Tools tab, sends echo requests only to the address the user types, while the user runs it.
+The program has **no telemetry** and sends nothing on its own. Two tools on the Tools tab send,
+and only while the user runs them: Ping sends echo requests to the address the user types, and
+NAT and STUN, when the user presses Start, sends a few STUN and TURN requests to the two servers
+in its boxes and small test packets to the public address the STUN server reports for this
+network.
 
 Reports that are in scope include, for example: a way to make the tool affect traffic
 it was not told to target, a crash that corrupts a user's files (profiles, config,

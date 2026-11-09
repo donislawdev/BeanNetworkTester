@@ -392,17 +392,20 @@ monitor is gone it returns to the centre of the current screen.
     press **Start**. In a few seconds the table shows the public address the router gives
     this computer and whether it keeps the port. The NAT mapping row says whether one socket
     gets the same public port for every server (then devices behind other routers can
-    connect directly) or a new one for each (then a call goes through a relay). The two
+    usually connect directly) or a new one for each (then a call may need a relay). The two
     hairpin rows say whether two devices behind this router reach each other through its
     public address, both sending at once and one side first: a router that closes the way
-    after one side went first sends such a call to a relay. The TURN rows say whether the
-    TURN server answers on UDP 3478 and 443 and on TCP 3478 and 80 (with a port typed, on
-    that port only). It is asked for a relay without a login, and its answer "401, login
-    needed" shows it is there.
-    A line above the table sums it up in plain words. Two sockets of this computer stand in
-    for two devices, and behind a provider's NAT or a VPN the result describes that whole
-    chain. Before each hairpin test, each socket sends one datagram that stops at the router
-    (TTL 1), so this computer's firewall already knows the way the answer comes back.
+    after one side went first leaves such a call to the local network or a relay. The TURN
+    rows say whether the TURN server answers on UDP 3478 and 443 and on TCP 3478 and 80
+    (with a port typed, on that port only). It is asked for a relay without a login, and its
+    answer "401, login needed" shows it is there.
+    When the run ends, a line above the table sums it up in plain words. Two sockets of this
+    computer stand in for two devices, and behind a provider's NAT or a VPN the result
+    describes that whole chain. The tool does not check the router's filtering (whether it
+    lets in datagrams from an address this computer has not sent to) or TURN over TLS, and
+    the two servers see this network's public address. Before each hairpin test, each socket
+    sends one datagram that stops at the router (TTL 1), so this computer's firewall already
+    knows the way the answer comes back.
     **"Copy results"** copies the table in English - with this network's public address in it.
   - **Sockets** - every TCP and UDP socket on this computer, like `netstat -ano`, and no
     session is needed: what is listening, what is connected, its state (LISTEN,

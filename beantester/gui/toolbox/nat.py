@@ -11,7 +11,8 @@ A run belongs to the WINDOW (``NatRun``, kept against the App, like Ping's
 ``PingRun``): it takes a few seconds and must not stop half way because the
 language changed - which rebuilds every panel - or another tab came to the front.
 Its poll is on the root window for the same reason. Stop takes effect inside the
-running job (``nettools.nat.Run.stop``): nothing more is sent after it.
+running job (``nettools.nat.Run.stop``): nothing more is sent after it. Closing the
+window is a Stop as well (``stop_window``): the worker would outlive the window.
 """
 import time
 import tkinter as tk
@@ -64,7 +65,7 @@ def result_words():
 
 RESULT_KEYS = ("tools.nat.result.address", "tools.nat.result.independent",
                "tools.nat.result.by_address", "tools.nat.result.by_address_port",
-               "tools.nat.result.works", "tools.nat.result.fails", "tools.nat.result.one_way",
+               "tools.nat.result.by_destination", "tools.nat.result.works", "tools.nat.result.fails", "tools.nat.result.one_way",
                "tools.nat.result.answers", "tools.nat.result.no_answer",
                "tools.nat.result.no_address", "tools.nat.result.not_found",
                "tools.nat.result.not_turn", "tools.nat.result.refused",
@@ -146,9 +147,13 @@ class NatRun:
 
     def _session_words(self, run):
         """What the session is doing to this run's packets, from the engine's own log
-        of what it captured and impaired - never guessed from the settings."""
+        of what it captured and impaired - never guessed from the settings. Nothing
+        sent yet (a name not found, say): no line - "not captured" would blame the
+        session's filter for packets that do not exist."""
         if not self.app.running:
             return SESSION_NONE
+        if not run.flows:
+            return None
         with crashlog.quiet(AREA):
             scopes = [self.app.engine.flow_scope(key) for key in sorted(run.flows)]
             if any(scope is True for scope in scopes):
@@ -175,11 +180,19 @@ def window_run(app):
     return _RUNS[app]
 
 
+def stop_window(app):
+    """The window is closing (``toolbox.stop_sending``): its run sends nothing more."""
+    runner = _RUNS.get(app)
+    if runner is not None:
+        runner.stop()
+
+
 class NatPanel:
     ID = ID
     LABEL = "tools.nat.tab"
     # Asked by the shared "not available" panel too (``gui/pages/toolbox.py``).
     help_keys = staticmethod(help_keys)
+    stop_window = staticmethod(stop_window)
 
     def __init__(self, app, parent):
         self.app = app
@@ -273,7 +286,7 @@ class NatPanel:
 
     def copy_report(self):
         run = self.runner.run
-        if run is not None and self.runner.rows:
+        if run is not None and self.runner.rows and not self.runner.running():
             copy_confirmed(self.app, nat.report(run, self.runner.rows),
                            T("tools.nat.report_logged"), AREA)
 
@@ -300,7 +313,11 @@ class NatPanel:
         self._sync_controls()
         self._show_status()
         self.session.config(text=T(runner.session) if runner.session else "")
-        self.summary.config(text=" ".join(T(key) for key in nat.conclusion(runner.rows)))
+        # Only once the run has ended: drawn from part of the rows, it would say one
+        # thing after the mapping and another after the hairpin.
+        said = (nat.conclusion(runner.rows, runner.run.transports)
+                if runner.finished is not None else ())
+        self.summary.config(text=" ".join(T(key) for key in said))
         rows = list(enumerate(runner.rows))
         column = self.table.sort["col"]
         if column in COLUMNS:

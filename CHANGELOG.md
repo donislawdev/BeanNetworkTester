@@ -11,8 +11,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   few seconds the table shows this computer's public address, whether the router keeps one
   public port for every server, whether two devices behind it reach each other through that
   address (both at once and one side first), and on which transports a TURN server answers.
-  A line above the table says what it means for a call. The STUN and TURN servers can be
-  changed (Cloudflare's are filled in), and nothing is sent before Start.
+  When the run ends, a line above the table says what it can mean for a call. The STUN and
+  TURN servers can be changed (Cloudflare's are filled in), and nothing is sent before Start.
 
 - **Connections: an ICE column shows which path a call takes.** For a call or another ICE
   connection (WebRTC and the like), the column says what each connection is: LAN (to this

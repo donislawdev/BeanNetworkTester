@@ -1,8 +1,10 @@
 """The NAT and STUN tool: how this network's router treats a call. No tkinter.
 
 One Start runs the jobs below, one worker run each: the panel checks Stop between
-them, and a job asks ``wanted()`` before everything it sends, so Stop pressed during
-a slow job sends nothing more (the lesson of Ping's first version).
+them, and a job asks ``wanted()`` before everything it sends and after each name
+lookup, so Stop pressed during a slow job sends nothing more (the lesson of Ping's
+first version). A lookup itself cannot be cut short (``getaddrinfo`` has no
+timeout): a slow resolver makes the stop late, never the traffic.
 
 1. ``addresses`` - one UDP socket asks the STUN server which address it sees (the
    public address, and whether the router kept this computer's port), then asks the
@@ -36,13 +38,20 @@ Rules measured before this code (the analysis, 2026-11-09, on a Windows Server V
   10052 TTL expired - the answer to the TTL-1 datagram) on the NEXT receive of the
   socket; the receive loop takes it and waits on (``_Udp.receive``).
 
+From the RFCs: every try of a request is the same request with the same
+transaction ID (RFC 8489 section 5), and a TURN server answers a repeated Allocate
+as the one it already answered (RFC 8656 section 7.2) - with a new ID it would say
+437 about the relay the first try made, and that relay would stay on the server.
+
 What it sends (the Tools tab's promise, README): a name lookup for each server, a
 few STUN Binding requests to the two servers, a few dozen small datagrams to this
 network's own public address, and one Allocate per TURN transport (on TCP, a
 connection for that one request). Nothing before Start. The hairpin datagrams go
 only to the public address the FIRST answer gave: a server that names another one
-for the pair gets nothing sent there.
+for the pair gets nothing sent there, and a "public" address on loopback or on the
+link is no address at all.
 """
+import errno
 import ipaddress
 import os
 import socket
@@ -79,13 +88,25 @@ OPEN_S = 0.2                # after the TTL-1 datagrams: their ICMP answers come
 POLL_S = 0.01               # one look at one socket of a pair
 RECEIVE = 4096              # the biggest datagram read (stun.MAX_MESSAGE)
 MAX_PORT = 65535
+# What a receive reports for an EARLIER datagram - an ICMP error (on Windows 10054
+# port unreachable and 10052 TTL expired, measured) - or for one too long for the
+# buffer: taken, and the wait goes on. Any other error is the socket's own and is
+# raised, instead of a loop spinning on it until the deadline.
+PASSING_ERRORS = frozenset({errno.ECONNRESET, errno.ENETRESET, errno.EMSGSIZE,
+                            errno.ECONNREFUSED, errno.EHOSTUNREACH, errno.ENETUNREACH})
 
-INDEPENDENT, BY_ADDRESS, BY_ADDRESS_AND_PORT, NO_NAT = (
-    "independent", "address", "address_port", "no_nat")
+# BY_DESTINATION: another public port for another server, and the second port of
+# that server silent - whether the port matters as well is not known.
+INDEPENDENT, BY_ADDRESS, BY_ADDRESS_AND_PORT, BY_DESTINATION, NO_NAT = (
+    "independent", "address", "address_port", "destination", "no_nat")
 
 # Detail keys the conclusion reads back from the rows.
 DETAIL_NO_NAT = "tools.nat.detail.no_nat"
 DETAIL_NO_STUN = "tools.nat.detail.no_stun"
+# The mapping row's Result for each mapping that depends on the destination.
+DEPENDENT_RESULTS = {BY_ADDRESS: "tools.nat.result.by_address",
+                     BY_ADDRESS_AND_PORT: "tools.nat.result.by_address_port",
+                     BY_DESTINATION: "tools.nat.result.by_destination"}
 
 
 class Server(NamedTuple):
@@ -110,7 +131,9 @@ EMPTY = {"stun": "tools.nat.refused.empty_stun", "turn": "tools.nat.refused.empt
 
 
 def _port(text, typed):
-    if not text.isascii() or not text.isdigit() or not 1 <= int(text) <= MAX_PORT:
+    # The length first: int() refuses a string of over 4300 digits with a ValueError.
+    if (not text.isascii() or not text.isdigit() or len(text) > len(str(MAX_PORT))
+            or not 1 <= int(text) <= MAX_PORT):
         raise Refused("tools.nat.refused.port", typed=typed)
     return int(text)
 
@@ -162,17 +185,30 @@ def _canonical(address):
     return str(ipaddress.ip_address(address.split("%")[0]))
 
 
-class _Udp:
-    """One UDP socket of a job, bound to every address of its family."""
+def _here_only(address):
+    """An address that never leaves this computer or its link (loopback,
+    link-local), an IPv4 one written as IPv6 included: no router's public address."""
+    found = ipaddress.ip_address(address)
+    found = getattr(found, "ipv4_mapped", None) or found
+    return found.is_loopback or found.is_link_local
 
-    def __init__(self, family):
+
+class _Udp:
+    """One UDP socket of a job, bound to one address of this computer."""
+
+    def __init__(self, family, address):
         self.family = family
         self.sock = socket.socket(family, socket.SOCK_DGRAM)
         try:
-            # Every address, as any calling program binds: the router's answer comes
-            # back to whichever address it chose to send from. Measured with Windows
-            # Firewall on (2026-11-09): no prompt and no rule for traffic it asked for.
-            self.sock.bind(("::" if family == socket.AF_INET6 else "0.0.0.0", 0))  # noqa: S104
+            # The address the routing table picks towards the server (``Run._socket``):
+            # every datagram leaves from it, so the router sees ONE internal endpoint -
+            # what a NAT mapping is defined for (RFC 4787) - and the answers and the
+            # hairpin datagrams come back to it. Never every address: the socket would
+            # take datagrams on any network this computer is on. Measured on a Windows
+            # Server VM with firewall auditing (2026-11-10): a whole run bound this way
+            # raised no firewall prompt (no event 5031) and made no rule, and gave the
+            # rows the wildcard bind gave there the day before.
+            self.sock.bind((address, 0))
         except OSError:
             self.sock.close()
             raise
@@ -194,11 +230,12 @@ class _Udp:
     def receive(self, timeout):
         """``(data, (address, port))`` that arrived within ``timeout`` s, or None.
 
-        An error Windows reports for an earlier datagram (10054, 10052) - or a
-        datagram too long for the buffer (10040) - is taken and the wait goes on;
-        the deadline still bounds it. A timeout on the socket rather than
-        ``select``: no limit on the descriptor's number (Linux's ``select`` stops
-        at 1024)."""
+        An error reported for an earlier datagram (``PASSING_ERRORS``: 10054 and
+        10052 on Windows) - or a datagram too long for the buffer (10040) - is taken
+        and the wait goes on; the deadline still bounds it. Any other error is
+        raised: a socket that fails every receive would otherwise spin a core until
+        the deadline. A timeout on the socket rather than ``select``: no limit on
+        the descriptor's number (Linux's ``select`` stops at 1024)."""
         deadline = time.monotonic() + timeout
         while (left := deadline - time.monotonic()) > 0:
             self.sock.settimeout(left)
@@ -206,7 +243,9 @@ class _Udp:
                 data, source = self.sock.recvfrom(RECEIVE)
             except TimeoutError:
                 return None
-            except OSError:
+            except OSError as error:
+                if error.errno not in PASSING_ERRORS:
+                    raise
                 continue
             return data, (_canonical(source[0]), source[1])
         return None
@@ -239,8 +278,8 @@ class _Net:
                 in socket.getaddrinfo(name, port, type=socket.SOCK_DGRAM)]
 
     @staticmethod
-    def udp(family):
-        return _Udp(family)
+    def udp(family, address):
+        return _Udp(family, address)
 
     @staticmethod
     def route_source(family, address):
@@ -305,16 +344,28 @@ def lookup(server, net):
 def mapping_verdict(first, second, third):
     """How the router maps one socket: the public ``(address, port)`` the STUN server
     saw (``first``), the TURN server on its port (``second``) and on the second port
-    (``third``, None when that port did not answer)."""
+    (``third``, None when that port did not answer).
+
+    One port for two addresses is independent even without ``third``: a mapping
+    that depends on the address, or on the address and the port, changes with the
+    address. Another port for the other address with ``third`` missing says only
+    that it depends on the destination - whether on the port too was not seen."""
     if second != first:
-        return BY_ADDRESS if third is None or third == second else BY_ADDRESS_AND_PORT
+        if third is None:
+            return BY_DESTINATION
+        return BY_ADDRESS if third == second else BY_ADDRESS_AND_PORT
     if third is None or third == first:
         return INDEPENDENT
     return BY_ADDRESS_AND_PORT
 
 
-def conclusion(rows):
-    """The plain-words answer drawn from the rows so far: a tuple of i18n keys."""
+def conclusion(rows, transports=()):
+    """The plain-words answer drawn from a run's rows: a tuple of i18n keys.
+
+    ``transports`` are the run's TURN transports (``Run.transports``): "no TURN" is
+    said only when EVERY one of them was checked and failed. A run stopped half way
+    has rows "not checked" there, and a run still going has none yet - one failed
+    transport says nothing about the others."""
     by = {row.test: row for row in rows if row.test != "turn"}
     public, mapping = by.get("public"), by.get("mapping")
     together, first = by.get("hairpin_together"), by.get("hairpin_first")
@@ -342,8 +393,8 @@ def conclusion(rows):
         keys.append("tools.nat.conclusion.together_only")
     else:
         keys.append("tools.nat.conclusion.together")
-    turn = [row for row in rows if row.test == "turn" and row.state != SKIPPED]
-    if turn and all(row.state == FAIL for row in turn):
+    turn = {row.args[:2]: row.state for row in rows if row.test == "turn"}
+    if transports and all(turn.get(_turn_args(*transport)) == FAIL for transport in transports):
         keys.append("tools.nat.conclusion.no_turn")
     return tuple(keys)
 
@@ -391,6 +442,47 @@ def _turn_words(message, transport, port, ms):
                     args + (("code", code if code is not None else "-"),))
     return Step("turn", OK, "tools.nat.result.answers", "tools.nat.detail.turn_code",
                 args + (("code", code),))
+
+
+def _relay_left(message):
+    """Whether an Allocate answer leaves a relay of ours on the server: a success,
+    or 437 - this 5-tuple has one already, which on a new socket only an earlier
+    try of ours made (a server that does not take a repeated request as the one it
+    answered)."""
+    return message.kind == stun.SUCCESS or stun.error_code(message) == 437
+
+
+class _Heard:
+    """What a hairpin pair received, kept small: each round datagram once per socket
+    (``ROUNDS`` at most) and the kinds of address they came from. Anything else - a
+    duplicate, a stranger's datagram, a TTL-1 one delivered here - is dropped as it
+    arrives, so a flood costs time, never memory."""
+
+    def __init__(self, token, public, local):
+        self.rounds = frozenset(token + b":P%d" % i for i in range(ROUNDS))
+        self.public, self.local = public, local
+        self.got = (set(), set())       # a session that duplicates must not make 11 of 10
+        self.kinds = set()
+
+    def take(self, index, found):
+        data, source = found
+        if data not in self.rounds:
+            return
+        self.got[index].add(data)
+        # A datagram for socket ``index`` comes from the other one's public address.
+        if source == tuple(self.public[1 - index]):
+            self.kinds.add("public")
+        elif source[0] == self.local:
+            self.kinds.add("lan")
+        else:
+            self.kinds.add("other")
+
+    def arrived(self):
+        return [len(got) for got in self.got]
+
+    def source(self):
+        """Where the counted datagrams came from: "public", "lan" or "other"."""
+        return next((kind for kind in ("public", "lan", "other") if kind in self.kinds), "")
 
 
 # -- one run ---------------------------------------------------------------------- #
@@ -481,18 +573,20 @@ class Run:
 
     # -- asking a server ---------------------------------------------------------- #
     def _exchange(self, sock, address, port, build, method, wanted):
-        """``(message, ms)``: an answer to one of our requests, from that server only,
-        or None after every try. A new transaction ID each try, so the round trip is
-        measured from the try that was answered. A send the system refuses raises."""
+        """``(message, ms)``: an answer to our request, from that server only, or None
+        after every try. Every try sends the same request, transaction ID included
+        (the module's docstring: RFC 8489 and 8656). The time runs from the first
+        try - which try was answered cannot be told - so it is how long a client
+        waited. A send the system refuses raises."""
         address = _canonical(address)
-        sent = {}
+        transaction = stun.transaction_id()
+        request = build(transaction)
+        began = time.monotonic()
         for wait in TRIES_S:
             if not wanted():
                 return None
-            transaction = stun.transaction_id()
-            sock.send(build(transaction), (address, port))
+            sock.send(request, (address, port))
             self.flows.add((sock.port, address, port))
-            sent[transaction] = time.monotonic()
             deadline = time.monotonic() + wait
             while (left := deadline - time.monotonic()) > 0:
                 got = sock.receive(left)
@@ -503,10 +597,10 @@ class Run:
                     continue
                 message = stun.decode(data)
                 if (message is None or message.method != method
-                        or message.transaction not in sent
+                        or message.transaction != transaction
                         or message.kind not in (stun.SUCCESS, stun.ERROR)):
                     continue
-                return message, round((time.monotonic() - sent[message.transaction]) * 1000)
+                return message, round((time.monotonic() - began) * 1000)
         return None
 
     def _mapped(self, sock, server, port, wanted):
@@ -521,6 +615,11 @@ class Run:
         found = stun.mapped_address(answer[0]) if answer[0].kind == stun.SUCCESS else None
         if found is not None and _family(found[0]) != sock.family:
             found = None
+        if found is not None and found[0] != self.local and _here_only(found[0]):
+            # A lying or broken server: the hairpin pair would send to a service of
+            # this computer or of its link. This computer's own address is kept - on
+            # loopback, or with no NAT on a link-local network, that is the answer.
+            found = None
         return found, True
 
     def _no_address(self, test, answered):
@@ -530,17 +629,32 @@ class Run:
         return Step(test, FAIL, "tools.nat.result.no_answer", DETAIL_NO_STUN,
                     (("s", f"{sum(TRIES_S):g}"),))
 
+    def _socket(self, family, toward):
+        """``(socket, this computer's address)``: a socket bound to the address the
+        routing table picks towards ``toward``. No route there is an OSError, which
+        ``step`` turns into the job's rows like any other refusal of the system."""
+        local = self.net.route_source(family, toward)
+        if local is None:
+            raise OSError(errno.ENETUNREACH, "no route to the server")
+        return self.net.udp(family, local), local
+
     # -- the jobs ----------------------------------------------------------------- #
     def _addresses(self, wanted):
+        # Stop is read after each lookup (the module's docstring): the rows of a run
+        # stopped here say "not checked".
         self.stun_at = lookup(self.stun, self.net)
+        if not wanted():
+            return
         self.turn_at = lookup(self.turn, self.net)
+        if not wanted():
+            return
         if self.stun_at is None:
             yield Step("public", FAIL, "tools.nat.result.not_found", "tools.nat.detail.not_found",
                        (("name", self.stun.typed),))
             yield _skipped("mapping", "tools.nat.detail.needs_public")
             return
         family = _family(self.stun_at.address)
-        sock = self.net.udp(family)
+        sock, self.local = self._socket(family, self.stun_at.address)
         try:
             yield from self._public_and_mapping(sock, family, wanted)
         finally:
@@ -554,8 +668,8 @@ class Run:
             yield self._no_address("public", answered)
             yield _skipped("mapping", "tools.nat.detail.needs_public")
             return
-        self.public, self.local = first, self.net.route_source(family, self.stun_at.address)
-        args = (("address", first[0]), ("port", first[1]), ("local", self.local or "-"),
+        self.public = first
+        args = (("address", first[0]), ("port", first[1]), ("local", self.local),
                 ("local_port", sock.port))
         if first[0] == self.local:
             self.mapping = NO_NAT
@@ -598,9 +712,9 @@ class Run:
                       "tools.nat.detail.independent_address")
             yield Step("mapping", OK, "tools.nat.result.independent", detail, args)
         else:
-            result = ("tools.nat.result.by_address" if self.mapping == BY_ADDRESS
-                      else "tools.nat.result.by_address_port")
-            yield Step("mapping", WARN, result, "tools.nat.detail.dependent", args)
+            result = DEPENDENT_RESULTS[self.mapping]
+            detail = "tools.nat.detail.dependent" if third else "tools.nat.detail.dependent_partial"
+            yield Step("mapping", WARN, result, detail, args)
 
     def _hairpin_blocker(self, lead):
         """Why this hairpin job cannot tell anything here, as a detail key - or None."""
@@ -626,8 +740,10 @@ class Run:
         family = _family(self.stun_at.address)
         socks = []
         try:
-            socks.append(self.net.udp(family))
-            socks.append(self.net.udp(family))
+            # On the address the first job's socket had: its answer is the public
+            # address the pair must see again.
+            socks.append(self.net.udp(family, self.local))
+            socks.append(self.net.udp(family, self.local))
             yield from self._pair(test, socks, lead, wanted)
         finally:
             for sock in socks:
@@ -648,10 +764,10 @@ class Run:
             yield _skipped(test, "tools.nat.detail.other_address")
             return
         a, b = socks
-        seen = {0: [], 1: []}
+        heard = _Heard(self.token, public, self.local)
         self.flows.update(((a.port, *public[1]), (b.port, *public[0])))
         self._open_way(socks, public)
-        self._drain(socks, seen, OPEN_S)
+        self._drain(socks, heard, OPEN_S)
         if lead:
             # b alone: a has sent nothing to b but the TTL-1 datagrams the router
             # dropped - for the router, these come unasked.
@@ -659,18 +775,15 @@ class Run:
                 if not wanted():
                     return
                 b.send(self.token + b":L%d" % i, public[0])
-                self._drain(socks, seen, ROUND_S)
+                self._drain(socks, heard, ROUND_S)
         for i in range(ROUNDS):
             if not wanted():
                 return
             a.send(self.token + b":P%d" % i, public[1])
             b.send(self.token + b":P%d" % i, public[0])
-            self._drain(socks, seen, ROUND_S)
-        self._drain(socks, seen, SETTLE_S)
-        # Each datagram once: a session that duplicates packets must not make 11 of 10.
-        arrived = [len({data for data, _source in seen[i] if data.startswith(self.token + b":P")})
-                   for i in (0, 1)]
-        yield _hairpin_words(arrived, self._sources(seen, public), lead)
+            self._drain(socks, heard, ROUND_S)
+        self._drain(socks, heard, SETTLE_S)
+        yield _hairpin_words(heard.arrived(), heard.source(), lead)
 
     def _open_way(self, socks, public):
         """Each socket tells this computer's firewall about every address the other
@@ -679,33 +792,18 @@ class Run:
         (TTL 1). To the local address they are delivered here, and not counted."""
         for me, other in ((0, 1), (1, 0)):
             socks[me].send(self.token + b":o", public[other], ttl=1)
-            if self.local:
-                socks[me].send(self.token + b":o", (self.local, socks[other].port), ttl=1)
+            socks[me].send(self.token + b":o", (self.local, socks[other].port), ttl=1)
 
     @staticmethod
-    def _drain(socks, seen, wait):
-        """Take what reaches ``socks`` for ``wait`` s, a short look at each in turn."""
+    def _drain(socks, heard, wait):
+        """Hand what reaches ``socks`` for ``wait`` s to ``heard`` (``_Heard``), a
+        short look at each socket in turn."""
         deadline = time.monotonic() + wait
         while (left := deadline - time.monotonic()) > 0:
             for index, sock in enumerate(socks):
                 found = sock.receive(min(left, POLL_S))
                 if found is not None:
-                    seen[index].append(found)
-
-    def _sources(self, seen, public):
-        """Where the counted datagrams came from: "public", "lan" or "other"."""
-        kinds = set()
-        for index, other in ((0, 1), (1, 0)):
-            for data, source in seen[index]:
-                if not data.startswith(self.token + b":P"):
-                    continue
-                if source == tuple(public[other]):
-                    kinds.add("public")
-                elif source[0] == self.local:
-                    kinds.add("lan")
-                else:
-                    kinds.add("other")
-        return next((kind for kind in ("public", "lan", "other") if kind in kinds), "")
+                    heard.take(index, found)
 
     def _turn(self, transport, port, wanted):
         args = _turn_args(transport, port)
@@ -743,11 +841,11 @@ class Run:
         yield Step("turn", FAIL, result, detail, args + (("s", f"{TCP_S:g}"),))
 
     def _turn_udp(self, family, port, args, wanted):
-        sock = self.net.udp(family)
+        sock, _local = self._socket(family, self.turn_at.address)
         try:
             answer = self._exchange(sock, self.turn_at.address, port, stun.allocate_request,
                                     stun.ALLOCATE, wanted)
-            if answer is not None and answer[0].kind == stun.SUCCESS:
+            if answer is not None and _relay_left(answer[0]):
                 # A relay handed out without a login: given back at once, from the
                 # socket it belongs to, instead of left on the server for minutes.
                 # Best effort: the answer is what the row reports either way.
@@ -786,7 +884,7 @@ def report(run, rows):
     for row in rows:
         test, result, detail = words(row, "en")
         lines.append(f"{test}: {result} - {detail}")
-    said = " ".join(translate(key, "en") for key in conclusion(rows))
+    said = " ".join(translate(key, "en") for key in conclusion(rows, run.transports))
     if said:
         lines.append(f"Conclusion: {said}")
     if run.stopped:

@@ -13,6 +13,7 @@ Two tests use the real sockets, on loopback only: the tool against a STUN and TU
 server written for the test, and the receive loop after an ICMP error (Windows
 reports 10054 on the next receive).
 """
+import errno
 import socket
 import sys
 import threading
@@ -20,10 +21,11 @@ import threading
 import pytest
 
 from beantester import stun
+from beantester.i18n import translate
 from beantester.nettools import Refused
 from beantester.nettools import nat
 
-LOCAL, PUBLIC = "10.0.0.20", "203.0.113.7"
+LOCAL, PUBLIC = "192.0.2.20", "203.0.113.7"
 STUN_AT, TURN_AT = "192.0.2.1", "192.0.2.2"
 NAMES = {"stun.test": STUN_AT, "turn.test": TURN_AT}
 
@@ -39,8 +41,8 @@ def quick(monkeypatch):
 
 
 class FakeUdp:
-    def __init__(self, net, family):
-        self.net, self.family = net, family
+    def __init__(self, net, family, address):
+        self.net, self.family, self.address = net, family, address
         net.last_port += 1
         self.port = net.last_port
         self.inbox = []
@@ -63,12 +65,15 @@ class FakeNat:
 
     def __init__(self, mapping=nat.INDEPENDENT, hairpin="public", lead_kills=True,
                  no_nat=False, silent=(), udp_turn="401", tcp=None, duplicate=False,
-                 keep_port=False, refuse_udp=False):
+                 keep_port=False, refuse_udp=False, flood=0):
         self.mapping, self.hairpin, self.lead_kills = mapping, hairpin, lead_kills
         self.no_nat, self.silent, self.udp_turn = no_nat, set(silent), udp_turn
         self.tcp = {3478: "401", 80: "401"} if tcp is None else tcp
         self.duplicate, self.keep_port, self.refuse_udp = duplicate, keep_port, refuse_udp
+        self.flood = flood          # copies of each datagram, and as many from a stranger
         self.public = LOCAL if no_nat else PUBLIC
+        self.routes = {}            # server address -> this computer's address towards it
+        self.allocations = {}       # local port -> the transaction ID that made a relay
         self.last_port = 50000
         self.socks = {}
         self.ports = {}             # (local port, mapping key) -> public port
@@ -86,13 +91,13 @@ class FakeNat:
             raise socket.gaierror(11001, "not found")
         return [(socket.AF_INET, NAMES[name])]
 
-    def udp(self, family):
+    def udp(self, family, address):
         if self.refuse_udp:
             raise OSError(10047, "address family not supported")
-        return FakeUdp(self, family)
+        return FakeUdp(self, family, address)
 
     def route_source(self, family, address):
-        return LOCAL
+        return self.routes.get(address, LOCAL)
 
     def tcp_ask(self, family, address, port, data, timeout):
         mode = self.tcp.get(port, "no_connection")
@@ -141,6 +146,9 @@ class FakeNat:
         sock.inbox.append((data, source))
         if self.duplicate:
             sock.inbox.append((data, source))
+        for copy in range(self.flood):
+            sock.inbox.append((data, source))
+            sock.inbox.append((b"a stranger's %d" % copy, ("198.51.100.1", 9)))
 
     def _serve(self, server, sock, data, to):
         request = stun.decode(data)
@@ -154,10 +162,29 @@ class FakeNat:
             answer = stun.encode(stun.BINDING, stun.SUCCESS, request.transaction,
                                  ((0x0020, value),))
         elif request.method == stun.ALLOCATE and server == "turn":
-            answer = self._allocate_answer(request, self.udp_turn)
+            answer = self._allocate(sock, request)
         else:
             return
-        self._deliver(sock, answer, to)
+        if answer is not None:
+            self._deliver(sock, answer, to)
+
+    def _allocate(self, sock, request):
+        """The TURN server's answer to an Allocate on UDP, by ``udp_turn``: "401" and
+        the like, "success", or a relay made and its success LOST on the way back.
+        Then a try with the same transaction ID is the same request, answered with
+        success (RFC 8656 section 7.2) - and any other request on that 5-tuple gets
+        437, as every request does in "lost_then_437" (a server that does not
+        recognise a repeated one)."""
+        mode = self.udp_turn
+        if mode not in ("success_lost", "lost_then_437"):
+            return self._allocate_answer(request, mode)
+        made = self.allocations.get(sock.port)
+        if made is None:
+            self.allocations[sock.port] = request.transaction
+            return None
+        if mode == "success_lost" and made == request.transaction:
+            return self._allocate_answer(request, "success")
+        return self._allocate_answer(request, "437")
 
     def _hairpin(self, sock, data, to):
         if self.hairpin == "none":
@@ -216,6 +243,7 @@ def test_what_was_typed_becomes_a_server():
     ("stun.test:65536", "stun", "tools.nat.refused.port"),
     ("stun.test:34x", "stun", "tools.nat.refused.port"),
     ("stun.test:٣", "stun", "tools.nat.refused.port"),
+    ("stun.test:" + "9" * 5000, "stun", "tools.nat.refused.port"),    # int() would refuse it
     ("stun.test:", "stun", "tools.nat.refused.port"),
     ("[2001:db8::1]:", "stun", "tools.nat.refused.port"),
     (":3478", "stun", "tools.nat.refused.bad_server"),
@@ -236,10 +264,19 @@ def test_the_mapping_verdict_from_three_answers():
     assert nat.mapping_verdict(a, a, a) == nat.INDEPENDENT
     assert nat.mapping_verdict(a, a, None) == nat.INDEPENDENT, "a silent second port"
     assert nat.mapping_verdict(a, b, b) == nat.BY_ADDRESS
-    assert nat.mapping_verdict(a, b, None) == nat.BY_ADDRESS
+    assert nat.mapping_verdict(a, b, None) == nat.BY_DESTINATION, \
+        "the second port was silent: whether the port matters is not known"
     assert nat.mapping_verdict(a, b, c) == nat.BY_ADDRESS_AND_PORT
     assert nat.mapping_verdict(a, a, b) == nat.BY_ADDRESS_AND_PORT
-    assert nat.mapping_verdict(a, ("198.51.100.9", 1), None) == nat.BY_ADDRESS
+    assert nat.mapping_verdict(a, ("198.51.100.9", 1), None) == nat.BY_DESTINATION
+
+
+def test_a_dependent_mapping_with_a_silent_second_port_says_only_what_it_saw():
+    run = run_all(FakeNat(mapping=nat.BY_ADDRESS, silent={("turn", 443)}))
+    row = by_test(run)[("mapping", ())]
+    assert (row.state, row.result, row.detail) == (
+        nat.WARN, "tools.nat.result.by_destination", "tools.nat.detail.dependent_partial")
+    assert nat.conclusion(run.rows) == ("tools.nat.conclusion.dependent",)
 
 
 def test_the_owners_router_two_devices_meet_only_when_they_start_together():
@@ -360,6 +397,25 @@ def test_a_duplicated_datagram_counts_once():
     assert together["a"] <= nat.ROUNDS and together["b"] <= nat.ROUNDS, together
 
 
+def test_a_flood_of_copies_and_strangers_datagrams_is_not_kept(monkeypatch):
+    """What a pair receives is sorted as it arrives: each round datagram once, the
+    kinds of source - a flood costs time, never memory, and changes no row."""
+    made = []
+
+    class Watched(nat._Heard):
+        def __init__(self, *args):
+            super().__init__(*args)
+            made.append(self)
+    monkeypatch.setattr(nat, "_Heard", Watched)
+    calm = by_test(run_all(FakeNat()))
+    flooded = by_test(run_all(FakeNat(flood=40)))
+    for test in ("hairpin_together", "hairpin_first"):
+        assert flooded[(test, ())] == calm[(test, ())], test
+    assert len(made) == 4, "one per hairpin job, two runs"
+    assert all(len(got) <= nat.ROUNDS for heard in made for got in heard.got)
+    assert all(heard.kinds <= {"public"} for heard in made), "strangers are not a source"
+
+
 def test_the_port_kept_and_a_silent_second_port():
     run = run_all(FakeNat(keep_port=True, silent={("turn", 443)}))
     rows = by_test(run)
@@ -423,15 +479,42 @@ def test_each_turn_answer_says_what_it_is():
         nat.OK, "tools.nat.detail.turn_code", 438)
 
 
+def released(net):
+    return [request for server, _port, request in net.received
+            if server == "turn" and request and request.method == stun.REFRESH]
+
+
 def test_a_relay_handed_out_without_a_login_is_given_back():
     net = FakeNat(udp_turn="success")
     run = run_all(net)
     assert by_test(run)[("turn", (("transport", "UDP"), ("port", 3478)))].detail == \
         "tools.nat.detail.turn_open"
-    released = [request for server, _port, request in net.received
-                if server == "turn" and request and request.method == stun.REFRESH]
-    assert len(released) == 2, "one Refresh with lifetime 0 for each UDP allocation"
-    assert all(dict(r.attributes)[stun.LIFETIME] == bytes(4) for r in released)
+    assert len(released(net)) == 2, "one Refresh with lifetime 0 for each UDP allocation"
+    assert all(dict(r.attributes)[stun.LIFETIME] == bytes(4) for r in released(net))
+
+
+def test_a_try_again_is_the_same_request_so_a_lost_answer_leaves_no_relay():
+    """RFC 8489 section 5: a resent request keeps its transaction ID, and RFC 8656
+    section 7.2: a TURN server answers it as the request it already took. With a new
+    ID, a relay whose success was lost got 437 and stayed on the server."""
+    net = FakeNat(udp_turn="success_lost")
+    run = run_all(net)
+    row = by_test(run)[("turn", (("transport", "UDP"), ("port", 3478)))]
+    assert row.detail == "tools.nat.detail.turn_open", row
+    allocates = [request.transaction for server, port, request in net.received
+                 if server == "turn" and port == 3478 and request.method == stun.ALLOCATE]
+    assert len(allocates) == 2 and len(set(allocates)) == 1, "the second try, the same ID"
+    assert len(released(net)) == 2
+
+
+def test_a_437_on_a_new_socket_is_a_relay_of_ours_and_is_given_back():
+    """A server that does not recognise a repeated request answers it 437: on a socket
+    of a moment ago only the try before made that relay, so it is given back too."""
+    net = FakeNat(udp_turn="lost_then_437")
+    run = run_all(net)
+    row = by_test(run)[("turn", (("transport", "UDP"), ("port", 3478)))]
+    assert (row.detail, dict(row.args)["code"]) == ("tools.nat.detail.turn_code", 437)
+    assert len(released(net)) == 2
 
 
 def test_nothing_more_is_sent_after_stop_and_the_rest_says_so():
@@ -458,6 +541,68 @@ def test_nothing_more_is_sent_after_stop_and_the_rest_says_so():
     assert {row.test for row in stopped} >= {"hairpin_together", "hairpin_first", "turn"}
 
 
+def test_stop_during_a_name_lookup_asks_and_sends_nothing_more():
+    """A lookup cannot be cut short, but the next one is not asked and nothing is sent."""
+    net = FakeNat()
+    run = nat.Run(nat.parse_server("stun.test", "stun"), nat.parse_server("turn.test", "turn"),
+                  net)
+    asked = []
+    found = net.lookup
+
+    def slow(name, port):
+        asked.append(name)
+        run.stop()                                   # pressed while the resolver works
+        return found(name, port)
+    net.lookup = slow
+    assert run.step() == ()
+    assert asked == ["stun.test"] and net.log == [] and run.done()
+    assert {row.detail for row in run.not_checked()} == {"tools.nat.detail.stopped"}
+
+
+def test_every_socket_is_bound_to_this_computers_address_towards_its_server():
+    """One address, never all of them: the one the routing table picks towards the
+    server - so the router sees one internal endpoint, and the pair the address the
+    first answer came to."""
+    net = FakeNat()
+    net.routes = {TURN_AT: "192.0.2.30"}
+    made = []
+    udp = net.udp
+    net.udp = lambda family, address: made.append(udp(family, address)) or made[-1]
+    run = run_all(net)
+    assert by_test(run)[("hairpin_first", ())].detail == "tools.nat.detail.hairpin_after_first"
+    # the address job's socket (it asks the TURN server too, from the same address),
+    # two pairs, then one socket per UDP transport of the TURN server
+    assert [sock.address for sock in made] == [LOCAL] * 5 + ["192.0.2.30"] * 2
+
+
+def test_no_route_to_a_server_is_a_row_that_says_so():
+    net = FakeNat()
+    net.route_source = lambda family, address: None
+    run = run_all(net)
+    rows = by_test(run)
+    assert (rows[("public", ())].state, rows[("public", ())].detail) == (
+        nat.FAIL, "tools.nat.detail.send_failed")
+    assert rows[("turn", (("transport", "UDP"), ("port", 443)))].detail == \
+        "tools.nat.detail.send_failed"
+    assert rows[("turn", (("transport", "TCP"), ("port", 80)))].state == nat.OK
+    assert not [entry for entry in net.log if entry[1][0] != TURN_AT], "nothing was sent"
+
+
+@pytest.mark.parametrize("public", ["127.0.0.1", "169.254.7.7"])
+def test_a_public_address_on_loopback_or_the_link_is_no_address(public):
+    """A lying or broken server must not point the hairpin datagrams at a service of
+    this computer or of its link (the loopback no-NAT run below keeps its answer:
+    there it IS this computer's address)."""
+    net = FakeNat()
+    net.public = public
+    run = run_all(net)
+    row = by_test(run)[("public", ())]
+    assert (row.state, row.detail) == (nat.FAIL, "tools.nat.detail.no_address")
+    assert not [entry for entry in net.log if entry[1][0] == public]
+    assert nat._here_only("::ffff:127.0.0.1") and nat._here_only("fe80::1")
+    assert not nat._here_only("10.1.2.3"), "a private address is a double NAT's, kept"
+
+
 def test_a_socket_the_system_refuses_is_a_row_and_the_run_goes_on():
     run = run_all(FakeNat(refuse_udp=True))
     rows = by_test(run)
@@ -482,7 +627,7 @@ def test_answers_from_another_address_or_to_another_question_are_not_taken():
             sock.inbox.append((stun.encode(stun.BINDING, stun.SUCCESS, request.transaction,
                                            ((0x0020, value),)), ("198.51.100.1", to[1])))
     quiet = Silent()
-    sock = quiet.udp(socket.AF_INET)
+    sock = quiet.udp(socket.AF_INET, LOCAL)
     assert run._mapped(sock, nat.Server("x", STUN_AT, 3478, STUN_AT), 3478,
                        lambda: True) == (None, False)
 
@@ -511,10 +656,41 @@ def test_the_conclusion_from_the_rows():
         "tools.nat.conclusion.together",)
     assert nat.conclusion([ok_public, independent, together,
                            step("hairpin_first", nat.SKIPPED)]) == ("tools.nat.conclusion.together",)
-    turn_fail = nat.Step("turn", nat.FAIL, "r", "d", (("transport", "UDP"), ("port", 1)))
-    turn_ok = nat.Step("turn", nat.OK, "r", "d", (("transport", "TCP"), ("port", 1)))
-    assert nat.conclusion([ok_public, turn_fail])[-1] == "tools.nat.conclusion.no_turn"
-    assert "tools.nat.conclusion.no_turn" not in nat.conclusion([ok_public, turn_fail, turn_ok])
+    transports = (("UDP", 1), ("TCP", 1))
+
+    def turn(transport, state):
+        return nat.Step("turn", state, "r", "d", (("transport", transport), ("port", 1)))
+    no_turn = "tools.nat.conclusion.no_turn"
+    assert nat.conclusion([ok_public, turn("UDP", nat.FAIL), turn("TCP", nat.FAIL)],
+                          transports)[-1] == no_turn
+    assert no_turn not in nat.conclusion([ok_public, turn("UDP", nat.FAIL), turn("TCP", nat.OK)],
+                                         transports)
+    assert no_turn not in nat.conclusion([ok_public, turn("UDP", nat.FAIL)], transports), \
+        "TCP not asked yet: one failed transport says nothing of the others"
+    assert no_turn not in nat.conclusion(
+        [ok_public, turn("UDP", nat.FAIL), turn("TCP", nat.SKIPPED)], transports), \
+        "stopped before TCP"
+    assert no_turn not in nat.conclusion([ok_public, turn("UDP", nat.FAIL)]), "no transports"
+
+
+def test_no_turn_is_said_only_when_every_transport_was_checked():
+    """A run stopped after one failed TURN transport must not say "no usable answer
+    on any transport" - neither on the panel nor in the copied results."""
+    said = translate("tools.nat.conclusion.no_turn", "en")
+    failing = {"udp_turn": "420", "tcp": {3478: "refused", 80: "refused"}}
+    run = run_all(FakeNat(**failing))
+    assert nat.conclusion(run.rows, run.transports)[-1] == "tools.nat.conclusion.no_turn"
+    assert said in nat.report(run, run.rows)
+    run = nat.Run(nat.parse_server("stun.test", "stun"), nat.parse_server("turn.test", "turn"),
+                  FakeNat(**failing))
+    while not run.done():
+        run.step()
+        if any(row.test == "turn" for row in run.rows):
+            run.stop()
+    rows = run.rows + list(run.not_checked())
+    assert [row.state for row in rows if row.test == "turn"] == [nat.FAIL] + [nat.SKIPPED] * 3
+    assert "tools.nat.conclusion.no_turn" not in nat.conclusion(rows, run.transports)
+    assert said not in nat.report(run, rows)
 
 
 def test_the_report_is_english_and_carries_every_row():
@@ -522,7 +698,7 @@ def test_the_report_is_english_and_carries_every_row():
     text = nat.report(run, run.rows)
     assert text.startswith("NAT and STUN, started ")
     assert "STUN server: stun.test (192.0.2.1)" in text
-    assert "Public address: 203.0.113.7 - This computer is 10.0.0.20." in text
+    assert "Public address: 203.0.113.7 - This computer is 192.0.2.20." in text
     assert "TURN, TCP 80: Answers - " in text
     assert "Conclusion: Devices behind this router reach each other" in text
     assert len(text.splitlines()) == 3 + len(run.rows) + 1
@@ -630,8 +806,9 @@ def test_the_receive_loop_takes_an_icmp_error_and_waits_on():
                 raw.recvfrom(64)
         finally:
             raw.close()
-    sock = nat._Udp(socket.AF_INET)
+    sock = nat._Udp(socket.AF_INET, "127.0.0.1")
     try:
+        assert sock.sock.getsockname()[0] == "127.0.0.1", "bound to the one address asked"
         sock.send(b"x", ("127.0.0.1", port))
         assert sock.receive(0.2) is None
         sock.send(b"x", ("127.0.0.1", sock.port), ttl=1)     # to itself: delivered here
@@ -640,3 +817,41 @@ def test_the_receive_loop_takes_an_icmp_error_and_waits_on():
         assert sock.sock.getsockopt(socket.IPPROTO_IP, socket.IP_TTL) != 1, "TTL put back"
     finally:
         sock.close()
+
+
+class Scripted:
+    """A socket whose receives raise or answer from a list, the last one for ever."""
+
+    def __init__(self, *answers):
+        self.answers, self.calls = list(answers), 0
+
+    def settimeout(self, _timeout):
+        pass
+
+    def recvfrom(self, _size):
+        self.calls += 1
+        answer = self.answers.pop(0) if len(self.answers) > 1 else self.answers[0]
+        if isinstance(answer, BaseException):
+            raise answer
+        return answer
+
+
+def scripted_udp(*answers):
+    sock = nat._Udp.__new__(nat._Udp)
+    sock.sock = Scripted(*answers)
+    return sock
+
+
+def test_the_receive_loop_waits_on_only_for_errors_about_an_earlier_datagram():
+    """ICMP errors the system reports late (10054, 10052 on Windows) and a datagram
+    too long are taken; any other error is raised at once - a socket that fails every
+    receive used to spin a core until the deadline."""
+    sock = scripted_udp(ConnectionResetError(errno.ECONNRESET, "port unreachable"),
+                        OSError(errno.ENETRESET, "TTL expired"),
+                        OSError(errno.EMSGSIZE, "too long"),
+                        (b"answer", ("192.0.2.1", 3478)))
+    assert sock.receive(1.0) == (b"answer", ("192.0.2.1", 3478))
+    broken = scripted_udp(OSError(errno.EBADF, "not a socket"))
+    with pytest.raises(OSError):
+        broken.receive(5.0)
+    assert broken.sock.calls == 1, "raised at the first one, not spun on"

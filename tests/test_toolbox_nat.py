@@ -72,6 +72,10 @@ def test_a_run_shows_each_row_the_conclusion_and_the_time_it_took():
         start(panel)
         assert panel.start_btn.cget("text") == T("tools.nat.stop"), "Start became Stop"
         assert "disabled" in str(panel.stun_entry.state()), "the servers stay as asked"
+        finish(panel.runner, until=lambda: len(panel.runner.rows) >= 2)
+        panel.refresh()
+        assert len(shown(panel)) >= 2 and panel.summary.cget("text") == "", \\
+            "no conclusion from part of the rows: it would change as they come"
         finish(panel.runner)
         panel.refresh()
         rows = shown(panel)
@@ -110,6 +114,31 @@ def test_stop_in_the_middle_sends_nothing_more_and_says_what_was_not_checked():
     """))
 
 
+def test_a_run_stopped_after_one_failed_turn_transport_does_not_say_no_turn():
+    run_gui(NAT + textwrap.dedent("""
+        NET.udp_turn, NET.tcp = "420", {3478: "refused", 80: "refused"}
+        copied = []
+        panel_mod.copy_confirmed = lambda app, text, said, area: copied.append(text)
+        panel = open_nat()
+        no_turn = T("tools.nat.conclusion.no_turn")
+        start(panel)
+        finish(panel.runner)
+        panel.refresh()
+        assert panel.summary.cget("text").endswith(no_turn), "every transport failed"
+        start(panel)
+        finish(panel.runner, until=lambda: any(row.test == "turn" for row in panel.runner.rows))
+        panel.copy_report()
+        assert copied == [], "nothing is copied while the run goes on"
+        panel._start_or_stop()                   # Stop, after one TURN transport
+        finish(panel.runner)
+        panel.refresh()
+        assert no_turn not in panel.summary.cget("text")
+        panel.copy_report()
+        assert len(copied) == 1 and nat.translate("tools.nat.conclusion.no_turn", "en") \\
+            not in copied[0]
+    """))
+
+
 def test_the_session_line_says_what_the_session_does_to_these_packets():
     run_gui(NAT + textwrap.dedent("""
         panel = open_nat()
@@ -126,7 +155,28 @@ def test_the_session_line_says_what_the_session_does_to_these_packets():
         finish(panel.runner)
         panel.refresh()
         assert panel.session.cget("text") == T("tools.nat.session.not_captured")
+        # nothing sent at all (no name was found): the filter is not blamed for it
+        start(panel, "nowhere.test", "elsewhere.test")
+        finish(panel.runner)
+        panel.refresh()
+        assert not panel.runner.run.flows and panel.session.cget("text") == ""
         app.running = False
+    """))
+
+
+def test_closing_the_window_stops_the_run():
+    run_gui(NAT + textwrap.dedent("""
+        from beantester.gui import toolbox
+        panel = open_nat()
+        start(panel)
+        finish(panel.runner, until=lambda: len(panel.runner.rows) >= 2)
+        toolbox.stop_sending(app)
+        assert panel.runner.run.stopped, "the job in flight reads it before every send"
+        finish(panel.runner)
+        sent = len(NET.log)
+        time.sleep(0.05)
+        panel.runner.poller.now()
+        assert len(NET.log) == sent
     """))
 
 
