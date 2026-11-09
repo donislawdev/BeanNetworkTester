@@ -41,6 +41,7 @@ from typing import NamedTuple
 from .adapters import AdaptersPanel
 from .diagnostics import DiagnosticsPanel
 from .exprtest import ExprTestPanel
+from .nat import NatPanel
 from .ping import PingPanel
 from .portcheck import PortCheckPanel
 from .sockets import SocketsPanel
@@ -79,6 +80,8 @@ class Tool(NamedTuple):
 # Within a group the tools keep that order.
 TOOLS = (
     Tool(PingPanel.ID, PingPanel.LABEL, PingPanel, NETWORK, sends=True, needs="ping"),
+    # Plain UDP and TCP sockets, which every system gives without rights: needs nothing.
+    Tool(NatPanel.ID, NatPanel.LABEL, NatPanel, NETWORK, sends=True),
     Tool(SocketsPanel.ID, SocketsPanel.LABEL, SocketsPanel, COMPUTER),
     Tool(TcpHealthPanel.ID, TcpHealthPanel.LABEL, TcpHealthPanel, COMPUTER,
          needs="tcp_health"),

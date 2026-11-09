@@ -233,9 +233,12 @@ revient au centre de l'écran actuel.
   L'ancienne limite stricte de 400 lignes a disparu - le nombre de lignes à afficher se règle avec
   le champ **"Row limit"** (section *Tables*, 0 = aucune limite, 50 000 par défaut).
 - **Tools** - de petits utilitaires pour les questions qu'on se pose avant ou pendant un test, en
-  trois groupes de sous-onglets : **Network** (Ping), **This computer** (Sockets, TCP health,
-  Port check, Adapters) et **This program** (Filter tester, Diagnostics). Seul **Ping** envoie quelque chose sur le réseau dans cet onglet : des
-  requêtes d'écho à l'adresse que vous saisissez, de Start à Stop. Aujourd'hui :
+  trois groupes de sous-onglets : **Network** (Ping, NAT and STUN), **This computer** (Sockets,
+  TCP health, Port check, Adapters) et **This program** (Filter tester, Diagnostics). Seuls
+  **Ping** et **NAT and STUN** envoient quelque chose sur le réseau dans cet onglet : Ping envoie
+  des requêtes d'écho à l'adresse que vous saisissez, de Start à Stop, et NAT and STUN envoie
+  quelques requêtes aux deux serveurs que vous saisissez et de petits paquets de test à la propre
+  adresse publique de ce réseau, quand vous appuyez sur Start. Aujourd'hui :
   - **Sockets** - tous les sockets TCP et UDP de cet ordinateur, comme `netstat -ano`, sans qu'aucune
     session soit nécessaire : ce qui écoute, ce qui est connecté, son état (LISTEN,
     ESTABLISHED, TIME_WAIT...) et le programme qui le possède. Servez-vous-en pour voir sur quel

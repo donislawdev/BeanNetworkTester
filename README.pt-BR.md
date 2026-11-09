@@ -222,9 +222,12 @@ para o centro da tela atual.
   linhas acabou - quantas mostrar é definido no campo **"Row limit"** (seção *Tables*, 0 = sem
   limite, padrão 50 000).
 - **Tools** - pequenos auxiliares para dúvidas que surgem antes ou durante um teste, em três grupos
-  de subabas: **Network** (Ping), **This computer** (Sockets, TCP health, Port check, Adapters)
-  e **This program** (Filter tester, Diagnostics). Só o **Ping** envia algo pela rede nesta aba: solicitações de eco para o endereço que você
-  digita, de Start a Stop. Hoje:
+  de subabas: **Network** (Ping, NAT and STUN), **This computer** (Sockets, TCP health, Port
+  check, Adapters) e **This program** (Filter tester, Diagnostics). Só o **Ping** e o
+  **NAT and STUN** enviam algo pela rede nesta aba: o Ping envia solicitações de eco para o
+  endereço que você digita, de Start a Stop, e o NAT and STUN envia algumas solicitações aos dois
+  servidores que você digita e pequenos pacotes de teste para o próprio endereço público desta
+  rede, ao apertar Start. Hoje:
   - **Sockets** - todos os sockets TCP e UDP deste computador, como o `netstat -ano`, e sem
     precisar de sessão: o que está escutando, o que está conectado, o estado (LISTEN,
     ESTABLISHED, TIME_WAIT...) e o programa dono. Use para ver em qual porta o seu aplicativo

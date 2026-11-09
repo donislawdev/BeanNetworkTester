@@ -350,10 +350,12 @@ monitor is gone it returns to the centre of the current screen.
   many to show is set with the **"Row limit"** field (*Tables* section, 0 = no limit, default
   50 000).
 - **Tools** - small helpers for questions you have before or during a test, in three groups of
-  sub-tabs: **Network** (Ping), **This computer** (Sockets, TCP health, Port check, Adapters) and
-  **This program** (Filter tester, Diagnostics).
-  Only **Ping** on this tab sends anything over the network: echo requests to the address you
-  type, from Start to Stop. Today:
+  sub-tabs: **Network** (Ping, NAT and STUN), **This computer** (Sockets, TCP health, Port
+  check, Adapters) and **This program** (Filter tester, Diagnostics).
+  Only **Ping** and **NAT and STUN** on this tab send anything over the network: Ping sends
+  echo requests to the address you type, from Start to Stop, and NAT and STUN sends a few
+  requests to the two servers you type and small test packets to this network's own public
+  address, when you press Start. Today:
   - **Ping** - does the session's latency and loss really reach the traffic? Type an IP
     address or a host name, choose how often to ping, how long to wait for a reply, how
     many bytes of data each ping carries (**Size**, 32 like ping.exe, up to 65 500) and how
@@ -385,6 +387,23 @@ monitor is gone it returns to the centre of the current screen.
     address it gave is shown. Right-click a row of **Sockets** or of the Connections page
     and choose **"Ping this address"** to ping its far end. **"Copy results"** copies the
     rows, each part's numbers and the run's, in English.
+  - **NAT and STUN** - how does this network's router treat a call (WebRTC and the like)?
+    Type a STUN server and a TURN server at another address (Cloudflare's are filled in) and
+    press **Start**. In a few seconds the table shows the public address the router gives
+    this computer and whether it keeps the port. The NAT mapping row says whether one socket
+    gets the same public port for every server (then devices behind other routers can
+    connect directly) or a new one for each (then a call goes through a relay). The two
+    hairpin rows say whether two devices behind this router reach each other through its
+    public address, both sending at once and one side first: a router that closes the way
+    after one side went first sends such a call to a relay. The TURN rows say whether the
+    TURN server answers on UDP 3478 and 443 and on TCP 3478 and 80 (with a port typed, on
+    that port only). It is asked for a relay without a login, and its answer "401, login
+    needed" shows it is there.
+    A line above the table sums it up in plain words. Two sockets of this computer stand in
+    for two devices, and behind a provider's NAT or a VPN the result describes that whole
+    chain. Before each hairpin test, each socket sends one datagram that stops at the router
+    (TTL 1), so this computer's firewall already knows the way the answer comes back.
+    **"Copy results"** copies the table in English - with this network's public address in it.
   - **Sockets** - every TCP and UDP socket on this computer, like `netstat -ano`, and no
     session is needed: what is listening, what is connected, its state (LISTEN,
     ESTABLISHED, TIME_WAIT...) and the program that owns it. Use it to see which port your

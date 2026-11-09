@@ -3586,8 +3586,8 @@ MUTATIONS = [
         # guard below it would go quiet while the reworded promise stood unchecked.
         "label": "toolbox promise: the README sentence is reworded behind the check",
         "file": "README.md",
-        "old": "  Only **Ping** on this tab sends anything over the network: echo requests to the address you\n",
-        "new": "  Only **Ping** on this tab sends anything over the network: echo requests to any address you\n",
+        "old": "  requests to the two servers you type and small test packets to this network's own public\n",
+        "new": "  requests to any servers you type and small test packets to this network's own public\n",
         "test": "test_the_tools_tab_promise_holds_for_everything_its_code_can_send",
     },
     {
@@ -11974,6 +11974,89 @@ MUTATIONS = [
         "old": "    if (not port or address.is_unspecified or address.is_multicast\n",
         "new": "    if (False\n",
         "test": "test_an_address_no_request_can_come_from_is_no_answer",
+    },
+    # -- the NAT and STUN tool's logic (2026-11-09) ----------------------------- #
+    {
+        # Measured on a Windows Server VM: a datagram reaching the socket unasked
+        # raises the firewall prompt (event 5031).
+        "label": "nat: a pair's firewall is not told before the datagrams come",
+        "file": "beantester/nettools/nat.py",
+        "old": "        self._open_way(socks, public)\n",
+        "new": "",
+        "test": "test_the_firewall_is_told_before_anything_can_come_unasked",
+    },
+    {
+        "label": "nat: a hairpin runs with a mapping that depends on the destination",
+        "file": "beantester/nettools/nat.py",
+        "old": "        if self.mapping != INDEPENDENT:\n",
+        "new": "        if False:\n",
+        "test": "test_a_mapping_that_depends_on_the_destination_sends_no_hairpin_at_all",
+    },
+    {
+        "label": "nat: Stop does not stop a hairpin round",
+        "file": "beantester/nettools/nat.py",
+        "old": "            if not wanted():\n                return\n            a.send(",
+        "new": "            a.send(",
+        "test": "test_nothing_more_is_sent_after_stop_and_the_rest_says_so",
+    },
+    {
+        "label": "nat: an answer from another address is taken",
+        "file": "beantester/nettools/nat.py",
+        "old": "                if source != (address, port):\n                    continue\n",
+        "new": "",
+        "test": "test_answers_from_another_address_or_to_another_question_are_not_taken",
+    },
+    {
+        # Asked twice at one address, any router gives one port: "independent" unseen.
+        "label": "nat: one address in both boxes is called independent",
+        "file": "beantester/nettools/nat.py",
+        "old": "        if _canonical(self.turn_at.address) == _canonical(self.stun_at.address):\n",
+        "new": "        if False:\n",
+        "test": "test_one_address_in_both_boxes_is_not_called_independent",
+    },
+    {
+        "label": "nat: a STUN server that is not TURN is said to answer as one",
+        "file": "beantester/nettools/nat.py",
+        "old": "NOT_TURN_CODES = frozenset({400, 420})",
+        "new": "NOT_TURN_CODES = frozenset()",
+        "test": "test_each_turn_answer_says_what_it_is",
+    },
+    {
+        "label": "nat: a relay handed out without a login is left on the server",
+        "file": "beantester/nettools/nat.py",
+        "old": "                    sock.send(stun.release_request(stun.transaction_id()),\n",
+        "new": "                    (stun.release_request(stun.transaction_id()),\n",
+        "test": "test_a_relay_handed_out_without_a_login_is_given_back",
+    },
+    {
+        "label": "nat: a name that was not found is called blocked UDP",
+        "file": "beantester/nettools/nat.py",
+        "old": "        if public.detail == DETAIL_NO_STUN:\n",
+        "new": "        if True:\n",
+        "test": "test_names_that_are_not_found",
+    },
+    {
+        # The hairpin datagrams go where the server says: only where its first answer said.
+        "label": "nat: the pair sends to whatever address the server names",
+        "file": "beantester/nettools/nat.py",
+        "old": "        if any(found[0] != self.public[0] for found in public):\n",
+        "new": "        if False:\n",
+        "test": "test_the_pair_sends_only_to_the_public_address_the_first_answer_gave",
+    },
+    {
+        # A session that duplicates packets made "11 of 10".
+        "label": "nat: a duplicated datagram counts twice",
+        "file": "beantester/nettools/nat.py",
+        "old": "len({data for data, _source in seen[i] if data.startswith(self.token + b\":P\")})",
+        "new": "len([data for data, _source in seen[i] if data.startswith(self.token + b\":P\")])",
+        "test": "test_a_duplicated_datagram_counts_once",
+    },
+    {
+        "label": "nat: an address of the other IP version is taken",
+        "file": "beantester/nettools/nat.py",
+        "old": "        if found is not None and _family(found[0]) != sock.family:\n",
+        "new": "        if False:\n",
+        "test": "test_an_answer_with_no_usable_address_is_said_as_that",
     },
     {
         "label": "stun: an error class RFC 8489 does not have is a code",

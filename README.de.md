@@ -230,10 +230,12 @@ zurück.
   Grenze von 400 Zeilen ist weg - wie viele angezeigt werden, legt das Feld **"Row limit"** fest
   (Bereich *Tables*, 0 = keine Grenze, Standard 50 000).
 - **Tools** - kleine Helfer für Fragen, die Sie vor oder während eines Tests haben, in drei
-  Gruppen von Untertabs: **Network** (Ping), **This computer** (Sockets, TCP health, Port check,
-  Adapters) und **This program** (Filter tester, Diagnostics).
-  Nur **Ping** auf diesem Tab sendet etwas über das Netzwerk: Echo-Anfragen an die Adresse, die Sie
-  eingeben, von Start bis Stop. Derzeit:
+  Gruppen von Untertabs: **Network** (Ping, NAT and STUN), **This computer** (Sockets, TCP
+  health, Port check, Adapters) und **This program** (Filter tester, Diagnostics).
+  Nur **Ping** und **NAT and STUN** auf diesem Tab senden etwas über das Netzwerk: Ping sendet
+  Echo-Anfragen an die Adresse, die Sie eingeben, von Start bis Stop, und NAT and STUN sendet
+  einige Anfragen an die beiden Server, die Sie eingeben, und kleine Testpakete an die eigene
+  öffentliche Adresse dieses Netzwerks, wenn Sie Start drücken. Derzeit:
   - **Sockets** - jeder TCP- und UDP-Socket auf diesem Computer, wie `netstat -ano`, und es ist
     keine Sitzung nötig: was lauscht, was verbunden ist, sein Zustand (LISTEN,
     ESTABLISHED, TIME_WAIT ...) und das Programm, dem er gehört. Damit sehen Sie, auf welchem Port

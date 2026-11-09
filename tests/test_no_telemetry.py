@@ -116,6 +116,8 @@ ALLOWED_IMPORTS = {
         "the port check: bind on a loopback address and close, nothing sent",
     ("beantester/nettools/ping.py", "socket"):
         "Ping's name lookup (getaddrinfo, below) and the address family constants",
+    ("beantester/nettools/nat.py", "socket"):
+        "the NAT and STUN tool's sockets and its two name lookups (below)",
     ("beantester/icmpsock.py", "socket"):
         "Ping on Linux: the ICMP socket an echo request goes through (below)",
     ("beantester/netlink.py", "socket"):
@@ -167,6 +169,18 @@ ALLOWED_CALLS = {
         "its DNS servers) - the lookup any program makes for a name. A text that is not "
         "plainly an address or a host name is refused before it (nettools/ping.py::parse), "
         "so nothing else reaches the resolver",
+    ("beantester/nettools/nat.py", "socket", "getaddrinfo"):
+        "the Tools tab's NAT and STUN: the two server NAMES the person typed, looked up "
+        "once when they press Start, by the system's own resolver. A text that is not an "
+        "address or a host name with an optional port is refused before it "
+        "(nettools/nat.py::parse_server, which uses Ping's reading of a name)",
+    ("beantester/nettools/nat.py", "socket", "socket"):
+        "the Tools tab's NAT and STUN, only after Start: UDP sockets that send STUN Binding "
+        "requests and TURN Allocates to the two typed servers and a few dozen test "
+        "datagrams to this network's own public address (the one the STUN server's first "
+        "answer gave), a TCP connection for one Allocate per TCP transport, and the route "
+        "probe - a connected UDP socket that asks the routing table and sends nothing. "
+        "tests/test_nettools_nat.py runs every job against a router held in memory",
     ("beantester/icmpsock.py", "socket", "socket"):
         "the Tools tab's Ping on Linux: the ICMP socket ONE echo request to the typed "
         "address goes through - the system's ping socket, or a raw one under sudo - "
@@ -862,11 +876,15 @@ def test_the_only_connection_goes_to_the_documented_route_probe():
 #
 # 2026-10-19, the owner's decision: Ping, the first tool that sends (basket B), and
 # the promise reworded with it - before it the sentence was "Nothing on this tab
-# sends anything over the network."
+# sends anything over the network." 2026-11-09, the owner's decision: NAT and STUN,
+# the second, named beside Ping.
 TOOLS_TAB_FILES = ("beantester/nettools/", "beantester/gui/toolbox/",
                    "beantester/gui/pages/toolbox.py")
-TOOLS_TAB_PROMISE = ("Only **Ping** on this tab sends anything over the network: echo "
-                     "requests to the address you type, from Start to Stop.")
+TOOLS_TAB_PROMISE = ("Only **Ping** and **NAT and STUN** on this tab send anything over the "
+                     "network: Ping sends echo requests to the address you type, from Start "
+                     "to Stop, and NAT and STUN sends a few requests to the two servers you "
+                     "type and small test packets to this network's own public address, "
+                     "when you press Start.")
 
 # What the tools named in the promise send, keyed exactly as TOOLS_TAB_QUIET_EXCEPTIONS:
 # finding -> (the tool's id, where it goes). Exact in both directions.
@@ -883,6 +901,13 @@ TOOLS_TAB_SENDING = {
         ("ping", "import for the ICMP socket below"),
     ("beantester/icmpsock.py", "socket", "socket"):
         ("ping", "on Linux, an echo request to the typed address, one at a time, Start to Stop"),
+    ("beantester/nettools/nat.py", "socket"):
+        ("nat", "import for the sockets and the name lookup below"),
+    ("beantester/nettools/nat.py", "socket", "getaddrinfo"):
+        ("nat", "the two typed server NAMES, looked up once at Start by the system's resolver"),
+    ("beantester/nettools/nat.py", "socket", "socket"):
+        ("nat", "STUN and TURN requests to the two typed servers and test datagrams to this "
+                "network's own public address, after Start"),
 }
 
 # Findings in a Tools-tab file that were checked NOT to send, each with how - keyed

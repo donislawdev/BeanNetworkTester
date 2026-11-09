@@ -199,9 +199,11 @@ Full HD / 2K / 4K에서는 커집니다), 열 너비, 표 행 높이, 차트 여
   즉각적입니다. 예전의 400행 고정 제한은 없어졌습니다. 몇 행을 보여 줄지는 **"Row limit"** 필드
   (*Tables* 섹션, 0 = 제한 없음, 기본값 50 000)로 정합니다.
 - **Tools** - 테스트 전이나 도중에 생기는 궁금증을 풀어 주는 작은 도우미들이며, 하위 탭의 세 그룹으로
-  나뉩니다: **Network**(Ping), **This computer**(Sockets, TCP health, Port check, Adapters),
-  **This program**(Filter tester, Diagnostics). 이 탭에서 네트워크로 무언가를 보내는 것은 **Ping**뿐이며, 입력한 주소로 Start부터 Stop까지
-  에코 요청을 보냅니다. 현재 제공되는 것은 다음과 같습니다:
+  나뉩니다: **Network**(Ping, NAT and STUN), **This computer**(Sockets, TCP health, Port check,
+  Adapters), **This program**(Filter tester, Diagnostics). 이 탭에서 네트워크로 무언가를 보내는 것은
+  **Ping**과 **NAT and STUN**뿐입니다. Ping은 입력한 주소로 Start부터 Stop까지 에코 요청을 보내고,
+  NAT and STUN은 Start를 누르면 입력한 두 서버에 몇 가지 요청을, 이 네트워크 자신의 공인 주소로 작은
+  테스트 패킷을 보냅니다. 현재 제공되는 것은 다음과 같습니다:
   - **Sockets** - 이 컴퓨터의 모든 TCP와 UDP 소켓을 `netstat -ano`처럼 보여 주며, 세션이 필요
     없습니다. 무엇이 듣고 있는지, 무엇이 연결되어 있는지, 그 상태(LISTEN, ESTABLISHED,
     TIME_WAIT...)와 그것을 소유한 프로그램을 알 수 있습니다. 열화하기 전에 애플리케이션이 어떤 포트에서

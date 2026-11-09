@@ -227,9 +227,12 @@ está, vuelve al centro de la pantalla actual.
   límite fijo de 400 filas ha desaparecido: cuántas se muestran se define en el campo **"Row limit"**
   (sección *Tables*, 0 = sin límite, 50 000 por defecto).
 - **Tools** - pequeñas utilidades para las preguntas que surgen antes o durante una prueba, en
-  tres grupos de subpestañas: **Network** (Ping), **This computer** (Sockets, TCP health, Port
-  check, Adapters) y **This program** (Filter tester, Diagnostics). Solo **Ping** envía algo por la red en esta pestaña: solicitudes de eco a la
-  dirección que se escribe, de Start a Stop. Hoy:
+  tres grupos de subpestañas: **Network** (Ping, NAT and STUN), **This computer** (Sockets, TCP
+  health, Port check, Adapters) y **This program** (Filter tester, Diagnostics). Solo **Ping** y
+  **NAT and STUN** envían algo por la red en esta pestaña: Ping envía solicitudes de eco a la
+  dirección que se escribe, de Start a Stop, y NAT and STUN envía unas pocas solicitudes a los
+  dos servidores que se escriben y pequeños paquetes de prueba a la propia dirección pública de
+  esta red, al pulsar Start. Hoy:
   - **Sockets** - todos los sockets TCP y UDP de este equipo, como `netstat -ano`, sin necesidad de
     sesión: qué está escuchando, qué está conectado, su estado (LISTEN, ESTABLISHED, TIME_WAIT...) y
     el programa que lo posee. Sirve para ver en qué puerto escucha la aplicación antes de
