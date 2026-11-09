@@ -696,8 +696,9 @@ reached by these switches: a call without ICE (plain SIP and RTP), ICE over TCP,
 over TCP or TLS, and IP fragments. Aim at those by their address or port. `--simulate` makes no
 call traffic, so nothing in it is part of a call.
 
-While no packet of a ticked part has gone by, the card says so in red: such a session impairs
-nothing. At the end of a command-line run, a targeting that caught nothing is called out, and the
+While no packet of a ticked part has matched the targeting, the card says so in red: such a
+session impairs nothing. The target process and the destination count too, so a call they leave
+out never matches. At the end of a command-line run, a targeting that caught nothing is called out, and the
 `In scope` line says how many of the captured packets it reached.
 
 **Session:**

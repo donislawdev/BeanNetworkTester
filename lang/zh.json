@@ -199,7 +199,7 @@
   "fields.buffer_hint": "0 = 无限制",
   "fields.call_checks": "连通性检查 (STUN)",
   "fields.call_media": "媒体",
-  "fields.call_no_match": "这里勾选的通话部分还没有任何数据包经过。流量当前不会受到弱网影响。",
+  "fields.call_no_match": "这里勾选的通话部分还没有任何数据包符合目标规则。流量当前不会受到弱网影响。",
   "fields.call_turn_control": "TURN 控制",
   "fields.corruption": "数据损坏:",
   "fields.corruption_up": "上传数据损坏:",

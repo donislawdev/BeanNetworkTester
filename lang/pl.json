@@ -199,7 +199,7 @@
   "fields.buffer_hint": "0 = bez limitu",
   "fields.call_checks": "Sprawdzenia (STUN)",
   "fields.call_media": "Media",
-  "fields.call_no_match": "Żaden pakiet zaznaczonych tu części rozmowy jeszcze nie przeszedł - ruch NIE jest modyfikowany.",
+  "fields.call_no_match": "Żaden pakiet zaznaczonych tu części rozmowy nie pasował jeszcze do celowania - ruch NIE jest modyfikowany.",
   "fields.call_turn_control": "Sterowanie TURN",
   "fields.corruption": "Uszkodzenie:",
   "fields.corruption_up": "Uszkodzenie w górę:",

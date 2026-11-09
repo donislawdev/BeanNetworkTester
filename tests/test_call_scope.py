@@ -151,6 +151,10 @@ def test_the_core_knows_whether_a_ticked_part_has_passed():
     judge(core, CHECK)
     check("nor a check the destination turned down", core.call_met is False)
     core.set_dest(False)
+    core.set_target(True, {40000})                  # a process that owns another port
+    judge(core, CHECK)
+    check("nor a check the target process turned down", core.call_met is False)
+    core.set_target(False, set())
     judge(core, CHECK)
     check("a check in scope is", core.call_met is True)
     core.set_call_parts(checks=True)

@@ -33,8 +33,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   freezes). Every program's STUN counts as a check. QUIC and VPNs are left alone. A call
   over TCP is not recognised.
 
-- **The Call targeting card says when nothing ticked has gone by.** A red line in the card
-  shows while no packet of a ticked part has passed, because such a session impairs nothing.
+- **The Call targeting card says when nothing ticked has matched.** A red line in the card
+  shows while no packet of a ticked part has matched the targeting (the target process and
+  the destination count too), because such a session impairs nothing.
 
 ### Changed
 

@@ -199,7 +199,7 @@
   "fields.buffer_hint": "0 = unlimited",
   "fields.call_checks": "Checks (STUN)",
   "fields.call_media": "Media",
-  "fields.call_no_match": "No packet of the parts ticked here has gone by yet - traffic is NOT being impaired.",
+  "fields.call_no_match": "No packet of the parts ticked here has matched your targeting yet - traffic is NOT being impaired.",
   "fields.call_turn_control": "TURN control",
   "fields.corruption": "Corruption:",
   "fields.corruption_up": "Corruption up:",
