@@ -559,6 +559,20 @@ class BeanEngine:
         """
         return self.core.process_target_active()
 
+    def call_parts_met(self):
+        """``None`` with no call scope armed; otherwise whether a packet of a ticked
+        part of a call has been in scope since the parts were set or the session
+        started (``BeanCore.call_met``).
+
+        For the GUI's tick, on the UI thread: two attribute reads and no lock. Each
+        is one store on the capture thread, and a reader that catches the parts
+        changing between the two is put right by the next tick.
+        """
+        core = self.core
+        if not core.call_parts:
+            return None
+        return core.call_met
+
     def set_ip_family(self, ipv4_only=False, ipv6_only=False):
         self.core.set_ip_family(ipv4_only=ipv4_only, ipv6_only=ipv6_only)
 
@@ -779,9 +793,16 @@ class BeanEngine:
         """
         return self._conns_settled
 
-    def _log_delivered(self, key, size, is_out):
+    def _log_delivered(self, key, size, is_out, scoped=False):
         """Credit delivered bytes to the session, to their flow's row, and to the
         scoped totals.
+
+        ``scoped`` is THIS packet's verdict from ``decide()``, carried through the
+        delay queue - not the row's flag, which only says that some packet of the
+        flow was in scope. A call scope splits one flow, so the flag put all of a
+        call's media into the targeted totals while only its checks were in scope;
+        the per-packet verdict also makes these the delivered half of exactly the
+        packets ``scoped_seen`` counts.
 
         The row half lives in ``connlog`` and takes no lock (its docstring carries
         the measurement); the session totals live here, because the stats dict is
@@ -797,7 +818,8 @@ class BeanEngine:
         st = self.st
         total = "bytes_out" if is_out else "bytes_in"
         st[total] = st[total] + size
-        if not self._conns_log.credit_delivered(key, size, is_out):
+        self._conns_log.credit_delivered(key, size, is_out)
+        if not scoped:
             return
         if is_out:
             st["bytes_out_scoped"] = st["bytes_out_scoped"] + size
@@ -1944,7 +1966,8 @@ class BeanEngine:
             # fields IN __dict__. tests/test_packet_header_cache.py pins both.
             if type(packet) is real_packet:
                 packet.__dict__.clear()
-            queued = self._enqueue(rels[0], packet, key=key, modified=modified)
+            queued = self._enqueue(rels[0], packet, key=key, modified=modified,
+                                   scoped=dec.scoped)
             if len(rels) > 1:
                 # Counted per copy that the queue ACCEPTED, not per decision to
                 # duplicate. The tile says "Packets sent twice", and it used to be
@@ -1957,7 +1980,7 @@ class BeanEngine:
                 # STOP can still strand the copy before it leaves.
                 copies = sum(1 for rel in rels[1:]
                              if self._enqueue(rel, packet, copy=True, key=key,
-                                              modified=modified))
+                                              modified=modified, scoped=dec.scoped))
                 if copies:
                     self._bump("duplicated", copies)
             if not queued:
@@ -2092,7 +2115,8 @@ class BeanEngine:
             # whose delivered counts are short must say why in the artefact
             self.log_event("WARN", "events.send_failed")
 
-    def _enqueue(self, release, packet, copy=False, key=None, modified=False):
+    def _enqueue(self, release, packet, copy=False, key=None, modified=False,
+                 scoped=False):
         """Queue one release of ``packet`` for delayed injection.
 
         Returns True when the packet was actually QUEUED - not whether an overflow
@@ -2109,9 +2133,13 @@ class BeanEngine:
         ``send(recalculate_checksum=...)``. An untouched packet goes back exactly
         as it arrived, pseudo-checksum and all - see _inject_loop for the
         measurement and why that is the correct thing to do, not merely the fast
-        one. It is the LAST field of the queue entry on purpose: ``stop()``
-        indexes this tuple POSITIONALLY (entry[3], entry[4]), so appending is the
-        one shape that cannot silently move somebody else's field.
+        one. ``stop()`` indexes this tuple POSITIONALLY (entry[3], entry[4]), so a
+        new field goes at the END, the one shape that cannot silently move somebody
+        else's field.
+
+        ``scoped`` is this packet's verdict from ``decide()`` (``Decision.scoped``),
+        the last field: the injector credits the delivered bytes to the session's
+        scoped totals by it (see ``_log_delivered``).
 
         ``copy=True`` marks a DUPLICATE release (pipeline step 12): the same
         packet already has an earlier entry in this queue. Overflow and shutdown
@@ -2158,7 +2186,7 @@ class BeanEngine:
                 wake = not self._heap or release < self._heap[0][0]
                 heapq.heappush(self._heap,
                                (release, next(self._counter), packet, copy, key,
-                                modified))
+                                modified, scoped))
                 q = len(self._heap)
                 # Without _slock, like _log_delivered's counters: this thread is the
                 # only writer (both callers are _capture_loop, and reset_stats runs
@@ -2240,7 +2268,7 @@ class BeanEngine:
                     self._cv.wait()
                 if not session.live:
                     break
-                release, arrived, packet, copy, key, modified = self._heap[0]
+                release, arrived, packet, copy, key, modified, scoped = self._heap[0]
                 now = time.monotonic()
                 if release > now:
                     self._cv.wait(timeout=min(release - now, 0.5))
@@ -2291,7 +2319,7 @@ class BeanEngine:
                     # damage done. Before, the row showed captured bytes under a
                     # heading the session panel used for delivered: measured
                     # bytes_in = 5 122 600 B in a row that received 409 600 B.
-                    self._log_delivered(key, size, is_out)
+                    self._log_delivered(key, size, is_out, scoped)
                     # AFTER the send, deliberately - see _note_order.
                     self._note_order(arrived, bool(is_out), copy)
             except Exception as e:

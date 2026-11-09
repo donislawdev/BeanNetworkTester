@@ -144,7 +144,9 @@ FUNCTION_CEILING = 119          # beantester/gui/app.py::_build_ui
 # three lines in `app.py` written longer than they need to be to hold the count.
 # `cli.py` is 757, seven lines under the band. 1086 -> 1083 on 2026-10-27: the choice
 # of the geometry the window opens with moved into `scaling.restored_geometry`.
-FILE_CEILING = 1083             # beantester/gui/app.py
+# 1083 -> 1073 on 2026-11-09: the "matches nothing" banner's packing moved into
+# `labels.show_banner`, shared with the call card's line.
+FILE_CEILING = 1073             # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
 # to a record and is blind to everything creeping upward together: five files at

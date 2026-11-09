@@ -7635,8 +7635,8 @@ MUTATIONS = [
         # P3-7a: the injector threw the copy flag away, as it shipped.
         "label": "engine: the injector forgets which release is a copy",
         "file": "beantester/engine.py",
-        "old": "                release, arrived, packet, copy, key, modified = self._heap[0]\n",
-        "new": "                release, arrived, packet, _, key, modified = self._heap[0]\n"
+        "old": "                release, arrived, packet, copy, key, modified, scoped = self._heap[0]\n",
+        "new": "                release, arrived, packet, _, key, modified, scoped = self._heap[0]\n"
                "                copy = False\n",
         "test": "test_a_copy_the_driver_refused_is_not_a_lost_packet",
     },
@@ -11574,8 +11574,9 @@ MUTATIONS = [
         "label": "csv: the connections export loses its ice column",
         "file": "beantester/gui/csv_export.py",
         "old": "                    f\"{max(0.0, now - last):.1f}\",\n"
-               "                    c.get(\"ice\") or \"\")])",
-        "new": "                    f\"{max(0.0, now - last):.1f}\")])",
+               "                    c.get(\"ice\") or \"\", scoped_packets(c))])",
+        "new": "                    f\"{max(0.0, now - last):.1f}\",\n"
+               "                    \"\", scoped_packets(c))])",
         "test": "test_export_connections_csv_writes_the_current_view",
     },
     {
@@ -11625,8 +11626,10 @@ MUTATIONS = [
     {
         "label": "call scope: one switch on puts every part in scope",
         "file": "beantester/core.py",
-        "old": "        return not part & parts\n",
-        "new": "        return not part\n",
+        "old": "        if not part & parts:\n"
+               "            return True\n",
+        "new": "        if not part:\n"
+               "            return True\n",
         "test": "test_each_switch_reaches_its_own_part_only",
     },
     {
@@ -11751,6 +11754,160 @@ MUTATIONS = [
         "old": "    return [tr(\"summary.call\", v=\", \".join(named))] if named else []\n",
         "new": "    return [tr(\"summary.call\", v=n) for n in named]\n",
         "test": "test_the_summary_names_the_parts_once",
+    },
+    # A split flow: the call scope puts a call's checks in scope while its media
+    # pass on the same port pair (2026-11-09).
+    {
+        "label": "connlog: a row never counts its packets in scope",
+        "file": "beantester/connlog.py",
+        "old": "                c[\"scoped\"] = True\n"
+               "                c[\"scoped_packets\"] += 1\n",
+        "new": "                c[\"scoped\"] = True\n",
+        "test": "test_a_split_call_counts_in_scope_only_the_packets_that_were",
+    },
+    {
+        "label": "engine: every delivered byte counts as targeted traffic",
+        "file": "beantester/engine.py",
+        "old": "        self._conns_log.credit_delivered(key, size, is_out)\n"
+               "        if not scoped:\n",
+        "new": "        self._conns_log.credit_delivered(key, size, is_out)\n"
+               "        if False:\n",
+        "test": "test_a_split_call_counts_in_scope_only_the_packets_that_were",
+    },
+    {
+        "label": "engine: the capture thread queues a packet without its verdict",
+        "file": "beantester/engine.py",
+        "old": "            queued = self._enqueue(rels[0], packet, key=key, modified=modified,\n"
+               "                                   scoped=dec.scoped)\n",
+        "new": "            queued = self._enqueue(rels[0], packet, key=key, modified=modified,\n"
+               "                                   scoped=True)\n",
+        "test": "test_a_split_call_counts_in_scope_only_the_packets_that_were",
+    },
+    {
+        "label": "engine: the injector drops the packet's verdict",
+        "file": "beantester/engine.py",
+        "old": "                    self._log_delivered(key, size, is_out, scoped)\n",
+        "new": "                    self._log_delivered(key, size, is_out)\n",
+        "test": "test_a_split_call_counts_in_scope_only_the_packets_that_were",
+    },
+    {
+        "label": "views: a share rounds up to 100%",
+        "file": "beantester/views.py",
+        "old": "    return f\"{min(99, int(percent))}%\"\n",
+        "new": "    return f\"{round(percent)}%\"\n",
+        "test": "test_a_share_in_scope_never_reads_like_all_or_none",
+    },
+    {
+        "label": "views: a sliver in scope reads 0%",
+        "file": "beantester/views.py",
+        "old": "    if percent < 1.0:\n"
+               "        return \"<1%\"\n",
+        "new": "    if percent < 0.0:\n"
+               "        return \"<1%\"\n",
+        "test": "test_a_share_in_scope_never_reads_like_all_or_none",
+    },
+    {
+        "label": "views: a row without the count is out of scope",
+        "file": "beantester/views.py",
+        "old": "        return (c.get(\"packets\") or 0) if c.get(\"scoped\") else 0\n",
+        "new": "        return 0\n",
+        "test": "test_a_share_in_scope_never_reads_like_all_or_none",
+    },
+    {
+        "label": "views: the impaired column sorts by the flag, not the share",
+        "file": "beantester/views.py",
+        "old": "    \"scoped\": lambda c, now: scope_share(c),\n",
+        "new": "    \"scoped\": lambda c, now: 1 if c.get(\"scoped\") else 0,\n",
+        "test": "test_the_impaired_column_shows_the_share_of_a_split_connection",
+    },
+    {
+        "label": "conns: the impaired cell shows the flag, not the share",
+        "file": "beantester/gui/pages/conns.py",
+        "old": "        share = scope_share(c)\n",
+        "new": "        share = 1.0 if c.get(\"scoped\") else 0.0\n",
+        "test": "test_the_impaired_column_shows_the_share_of_a_split_connection",
+    },
+    # A call scope that meets no call, and any targeting that catches nothing
+    # (2026-11-09).
+    {
+        "label": "core: a call packet in scope never says so",
+        "file": "beantester/core.py",
+        "old": "        self.call_met = True\n"
+               "        return False\n",
+        "new": "        return False\n",
+        "test": "test_the_core_knows_whether_a_ticked_part_has_passed",
+    },
+    {
+        "label": "core: applying the same call parts forgets the call was met",
+        "file": "beantester/core.py",
+        "old": "            if parts != self.call_parts:\n"
+               "                self.call_met = False\n",
+        "new": "            if True:\n"
+               "                self.call_met = False\n",
+        "test": "test_the_core_knows_whether_a_ticked_part_has_passed",
+    },
+    {
+        "label": "core: a new session inherits the last one's call",
+        "file": "beantester/core.py",
+        "old": "            # a new session has met no call yet, whatever the last one met\n"
+               "            self.call_met = False\n",
+        "new": "",
+        "test": "test_the_core_knows_whether_a_ticked_part_has_passed",
+    },
+    {
+        "label": "engine: no call scope still answers whether a call was met",
+        "file": "beantester/engine.py",
+        "old": "        if not core.call_parts:\n"
+               "            return None\n"
+               "        return core.call_met\n",
+        "new": "        return core.call_met\n",
+        "test": "test_the_engine_answers_none_without_a_call_scope",
+    },
+    {
+        "label": "gui: the call card never says nothing ticked has passed",
+        "file": "beantester/gui/pages/control.py",
+        "old": "        text = T(\"fields.call_no_match\") if met is False else \"\"\n",
+        "new": "        text = \"\"\n",
+        "test": "test_a_call_scope_that_meets_no_call_says_so_in_its_card",
+    },
+    {
+        "label": "gui: the Control page's refresh forgets the call card's line",
+        "file": "beantester/gui/pages/control.py",
+        "old": "    def refresh(self):\n"
+               "        self._sync_call_note()\n",
+        "new": "    def refresh(self):\n"
+               "        pass\n",
+        "test": "test_a_call_scope_that_meets_no_call_says_so_in_its_card",
+    },
+    {
+        "label": "gui: the call card's line stays up once the session stops",
+        "file": "beantester/gui/pages/control.py",
+        "old": "        met = app.engine.call_parts_met() if app.running else None\n",
+        "new": "        met = app.engine.call_parts_met()\n",
+        "test": "test_a_call_scope_that_meets_no_call_says_so_in_its_card",
+    },
+    {
+        "label": "cli: a destination that caught nothing goes unnamed",
+        "file": "beantester/cli.py",
+        "old": "        names.append(\"destination targeting\")\n",
+        "new": "        pass\n",
+        "test": "test_every_targeting_that_caught_nothing_is_called_out",
+    },
+    {
+        "label": "cli: the family switches are no targeting",
+        "file": "beantester/cli.py",
+        "old": "            or g(\"ipv4_only\") or g(\"ipv6_only\")):\n",
+        "new": "            ):\n",
+        "test": "test_every_targeting_that_caught_nothing_is_called_out",
+    },
+    {
+        "label": "cli: only a process target gets its share said",
+        "file": "beantester/cli.py",
+        "old": "    if names:\n"
+               "        # Text channel only",
+        "new": "    if names and names[0].startswith(\"process\"):\n"
+               "        # Text channel only",
+        "test": "test_every_targeting_that_caught_nothing_is_called_out",
     },
 ]
 

@@ -36,7 +36,7 @@ from .repro import REPORT_CONNECTIONS, save_repro_report, session_command
 from .scenario import load_scenario_file
 from .settings import (DEFAULT_SETTINGS, apply_settings, build_matchers,
                        load_config_file, parse_schedule, save_config_file,
-                       range_errors, warn_if_unbounded)
+                       range_errors, setting_expression, warn_if_unbounded)
 from .synthetic import SyntheticDivert
 from .utils import bytes_to_mb
 
@@ -1148,6 +1148,33 @@ def _drive_session(engine, cfg, log, sleep, clock, scen):
     return code, stop_reason, t0
 
 
+_CALL_PART_NAMES = (("call_checks", "checks"), ("call_turn_control", "TURN control"),
+                    ("call_media", "media"))
+
+
+def _targeting_names(settings):
+    """What narrows the impairments, one phrase each, for the end-of-run lines.
+
+    Everything ``decide()`` steps 1 and 2 can leave a packet out by: the process
+    target, the destination (its addresses and ports, and the IPv4 / IPv6 switches
+    of the same card, which leave packets out the same way), and the parts of a
+    call. Empty when none is set - and then every packet is in scope, so "caught
+    nothing" cannot be true.
+    """
+    g = settings.get
+    names = []
+    target = str(g("target") or "").strip()
+    if target:
+        names.append(f"process target {target!r}")
+    if (setting_expression("dst_ip", g("dst_ip")) or setting_expression("dst_port", g("dst_port"))
+            or g("ipv4_only") or g("ipv6_only")):
+        names.append("destination targeting")
+    parts = [name for key, name in _CALL_PART_NAMES if g(key)]
+    if parts:
+        names.append("call targeting: " + ", ".join(parts))
+    return names
+
+
 def _report_session(engine, cfg, log, clock, code, stop_reason, t0):
     """Turn a finished session into its artefacts, and into the exit code.
 
@@ -1191,10 +1218,14 @@ def _report_session(engine, cfg, log, clock, code, stop_reason, t0):
     # wrong thing. Not an assertion: a target with no traffic of its own is a
     # legitimate run, and turning that into a failure would break the exit-code
     # contract for everyone already running one.
-    target = str(cfg["settings"].get("target") or "").strip()
+    # Every targeting, not only the process: a destination nobody talks to and a
+    # call scope that meets no call impair nothing just as silently. Limited the
+    # same way for all of them: the counters cover the whole run, so a scenario
+    # that sets a target only in a later step is judged by its whole session.
+    names = _targeting_names(cfg["settings"])
     scoped = stats.get("scoped_seen", 0)
-    if target and stats["seen"] and not scoped:
-        log.warn(f"the process target {target!r} caught nothing: 0 of "
+    if names and stats["seen"] and not scoped:
+        log.warn(f"the targeting caught nothing ({'; '.join(names)}): 0 of "
                  f"{stats['seen']} captured packets were in scope, so this run "
                  f"impaired nothing")
 
@@ -1215,13 +1246,13 @@ def _report_session(engine, cfg, log, clock, code, stop_reason, t0):
         record["connections"] = conns[:CONSOLE_CONNECTIONS]
     lines = [f"Data usage: downloaded {down_mb} MB, uploaded {up_mb} MB, "
              f"total {round(down_mb + up_mb, 2)} MB."]
-    if target:
+    if names:
         # Text channel only: the JSON summary already carries `scoped_seen` in
         # `counters`, and the NDJSON schema is a frozen contract (see "Public
         # contracts"). A human reading the text run had no way to see how much
-        # of the captured traffic the target actually accounted for.
+        # of the captured traffic the targeting actually accounted for.
         lines.append(f"In scope: {scoped} of {stats['seen']} captured packets "
-                     f"(process target {target!r}).")
+                     f"({'; '.join(names)}).")
     if eff is not None:
         lines += [f"Session seed: {eff}", f"Reproduce: {repro}"]
     lines.append(f"Finished: {exitcodes.name_of(code).lower()} "

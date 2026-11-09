@@ -19,7 +19,7 @@ from ...fields import BOOL, FIELDS
 from ...i18n import T
 from .. import form_search as search
 from ..form import ControlForm
-from ..labels import wrapping_label
+from ..labels import show_banner, wrapping_label
 from ..scaling import scaled
 from ..scrollable import ScrollableFrame
 from ..theme import CARD_WRAP_PAD, popdown_height, popdown_width
@@ -54,6 +54,8 @@ class ControlPage:
         self._index = search.build_index()
         self._targets = []           # entries Enter walks, in page order
         self._at = 0                 # which one is current
+        self._call_note = None       # the call card's red line (_build_call)
+        self._call_note_shown = None # what it says now (None: not rendered yet)
         self._marks = []             # per target: (widget, kind, style it had)
         self._opened = set()         # sections the SEARCH opened, to close again
         self._job = None
@@ -62,6 +64,7 @@ class ControlPage:
         self.form = ControlForm(self.scroll.body, app, scroller=self.scroll,
                                 on_rebuilt=self._reapply, extras={
             "target": self._build_target,
+            "call": self._build_call,
             "advanced": self._build_advanced,
             "repro": self._build_repro,
             "profiles": self._build_profiles,
@@ -470,6 +473,12 @@ class ControlPage:
         # warning would stay invisible for the rest of the session.
         self.app._shown_target_warning = None
 
+    def _build_call(self, body):
+        """The "no ticked part of a call has passed yet" line, the target banner's
+        pattern (packed only while it says something, ``labels.show_banner``)."""
+        self._call_note = wrapping_label(body, "", style="Bad.TLabel", pad=CARD_WRAP_PAD)
+        self._call_note_shown = None            # a rebuilt line starts empty
+
     def _build_advanced(self, body):
         row = ttk.Frame(body, style="Card.TFrame")
         row.pack(fill="x", pady=(scaled(6), 0))
@@ -525,4 +534,21 @@ class ControlPage:
 
     # -- lifecycle ----------------------------------------------------------- #
     def refresh(self):
-        pass
+        self._sync_call_note()
+
+    def _sync_call_note(self):
+        """Say it in the call card while a call scope has met no call: it impairs
+        nothing, and a run where nothing broke looks exactly like one where everything
+        held up - the reason the process target has its banner.
+
+        On the tick, while this page is the one on screen (nobody reads the line
+        anywhere else): ``BeanEngine.call_parts_met`` is two attribute reads and no
+        lock, and an unchanged answer does no widget work at all.
+        """
+        app = self.app
+        met = app.engine.call_parts_met() if app.running else None
+        text = T("fields.call_no_match") if met is False else ""
+        if text == self._call_note_shown:
+            return
+        self._call_note_shown = text
+        show_banner(self._call_note, text, "gui.control")

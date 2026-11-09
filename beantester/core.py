@@ -460,6 +460,12 @@ class BeanCore:
         # no media is in scope: what cannot be identified must not be damaged.
         self.call_parts = 0
         self._call_flow = None
+        # Whether a packet of a ticked part has been in scope since the parts were set
+        # or the session started. A call scope that meets no call impairs nothing, and
+        # a run where nothing broke looks like one where everything held up - the GUI
+        # says so while this stays False. One store per call packet in scope, and only
+        # with a call scope armed.
+        self.call_met = False
         # Whether any of the three above is aimed: the one attribute decide() step 2
         # reads per packet when nothing is. Kept by their setters (``_re_aim``), the
         # only code that writes them.
@@ -781,6 +787,10 @@ class BeanCore:
         parts = ((CALL_CHECKS if checks else 0) | (CALL_TURN_CONTROL if turn_control else 0)
                  | (CALL_MEDIA if media else 0))
         with self._lock:
+            # Only a CHANGE starts the question again: "Apply" with the same parts
+            # must not bring the note back while the call is already reached.
+            if parts != self.call_parts:
+                self.call_met = False
             self.call_parts = parts
             self._re_aim()
 
@@ -865,7 +875,11 @@ class BeanCore:
             row_of = self._call_flow
             row = row_of((local_port, remote_ip, remote_port)) if row_of is not None else None
             part = CALL_MEDIA if row is not None and row["ice"] else 0
-        return not part & parts
+        if not part & parts:
+            return True
+        # Last of the step-2 tests, so this packet IS in scope (step 1 came before).
+        self.call_met = True
+        return False
 
     def _address_class_cut(self, remote_ip):
         """Which address-class switch cuts this packet, or ``None``.
@@ -1024,6 +1038,8 @@ class BeanCore:
             # the same reason the schedule and the token buckets restart here.
             self._loss_bad[True] = self._loss_bad[False] = False
             self.loss_bursts = 0
+            # a new session has met no call yet, whatever the last one met
+            self.call_met = False
 
     # -- helpers ------------------------------------------------------------ #
     @staticmethod

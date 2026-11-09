@@ -119,6 +119,54 @@ def test_a_portless_row_renders_empty_port_cells_and_is_not_searchable_as_none()
     ''')
 
 
+def test_the_impaired_column_shows_the_share_of_a_split_connection():
+    """A call scope splits ONE flow: a call's checks and its media share a port pair.
+    With only the checks in scope the column read "yes" while the media all passed.
+
+    "yes" is every packet, "no" none, a share is between them - rounded DOWN and
+    never "100%" (that is "yes") nor "0%" (that is "no"). The sort is the order of
+    what is shown, and a share is highlighted like "yes"."""
+    run_gui('''
+        page = app.pages["connections"]
+        app.engine.now_ref = lambda: 100.0
+        app.engine.core.set_call_parts(checks=True)
+        def row(port, packets, scoped_packets, proc, **extra):
+            return dict(dict(local_port=port, remote_ip="10.0.0.20", remote_port=50001,
+                             proto="UDP", packets=packets, bytes=packets * 100,
+                             bytes_in=0, bytes_out=packets * 100, sent=0, sent_in=0,
+                             sent_out=0, dropped=0, scoped=scoped_packets > 0,
+                             scoped_packets=scoped_packets, pid=1, first=90.0, last=99.0,
+                             dir="out", proc=proc), **extra)
+        rows = [row(5000, 400, 400, "all.exe"),
+                row(5001, 4000, 3999, "almost.exe"),
+                row(5002, 40, 39, "most.exe"),
+                row(5003, 400, 1, "checks.exe"),
+                row(5004, 400, 0, "none.exe"),
+                # a row made by hand without the count: its flag answers
+                {k: v for k, v in row(5005, 7, 7, "flag.exe").items()
+                 if k != "scoped_packets"}]
+        app.engine.connections_snapshot = lambda limit=None: rows
+        req = {"engine": app.engine, "query": "", "sort": {"col": "scoped", "reverse": False},
+               "limit": app.row_limit(), "now": 100.0, "proc_map": {}}
+        page._apply(page._build_model(req))
+
+        model = {vals[0]: (vals, tags) for _key, vals, tags in page.table.rows}
+        cell = {name: vals[8] for name, (vals, _tags) in model.items()}
+        assert cell["all.exe"] == bnt.T("conns.yes"), cell
+        assert cell["flag.exe"] == bnt.T("conns.yes"), cell
+        assert cell["none.exe"] == bnt.T("conns.no"), cell
+        assert cell["almost.exe"] == "99%", cell       # 99.975%: never "100%"
+        assert cell["most.exe"] == "97%", cell         # 97.5%, rounded down
+        assert cell["checks.exe"] == "<1%", cell       # 0.25%: never "0%"
+        assert "impaired" in model["checks.exe"][1], model["checks.exe"]
+        assert "impaired" not in model["none.exe"][1], model["none.exe"]
+
+        order = [vals[0] for _key, vals, _tags in page.table.rows]
+        assert order.index("none.exe") < order.index("checks.exe") < order.index("most.exe") \\
+            < order.index("almost.exe") < order.index("all.exe"), order
+    ''')
+
+
 def test_two_portless_rows_to_one_address_keep_separate_identities():
     """The widget's key index is a dict, so two rows sharing a key means one of
     them cannot be selected or scrolled to. Portless rows have no ports to tell

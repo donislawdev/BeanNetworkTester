@@ -696,6 +696,11 @@ reached by these switches: a call without ICE (plain SIP and RTP), ICE over TCP,
 over TCP or TLS, and IP fragments. Aim at those by their address or port. `--simulate` makes no
 call traffic, so nothing in it is part of a call.
 
+While no packet of a ticked part has matched the targeting, the card says so in red: such a
+session impairs nothing. The target process and the destination count too, so a call they leave
+out never matches. At the end of a command-line run, a targeting that caught nothing is called out, and the
+`In scope` line says how many of the captured packets it reached.
+
 **Session:**
 - *Duration (s)* - after this many seconds the program **stops itself** (exactly as if you clicked
   STOP): impairment disappears, the driver is released. `0` = runs until STOP (the previous, default
@@ -1284,7 +1289,7 @@ tooltip on that header.
 | `r.port` | Port on the remote side (443 = HTTPS, 53 = DNS, 80 = HTTP). Empty for traffic with no ports, such as ping. |
 | `l.port` | Port on this machine - what links the connection to a process. Empty for ping/ICMP, which is also why those rows usually have no process name. |
 | `packets` | Packets seen on this connection since it appeared. |
-| `impaired?` | Whether the connection was **in impairment scope** this session - impaired, not merely watched. It stays `yes` after the connection closes, as a record. With no targeting set, everything is in scope. |
+| `impaired?` | How much of the connection was **in impairment scope** this session - impaired, not merely watched: `yes` for all of its packets, `no` for none, and a share such as `97%` (or `<1%`) when the targeting left some of them out. A call's checks and its media travel on one connection, so with only **Checks** ticked in **Call targeting** a call shows a small share, and a target set during the session leaves out the packets before it. The answer stays after the connection closes, as a record. While any targeting is on, every row with a packet in scope is highlighted. With no targeting set, everything is in scope. |
 | `dropped` | Packets dropped on this connection by the active impairments (loss, link outage, LAN mode, "Internet only", resets, ...). |
 | `down` | Data that actually **reached** the application - what it downloaded. Same quantity the session panel calls "Downloaded (MB)". |
 | `up` | Data that actually **left** this machine - what the application uploaded. |
@@ -1404,13 +1409,14 @@ table shortens:
 | CSV column | table column |
 |---|---|
 | `process`, `pid`, `proto`, `remote_ip`, `remote_port`, `local_port`, `packets` | same, unabbreviated |
-| `impaired` | `impaired?` (`yes` / `no`) |
+| `impaired` | `impaired?` - `yes` when any of the connection's packets was in scope, `no` when none was. The share is in `packets_in_scope` |
 | `dropped` | `dropped` |
 | `delivered_down_bytes`, `delivered_up_bytes`, `delivered_total_bytes` | `down`, `up`, `total` - **always raw bytes here**, never the unit the screen picked |
 | `captured_down_bytes`, `captured_up_bytes`, `captured_total_bytes` | `down seen`, `up seen` (plus their total) |
 | `avg_bytes` | `avg[B]` |
 | `duration_s`, `idle_s` | `time[s]`, `idle[s]` |
-| `ice` | `ICE` (`LAN`, `NAT`, `WAN`, `TURN`, `STUN` or empty) - the **last** column, so a reader that takes the columns by position is not moved by it |
+| `ice` | `ICE` (`LAN`, `NAT`, `WAN`, `TURN`, `STUN` or empty) - after the columns above, so a reader that takes them by position is not moved by it |
+| `packets_in_scope` | how many of the connection's `packets` were in impairment scope - the number behind the share in `impaired?`. The **last** column, for the same reason |
 
 ## Scenario file format
 

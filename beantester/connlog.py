@@ -199,17 +199,20 @@ class ConnectionLog:
                 # The two used to be one set of numbers under headings the session
                 # panel used for delivered - a row could read 5 122 600 B received
                 # while the application got 409 600 B.
-                # 20 keys, in ONE constructor call, and the count has a ceiling that
+                # 21 keys, in ONE constructor call, and the count has a ceiling that
                 # is not obvious: MEASURED 2026-11-04 (CPython 3.14.10 and 3.15.2,
                 # tracemalloc, rows made here, 10k-200k of them, ``internal_tools``
                 # probes ``2026-11-04-ice-path``), the two
                 # ICE keys cost nothing - 705-729 B a row at 18 keys and at 20 - while
                 # a 22nd key costs 454 B more on every row: the table doubles.
+                # MEASURED again 2026-11-09 for the 21st (CPython 3.15.2, 200k rows
+                # from one constructor call): 679.0 B at 20 keys, 680.3 at 21, 1048.3
+                # at 22. This row is FULL: the next key doubles every row's table.
                 c = dict(remote_ip=remote_ip, remote_port=remote_port,
                          local_port=local_port, proto=proto, packets=0, bytes=0,
                          bytes_in=0, bytes_out=0, sent=0, sent_in=0, sent_out=0,
                          dropped=0, first=now, last=now,
-                         dir="", scoped=bool(scoped),
+                         dir="", scoped=False, scoped_packets=0,
                          proc=self._process_for(local_port),
                          pid=self._pid_for(local_port),
                          ice="", ice_n=PROBE_FIRST if proto == "UDP" else 0)
@@ -242,7 +245,15 @@ class ConnectionLog:
             # as a table full of "no". The row highlight
             # (gui/pages/conns.py::_tag_of) reads this same stored record, so the
             # colour and the "impaired?" column can never disagree.
-            c["scoped"] = c["scoped"] or bool(scoped)
+            #
+            # scoped_packets counts them, because the answer is not always the
+            # flow's: the call scope splits ONE flow (a call's checks and its media
+            # share a port pair), and a process target set mid-session leaves the
+            # packets before it out. The flag alone read "yes" for a call whose
+            # media all passed. Both come from this packet's own verdict.
+            if scoped:
+                c["scoped"] = True
+                c["scoped_packets"] += 1
             c["last"] = now
             c["dir"] = "out" if is_out else "in"
             c["proto"] = proto
@@ -260,10 +271,11 @@ class ConnectionLog:
     def credit_delivered(self, key, size, is_out):
         """Credit bytes that actually went back on the wire to their flow's row.
 
-        Returns whether that row is SCOPED, so the caller can add the same bytes to
-        the session's scoped totals - the flag lives on the row, and the engine owns
-        the stats dict, so this is the seam between them. False when there was no
-        row to credit.
+        Whether they count toward the session's scoped totals is NOT asked here: the
+        row's flag says "some packet of this flow was in scope", and a call scope
+        puts a call's checks in scope while its media pass, so the flag counted all
+        of the media as targeted traffic. The packet's own verdict rides through the
+        delay queue to ``engine._log_delivered`` instead.
 
         Called from the INJECT thread, once per delivered packet, and deliberately
         WITHOUT the lock - the same reasoning as ``SocketWatcher.pid_for`` (see
@@ -284,16 +296,15 @@ class ConnectionLog:
         gone from the table anyway.
         """
         if key is None:
-            return False
+            return
         c = self.rows.get(key)
         if c is None:
-            return False
+            return
         c["sent"] += size
         if is_out:
             c["sent_out"] += size
         else:
             c["sent_in"] += size
-        return bool(c.get("scoped"))
 
     def charge(self, key, field, n=1):
         """Add to one counter on one flow's row (no row = nothing to charge).

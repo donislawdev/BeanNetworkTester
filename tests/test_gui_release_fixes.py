@@ -265,6 +265,52 @@ def test_a_target_that_matches_nothing_says_so_on_the_page():
     """)
 
 
+def test_a_call_scope_that_meets_no_call_says_so_in_its_card():
+    """A call scope with no call impairs nothing, and said nothing about it.
+
+    The synthetic packets are zeros, so no part of a call ever passes: the line is
+    up for the whole run. Once a ticked part has passed it goes, and it goes with
+    the session. Without a call scope there is no line at all. Driven through the
+    tick, which refreshes the page on screen - the Control page here."""
+    run_gui("""
+        from beantester.synthetic import SyntheticDivert
+
+        real_start = app.engine.start
+        app.engine.start = (lambda filt, divert=None, duration=0, **kw:
+                            real_start(filt, divert=SyntheticDivert(seed=3),
+                                       duration=duration))
+        note = bnt.T("fields.call_no_match")
+        page = app.pages["control"]
+        assert app.current_page() is page
+
+        app._start(); app._settle_transition()
+        app._tick()
+        line = page._call_note
+        assert line.kw.get("text") == "", "a line with no call scope"
+        assert not line.winfo_ismapped()
+        app._stop(); app._settle_transition()
+
+        app.vars["call_checks"].set(True)
+        app._start(); app._settle_transition()
+        app._tick()
+        assert line.kw.get("text") == note, line.kw
+        assert line.winfo_ismapped()
+
+        app.engine.core.call_met = True      # what a check in scope does
+        app._tick()
+        assert line.kw.get("text") == "", line.kw
+        assert not line.winfo_ismapped()
+
+        app.engine.core.call_met = False
+        app._tick()
+        assert line.kw.get("text") == note
+        app._stop(); app._settle_transition()
+        app._tick()
+        assert line.kw.get("text") == "", "the line outlived the session"
+        assert not line.winfo_ismapped()
+    """)
+
+
 def test_a_target_that_cannot_be_used_says_everything_is_impaired():
     """The banner used to say the OPPOSITE of the truth here.
 
@@ -523,6 +569,8 @@ def test_every_wrapping_label_wraps_inside_its_own_margins(dpi):
         app.vars["narrow_filter"].set(True)
         settings._sync_scope_status()
         app.set_target_warning("matches nothing")
+        from beantester.gui.labels import show_banner
+        show_banner(app.pages["control"]._call_note, "nothing ticked has passed", "test")
         # Every section's error line, on the Control page and in Settings: its switch
         # on, and a broken pattern, which every kind of validated field refuses ("((" is
         # a process name, "-1" a seed).

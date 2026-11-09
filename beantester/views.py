@@ -130,6 +130,46 @@ def avg_packet_bytes(c):
     return round(c.get("bytes", 0) / max(1, packets))
 
 
+def scoped_packets(c):
+    """How many of a connection row's packets were in impairment scope.
+
+    A row without the count (one made by hand, as tests do) answers from its flag:
+    all of its packets or none.
+    """
+    n = c.get("scoped_packets")
+    if n is None:
+        return (c.get("packets") or 0) if c.get("scoped") else 0
+    return n
+
+
+def scope_share(c):
+    """The share of a connection's packets that were in impairment scope, 0.0 to 1.0.
+
+    One number for the "impaired?" cell and its sort, so the order is the order of
+    what is shown. Neither 0 nor 1 when targeting left some of a flow's packets out:
+    a call scope splits one flow (a call's checks and its media share a port pair),
+    and a target set mid-session leaves the packets before it out.
+    """
+    packets = c.get("packets") or 0
+    if packets <= 0:
+        return 1.0 if c.get("scoped") else 0.0
+    return scoped_packets(c) / packets
+
+
+def share_text(share):
+    """A share strictly between none and all, as the "impaired?" cell shows it.
+
+    Whole percent rounded DOWN and never above 99: 3 999 of 4 000 packets must not
+    read "100%", which says what "yes" says. Below one percent it is "<1%" rather
+    than "0%", which would say what "no" says - a call's checks are well under one
+    percent of its packets.
+    """
+    percent = share * 100.0
+    if percent < 1.0:
+        return "<1%"
+    return f"{min(99, int(percent))}%"
+
+
 # Columns the table shows but the engine does not store: they are DERIVED from
 # the raw row. They used to be materialised into a copy of every connection
 # before sorting - which is fine for 400 rows and hundreds of milliseconds of
@@ -147,7 +187,7 @@ DERIVED = {
     "down_seen": lambda c, now: c.get("bytes_in", 0) / 1024.0,
     "up_seen": lambda c, now: c.get("bytes_out", 0) / 1024.0,
     "avg": lambda c, now: c.get("bytes", 0) / max(1, c.get("packets", 0)),
-    "scoped": lambda c, now: 1 if c.get("scoped") else 0,
+    "scoped": lambda c, now: scope_share(c),
     "dur": lambda c, now: max(0.0, c.get("last", now) - c.get("first", now)),
     "idle": lambda c, now: max(0.0, now - c.get("last", now)),
     "proc": lambda c, now: str(c.get("proc") or "").lower(),

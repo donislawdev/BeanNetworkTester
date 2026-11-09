@@ -68,6 +68,26 @@ def wrapping_label(parent, text="", style="Muted.TLabel", pad=16, **kw):
     return label
 
 
+def show_banner(label, text, subsystem):
+    """Show (or clear) a red line inside a Control-page card, made by ``wrapping_label``.
+
+    Packed only while it has something to say, so an empty one takes no room. ``None``
+    (the card was never built) is a no-op. Main thread only - it touches the widget.
+    Shared by the process target's "matches nothing" banner and the call card's
+    "nothing ticked has passed yet" line, so the two cannot come to look different.
+    """
+    if label is None:
+        return
+    with crashlog.quiet(subsystem):
+        if text:
+            label.config(text=text)
+            if not label.winfo_ismapped():
+                label.pack(fill="x", pady=(scaled(5), 0))
+        else:
+            label.config(text="")
+            label.pack_forget()
+
+
 def sync_note(owner, notes, tips, state, subsystem, attr="_scope_note"):
     """Re-word a note built by ``wrapping_label`` - and its bubble - on a new state.
 

@@ -16,7 +16,8 @@ import time
 from .. import crashlog
 from ..i18n import T
 from ..paths import CONNECTIONS_CSV_FILE, CSV_FILE, hand_back
-from ..views import avg_packet_bytes, connection_proc, filter_sort_connections
+from ..views import (avg_packet_bytes, connection_proc, filter_sort_connections,
+                     scoped_packets)
 
 # Internal stat keys are engine-speak ("seen"); a CSV is read by people and
 # by spreadsheets, so it gets column names that mean something.
@@ -144,7 +145,11 @@ CONN_CSV_HEADER = ["process", "pid", "proto", "remote_ip", "remote_port",
                    "avg_bytes", "duration_s", "idle_s",
                    # LAST, not beside "proto" where the table shows it: a reader that
                    # takes the columns by position keeps working (owner, 2026-11-04)
-                   "ice"]
+                   "ice",
+                   # after it for the same reason. "impaired" keeps its yes/no (any
+                   # packet in scope): a third value there would change what an
+                   # existing reader of that column gets
+                   "packets_in_scope"]
 
 
 # One export at a time, and the thing being protected is the FILE, not the window:
@@ -241,7 +246,7 @@ def _write_connections_now(app, payload):
                     avg_packet_bytes(c),
                     f"{max(0.0, last - c.get('first', now)):.1f}",
                     f"{max(0.0, now - last):.1f}",
-                    c.get("ice") or "")])
+                    c.get("ice") or "", scoped_packets(c))])
         hand_back(tmp)                  # before it takes the place of theirs
         os.replace(tmp, path)
         app.log(f"{T('log.conns_saved_to')} {path} ({len(rows)})")

@@ -33,7 +33,7 @@ from ...nettools.tcphealth import Request
 from ...processes import port_process_map
 from ...utils import human_bytes
 from ...views import (avg_packet_bytes, connection_proc, filter_connections,
-                      sort_connections, sum_traffic)
+                      scope_share, share_text, sort_connections, sum_traffic)
 from .. import dialogs
 from ..field_actions import block_ip_address, leave_process_alone
 from ..model_worker import AsyncModel
@@ -567,15 +567,17 @@ class ConnsPage:
         idle = max(0.0, now - last)
         dur = max(0.0, last - c.get("first", now))
         packets = c.get("packets") or 0
-        # The COLUMN is the session-long record "was this flow ever in impairment
-        # scope" (a sticky flag the engine keeps per flow), NOT a live lookup. A
+        # The COLUMN is the session-long record "how much of this flow was in
+        # impairment scope" (counted per packet as it passed), NOT a live lookup. A
         # closed or idle flow's ephemeral port has left the socket table, so a live
         # check flips every finished connection to "no" the instant it closes -
         # which read as "the tool caught almost nothing" even when it had impaired
-        # them all while they were alive. The LIVE "in scope right now" signal is
-        # the row highlight (_tag_of), which still follows the CURRENT target, so
-        # narrowing chrome->firefox drops the highlight without erasing the record.
-        scoped = T("conns.yes") if c.get("scoped") else T("conns.no")
+        # them all while they were alive. "yes" is every packet, "no" none, and a
+        # share in between: a call scope puts a call's checks in scope while its
+        # media pass on the same flow, and the flag alone read "yes" for that.
+        share = scope_share(c)
+        scoped = (T("conns.yes") if share >= 1.0 else
+                  T("conns.no") if share <= 0.0 else share_text(share))
         return (connection_proc(c, self.app.proc_map) or "?",
                 c.get("pid") or "", c.get("proto", "IP"), c.get("ice") or "",
                 c.get("remote_ip"),
@@ -601,10 +603,11 @@ class ConnsPage:
                 f"{dur:.1f}", f"{idle:.1f}")
 
     def _tag_of(self, c):
-        """Colour a row EXACTLY when the "impaired?" column says "yes".
+        """Colour a row EXACTLY when the "impaired?" column says anything but "no".
 
-        Both read the one stored per-flow ``scoped`` record, so the colour and the
-        column can never disagree. They used to differ: the column read the stored
+        Both read the stored per-flow record (the flag here, the count beside it in
+        the column: the flag is set by the first packet the count counts), so the
+        colour and the column can never disagree. They used to differ: the column read the stored
         record ("was this flow ever in impairment scope") while the highlight asked
         the engine LIVE ("is its port in the target set right now"). For a closed or
         idle flow those answer differently - the live check flips to "no" the moment
