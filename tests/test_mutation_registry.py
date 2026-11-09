@@ -11935,6 +11935,53 @@ MUTATIONS = [
                "        # Text channel only",
         "test": "test_every_targeting_that_caught_nothing_is_called_out",
     },
+    # -- the STUN codec of the NAT and STUN tool (2026-11-09) ------------------- #
+    {
+        # A stale or damaged answer read as this computer's address.
+        "label": "stun: a fingerprint that does not match is taken",
+        "file": "beantester/stun.py",
+        "old": "            if after != size or value_size != 4 or int.from_bytes(value, \"big\") != want:\n",
+        "new": "            if after != size or value_size != 4:\n",
+        "test": "test_a_changed_byte_or_a_cut_message_is_not_taken",
+    },
+    {
+        "label": "stun: an attribute running past the end is read",
+        "file": "beantester/stun.py",
+        "old": "        if after > size:\n            return None\n",
+        "new": "        if False:\n            return None\n",
+        "test": "test_what_is_not_a_stun_message_is_none",
+    },
+    {
+        "label": "stun: a message longer than the tool reads is taken",
+        "file": "beantester/stun.py",
+        "old": "    if size < HEADER or size > MAX_MESSAGE or data[0] & 0xC0",
+        "new": "    if size < HEADER or data[0] & 0xC0",
+        "test": "test_what_is_not_a_stun_message_is_none",
+    },
+    {
+        # The IPv6 address is XORed with the cookie AND the transaction ID.
+        "label": "stun: an IPv6 mapped address is unmasked with the cookie only",
+        "file": "beantester/stun.py",
+        "old": "                                        ^ int.from_bytes(mask, \"big\"))\n",
+        "new": "                                        ^ int.from_bytes(mask[:4], \"big\"))\n",
+        "test": "test_the_rfc_5769_answers_decode_to_the_addresses_the_rfc_states",
+    },
+    {
+        # A lying or broken server would point the hairpin datagrams at port 0 or a
+        # group address.
+        "label": "stun: a mapped address no request can come from is taken",
+        "file": "beantester/stun.py",
+        "old": "    if (not port or address.is_unspecified or address.is_multicast\n",
+        "new": "    if (False\n",
+        "test": "test_an_address_no_request_can_come_from_is_no_answer",
+    },
+    {
+        "label": "stun: an error class RFC 8489 does not have is a code",
+        "file": "beantester/stun.py",
+        "old": "    if not 3 <= hundreds <= 6 or number > 99:\n",
+        "new": "    if number > 99:\n",
+        "test": "test_the_error_code_is_a_number_and_a_wrong_one_is_none",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

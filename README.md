@@ -1738,6 +1738,7 @@ beantester/              the implementation package
   engine.py              capture/inject threads, statistics (BeanEngine)
   connlog.py             the session's connection log: one row per flow, and its cap
   ice.py                 the ICE column: which UDP flows carry STUN, and the path the data takes
+  stun.py                STUN and TURN messages written and read for the NAT and STUN tool (pure)
   driverwait.py          how long packets waited in the driver's queue before the tool got them
   capture_backend.py     which packet-capture driver this platform uses - the one place that knows
   capabilities.py        which system APIs the Tools tab's tools find here - the one place that asks
