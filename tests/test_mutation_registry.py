@@ -3374,9 +3374,35 @@ MUTATIONS = [
         # only from <<NotebookTabChanged>> would be an empty tab when measured.
         "label": "toolbox: select no longer builds the panel it shows",
         "file": "beantester/gui/pages/toolbox.py",
-        "old": "            self.nb.select(index)\n        self._ensure(tool_id)",
-        "new": "            self.nb.select(index)",
+        "old": "            self.tool_nbs[group_id].select(in_group.index(tool_id))\n"
+               "        self._ensure(tool_id)",
+        "new": "            self.tool_nbs[group_id].select(in_group.index(tool_id))",
         "test": "test_a_panel_is_built_on_first_view_and_the_open_tab_is_remembered",
+    },
+    {
+        # The row menus know tools, not groups: "Ping this address" from the
+        # Sockets tool would land on the This computer group's row.
+        "label": "toolbox groups: select shows the tool but not its group",
+        "file": "beantester/gui/pages/toolbox.py",
+        "old": "            self.nb.select([group.id for group in self.groups].index(group_id))\n",
+        "new": "",
+        "test": "test_the_tools_page_is_the_renderer_of_its_registry",
+    },
+    {
+        "label": "toolbox groups: a group with no tool still gets a tab",
+        "file": "beantester/gui/pages/toolbox.py",
+        "old": "        self.groups = tuple(group for group in GROUPS if tools_in(group.id, TOOLS))",
+        "new": "        self.groups = GROUPS",
+        "test": "test_a_panel_is_built_on_first_view_and_the_open_tab_is_remembered",
+    },
+    {
+        # A click on a group's tab changes the tool on screen: unheard, ui.json
+        # would keep the tool of the group left behind.
+        "label": "toolbox groups: a click on a group is not heard",
+        "file": "beantester/gui/pages/toolbox.py",
+        "old": "        self.nb.bind(\"<<NotebookTabChanged>>\", lambda e: self._on_subpage())\n",
+        "new": "",
+        "test": "test_a_group_keeps_its_own_tool_and_ui_json_keeps_the_tool",
     },
     {
         "label": "toolbox: a tool that is gone from the registry breaks the page",
@@ -3413,8 +3439,8 @@ MUTATIONS = [
     {
         "label": "capabilities: Ping forgets what it needs",
         "file": "beantester/gui/toolbox/__init__.py",
-        "old": "PingPanel, sends=True, needs=\"ping\"),\n",
-        "new": "PingPanel, sends=True),\n",
+        "old": "PingPanel, NETWORK, sends=True, needs=\"ping\"),\n",
+        "new": "PingPanel, NETWORK, sends=True),\n",
         "test": "test_every_tool_needs_a_real_capability_and_the_one_its_logic_imports",
     },
     {
@@ -3577,8 +3603,8 @@ MUTATIONS = [
         # a tool that sends is not marked as sending, so the promise would not name it.
         "label": "toolbox promise: Ping is not marked as sending",
         "file": "beantester/gui/toolbox/__init__.py",
-        "old": "    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel, sends=True, needs=\"ping\"),\n",
-        "new": "    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel, needs=\"ping\"),\n",
+        "old": "    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel, NETWORK, sends=True, needs=\"ping\"),\n",
+        "new": "    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel, NETWORK, needs=\"ping\"),\n",
         "test": "test_the_promise_names_exactly_the_tools_that_send",
     },
     {

@@ -349,7 +349,9 @@ monitor is gone it returns to the centre of the current screen.
   whether it holds 400 rows or a few hundred thousand. The old hard 400-row limit is gone - how
   many to show is set with the **"Row limit"** field (*Tables* section, 0 = no limit, default
   50 000).
-- **Tools** - small helpers for questions you have before or during a test, one sub-tab each.
+- **Tools** - small helpers for questions you have before or during a test, in three groups of
+  sub-tabs: **Network** (Ping), **This computer** (Sockets, TCP health, Port check, Adapters) and
+  **This program** (Filter tester, Diagnostics).
   Only **Ping** on this tab sends anything over the network: echo requests to the address you
   type, from Start to Stop. Today:
   - **Ping** - does the session's latency and loss really reach the traffic? Type an IP
@@ -424,13 +426,6 @@ monitor is gone it returns to the centre of the current screen.
     computer's own loopback address and gives the port back at once. Who holds a port
     comes from the same table as **Sockets**. Right-click a row to target the program that
     holds the port or leave it alone.
-  - **Filter tester** - pick a field from the Control page (target process, destination
-    IP or port, blocked IP or port), type an expression and a value, and see at once whether
-    they match. It also shows which part of the expression selected the value, which `!` part
-    excluded it, and how the program reads what you typed. A value that is not an address, a
-    port or a PID is reported as that, not as "does not match". **"Use in the Control
-    field"** puts the expression into that field, replacing what is there. What you type
-    stays until you close the program, even if you switch the language.
   - **Adapters** - every network adapter on this computer and the settings a test depends
     on, the kind `ipconfig /all` prints (on Linux, `ip addr` and `ip route`). The adapter
     your internet traffic leaves through is at the top, then the ones that are up. Choose
@@ -448,6 +443,13 @@ monitor is gone it returns to the centre of the current screen.
     **"Copy report"** copies every adapter and the proxy settings in English - the text
     contains this computer's addresses and MAC addresses. Right-click an adapter in the
     list to copy only that one, in the same words.
+  - **Filter tester** - pick a field from the Control page (target process, destination
+    IP or port, blocked IP or port), type an expression and a value, and see at once whether
+    they match. It also shows which part of the expression selected the value, which `!` part
+    excluded it, and how the program reads what you typed. A value that is not an address, a
+    port or a PID is reported as that, not as "does not match". **"Use in the Control
+    field"** puts the expression into that field, replacing what is there. What you type
+    stays until you close the program, even if you switch the language.
   - **Diagnostics** - why START will not work, without a console. It runs the same checks
     as `--doctor` (administrator rights, the WinDivert driver, leftovers in the temp
     folder...) and marks each one OK, Warning or Problem. **"Clean up the driver"** unloads

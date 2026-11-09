@@ -1,10 +1,15 @@
-"""Tools page: one sub-tab per tool of the registry in ``gui/toolbox``.
+"""Tools page: a tab per group of the registry in ``gui/toolbox``, a tab per tool in each.
 
 A DISPATCHER and nothing more. What a tool shows and does lives in its panel; this
 page builds the tabs, decides which panel exists yet, and hands the page calls on
 (``refresh``, ``teardown``, ``focus_search``, ``on_pref_changed``, ``pending``).
 
-Three decisions carry this file, each paid for somewhere else first:
+Everything outside this file speaks of TOOLS, never of groups: ``select`` takes a
+tool's id and puts its group on screen too, ``current`` answers a tool's id, and
+``ui.json`` keeps the tool. The group a tool is in is the registry's to say, so a
+row menu's "Ping this address" works whichever group Ping is in.
+
+Four decisions carry this file, each paid for somewhere else first:
 
 * **Panels are built on first view, and synchronously in ``select``.** Twenty tools
   must not cost twenty panels at start-up. And the GUI render check puts each
@@ -18,7 +23,8 @@ Three decisions carry this file, each paid for somewhere else first:
   ``crashlog.quiet``; a panel whose constructor raises becomes a line saying so,
   once, instead of being retried on every look.
 * **The tab that was open is remembered by id** (``ui.json``, ``tools_page``), so
-  reordering the registry never reopens the wrong tool.
+  reordering the registry or moving a tool to another group never reopens the
+  wrong tool - and a file written before the groups opens the tool it named.
 * **A tool this system lacks is decided HERE** (``capabilities.why_not`` on the
   registry's ``needs``), before its panel exists, so no panel asks the question
   itself and no panel is built against an API that is not there.
@@ -30,7 +36,7 @@ from ...i18n import T
 from .. import dialogs
 from ..labels import wrapping_label
 from ..theme import PAGE_WRAP_PAD, space
-from ..toolbox import TOOL_BY_ID, TOOLS
+from ..toolbox import GROUPS, TOOL_BY_ID, TOOLS, tools_in
 from ... import capabilities, crashlog
 
 AREA = "gui.pages.toolbox"
@@ -76,38 +82,56 @@ class ToolboxPage:
     def __init__(self, app, parent):
         self.app = app
         self.frame = ttk.Frame(parent)
+        # The groups' row, and under each group the row of its tools: the same
+        # narrower sub-tabs at both levels (GUI rule 2, no new widget).
         self.nb = ttk.Notebook(self.frame, style="Sub.TNotebook")
         self.nb.pack(fill="both", expand=True, pady=(space("tight"), 0))
+        # A group with no tool gets no tab: an empty row of tabs is a dead end.
+        self.groups = tuple(group for group in GROUPS if tools_in(group.id, TOOLS))
+        self.tool_nbs = {}          # group id -> the notebook of its tools
         self.tabs = {}
         self.panels = {}            # tool id -> panel, only for tools already shown
-        for tool in TOOLS:
-            tab = ttk.Frame(self.nb)
-            self.nb.add(tab, text=T(tool.label))
-            self.tabs[tool.id] = tab
+        for group in self.groups:
+            holder = ttk.Frame(self.nb)
+            self.nb.add(holder, text=T(group.label))
+            tools_nb = ttk.Notebook(holder, style="Sub.TNotebook")
+            tools_nb.pack(fill="both", expand=True, pady=(space("tight"), 0))
+            self.tool_nbs[group.id] = tools_nb
+            for tool in tools_in(group.id, TOOLS):
+                tab = ttk.Frame(tools_nb)
+                tools_nb.add(tab, text=T(tool.label))
+                self.tabs[tool.id] = tab
+            tools_nb.bind("<<NotebookTabChanged>>", lambda e: self._on_subpage())
         self.nb.bind("<<NotebookTabChanged>>", lambda e: self._on_subpage())
         self.select(app.ui.get("tools_page", ""))
 
     # -- which tab ----------------------------------------------------------- #
     def current(self):
+        """The id of the tool on screen: the chosen tool of the chosen group."""
         try:
-            return TOOLS[int(self.nb.index(self.nb.select()))].id
-        except (tk.TclError, TypeError, ValueError, IndexError):
+            group = self.groups[int(self.nb.index(self.nb.select()))]
+            tools_nb = self.tool_nbs[group.id]
+            return tools_in(group.id, TOOLS)[int(tools_nb.index(tools_nb.select()))].id
+        except (tk.TclError, TypeError, ValueError, IndexError, KeyError):
             # A notebook being torn down answers "" for its selection; the first
             # tool is the same answer `select` gives an id it does not know.
             return TOOLS[0].id
 
     def select(self, tool_id):
-        """Show one tool, building its panel now if this is its first time.
+        """Show one tool - its group, then the tool in it - building its panel now
+        if this is its first time.
 
         An id that is not in the registry (a tool removed since the file was
-        written) opens the first tab, the way ``App.select_page`` treats an
+        written) opens the first tool, the way ``App.select_page`` treats an
         unknown page.
         """
         if tool_id not in TOOL_BY_ID:
             tool_id = TOOLS[0].id
-        index = [tool.id for tool in TOOLS].index(tool_id)
+        group_id = TOOL_BY_ID[tool_id].group
+        in_group = [tool.id for tool in tools_in(group_id, TOOLS)]
         with crashlog.quiet(AREA):
-            self.nb.select(index)
+            self.nb.select([group.id for group in self.groups].index(group_id))
+            self.tool_nbs[group_id].select(in_group.index(tool_id))
         self._ensure(tool_id)
 
     def _on_subpage(self):

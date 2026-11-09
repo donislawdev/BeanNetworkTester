@@ -551,6 +551,11 @@ def test_the_notebooks_inside_a_page_have_the_narrower_tabs():
         assert set(inner) >= {"statistics", "tools"}, sorted(inner)
         for page_id, nb in inner.items():
             assert nb.kw.get("style") == "Sub.TNotebook", (page_id, nb.kw)
+        # the Tools page's groups each hold a row of their tools: the same narrower tabs
+        tool_rows = app.pages["tools"].tool_nbs
+        assert tool_rows, "the Tools page has a row of tools in each group"
+        for group_id, nb in tool_rows.items():
+            assert nb.kw.get("style") == "Sub.TNotebook", (group_id, nb.kw)
 
         class Recorder:
             def __init__(self):

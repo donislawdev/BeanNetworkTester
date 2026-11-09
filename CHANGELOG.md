@@ -39,6 +39,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Changed
 
+- **Tools: the tools are in three groups.** A row of tabs above the tools: **Network**
+  (Ping), **This computer** (Sockets, TCP health, Port check, Adapters) and **This program**
+  (Filter tester, Diagnostics). Each group remembers the tool you left open in it, and the
+  program opens on the tool you used last, as before.
+
 - **Connections: "impaired?" says how much of a connection was in scope.** A connection
   with only some of its packets in scope shows the share, such as 97%, instead of "yes":
   a call with only its checks targeted, or a connection that was already open when a

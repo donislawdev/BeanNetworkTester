@@ -221,8 +221,9 @@ para o centro da tela atual.
   instantânea, seja com 400 linhas ou com algumas centenas de milhares. O antigo limite fixo de 400
   linhas acabou - quantas mostrar é definido no campo **"Row limit"** (seção *Tables*, 0 = sem
   limite, padrão 50 000).
-- **Tools** - pequenos auxiliares para dúvidas que surgem antes ou durante um teste, uma subaba para
-  cada. Só o **Ping** envia algo pela rede nesta aba: solicitações de eco para o endereço que você
+- **Tools** - pequenos auxiliares para dúvidas que surgem antes ou durante um teste, em três grupos
+  de subabas: **Network** (Ping), **This computer** (Sockets, TCP health, Port check, Adapters)
+  e **This program** (Filter tester, Diagnostics). Só o **Ping** envia algo pela rede nesta aba: solicitações de eco para o endereço que você
   digita, de Start a Stop. Hoje:
   - **Sockets** - todos os sockets TCP e UDP deste computador, como o `netstat -ano`, e sem
     precisar de sessão: o que está escutando, o que está conectado, o estado (LISTEN,
@@ -242,13 +243,6 @@ para o centro da tela atual.
     endereço de loopback do próprio computador e devolve a porta na hora. Quem usa uma porta vem da
     mesma tabela do **Sockets**. Clique com o botão direito em uma linha para direcionar ao programa
     que usa a porta ou deixá-lo em paz.
-  - **Filter tester** - escolha um campo da página Control (processo alvo, IP ou porta de destino,
-    IP ou porta bloqueados), digite uma expressão e um valor, e veja na hora se eles combinam.
-    Também mostra qual parte da expressão selecionou o valor, qual parte com `!` o excluiu e como o
-    programa interpreta o que você digitou. Um valor que não é um endereço, uma porta nem um PID é
-    reportado como tal, e não como "não combina". **"Use in the Control field"** coloca a expressão
-    nesse campo, substituindo o que estiver lá. O que você digita permanece até fechar o programa,
-    mesmo que você troque o idioma.
   - **Adapters** - todos os adaptadores de rede deste computador e as configurações de que um teste
     depende, do tipo que o `ipconfig /all` imprime (somente Windows). O adaptador por onde sai o seu
     tráfego de internet fica no topo,
@@ -265,6 +259,13 @@ para o centro da tela atual.
     Um proxy informado por nome não é resolvido, e senhas em um endereço ficam ocultas.
     **"Copy report"** copia todos os adaptadores e as configurações de proxy em inglês - o texto
     contém os endereços e os endereços MAC deste computador.
+  - **Filter tester** - escolha um campo da página Control (processo alvo, IP ou porta de destino,
+    IP ou porta bloqueados), digite uma expressão e um valor, e veja na hora se eles combinam.
+    Também mostra qual parte da expressão selecionou o valor, qual parte com `!` o excluiu e como o
+    programa interpreta o que você digitou. Um valor que não é um endereço, uma porta nem um PID é
+    reportado como tal, e não como "não combina". **"Use in the Control field"** coloca a expressão
+    nesse campo, substituindo o que estiver lá. O que você digita permanece até fechar o programa,
+    mesmo que você troque o idioma.
   - **Diagnostics** - por que o START não funciona, sem precisar de console. Executa as mesmas
     verificações do `--doctor` (permissões de administrador, o driver WinDivert, sobras na pasta
     temporária...) e marca cada uma como OK, Warning ou Problem. **"Clean up the driver"**
