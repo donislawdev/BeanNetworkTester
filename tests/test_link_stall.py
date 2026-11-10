@@ -382,11 +382,16 @@ def test_the_summary_says_whether_the_outage_holds():
           "outage" not in settings_summary(dict(DEFAULT_SETTINGS, flap_hold=True), lang="en"))
 
 
+# A number as a text writes it: digits in groups of three behind one separator (a
+# space, a no-break space, a comma, a full stop), or plain digits. Not "any run of
+# digits and separators": that joins "10,000. 5" into one number.
+THOUSANDS = re.compile(r"\d{1,3}(?:[ \N{NO-BREAK SPACE}\N{NARROW NO-BREAK SPACE},.]\d{3})+|\d+")
+
+
 def test_the_tooltip_names_the_limit_the_core_enforces():
     """The number in the text is typed, the one in the core is the truth."""
     for code in load_languages():
         text = translate("tips.flap_hold", code)
-        numbers = {int(re.sub(r"\D", "", match))
-                   for match in re.findall(r"\d[\d  ,.]*\d", text)}
+        numbers = {int(re.sub(r"\D", "", match)) for match in THOUSANDS.findall(text)}
         check(f"{code}: the tooltip says {FLAP_HOLD_MAX}", FLAP_HOLD_MAX in numbers,
               f"({sorted(numbers)} in {text!r})")

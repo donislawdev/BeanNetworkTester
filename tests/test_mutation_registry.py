@@ -12452,9 +12452,30 @@ MUTATIONS = [
     {
         "label": "wire: a TCP data offset past the packet is believed",
         "file": "beantester/wire.py",
-        "old": "if head + 20 <= data <= size else -1",
+        "old": "if head + 20 <= data <= end else -1",
         "new": "if head + 20 <= data else -1",
         "test": "test_a_length_that_does_not_fit_is_not_believed",
+    },
+    {
+        "label": "wire: padding after the IP packet counts as TCP data",
+        "file": "beantester/wire.py",
+        "old": "        end = declared if 0 < declared < size else size\n",
+        "new": "        end = size\n",
+        "test": "test_padding_after_the_ip_packet_is_not_tcp_data",
+    },
+    {
+        "label": "wire: an IP length of 0 ends the packet at its first byte",
+        "file": "beantester/wire.py",
+        "old": "        end = declared if 0 < declared < size else size\n",
+        "new": "        end = declared if declared < size else size\n",
+        "test": "test_an_ip_length_that_says_nothing_leaves_the_buffer_to_end_the_packet",
+    },
+    {
+        "label": "payload: a huge integer goes through a float and overflows",
+        "file": "beantester/settings.py",
+        "old": "        if isinstance(value, int):\n            return str(value)       # never through float: 10**400 would overflow it\n",
+        "new": "        value = float(value)\n",
+        "test": "test_a_number_too_large_for_anything_is_a_config_error",
     },
     {
         "label": "wire: whatever is not TCP is read as UDP",
@@ -12473,7 +12494,7 @@ MUTATIONS = [
     {
         "label": "payload: a bare zero from a config file reads as an empty field",
         "file": "beantester/settings.py",
-        "old": "        return str(int(value)) if float(value).is_integer() else str(value)\n",
+        "old": "        if isinstance(value, int):\n            return str(value)       # never through float: 10**400 would overflow it\n        return str(int(value)) if value.is_integer() else str(value)\n",
         "new": "        return str(value or \"\").strip()\n",
         "test": "test_a_bare_zero_from_a_config_file_is_a_size_not_an_empty_field",
     },

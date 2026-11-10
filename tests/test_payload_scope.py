@@ -283,6 +283,21 @@ def test_a_bare_zero_from_a_config_file_is_a_size_not_an_empty_field():
         validate_settings({**DEFAULT_SETTINGS, "payload_udp": 1.5})
 
 
+def test_a_number_too_large_for_anything_is_a_config_error():
+    """JSON carries integers of any length. One past what a float can hold raised
+    OverflowError on its way to the bounds check, which is a crash and not a message."""
+    for key in ("payload_udp", "payload_tcp"):
+        for huge in (10 ** 400, 65536, -1):
+            with pytest.raises(ValueError):
+                validate_settings({**DEFAULT_SETTINGS, key: huge})
+        engine = BeanEngine()
+        apply_settings(engine, {**DEFAULT_SETTINGS, "loss": 100, key: "64-1472"})
+        said = []
+        apply_settings(engine, {**DEFAULT_SETTINGS, "loss": 100, key: 10 ** 400}, said.append)
+        check(f"{key}: a scenario step with it is skipped, out loud", len(said) == 1, f"({said})")
+        check(f"{key}: and the scope stays as it was", engine.core.targeting_active())
+
+
 def test_the_summary_names_the_scope_once():
     both = settings_summary(dict(DEFAULT_SETTINGS, payload_udp="64-1472", payload_tcp="!0"),
                             lang="en")

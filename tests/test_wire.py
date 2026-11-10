@@ -60,6 +60,43 @@ def test_tcp_reports_what_the_segment_carries():
     check("IPv6 with TCP options", payload_length(tcp6(bytes(10), options=10), True) == 10)
 
 
+def test_padding_after_the_ip_packet_is_not_tcp_data():
+    """A frame below the link's minimum is padded, and a capture that sits before the
+    IP layer hands the padding over: a bare acknowledgement is 54 bytes in a 60-byte
+    frame. Read from the buffer alone it would carry six bytes, so "0" would miss it
+    and "!0" would take it."""
+    for padding in (1, 6, 40):
+        check(f"IPv4, a bare acknowledgement padded by {padding}",
+              payload_length(tcp4(b"") + bytes(padding), True) == 0)
+        check(f"IPv6, a bare acknowledgement padded by {padding}",
+              payload_length(tcp6(b"") + bytes(padding), True) == 0)
+        check(f"IPv4, 10 bytes of data padded by {padding}",
+              payload_length(tcp4(bytes(10)) + bytes(padding), True) == 10)
+        check(f"IPv4, TCP options and padding by {padding}",
+              payload_length(tcp4(bytes(3), options=2) + bytes(padding), True) == 3)
+    check("UDP never read the buffer for its size",
+          payload_length(udp4(HOME, PEER_LAN, bytes(5)) + bytes(13), False) == 5)
+
+
+def test_an_ip_length_that_says_nothing_leaves_the_buffer_to_end_the_packet():
+    """Segmentation offload hands over packets too large for the 16-bit field, with 0
+    in it. And a length past the buffer is not believed: the buffer is all there is."""
+    big = bytearray(tcp4(bytes(1000)))
+    big[2:4] = b"\x00\x00"
+    check("IPv4, length field 0", payload_length(bytes(big), True) == 1000)
+    big6 = bytearray(tcp6(bytes(1000)))
+    big6[4:6] = b"\x00\x00"
+    check("IPv6, payload length 0", payload_length(bytes(big6), True) == 1000)
+    long = bytearray(tcp4(bytes(100)))
+    long[2:4] = (5000).to_bytes(2, "big")
+    check("a length past the buffer: the buffer ends the packet",
+          payload_length(bytes(long), True) == 100)
+    short = bytearray(tcp4(bytes(100)))
+    short[2:4] = (30).to_bytes(2, "big")
+    check("a length that ends inside the TCP header is unreadable",
+          payload_length(bytes(short), True) == -1)
+
+
 def test_the_buffer_the_driver_hands_over_is_read_as_it_is():
     """pydivert's ``raw`` is a memoryview; a copy per packet would be an allocation
     on the capture thread."""

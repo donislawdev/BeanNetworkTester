@@ -98,7 +98,9 @@ def setting_expression(key, value):
         # bare acknowledgement, an empty datagram - not the "unset" a port's 0 was.
         # Read as empty it would switch the scope off, which widens the session to
         # everything it was sparing.
-        return str(int(value)) if float(value).is_integer() else str(value)
+        if isinstance(value, int):
+            return str(value)       # never through float: 10**400 would overflow it
+        return str(int(value)) if value.is_integer() else str(value)
     return str(value or "").strip()
 
 

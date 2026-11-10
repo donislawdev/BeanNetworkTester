@@ -1462,7 +1462,7 @@ what `packets_seen` counted in the first place - so every row records it in `cap
 | `dropped_local_network` | dropped by "Internet only" (local network cut, internet and loopback alive) |
 | `dropped_block` | dropped by the blocking (firewall) fields |
 | `dropped_link_outage` | dropped during a flapping outage |
-| `held_link_outage` | held by a flapping outage instead of being dropped, and delivered when it ended |
+| `held_link_outage` | held by a flapping outage instead of being dropped by it. A held packet can still be lost later: to a full speed-limit buffer, to loss, or to STOP |
 | `dropped_rate_limit` | dropped by a full speed-limit buffer |
 | `dropped_at_stop` | queued packets discarded when the session stopped |
 | `dropped_send_failed` | the driver refused to re-inject them |

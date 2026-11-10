@@ -287,7 +287,7 @@
   "frames.flapping": "Przerwy w łączu (flapping)",
   "frames.impairments": "Zakłócenia",
   "frames.latency": "Opóźnienie (ping) i kolejność pakietów",
-  "frames.payload": "Celuj w rozmiar danych  (bajty danych w pakiecie, oba puste = cały ruch)",
+  "frames.payload": "Celuj w rozmiar danych  (bajty danych w pakiecie, oba puste = bez filtra rozmiaru)",
   "frames.profiles": "Profile",
   "frames.repro": "Powtarzalność i scenariusz",
   "frames.schedule": "Harmonogram przepustowości",

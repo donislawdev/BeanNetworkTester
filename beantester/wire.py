@@ -25,7 +25,13 @@ The sizes are the ones the capture driver hands over. MEASURED 2026-11-10 on
 Windows (WinDivert, over a virtual switch and over a physical network): TCP
 arrives at segment size in both directions, never merged by send or receive
 offload, and a UDP datagram above the MTU arrives as ONE packet both ways, so the
-size seen is the size the application sent.
+size seen is the size the application sent. On Linux (eBPFDivert) TCP arrives in
+offloaded pieces above one segment, and such a datagram as fragments.
+
+A packet can be LONGER than its IP header says: a frame below the link's minimum
+is padded, and a capture that sits before the IP layer sees the padding. The IP
+length is therefore where a packet ends, when it has one. A segmentation-offload
+packet too large for the 16-bit field carries 0 there, and then the buffer ends it.
 """
 
 MIN_PACKET = 28          # the shortest readable one: IPv4 header + UDP header
@@ -47,18 +53,24 @@ def payload_length(raw, is_tcp):
         if head < 20 or (raw[6] & 0x3F) or raw[7]:
             return -1
         proto = raw[9]
+        declared = (raw[2] << 8) | raw[3]
     elif first >> 4 == 6:
         head = 40
         proto = raw[6]
+        declared = (raw[4] << 8) | raw[5]
+        if declared:
+            declared += 40
     else:
         return -1
     if is_tcp:
         if proto != 6 or size < head + 20:
             return -1
-        # From the bytes handed over, not the IP length field: the two agree on
-        # every packet measured, and this one cannot point past the buffer.
+        # Where the packet ends: its IP length, never past the buffer. Without it
+        # a bare acknowledgement padded to the link's minimum frame would read as
+        # six bytes of data. 0 = no length to go by (see the module docstring).
+        end = declared if 0 < declared < size else size
         data = head + (raw[head + 12] >> 4) * 4
-        return size - data if head + 20 <= data <= size else -1
+        return end - data if head + 20 <= data <= end else -1
     if proto != 17 or size < head + 8:
         return -1
     length = (raw[head + 4] << 8) | raw[head + 5]

@@ -110,6 +110,7 @@ from .connlog import ConnectionLog
 from .core import FLAP_HOLD_MAX, BeanCore
 from .damage import DROP_BY_REASON, RST_BY_REASON
 from .i18n import T
+from .matchers import Matcher
 from .scenario_runner import ScenarioRunner
 from .target_resolver import TargetResolver
 from . import crashlog
@@ -537,7 +538,8 @@ class BeanEngine:
         # responsibility) and start() reconciles the two either way.
         return current
 
-    def set_flap(self, enabled, period_s, down_pct, hold=False):
+    def set_flap(self, enabled: bool, period_s: float, down_pct: float,
+                 hold: bool = False) -> None:
         self.core.set_flap(enabled, period_s, down_pct, hold=hold)
 
     def set_dest(self, active, ip=None, port=None):
@@ -579,7 +581,8 @@ class BeanEngine:
     def set_call_parts(self, checks=False, turn_control=False, media=False):
         self.core.set_call_parts(checks=checks, turn_control=turn_control, media=media)
 
-    def set_payload(self, udp=None, tcp=None):
+    def set_payload(self, udp: "str | Matcher | None" = None,
+                    tcp: "str | Matcher | None" = None) -> None:
         self.core.set_payload(udp=udp, tcp=tcp)
 
     def set_lan(self, enabled):

@@ -287,7 +287,7 @@
   "frames.flapping": "链路中断（周期断线）",
   "frames.impairments": "弱网效果",
   "frames.latency": "延迟（Ping）与数据包顺序",
-  "frames.payload": "数据长度筛选（数据包携带的数据字节数，两项都留空 = 全部流量）",
+  "frames.payload": "数据长度筛选（数据包携带的数据字节数，两项都留空 = 不按长度筛选）",
   "frames.profiles": "配置方案",
   "frames.repro": "可复现性与场景",
   "frames.schedule": "吞吐量计划",
