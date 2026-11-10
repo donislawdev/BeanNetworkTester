@@ -202,10 +202,11 @@ def test_an_apply_holds_the_core_lock_over_assignments_only():
     try:
         apply_settings(sh, dict(loss=5, dst_ip="10.0.0.0/8", dst_port="80,443",
                                 block_ip="203.0.113.0/24", block_port="8080",
-                                # one of the pair left EMPTY on purpose: an empty
-                                # matcher is falsy, and a setter that tested it with
-                                # `or` compiled it a second time, under the lock
                                 payload_udp="64-1472", target=""))
+        # Each of the pair left EMPTY once, on purpose: an empty matcher is falsy,
+        # and a setter that tested it with `or` turned it back into text and
+        # compiled it a second time, under the lock.
+        apply_settings(sh, dict(loss=5, payload_tcp="!0", target=""))
     finally:
         core_mod.parse_matcher = real_parse
 

@@ -18,7 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   that arrive during an outage wait and arrive together when it ends, in order, as after a
   Wi-Fi handover. Latency is added after the wait and a speed limit spreads the burst out.
   One outage holds at most 10,000 packets. The Statistics page and the stats CSV count them
-  as "Held by outage" (`held_link_outage`).
+  as "Delayed by outage" (`held_link_outage`), a total that only grows. "Queued" shows how
+  many are waiting right now.
 
 - **Tools: NAT and STUN, how this network's router treats a call.** Press **Start** and in a
   few seconds the table shows this computer's public address, whether the router keeps one

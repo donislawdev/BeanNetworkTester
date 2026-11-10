@@ -690,8 +690,9 @@ is lost, everything is late, and then it all arrives at once.
 - A large burst takes a moment to send, and while it leaves, the other traffic this tool
   captured waits behind it, once, when the outage ends. Measured on one PC: about 45 ms behind
   1,000 held packets, about 0.2 s behind 5,000 and about 0.5 s behind 10,000.
-- Pressing STOP drops what is still waiting. The Statistics page counts held packets as "Held by
-  outage".
+- Pressing STOP drops what is still waiting.
+- The Statistics page counts held packets as "Delayed by outage". It is a total that only grows.
+  "Queued" shows how many are waiting right now, and falls back when an outage ends.
 
 **Advanced (NAT / connections):**
 - *Target destination (IP/port)* - impair only traffic to/from chosen servers. Both fields accept

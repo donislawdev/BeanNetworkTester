@@ -12525,7 +12525,7 @@ MUTATIONS = [
         "file": "beantester/core.py",
         "old": "        end = self._session_start + cycle * period + down\n",
         "new": "        end = now + (down - phase)\n",
-        "test": "test_every_packet_of_one_outage_gets_the_identical_release_time",
+        "test": "test_the_end_of_an_outage_does_not_depend_on_which_packet_asks",
     },
     {
         "label": "stall: latency starts at capture, so the stall hides it",

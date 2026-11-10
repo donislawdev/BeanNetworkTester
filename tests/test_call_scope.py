@@ -222,7 +222,8 @@ def test_through_the_engine_a_call_loses_its_media_and_keeps_its_checks():
         wait_seen(engine, len(packets))
         # "seen" is counted before a packet is queued, and STOP drops the queue: wait
         # for the injector too, or the last packet is sometimes still on its way.
-        wait_until(lambda: len(divert.sent) >= 5)
+        check("the five unimpaired packets were sent",
+              wait_until(lambda: len(divert.sent) >= 5))
         stats = engine.stats_snapshot()
     finally:
         engine.stop()

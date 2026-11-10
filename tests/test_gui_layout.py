@@ -594,7 +594,8 @@ def test_fields_with_a_help_sheet_get_the_question_mark_button():
     """
     run_gui("""
         from beantester.fields import FIELD_DEFS
-        expression_help = {"target", "dst_ip", "dst_port", "block_ip", "block_port"}
+        expression_help = {"target", "dst_ip", "dst_port", "payload_udp", "payload_tcp",
+                           "block_ip", "block_port"}
         own_sheet = {f.key for f in FIELD_DEFS if f.help_body}
         assert set(app.form.helps) == expression_help | own_sheet, app.form.helps
         assert "rate_schedule" not in app.form.helps

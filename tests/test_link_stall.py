@@ -102,6 +102,31 @@ def test_every_packet_of_one_outage_gets_the_identical_release_time():
         assert len(ends) <= 1, (period, down, start, sorted(ends))
 
 
+# Outages where an end computed from each packet's own clock (``now + (down -
+# phase)``) comes out EARLIER for the later of two packets: (session start, period,
+# downtime percent, first packet, second packet). Found by search on 2026-11-10;
+# random draws meet one in about 5000 outages, which is why they are written down.
+ROUNDING_TRAPS = (
+    (3058.09, 30.0, 50.0, 55588.269744137746, 55588.38538672782),
+    (1010.259, 30.0, 25.0, 17394.46233003149, 17394.97918237945),
+    (17945.743, 30.0, 10.0, 58655.7761502037, 58655.82921648419),
+    (10063.507, 30.0, 25.0, 32083.54164182481, 32083.644667059052),
+    (13643.535, 30.0, 10.0, 53063.5474400368, 53063.63742958647),
+    (20590.853, 30.0, 25.0, 54701.23492046498, 54701.36204061582),
+)
+
+
+def test_the_end_of_an_outage_does_not_depend_on_which_packet_asks():
+    """The same statement as the test above, on the outages known to break it: there
+    a later packet would be released BEFORE an earlier one of the same outage."""
+    for start, period, down, first, second in ROUNDING_TRAPS:
+        core = stalling_core(period=period, down_pct=down, start=start)
+        earlier, later = judge(core, first).releases[0], judge(core, second).releases[0]
+        check(f"start {start}, period {period}: both are held", earlier > first and later > second)
+        check(f"start {start}, period {period}: one release time for both",
+              earlier == later, f"({earlier!r} and {later!r})")
+
+
 def test_latency_is_added_after_the_stall():
     """Queue time and latency add up, on a real link and here: a packet stalled for
     two seconds on a 200 ms link arrives after 2.2 s, not after 2 s."""
@@ -307,8 +332,10 @@ def test_the_engine_says_at_stop_when_an_outage_ran_out_of_room():
     engine.start("test", divert=FakeDivert([]))
     engine.core.flap_refused = 37                    # what _outage counts past the limit
     engine.stop()
-    said = [line for line in lines if "37" in line and str(FLAP_HOLD_MAX) in line]
-    check("one line names both numbers", len(said) == 1, f"({lines})")
+    # the whole sentence, so the two numbers cannot trade places unnoticed
+    expected = translate("log.flap_hold_full", None, n=37, cap=FLAP_HOLD_MAX)
+    check("one line names both numbers, each in its place",
+          "37" in expected and lines.count(expected) == 1, f"({lines})")
     quiet = []
     engine = BeanEngine(log_fn=quiet.append)
     engine.start("test", divert=FakeDivert([]))
