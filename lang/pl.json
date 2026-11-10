@@ -997,7 +997,7 @@
   "tools.nat.detail.send_failed": "Ten komputer nie mógł wysłać: może nie mieć tam trasy. Sprawdź jego połączenie z siecią.",
   "tools.nat.detail.stopped": "Nie sprawdzono: zatrzymano.",
   "tools.nat.detail.stun_not_turn": "Odpowiada na STUN, ale nie jako serwer TURN (błąd {code}).",
-  "tools.nat.detail.tls_date": "Certyfikat wygasł albo jeszcze nie obowiązuje, albo zegar tego komputera wskazuje inną datę.",
+  "tools.nat.detail.tls_date": "Certyfikat wygasł albo jeszcze nie obowiązuje, albo zegar tego komputera wskazuje inną datę. Najpierw sprawdź datę i godzinę na tym komputerze.",
   "tools.nat.detail.tls_failed": "Uzgadnianie TLS nie powiodło się: serwer i ten komputer nie znalazły wspólnego sposobu zabezpieczenia połączenia.",
   "tools.nat.detail.tls_name": "Certyfikat nie jest wystawiony na „{name}”. Jeśli wpisany jest adres, wpisz zamiast niego nazwę serwera.",
   "tools.nat.detail.tls_reset": "Połączenie zostało przerwane w trakcie uzgadniania TLS: po drodze może być zapora, która filtruje po nazwie serwera.",

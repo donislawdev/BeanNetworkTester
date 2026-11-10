@@ -997,7 +997,7 @@
   "tools.nat.detail.send_failed": "This computer could not send: it may have no route there. Check its network connection.",
   "tools.nat.detail.stopped": "Not checked: stopped.",
   "tools.nat.detail.stun_not_turn": "It answers STUN, but not as a TURN server (error {code}).",
-  "tools.nat.detail.tls_date": "The certificate has expired or is not valid yet, or this computer's clock is off.",
+  "tools.nat.detail.tls_date": "The certificate has expired or is not valid yet, or this computer's clock is off. Check the date and time on this computer first.",
   "tools.nat.detail.tls_failed": "The TLS handshake failed: the server and this computer found no common way to secure the connection.",
   "tools.nat.detail.tls_name": "The certificate is not for \"{name}\". If an address is typed, type the server's name instead.",
   "tools.nat.detail.tls_reset": "The connection was cut during the TLS handshake: a firewall that filters by server name may be in the way.",

@@ -12283,6 +12283,77 @@ MUTATIONS = [
         "new": "        if out:\n",
         "test": "test_sentences_join_with_a_space_except_after_a_full_width_stop",
     },
+    {
+        "label": "linux bundle: a bundled libssl passes",
+        "file": "tools/linux_bundle.py",
+        "old": "\"libssl.so\", \"libcrypto.so\")\n",
+        "new": ")\n",
+        "test": "test_the_systems_openssl_is_not_carried",
+    },
+    {
+        "label": "linux bundle: a bundle without _ssl passes",
+        "file": "tools/linux_bundle.py",
+        "old": "\"libebpfdivert.so\", \"_ssl.\")\n",
+        "new": "\"libebpfdivert.so\")\n",
+        "test": "test_a_bundle_missing_what_it_must_carry_fails",
+    },
+    {
+        "label": "sbom: the bundle audit stops recognising OpenSSL",
+        "file": "tools/sbom.py",
+        "old": "    (r\"openssl|libssl|libcrypto\", \"OpenSSL\"),\n",
+        "new": "",
+        "test": "test_the_bundle_guard_notices_a_component_the_registry_lacks",
+    },
+    {
+        "label": "telemetry: an ssl import is no longer registered per file",
+        "file": "tests/test_no_telemetry.py",
+        "old": "REACHING_MODULES = (\"socket\", \"webbrowser\", \"subprocess\", \"ssl\")\n",
+        "new": "REACHING_MODULES = (\"socket\", \"webbrowser\", \"subprocess\")\n",
+        "test": "test_only_named_files_may_import_a_module_that_reaches_outside",
+    },
+    {
+        "label": "telemetry: a call on ssl is no longer registered",
+        "file": "tests/test_no_telemetry.py",
+        "old": "CALLED_MODULES = (\"socket\", \"webbrowser\", \"ssl\")\n",
+        "new": "CALLED_MODULES = (\"socket\", \"webbrowser\")\n",
+        "test": "test_every_socket_and_browser_use_is_a_named_exception",
+    },
+    # -- Stop during a TCP or TLS connection (the review of the TLS change) --------- #
+    {
+        "label": "nat: a stream stopped while connecting still sends its request",
+        "file": "beantester/nettools/nat.py",
+        "old": "    if not wanted():\n        return \"stopped\", b\"\"\n    try:\n        conn.sendall(data)\n",
+        "new": "    try:\n        conn.sendall(data)\n",
+        "test": "test_the_real_client_stopped_once_connected_sends_nothing",
+    },
+    {
+        "label": "nat: TLS stopped while connecting still makes the handshake",
+        "file": "beantester/nettools/nat.py",
+        "old": "            if not wanted():\n                return \"stopped\", b\"\"\n            raw.settimeout(",
+        "new": "            raw.settimeout(",
+        "test": "test_the_real_client_stopped_once_connected_sends_nothing",
+    },
+    {
+        "label": "nat: a TURN row stopped while connecting is a failure",
+        "file": "beantester/nettools/nat.py",
+        "old": "        if what == \"stopped\":\n            return              # the rows of a run stopped here say \"not checked\"\n",
+        "new": "",
+        "test": "test_stop_while_a_connection_is_made_sends_no_request",
+    },
+    {
+        "label": "nat: the TLS row does not hear Stop",
+        "file": "beantester/nettools/nat.py",
+        "old": "                                          request, TCP_S, wanted)\n",
+        "new": "                                          request, TCP_S, lambda: True)\n",
+        "test": "test_stop_while_a_connection_is_made_sends_no_request",
+    },
+    {
+        "label": "nat: the TCP row does not hear Stop",
+        "file": "beantester/nettools/nat.py",
+        "old": "            what, data = self.net.tcp_ask(family, self.turn_at.address, port, request, TCP_S,\n                                          wanted)\n",
+        "new": "            what, data = self.net.tcp_ask(family, self.turn_at.address, port, request, TCP_S,\n                                          lambda: True)\n",
+        "test": "test_stop_while_a_connection_is_made_sends_no_request",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

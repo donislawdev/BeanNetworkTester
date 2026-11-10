@@ -3,8 +3,10 @@
 One Start runs the jobs below, one worker run each: the panel checks Stop between
 them, and a job asks ``wanted()`` before everything it sends and after each name
 lookup, so Stop pressed during a slow job sends nothing more (the lesson of Ping's
-first version). A lookup itself cannot be cut short (``getaddrinfo`` has no
-timeout): a slow resolver makes the stop late, never the traffic.
+first version). Over TCP and TLS it is asked once the connection is made and again
+after the TLS handshake. A lookup, a connection or a handshake under way cannot be
+cut short (``getaddrinfo`` has no timeout, the other two end within ``TCP_S``): a
+slow resolver or server makes the stop late, and no request follows it.
 
 1. ``addresses`` - one UDP socket asks the STUN server which address it sees (the
    public address, and whether the router kept this computer's port), then asks the
@@ -298,9 +300,12 @@ def _connect(conn, address, port, timeout):
     return None
 
 
-def _ask_stream(conn, data, deadline):
+def _ask_stream(conn, data, deadline, wanted):
     """Send one request on a connected stream (TCP, or TLS over it) and read one STUN
-    message back: ``(what, answer bytes)`` as ``_Net.tcp_ask`` says them."""
+    message back: ``(what, answer bytes)`` as ``_Net.tcp_ask`` says them. ``wanted()``
+    is asked first: a Stop pressed while the connection was being made sends nothing."""
+    if not wanted():
+        return "stopped", b""
     try:
         conn.sendall(data)
         head = _read(conn, stun.HEADER, deadline)
@@ -338,18 +343,20 @@ class _Net:
             return None
 
     @staticmethod
-    def tcp_ask(family, address, port, data, timeout):
+    def tcp_ask(family, address, port, data, timeout, wanted):
         """One request on a new TCP connection: ``(what, answer bytes)`` - what is
-        "answer", "refused", "no_connection", "no_answer" or "not_stun". Every read is
-        bounded (``stun.MAX_MESSAGE``) and the whole exchange takes ``timeout`` s at
-        most. Closing the connection ends an allocation made on it (RFC 8656)."""
+        "answer", "refused", "no_connection", "no_answer", "not_stun", or "stopped"
+        when ``wanted()`` says no once the connection is made (nothing is sent then).
+        Every read is bounded (``stun.MAX_MESSAGE``) and the whole exchange takes
+        ``timeout`` s at most. Closing the connection ends an allocation made on it
+        (RFC 8656)."""
         deadline = time.monotonic() + timeout
         with socket.socket(family, socket.SOCK_STREAM) as conn:
             failed = _connect(conn, address, port, timeout)
-            return (failed, b"") if failed else _ask_stream(conn, data, deadline)
+            return (failed, b"") if failed else _ask_stream(conn, data, deadline, wanted)
 
     @staticmethod
-    def tls_ask(family, address, port, name, data, timeout):
+    def tls_ask(family, address, port, name, data, timeout, wanted):
         """``tcp_ask`` inside TLS, to ``name`` - the server's name as typed: the name the
         handshake sends (SNI) and the one its certificate must be for. The certificate
         is checked against this computer's trusted roots, as a call app's TLS checks it
@@ -357,8 +364,9 @@ class _Net:
         tests/test_no_telemetry.py). Besides ``tcp_ask``'s answers, what is "untrusted",
         "name" or "date" (the certificate), "reset" (cut during the handshake),
         "not_tls", "tls_failed", or "no_tls" when this system has no TLS library this
-        program can load. ``ssl`` is imported here, so OpenSSL loads with the first TLS
-        row and not with the window."""
+        program can load. ``wanted()`` is asked before the handshake as well, which
+        sends the name. ``ssl`` is imported here, so opening the NAT and STUN panel does
+        not load OpenSSL: the first TLS row does."""
         try:
             import ssl
         except ImportError:
@@ -368,6 +376,8 @@ class _Net:
             failed = _connect(raw, address, port, timeout)
             if failed:
                 return failed, b""
+            if not wanted():
+                return "stopped", b""
             raw.settimeout(max(deadline - time.monotonic(), POLL_S))
             try:
                 conn = ssl.create_default_context().wrap_socket(raw, server_hostname=name)
@@ -381,7 +391,7 @@ class _Net:
             except OSError:
                 return "no_answer", b""
             with conn:
-                return _ask_stream(conn, data, deadline)
+                return _ask_stream(conn, data, deadline, wanted)
 
 
 def _family(address):
@@ -927,9 +937,12 @@ class Run:
         began = time.monotonic()
         if transport == "TLS":
             what, data = self.net.tls_ask(family, self.turn_at.address, port, self.turn.host,
-                                          request, TCP_S)
+                                          request, TCP_S, wanted)
         else:
-            what, data = self.net.tcp_ask(family, self.turn_at.address, port, request, TCP_S)
+            what, data = self.net.tcp_ask(family, self.turn_at.address, port, request, TCP_S,
+                                          wanted)
+        if what == "stopped":
+            return              # the rows of a run stopped here say "not checked"
         ms = round((time.monotonic() - began) * 1000)
         if what == "answer":
             message = stun.decode(data)

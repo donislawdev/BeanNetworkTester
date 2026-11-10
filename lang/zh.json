@@ -997,7 +997,7 @@
   "tools.nat.detail.send_failed": "这台电脑无法发送：可能没有通往那里的路由。请检查它的网络连接。",
   "tools.nat.detail.stopped": "未检查：已停止。",
   "tools.nat.detail.stun_not_turn": "它回复 STUN，但不是作为 TURN 服务器（错误 {code}）。",
-  "tools.nat.detail.tls_date": "证书已过期或尚未生效，或者这台电脑的时钟不准。",
+  "tools.nat.detail.tls_date": "证书已过期或尚未生效，或者这台电脑的时钟不准。请先检查这台电脑的日期和时间。",
   "tools.nat.detail.tls_failed": "TLS 握手失败：服务器和这台电脑找不到共同的连接加密方式。",
   "tools.nat.detail.tls_name": "证书不是为“{name}”签发的。如果输入的是地址，请改为输入服务器名称。",
   "tools.nat.detail.tls_reset": "TLS 握手过程中连接被切断：途中可能有按服务器名称过滤的防火墙。",

@@ -653,6 +653,19 @@ def test_no_shipped_code_weakens_tls():
     check("no shipped code weakens TLS or makes its own context", not bad, f"({bad})")
 
 
+def test_the_default_context_checks_what_security_md_says():
+    """What the guard above keeps in place, on the Python the packages are built with:
+    a certificate required, for the name asked, TLS 1.2 at least (the default since
+    Python 3.10). A scanner that models older Pythons reads the default context as
+    allowing TLS 1.0 and 1.1; this is the measured answer."""
+    import ssl
+    context = ssl.create_default_context()
+    check("a certificate is required", context.verify_mode == ssl.CERT_REQUIRED)
+    check("for the name asked", context.check_hostname)
+    check("TLS 1.2 at least", context.minimum_version >= ssl.TLSVersion.TLSv1_2,
+          f"({context.minimum_version!r})")
+
+
 def test_the_tls_guard_rejects_each_way_to_weaken_it():
     """The canary for the check above, and for the one allowed call."""
     weak = {

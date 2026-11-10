@@ -88,6 +88,7 @@ class FakeNat:
         self.log = []               # (local port, to, ttl, data)
         self.received = []          # what the servers got: (server, request)
         self.on_send = None
+        self.on_connect = None      # (transport, port), as a TCP or TLS connection is made
 
     # -- the _Net interface ------------------------------------------------------- #
     def lookup(self, name, port):
@@ -103,8 +104,17 @@ class FakeNat:
     def route_source(self, family, address):
         return self.routes.get(address, LOCAL)
 
-    def tcp_ask(self, family, address, port, data, timeout):
+    def _connected(self, transport, port, wanted):
+        """A connection is made: ``on_connect`` may press Stop now, and the client asks
+        ``wanted()`` before it sends anything (``nat._ask_stream``)."""
+        if self.on_connect:
+            self.on_connect(transport, port)
+        return wanted()
+
+    def tcp_ask(self, family, address, port, data, timeout, wanted):
         mode = self.tcp.get(port, "no_connection")
+        if mode not in ("refused", "no_connection") and not self._connected("TCP", port, wanted):
+            return "stopped", b""
         request = stun.decode(data)
         self.received.append(("tcp", port, request))
         if mode in ("refused", "no_connection", "no_answer", "not_stun"):
@@ -113,8 +123,11 @@ class FakeNat:
             return "answer", b"\x01\x13\x00\x00" + stun.COOKIE + bytes(12)
         return "answer", self._allocate_answer(request, mode)
 
-    def tls_ask(self, family, address, port, name, data, timeout):
+    def tls_ask(self, family, address, port, name, data, timeout, wanted):
         mode = self.tls.get(port, "no_connection")
+        if (mode not in ("refused", "no_connection", "no_tls")
+                and not self._connected("TLS", port, wanted)):
+            return "stopped", b""
         self.tls_names.append(name)
         if not mode.isdigit() and mode != "success":
             return mode, b""
@@ -515,7 +528,7 @@ def test_each_tls_failure_says_what_it_is(mode, result, detail):
     assert (row.state, row.result, row.detail) == (nat.FAIL, result, detail)
     for lang in ("en", "pl", "zh"):
         text = translate(detail, lang, **dict(row.args))
-        assert text and "{" not in text, (lang, text)
+        assert text != detail and "{" not in text, (lang, text)
     assert tls_row(run, 443).detail == "tools.nat.detail.turn_answers", "the other port is its own row"
 
 
@@ -625,6 +638,28 @@ def test_stop_during_a_name_lookup_asks_and_sends_nothing_more():
     assert run.step() == ()
     assert asked == ["stun.test"] and net.log == [] and run.done()
     assert {row.detail for row in run.not_checked()} == {"tools.nat.detail.stopped"}
+
+
+@pytest.mark.parametrize("transport, port", [("TCP", 3478), ("TLS", 5349)])
+def test_stop_while_a_connection_is_made_sends_no_request(transport, port):
+    """A connection or a TLS handshake under way is not cut short, but the TURN request
+    that would follow it is not sent, and its row says "not checked"."""
+    net = FakeNat()
+    run = nat.Run(nat.parse_server("stun.test", "stun"), nat.parse_server("turn.test", "turn"),
+                  net)
+
+    def stopper(at_transport, at_port):
+        if (at_transport, at_port) == (transport, port):
+            run.stop()                               # pressed while it connects
+    net.on_connect = stopper
+    while not run.done():
+        run.step()
+    key = ("turn", (("transport", transport), ("port", port)))
+    assert key not in by_test(run), "no row of its own"
+    assert (transport.lower(), port) not in {entry[:2] for entry in net.received}
+    stopped = {(row.test, row.args[:2]) for row in run.not_checked()
+               if row.detail == "tools.nat.detail.stopped"}
+    assert key in stopped
 
 
 def test_every_socket_is_bound_to_this_computers_address_towards_its_server():
@@ -880,20 +915,22 @@ def test_the_real_sockets_against_a_server_on_loopback():
 class NotTls:
     """A TCP server on 127.0.0.1 that is not a TLS one: it answers what it is given
     with STUN-looking bytes ("stun"), resets the connection ("reset") or says nothing
-    for a while ("silent"). One connection."""
+    for a while ("silent"). One connection; ``got`` is the first thing it was sent
+    (empty when the client closed without sending)."""
 
     def __init__(self, mode):
         self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.listener.bind(("127.0.0.1", 0))
         self.listener.listen(1)
         self.port = self.listener.getsockname()[1]
+        self.got = None
         self.thread = threading.Thread(target=self._serve, args=(mode,), daemon=True)
         self.thread.start()
 
     def _serve(self, mode):
         conn, _source = self.listener.accept()
         with conn:
-            conn.recv(4096)
+            self.got = conn.recv(4096)
             if mode == "stun":
                 conn.sendall(b"\x01\x13\x00\x00" + stun.COOKIE + bytes(12))
             elif mode == "reset":
@@ -906,6 +943,11 @@ class NotTls:
         self.listener.close()
 
 
+def always():
+    """``wanted()`` of a run nobody stops."""
+    return True
+
+
 @pytest.mark.parametrize("mode, what", [("stun", "not_tls"), ("reset", "reset"),
                                         ("silent", "no_answer")])
 def test_the_real_tls_client_against_servers_that_do_not_speak_it(mode, what):
@@ -914,10 +956,64 @@ def test_the_real_tls_client_against_servers_that_do_not_speak_it(mode, what):
     server = NotTls(mode)
     try:
         found = nat._Net.tls_ask(socket.AF_INET, "127.0.0.1", server.port, "turn.test",
-                                 stun.allocate_request(stun.transaction_id()), 0.5)
+                                 stun.allocate_request(stun.transaction_id()), 0.5, always)
     finally:
         server.close()
     assert found == (what, b"")
+
+
+@pytest.mark.parametrize("transport", ["TCP", "TLS"])
+def test_the_real_client_stopped_once_connected_sends_nothing(transport):
+    """Stop pressed while the connection was being made: no request, and over TLS no
+    handshake either - the server gets not one byte before the client closes."""
+    server = NotTls("silent")
+    request = stun.allocate_request(stun.transaction_id())
+    try:
+        if transport == "TLS":
+            found = nat._Net.tls_ask(socket.AF_INET, "127.0.0.1", server.port, "turn.test",
+                                     request, 2, lambda: False)
+        else:
+            found = nat._Net.tcp_ask(socket.AF_INET, "127.0.0.1", server.port, request, 2,
+                                     lambda: False)
+    finally:
+        server.close()
+    assert (found, server.got) == (("stopped", b""), b"")
+
+
+def test_a_stop_during_the_handshake_sends_no_request(monkeypatch):
+    import ssl
+    sent = []
+
+    class Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+        def settimeout(self, _seconds):
+            pass
+
+        def sendall(self, data):
+            sent.append(data)
+
+        def recv(self, _size):
+            return b""
+
+    class Context:
+        def wrap_socket(self, raw, server_hostname):
+            return Conn()
+    monkeypatch.setattr(ssl, "create_default_context", Context)
+    answers = iter([True, False])                    # before the handshake, after it
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    try:
+        found = nat._Net.tls_ask(socket.AF_INET, "127.0.0.1", listener.getsockname()[1],
+                                 "turn.test", b"x", 1, lambda: next(answers))
+    finally:
+        listener.close()
+    assert (found, sent) == (("stopped", b""), [])
 
 
 def test_a_closed_port_is_refused_before_any_tls():
@@ -926,8 +1022,8 @@ def test_a_closed_port_is_refused_before_any_tls():
     port = probe.getsockname()[1]
     probe.close()
     # 5 s: Windows tries a refused loopback connection again for about 2 s first.
-    assert nat._Net.tls_ask(socket.AF_INET, "127.0.0.1", port, "turn.test", b"x", 5) == (
-        "refused", b"")
+    assert nat._Net.tls_ask(socket.AF_INET, "127.0.0.1", port, "turn.test", b"x", 5,
+                            always) == ("refused", b"")
 
 
 @pytest.mark.parametrize("code, what", [(20, "untrusted"), (19, "untrusted"), (18, "untrusted"),
@@ -951,7 +1047,7 @@ def test_a_refused_certificate_is_told_by_its_verify_code(monkeypatch, code, wha
     listener.listen(1)
     try:
         found = nat._Net.tls_ask(socket.AF_INET, "127.0.0.1", listener.getsockname()[1],
-                                 "turn.test", b"x", 1)
+                                 "turn.test", b"x", 1, always)
     finally:
         listener.close()
     assert (found, asked) == ((what, b""), ["turn.test"])
@@ -974,7 +1070,7 @@ def test_a_handshake_that_fails_is_told_from_a_port_without_tls(monkeypatch, rea
     listener.listen(1)
     try:
         found = nat._Net.tls_ask(socket.AF_INET, "127.0.0.1", listener.getsockname()[1],
-                                 "turn.test", b"x", 1)
+                                 "turn.test", b"x", 1, always)
     finally:
         listener.close()
     assert found == (what, b"")
@@ -983,8 +1079,8 @@ def test_a_handshake_that_fails_is_told_from_a_port_without_tls(monkeypatch, rea
 def test_no_tls_library_here_is_said_before_anything_is_sent(monkeypatch):
     monkeypatch.setitem(sys.modules, "ssl", None)          # import ssl raises ImportError
     monkeypatch.setattr(socket, "socket", None)            # and nothing may be opened
-    assert nat._Net.tls_ask(socket.AF_INET, "192.0.2.2", 443, "turn.test", b"x", 1) == (
-        "no_tls", b"")
+    assert nat._Net.tls_ask(socket.AF_INET, "192.0.2.2", 443, "turn.test", b"x", 1,
+                            always) == ("no_tls", b"")
 
 
 def test_the_receive_loop_takes_an_icmp_error_and_waits_on():

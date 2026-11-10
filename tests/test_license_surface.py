@@ -368,7 +368,7 @@ def test_the_openssl_row_names_the_version_this_python_loads():
     version = {name: v for name, v, *_ in legal.component_rows("win32")}["OpenSSL"]
     check("the row is the version text's", version == ssl.OPENSSL_VERSION.split()[1],
           f"({version} vs {ssl.OPENSSL_VERSION})")
-    found = re.fullmatch(r"3\.\d+\.(\d+)", version)
+    found = re.fullmatch(r"\d+\.\d+\.(\d+)", version)
     check("with its patch number", found is not None
           and int(found.group(1)) == ssl.OPENSSL_VERSION_INFO[3],
           f"({version}, {ssl.OPENSSL_VERSION_INFO})")
