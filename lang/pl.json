@@ -8,7 +8,7 @@
   "about.license": "Licencja: {license}",
   "about.license_terms": "Wolne i otwarte oprogramowanie na licencji GNU GPL v3. Wolno używać, zmieniać i udostępniać dalej na tej samej licencji.",
   "about.licenses_dir": "Pełne teksty licencji: {path}",
-  "about.no_telemetry": "Ten program niczego nie wysyła sam z siebie: zero telemetrii, brak sprawdzania aktualizacji, brak usług zewnętrznych. Jego narzędzie Ping pinguje tylko adres, który wpiszesz, od Start do Stop.",
+  "about.no_telemetry": "Ten program niczego nie wysyła sam z siebie: zero telemetrii, brak sprawdzania aktualizacji, brak usług zewnętrznych. Jego narzędzie Ping pinguje tylko adres, który wpiszesz, od Start do Stop. Narzędzie NAT i STUN po naciśnięciu Start wysyła kilka zapytań do dwóch wpisanych serwerów oraz małe pakiety testowe na własny adres publiczny tej sieci.",
   "about.no_warranty": "Program nie ma żadnej gwarancji, w zakresie dozwolonym przez prawo.",
   "about.third_party": "Zbudowany na (każdy składnik na własnej licencji, patrz THIRD-PARTY-NOTICES.md):",
   "about.version": "wersja {version}",

@@ -313,5 +313,7 @@ def cli_report():
               "Full notices:       %s" % resource_path(NOTICES_FILE),
               "",
               "Telemetry: none. This program sends nothing on its own. Its Ping tool "
-              "pings only the address you type."]
+              "pings only the address you type, and its NAT and STUN tool sends a few "
+              "requests to the two servers you type and small test datagrams to this "
+              "network's own public address, when you press Start."]
     return "\n".join(lines)

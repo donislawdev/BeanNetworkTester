@@ -60,7 +60,8 @@ exists.
 - **Export to CSV** - session statistics and a snapshot of the connections table.
 - **Command-line mode** - scriptable for CI, with exit codes and JSON output.
 - **No telemetry, nothing sent on its own** - the Ping tool pings only the address you type,
-  from Start to Stop.
+  from Start to Stop, and the NAT and STUN tool sends a few requests to the two servers you type
+  and small test packets to this network's own public address, when you press Start.
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester adding lag and packet loss to a live ping" width="820">
@@ -2070,10 +2071,13 @@ rights arising from them.
 
 Bean Network Tester **sends nothing on its own**. It has no telemetry, no update checks and no
 external services. The tool captures network traffic on your computer - and that data **never leaves
-it**. Two things go out only when you ask for them: a page opened in your browser - the support page
-or the project's page on GitHub - when you click the button for it yourself, and the echo requests of
-the **Ping** tool on the Tools tab, which go only to the address you type, from Start to Stop. When you
-type a name instead of an address, Windows looks it up first, the way it does for any program.
+it**. Three things go out, and only when you ask for them. One is a page opened in your browser - the
+support page or the project's page on GitHub - when you click the button for it yourself. Another is
+the echo requests of the **Ping** tool on the Tools tab, which go only to the address you type, from
+Start to Stop. The third is what the **NAT and STUN** tool on the same tab sends when you press Start:
+a few requests to the two servers you type and small test packets to this network's own public
+address. When you type a name instead of an address, Windows looks it up first, the way it does for
+any program.
 
 ## A note on SmartScreen and antivirus
 

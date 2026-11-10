@@ -66,7 +66,8 @@ tester que lo necesite.
 - **Exportar a CSV** - estadísticas de la sesión e instantánea de la tabla de conexiones.
 - **Modo de línea de comandos** - automatizable para CI, con códigos de salida y salida JSON.
 - **Sin telemetría, no envía nada por su cuenta** - la herramienta Ping solo hace ping a la
-  dirección que se escribe.
+  dirección que se escribe, y NAT and STUN envía unas pocas solicitudes a los dos servidores que se
+  escriben y pequeños paquetes de prueba a la propia dirección pública de esta red, al pulsar Start.
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester adding lag and packet loss to a live ping" width="820">
@@ -1872,10 +1873,13 @@ la licencia del proyecto restringe los derechos que se derivan de ellas.
 
 Bean Network Tester **no envía nada por su cuenta**. No tiene telemetría, ni comprobación de
 actualizaciones, ni servicios externos. La herramienta captura tráfico de red en su equipo, y esos
-datos **nunca salen de él**. Solo salen dos cosas, y solo cuando se piden: una página abierta en el
-navegador (la página de apoyo o la página del proyecto en GitHub), cuando se hace clic por cuenta
-propia en el botón correspondiente, y las solicitudes de eco de la herramienta **Ping** de la
-pestaña Tools, que van solo a la dirección que se escribe, de Start a Stop. Si se escribe un nombre
+datos **nunca salen de él**. Solo salen tres cosas, y solo cuando se piden. Una es una página
+abierta en el navegador (la página de apoyo o la página del proyecto en GitHub), cuando se hace clic
+por cuenta propia en el botón correspondiente. Otra son las solicitudes de eco de la herramienta
+**Ping** de la pestaña Tools, que van solo a la dirección que se escribe, de Start a Stop. La tercera
+es lo que envía la herramienta **NAT and STUN** de la misma pestaña al pulsar Start: unas pocas
+solicitudes a los dos servidores que se escriben y pequeños paquetes de prueba a la propia dirección
+pública de esta red. Si se escribe un nombre
 en lugar de una dirección, Windows lo busca primero, como para cualquier programa.
 
 ## Una nota sobre SmartScreen y el antivirus

@@ -1068,6 +1068,108 @@ def test_the_promise_names_exactly_the_tools_that_send():
                   bool(english.get(f"tools.{tool.id}.sends")), "(tools.<id>.sends missing)")
 
 
+# Every OTHER sentence that says what leaves the computer. #321 reworded the promise
+# above and SECURITY.md for NAT and STUN, and five places went on naming Ping alone -
+# the README's privacy section said "Two things go out" while there were three (found
+# 2026-11-10, before a release carried it). Each of them must name every tool that
+# sends, by the name its reader sees: the tab's name in the language the text is in
+# where the program speaks it (lang/<code>.json), and the English name in the README
+# translations the window has no language for, as their Tools entries do.
+README_NAME_LANGUAGE = {"README.zh-Hans.md": "zh"}
+
+
+def _languages():
+    import json
+    folder = os.path.join(ROOT, "lang")
+    return {name[:-5]: json.load(open(os.path.join(folder, name), encoding="utf-8"))
+            for name in sorted(os.listdir(folder)) if name.endswith(".json")}
+
+
+def _readme_parts(lines):
+    """The README's two sentences about what goes out: the feature bullet that names
+    Ping (with its wrapped lines) and the section just above the SmartScreen one."""
+    parts = []
+    for index, line in enumerate(lines):
+        if not line.startswith("- **"):
+            continue
+        end = index + 1
+        while end < len(lines) and lines[end].startswith("  "):
+            end += 1
+        bullet = "\n".join(lines[index:end])
+        if "Ping" in bullet:
+            parts.append(("feature list", bullet))
+            break
+    smart = next((i for i, line in enumerate(lines)
+                  if line.startswith("## ") and "SmartScreen" in line), None)
+    if smart is not None:
+        start = max(i for i in range(smart) if lines[i].startswith("## "))
+        parts.append(("privacy section", "\n".join(lines[start:smart])))
+    return parts
+
+
+def what_goes_out():
+    """``(where, text, language)`` of every sentence that lists what leaves the computer."""
+    from beantester import legal
+    found = []
+    for name in sorted(os.listdir(ROOT)):
+        if name.startswith("README") and name.endswith(".md"):
+            with open(os.path.join(ROOT, name), encoding="utf-8") as handle:
+                lines = handle.read().splitlines()
+            language = README_NAME_LANGUAGE.get(name, "en")
+            found += [(f"{name}, {part}", text, language)
+                      for part, text in _readme_parts(lines)]
+    with open(os.path.join(ROOT, "THIRD-PARTY-NOTICES.md"), encoding="utf-8") as handle:
+        notices = handle.read()
+    at = notices.find("## Telemetry")
+    if at >= 0:
+        end = notices.find("\n## ", at + 1)
+        found.append(("THIRD-PARTY-NOTICES.md, Telemetry",
+                      notices[at:end if end > 0 else None], "en"))
+    report = legal.cli_report()
+    found.append(("--license", report[report.find("Telemetry:"):], "en"))
+    for code, strings in _languages().items():
+        found.append((f"lang/{code}.json, about.no_telemetry",
+                      strings.get("about.no_telemetry", ""), code))
+    return found
+
+
+def unnamed(text, names):
+    """The tools of ``names`` (id -> name) that ``text`` does not name; line breaks
+    count as spaces, because the READMEs wrap their sentences."""
+    folded = " ".join(text.split())
+    return sorted(tool for tool, name in names.items() if name not in folded)
+
+
+def test_every_sentence_about_what_goes_out_names_every_tool_that_sends():
+    from beantester.gui.toolbox import TOOLS
+    languages = _languages()
+    sending = [tool for tool in TOOLS if tool.sends]
+    found = what_goes_out()
+    readmes = [name for name in os.listdir(ROOT)
+               if name.startswith("README") and name.endswith(".md")]
+    # Two per README, the notices, --license and one per window language: fewer means
+    # a sentence was not found, and a check over nothing passes everything.
+    check("every sentence about what goes out was found",
+          len(found) == 2 * len(readmes) + 2 + len(languages) and all(t for _w, t, _l in found),
+          f"({[(where, len(text)) for where, text, _l in found]})")
+    missing = {}
+    for where, text, language in found:
+        names = {tool.id: languages[language][tool.label] for tool in sending}
+        if unnamed(text, names):
+            missing[where] = unnamed(text, names)
+    check("each of them names every tool that sends", not missing,
+          f"(name the tool there, the way the Tools tab's promise does: {missing})")
+
+
+def test_a_sentence_that_leaves_a_sending_tool_out_is_caught():
+    """The canary for the check above: the sentence #321 left behind."""
+    names = {"ping": "Ping", "nat": "NAT and STUN"}
+    check("Ping alone is caught",
+          unnamed("Its Ping tool pings only the address you type.", names) == ["nat"])
+    check("a name wrapped across two lines still counts",
+          unnamed("Ping, and the NAT and\n  STUN tool", names) == [])
+
+
 def test_the_tools_tab_check_sees_each_way_out():
     """The canary for the check above: each shape a network tool would take."""
     rel = "beantester/nettools/probe.py"

@@ -10,9 +10,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 - **Tools: NAT and STUN, how this network's router treats a call.** Press **Start** and in a
   few seconds the table shows this computer's public address, whether the router keeps one
   public port for every server, whether two devices behind it reach each other through that
-  address (both at once and one side first), and on which transports a TURN server answers.
-  When the run ends, a line above the table says what it can mean for a call. The STUN and
-  TURN servers can be changed (Cloudflare's are filled in), and nothing is sent before Start.
+  address, and on which transports a TURN server answers. When the run ends, a line above
+  the table says what it can mean for a call. The servers can be changed (Cloudflare's are
+  filled in). Nothing is sent before Start, and the About window and `--license` name the
+  tool among what the program sends.
 
 - **Connections: an ICE column shows which path a call takes.** For a call or another ICE
   connection (WebRTC and the like), the column says what each connection is: LAN (to this

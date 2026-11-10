@@ -66,7 +66,8 @@ der es braucht, dass es existiert.
 - **Export nach CSV** - Sitzungsstatistik und ein Schnappschuss der Verbindungstabelle.
 - **Befehlszeilenmodus** - skriptfähig für CI, mit Exit-Codes und JSON-Ausgabe.
 - **Keine Telemetrie, sendet nichts von sich aus** - das Werkzeug Ping pingt nur die Adresse, die
-  Sie eingeben.
+  Sie eingeben, und NAT and STUN sendet einige Anfragen an die beiden Server, die Sie eingeben, und
+  kleine Testpakete an die eigene öffentliche Adresse dieses Netzwerks, wenn Sie Start drücken.
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester fügt einem laufenden Ping Verzögerung und Paketverlust hinzu" width="820">
@@ -1922,10 +1923,13 @@ Projekts schränkt die Rechte ein, die sich aus ihnen ergeben.
 
 Bean Network Tester **sendet nichts von sich aus**. Es hat keine Telemetrie, keine Update-Prüfungen
 und keine externen Dienste. Das Werkzeug erfasst Netzwerkverkehr auf Ihrem Computer - und diese
-Daten **verlassen ihn nie**. Zwei Dinge gehen nur hinaus, wenn Sie darum bitten: eine Seite, die in
-Ihrem Browser geöffnet wird - die Unterstützungsseite oder die Seite des Projekts auf GitHub -, wenn
-Sie selbst auf die entsprechende Schaltfläche klicken, und die Echo-Anfragen des Werkzeugs **Ping**
-auf dem Tab Tools, die nur an die Adresse gehen, die Sie eingeben, von Start bis Stop. Wenn Sie statt
+Daten **verlassen ihn nie**. Drei Dinge gehen nur hinaus, wenn Sie darum bitten. Das eine ist eine
+Seite, die in Ihrem Browser geöffnet wird - die Unterstützungsseite oder die Seite des Projekts auf
+GitHub -, wenn Sie selbst auf die entsprechende Schaltfläche klicken. Das zweite sind die
+Echo-Anfragen des Werkzeugs **Ping** auf dem Tab Tools, die nur an die Adresse gehen, die Sie
+eingeben, von Start bis Stop. Das dritte ist, was das Werkzeug **NAT and STUN** auf demselben Tab
+sendet, wenn Sie Start drücken: einige Anfragen an die beiden Server, die Sie eingeben, und kleine
+Testpakete an die eigene öffentliche Adresse dieses Netzwerks. Wenn Sie statt
 einer Adresse einen Namen eingeben, schlägt Windows ihn zuerst nach, wie für jedes Programm.
 
 ## Ein Hinweis zu SmartScreen und Antivirenprogrammen

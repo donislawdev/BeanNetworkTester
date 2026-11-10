@@ -8,7 +8,7 @@
   "about.license": "许可证：{license}",
   "about.license_terms": "本程序依据 GNU GPL v3 免费开源。你可以在遵守相同许可证的前提下使用、修改和分享。",
   "about.licenses_dir": "完整许可证文本：{path}",
-  "about.no_telemetry": "本程序不会自行发送任何内容：没有遥测、没有更新检查，也不使用外部服务。它的 Ping 工具只在“开始”到“停止”之间 ping 你输入的地址。",
+  "about.no_telemetry": "本程序不会自行发送任何内容：没有遥测、没有更新检查，也不使用外部服务。它的 Ping 工具只在“开始”到“停止”之间 ping 你输入的地址。它的 NAT 和 STUN 工具在你按下“开始”后，向你输入的两个服务器发送少量请求，并向本网络自己的公网地址发送小测试包。",
   "about.no_warranty": "在法律允许的最大范围内，本程序不提供任何形式的担保。",
   "about.third_party": "本程序使用了以下组件（各自采用独立许可证，详见 THIRD-PARTY-NOTICES.md）：",
   "about.version": "版本 {version}",
