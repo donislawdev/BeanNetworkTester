@@ -58,6 +58,10 @@ KIND_PROCESS = "process"
 REGEX_PREFIX = "re:"
 OPERATORS = (">=", "<=", ">", "<")       # two-character operators come first
 PORT_BOUNDS = (0, 65535)                 # usable as the ``bounds`` of a port field
+# ...and of a payload-size field: the bytes of transport data one IP packet can
+# carry. The same numbers by coincidence (both are 16-bit), which is why it has a
+# name of its own: a jumbogram would move this one and leave the ports alone.
+PAYLOAD_BOUNDS = (0, 65535)
 
 
 # -- errors ------------------------------------------------------------------ #

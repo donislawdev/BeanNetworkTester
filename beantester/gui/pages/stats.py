@@ -83,6 +83,7 @@ CELLS = (
     ("drop_internet_only", "stats.local_cut", "", "tips.stat_local"),
     ("drop_block", "stats.block_cut", "", "tips.stat_block"),
     ("drop_flap", "stats.flap_cut", "", "tips.stat_flap"),
+    ("flap_held", "stats.flap_held", "", "tips.stat_flap_held"),
     ("rst_sent", "stats.rst_sent", "", "tips.stat_rst_sent"),
 )
 

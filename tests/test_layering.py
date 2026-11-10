@@ -87,13 +87,16 @@ def _top_level_modules():
 
 def test_core_stays_pure():
     intra, _ = _module_level(_pkg_file("core.py"))
-    allowed = {"utils", "matchers", "ice"}
-    check("core.py imports only utils/matchers/ice internally",
+    allowed = {"utils", "matchers", "ice", "wire"}
+    check("core.py imports only utils/matchers/ice/wire internally",
           intra <= allowed, f"(also imports {sorted(intra - allowed)})")
     # ...and ice stays a leaf, or core would reach whatever it grew to import
     leaf, _ = _module_level(_pkg_file("ice.py"))
     check("ice.py imports only utils internally", leaf <= {"utils"},
           f"(also imports {sorted(leaf - {'utils'})})")
+    # ...and wire imports nothing of ours at all: it reads bytes
+    leaf, _ = _module_level(_pkg_file("wire.py"))
+    check("wire.py imports nothing from the package", not leaf, f"(imports {sorted(leaf)})")
 
 
 def test_engine_never_imports_gui_or_cli():

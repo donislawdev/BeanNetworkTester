@@ -152,9 +152,21 @@ def test_every_expression_field_says_what_its_empty_value_means():
     (``narrows``) takes every value, one that acts only on what it names
     (IMPAIRS_MATCHED) takes none. A new expression field that is neither would be read
     as a bound without anybody deciding it, and the note for the second kind speaks of
-    a BLOCK, so those must stay the block card's."""
+    a BLOCK, so those must stay the block card's.
+
+    The payload pair is the decided exception: a scope like the destination - alone
+    and empty it takes every packet, which is what the tester says - but deliberately
+    not ``narrows``, since ">=0" bounds nothing (fields.py)."""
+    scope_without_a_bound = {"payload_udp", "payload_tcp"}
     for field in expression_fields():
         matched_only = field.impairs == IMPAIRS_MATCHED
+        if field.key in scope_without_a_bound:
+            check(f"{field.key}: a scope, and neither a bound nor a block",
+                  not field.narrows and not field.impairs and field.section == "payload",
+                  f"({field.narrows}, {field.impairs!r}, {field.section})")
+            check(f"{field.key}: empty takes every value",
+                  evaluate(field.key, "", "100").everything)
+            continue
         check(f"{field.key}: exactly one of narrows and IMPAIRS_MATCHED",
               field.narrows != matched_only, f"({field.narrows}, {field.impairs!r})")
         if matched_only:

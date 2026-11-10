@@ -131,6 +131,11 @@ connection on this machine until you stop it, and says so before it starts.
 """
 
 
+_FLAP_HOLD_HELP = ("hold the packets that arrive during an outage and deliver them "
+                   "when it ends, in order, instead of dropping them. Latency is "
+                   "added after the wait and a speed limit spreads the burst out")
+
+
 def _add_scope_arguments(p):
     """The flags that say WHICH traffic is aimed at, rather than what is done to it.
 
@@ -184,6 +189,20 @@ def _add_scope_arguments(p):
                         "that has carried STUN, so other UDP (QUIC, VPNs) never "
                         "counts. The rest of the traffic is left alone, blocking and "
                         "LAN mode included")
+    # Targeting again, by how much data a packet carries. NOT --udp-payload and
+    # --tcp-payload: those would make --u (today --up) and --t (--target) ambiguous.
+    p.add_argument("--payload-udp",
+                   help="impair only UDP packets that carry this many bytes of data "
+                        "(the payload, without headers): number, list, range a-b, "
+                        "comparison, ! to exclude (e.g. '64-1472' leaves small "
+                        "keepalives alone). TCP is then left alone, unless "
+                        "--payload-tcp is given too. Packets whose size cannot be "
+                        "read (ICMP, fragments) are always left alone")
+    p.add_argument("--payload-tcp",
+                   help="impair only TCP packets that carry this many bytes of data, "
+                        "in the same syntax (e.g. '!0' leaves bare acknowledgements "
+                        "alone, '0' impairs nothing else). UDP is then left alone, "
+                        "unless --payload-udp is given too")
     p.add_argument("--lan-mode", action="store_true",
                    help="LAN mode: cut the internet (public addresses), keep the local network")
     # NOT --lan-cut or --lan-block: a second option starting with "lan-" makes
@@ -296,6 +315,7 @@ def build_arg_parser():
     p.add_argument("--loop", action="store_true", help="loop the scenario")
     p.add_argument("--flap-period", type=float, help="link outage period [s]")
     p.add_argument("--flap-down", type=float, help="fraction of the period down [%%]")
+    p.add_argument("--flap-hold", action="store_true", help=_FLAP_HOLD_HELP)
     # default=None (NOT 0): --duration is a setting now, so a flag that is not
     # given must not override a --config file with a zero
     p.add_argument("--duration", type=float, default=None,
@@ -526,6 +546,7 @@ def _sample_record(elapsed, down, up, s):
                 drop_internet_only=s["drop_internet_only"],
                 drop_block=s["drop_block"],
                 drop_mtu=s["drop_mtu"], drop_flap=s["drop_flap"],
+                flap_held=s.get("flap_held", 0),
                 corrupted=s["corrupted"],
                 duplicated=s["duplicated"], drop_overflow=s["drop_overflow"],
                 drop_rate=s["drop_rate"],
@@ -1157,9 +1178,9 @@ def _targeting_names(settings):
 
     Everything ``decide()`` steps 1 and 2 can leave a packet out by: the process
     target, the destination (its addresses and ports, and the IPv4 / IPv6 switches
-    of the same card, which leave packets out the same way), and the parts of a
-    call. Empty when none is set - and then every packet is in scope, so "caught
-    nothing" cannot be true.
+    of the same card, which leave packets out the same way), the parts of a call
+    and the payload size. Empty when none is set - and then every packet is in
+    scope, so "caught nothing" cannot be true.
     """
     g = settings.get
     names = []
@@ -1172,6 +1193,11 @@ def _targeting_names(settings):
     parts = [name for key, name in _CALL_PART_NAMES if g(key)]
     if parts:
         names.append("call targeting: " + ", ".join(parts))
+    sizes = [f"{name} {text}" for name, text in (
+        ("UDP", setting_expression("payload_udp", g("payload_udp"))),
+        ("TCP", setting_expression("payload_tcp", g("payload_tcp")))) if text]
+    if sizes:
+        names.append("payload size targeting: " + ", ".join(sizes))
     return names
 
 

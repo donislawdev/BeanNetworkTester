@@ -143,7 +143,8 @@ def test_match_fields_is_a_view_over_the_registry():
           MATCH_FIELDS == expected, f"({MATCH_FIELDS})")
     check("registry: the expression fields are still there",
           [k for k, _, _, _ in MATCH_FIELDS]
-          == ["target", "dst_ip", "dst_port", "block_ip", "block_port"])
+          == ["target", "dst_ip", "dst_port", "payload_udp", "payload_tcp",
+              "block_ip", "block_port"])
 
 
 def test_only_fields_that_can_show_a_hint_declare_one():
@@ -176,6 +177,9 @@ def test_profile_scope_is_derived():
                                     "latency", "jitter",
                                     "down", "up", "buffer", "spike_prob",
                                     "spike_ms", "flap_period", "flap_down",
+                                    # what an outage does with its packets: a
+                                    # cadence stored without it is half a link
+                                    "flap_hold",
                                     # asymmetry: the switch and the seven values
                                     # it governs. A profile that stored "200 ms"
                                     # without saying it was download-only would

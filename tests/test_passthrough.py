@@ -65,7 +65,7 @@ from fakes import FakeDivert, FakePacket, check
 # hand.
 IMPAIRMENT_OFF = dict(
     {key: off_value(FIELDS[key]) for key in IMPAIRING_KEYS + NARROWING_KEYS},
-    spike_ms=0, flap_down=0, loss_burst=0, block_reject=False,
+    spike_ms=0, flap_down=0, flap_hold=False, loss_burst=0, block_reject=False,
     # The upload spike's size, for the same reason as spike_ms beside it: it sits
     # behind its own probability's gate, so it arms nothing, and 0 really is its
     # cold value. The upload IMPAIRMENTS need no line here - they declare

@@ -107,9 +107,10 @@ from . import filters
 from . import portmap
 from . import winenv
 from .connlog import ConnectionLog
-from .core import BeanCore
+from .core import FLAP_HOLD_MAX, BeanCore
 from .damage import DROP_BY_REASON, RST_BY_REASON
 from .i18n import T
+from .matchers import Matcher
 from .scenario_runner import ScenarioRunner
 from .target_resolver import TargetResolver
 from . import crashlog
@@ -537,8 +538,9 @@ class BeanEngine:
         # responsibility) and start() reconciles the two either way.
         return current
 
-    def set_flap(self, enabled, period_s, down_pct):
-        self.core.set_flap(enabled, period_s, down_pct)
+    def set_flap(self, enabled: bool, period_s: float, down_pct: float,
+                 hold: bool = False) -> None:
+        self.core.set_flap(enabled, period_s, down_pct, hold=hold)
 
     def set_dest(self, active, ip=None, port=None):
         self.core.set_dest(active, ip=ip, port=port)
@@ -578,6 +580,10 @@ class BeanEngine:
 
     def set_call_parts(self, checks=False, turn_control=False, media=False):
         self.core.set_call_parts(checks=checks, turn_control=turn_control, media=media)
+
+    def set_payload(self, udp: "str | Matcher | None" = None,
+                    tcp: "str | Matcher | None" = None) -> None:
+        self.core.set_payload(udp=udp, tcp=tcp)
 
     def set_lan(self, enabled):
         self.core.set_lan(enabled)
@@ -702,6 +708,11 @@ class BeanEngine:
                            drop_syn=0, drop_mtu=0, drop_nat=0,
                            drop_rst=0, drop_lan=0, drop_internet_only=0,
                            drop_block=0, drop_flap=0,
+                           # Packets an outage HELD instead of dropping, so the
+                           # mirror of drop_flap beside it. Zeroed here for the CSV
+                           # column order, like loss_bursts; the value is the
+                           # core's, merged by stats_snapshot.
+                           flap_held=0,
                            drop_rate=0, drop_shutdown=0, drop_send=0,
                            # rst_reset counts CONNECTIONS torn down; drop_rst counts
                            # the packets each one then swallows for its cooldown, and
@@ -916,6 +927,7 @@ class BeanEngine:
         # is allowed to be a moment old. (A free-threaded build would have to
         # revisit this, along with the other lock-free reads - backlog B-2.)
         s["loss_bursts"] = self.core.loss_bursts
+        s["flap_held"] = self.core.flap_held
         # The same bargain for the driver-wait peak (see driverwait.DriverWait).
         s["driver_wait_peak_ms"] = self._driver_wait.peak_ms
         # And for what an overloaded driver did, where the platform's driver counts
@@ -1570,6 +1582,11 @@ class BeanEngine:
         # the atexit registration all stayed until the log moved (measured).
         self._say(say)
         self._driver_wait.say_overflow_total()   # said only when there were any
+        if self.core.flap_refused:
+            # An outage that held packets ran out of room: said once, here, because
+            # the counter it lands in ("Link outage") cannot tell these from an
+            # outage that was asked to drop.
+            self.log(T("log.flap_hold_full", n=self.core.flap_refused, cap=FLAP_HOLD_MAX))
         self.log(T("log.stop"))
 
     # How long the capture thread waits on _stop_lock before re-checking WHO holds

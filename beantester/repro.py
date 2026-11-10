@@ -72,18 +72,15 @@ def settings_to_cli(settings, seed=None, simulate=False, scenario=None, loop=Fal
         args += ["--rate-schedule", str(g("rate_schedule")).strip()]
     if str(g("target")).strip():
         args += ["--target", str(g("target")).strip()]
-    dst_ip = setting_expression("dst_ip", g("dst_ip"))
-    if dst_ip:
-        args += ["--dst-ip", dst_ip]
-    dst_port = setting_expression("dst_port", g("dst_port"))
-    if dst_port:
-        args += ["--dst-port", dst_port]
-    block_ip = setting_expression("block_ip", g("block_ip"))
-    if block_ip:
-        args += ["--block-ip", block_ip]
-    block_port = setting_expression("block_port", g("block_port"))
-    if block_port:
-        args += ["--block-port", block_port]
+    # The expressions, as a table for the reason the switches below are one. The
+    # payload pair sits between the destination and the block: both say which
+    # traffic is aimed at, and the older flags keep the order they always had.
+    for key, flag in (("dst_ip", "--dst-ip"), ("dst_port", "--dst-port"),
+                      ("payload_udp", "--payload-udp"), ("payload_tcp", "--payload-tcp"),
+                      ("block_ip", "--block-ip"), ("block_port", "--block-port")):
+        text = setting_expression(key, g(key))
+        if text:
+            args += [flag, text]
     # The plain on/off switches, as a table rather than seven identical branches
     # - the shape `settings_summary` took for the same reason, and the same
     # reason it matters here: the complexity ratchet counts the branches, so the
@@ -92,6 +89,8 @@ def settings_to_cli(settings, seed=None, simulate=False, scenario=None, loop=Fal
     # older ones.
     #
     # Each line still carries WHY it has to be in the command at all:
+    #  * flap_hold - whether an outage lost its packets or delivered them late is
+    #    the difference between a stalled link and a broken one;
     #  * block_reject - whether the block answered or stayed silent decides what
     #    the application under test DID, so a run without it is not the same run;
     #  * asym - which half of the numbers above the session actually applied.
@@ -103,7 +102,8 @@ def settings_to_cli(settings, seed=None, simulate=False, scenario=None, loop=Fal
     #    ::test_every_setting_with_a_flag_reaches_the_reproduction_command); the
     #    repro REPORT has carried `narrowed` all along, which is why nobody
     #    noticed the command did not.
-    for key, flag in (("block_reject", "--block-reject"), ("asym", "--asym"),
+    for key, flag in (("flap_hold", "--flap-hold"),
+                      ("block_reject", "--block-reject"), ("asym", "--asym"),
                       ("lan_mode", "--lan-mode"), ("ipv4_only", "--ipv4-only"),
                       ("ipv6_only", "--ipv6-only"),
                       ("call_checks", "--call-checks"),

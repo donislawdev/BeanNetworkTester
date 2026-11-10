@@ -7,6 +7,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **Payload size targeting.** A new card on the Control page aims the impairments at packets
+  by how many bytes of data they carry, with one field for UDP and one for TCP
+  (`--payload-udp`, `--payload-tcp`). Both take the usual filter syntax: `64-1472` leaves a
+  game's small keepalives alone, and `!0` on TCP leaves bare acknowledgements alone. Filling
+  in one field leaves the other protocol untouched.
+
+- **A link outage can hold packets instead of dropping them.** Tick "Hold packets during an
+  outage and deliver them when it ends" in the Link outages card (`--flap-hold`) and packets
+  that arrive during an outage wait and arrive together when it ends, in order, as after a
+  Wi-Fi handover. Latency is added after the wait and a speed limit spreads the burst out.
+  One outage holds at most 10,000 packets. The Statistics page and the stats CSV count them
+  as "Delayed by outage" (`held_link_outage`), a total that only grows. "Queued" shows how
+  many are waiting right now.
+
 - **Tools: NAT and STUN, how this network's router treats a call.** Press **Start** and in a
   few seconds the table shows this computer's public address, whether the router keeps one
   public port for every server, whether two devices behind it reach each other through that

@@ -18,7 +18,7 @@ Layering: this module depends only on ``matchers`` (expression kinds),
 """
 from typing import NamedTuple, Optional, Tuple
 
-from .matchers import KIND_INT, KIND_IP, KIND_PROCESS, PORT_BOUNDS
+from .matchers import KIND_INT, KIND_IP, KIND_PROCESS, PAYLOAD_BOUNDS, PORT_BOUNDS
 from .processes import TARGET_FIELD
 from .utils import number_string
 
@@ -290,6 +290,19 @@ FIELD_DEFS = (
     Field("flap_down", NUMBER, "fields.flap_down_pct", "flapping", unit="%",
           bounds=PCT, width=6, tip="tips.flap", in_profile=True,
           cli="flap-down", parameter_of="flap_period"),
+    # What an outage does with the packets that arrive during it: drop them (off,
+    # and what this tool always did) or keep them and deliver them when the link
+    # comes back - a handover, a radio that sleeps between beacons. A PARAMETER of
+    # the outage, so no `impairs`: decide() step 5 reads it behind the same gate as
+    # the downtime percent, and on its own it touches no packet. A checkbox, not a
+    # drop/hold dropdown, for the reason given at `block_reject`.
+    #
+    # in_profile for the reason the pair above is: a profile that stored the
+    # cadence without saying whether the link loses or delays what it could not
+    # carry stored half of what that link does to an application.
+    Field("flap_hold", BOOL, "fields.flap_hold", "flapping",
+          tip="tips.flap_hold", cli="flap-hold", in_profile=True,
+          parameter_of="flap_period"),
 
     # -- destination ------------------------------------------------------- #
     Field("dst_ip", EXPR, "fields.ip", "destination", expr_kind=KIND_IP,
@@ -335,6 +348,28 @@ FIELD_DEFS = (
           tip="tips.call_turn_control", cli="call-turn-control", narrows=True),
     Field("call_media", BOOL, "fields.call_media", "call",
           tip="tips.call_media", cli="call-media", narrows=True),
+
+    # -- payload size ------------------------------------------------------ #
+    # Which packets the impairments reach, by how many bytes of data they carry
+    # (wire.payload_length, read in decide() step 2). One field per protocol and
+    # not one field with a protocol switch: "UDP 64-1472 and TCP that carries
+    # data" is one session, and a switch could not say it. Filling in one leaves
+    # the other protocol alone; both empty = no such scope.
+    #
+    # 🔴 NOT narrows=True, for the reason the address-family pair is not: ">=0"
+    # still reaches every UDP packet on the machine, so counting this as a bound
+    # would silence the blast-radius warning for a session that bounded nothing.
+    #
+    # 🔴 The flags are --payload-udp / --payload-tcp and not --udp-payload /
+    # --tcp-payload. MEASURED: those two would make the abbreviations --u (today
+    # --up) and --t (--target) ambiguous, and argparse refuses an ambiguous one
+    # with exit 2 (allow_abbrev stays on: ADR 2026-08-02).
+    Field("payload_udp", EXPR, "fields.payload_udp", "payload", unit="B",
+          expr_kind=KIND_INT, bounds=PAYLOAD_BOUNDS, width=18, tip="tips.payload",
+          span=True, cli="payload-udp"),
+    Field("payload_tcp", EXPR, "fields.payload_tcp", "payload", unit="B",
+          expr_kind=KIND_INT, bounds=PAYLOAD_BOUNDS, width=18, tip="tips.payload",
+          span=True, cli="payload-tcp"),
 
     # -- blocking (firewall) ---------------------------------------------- #
     # Drop traffic to matching destinations outright. IP OR port (each takes part
@@ -491,7 +526,8 @@ SECTIONS = (
     Section("asymmetry", "frames.asymmetry",
             ("asym", "latency_up", "jitter_up", "spike_prob_up", "spike_ms_up",
              "loss_up", "corrupt_up", "dup_up"), columns=2),
-    Section("flapping", "frames.flapping", ("flap_period", "flap_down"), columns=2),
+    Section("flapping", "frames.flapping",
+            ("flap_period", "flap_down", "flap_hold"), columns=2),
     # columns=2 for the family pair only: both expression fields above carry
     # span=True and keep a row each regardless, so this changes nothing they do.
     Section("destination", "frames.destination",
@@ -501,6 +537,8 @@ SECTIONS = (
     # protocol and the three read as a list.
     Section("call", "frames.call",
             ("call_checks", "call_turn_control", "call_media"), columns=1, extra="call"),
+    # The third way of saying what is aimed at: by how much data a packet carries.
+    Section("payload", "frames.payload", ("payload_udp", "payload_tcp"), columns=1),
     Section("block", "frames.block", ("block_ip", "block_port", "block_reject"),
             columns=1),
     Section("advanced", "frames.advanced",
