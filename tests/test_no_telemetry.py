@@ -92,8 +92,15 @@ FORBIDDEN_MODULES = {
     "urllib", "urllib2", "urllib3", "http", "httplib", "requests", "httpx",
     "aiohttp", "websockets", "websocket", "ftplib", "smtplib", "poplib",
     "imaplib", "nntplib", "telnetlib", "xmlrpc", "socketserver", "smtpd",
-    "wsgiref", "asyncio", "ssl", "boto3", "paramiko", "pycurl",
+    "wsgiref", "asyncio", "boto3", "paramiko", "pycurl",
 }
+
+# `ssl` was in the list above until 2026-11-10 (the owner's decision: TURN over TLS in
+# the NAT and STUN tool). It is now policed like `socket`: ONE file may import it and
+# make ONE call on it, `create_default_context` (ALLOWED_IMPORTS / ALLOWED_CALLS), and
+# nothing in the package may weaken what that context checks (TLS_WEAKENING). The CLI
+# never does TLS, so the runtime layer below still treats an import of it as forbidden.
+RUNTIME_FORBIDDEN = FORBIDDEN_MODULES | {"ssl"}
 
 # Modules whose USE is policed rather than banned. Naming them here is what makes
 # the scan alias-proof: `import socket as s` still carries the name `socket` in
@@ -101,7 +108,30 @@ FORBIDDEN_MODULES = {
 # `s.create_connection(...)` and `from socket import create_connection` alike.
 # Measured 2026-09-03 - before this existed, all three of those shapes walked
 # straight through, and so did `import subprocess as sp; sp.run(...)`.
-WATCHED_MODULES = {"socket", "webbrowser", "subprocess", "os", "ctypes"}
+WATCHED_MODULES = {"socket", "webbrowser", "subprocess", "os", "ctypes", "ssl"}
+
+# The watched modules whose IMPORT is registered per file (ALLOWED_IMPORTS), and the
+# ones whose CALLS are (ALLOWED_CALLS).
+REACHING_MODULES = ("socket", "webbrowser", "subprocess", "ssl")
+CALLED_MODULES = ("socket", "webbrowser", "ssl")
+
+# Every name that makes a TLS context check less than `ssl.create_default_context()`
+# does (a certificate, its name, TLS 1.2 at least), or that makes a context some other
+# way. Matched as an attribute, a bare name or a string anywhere in the package, with
+# no exception: the one TLS context the program makes is the default one. Docstrings
+# are prose, as for URLs.
+# The ssl module's protocol and option constants are listed by name rather than by
+# prefix: "PROTOCOL_" alone matched the Port check's own PROTOCOL_NAMES.
+TLS_WEAKENING = frozenset({
+    "CERT_NONE", "CERT_OPTIONAL", "check_hostname", "verify_mode", "verify_flags",
+    "SSLContext", "_create_unverified_context", "_create_stdlib_context",
+    "_create_default_https_context", "minimum_version", "maximum_version",
+    "set_ciphers", "load_verify_locations", "load_cert_chain",
+    "PROTOCOL_TLS", "PROTOCOL_TLS_CLIENT", "PROTOCOL_TLS_SERVER", "PROTOCOL_SSLv23",
+    "PROTOCOL_SSLv2", "PROTOCOL_SSLv3", "PROTOCOL_TLSv1", "PROTOCOL_TLSv1_1",
+    "PROTOCOL_TLSv1_2", "OP_NO_TLSv1_2", "OP_NO_TLSv1_3", "OP_LEGACY_SERVER_CONNECT",
+    "OP_IGNORE_UNEXPECTED_EOF",
+})
 
 # Which files may import the three that can reach outside this process at all.
 # This is the stronger half of the alias answer: an import names its module
@@ -118,6 +148,13 @@ ALLOWED_IMPORTS = {
         "Ping's name lookup (getaddrinfo, below) and the address family constants",
     ("beantester/nettools/nat.py", "socket"):
         "the NAT and STUN tool's sockets and its two name lookups (below)",
+    ("beantester/nettools/nat.py", "ssl"):
+        "the NAT and STUN tool's TURN over TLS: the default context, below, imported in "
+        "the one function that makes the TLS connection",
+    ("beantester/legal.py", "ssl"):
+        "the version of the OpenSSL the Windows zip ships, for --license, the About "
+        "window and the SBOM: ssl.OPENSSL_VERSION_INFO, read when asked. No call, no "
+        "context, no connection",
     ("beantester/icmpsock.py", "socket"):
         "Ping on Linux: the ICMP socket an echo request goes through (below)",
     ("beantester/netlink.py", "socket"):
@@ -178,9 +215,14 @@ ALLOWED_CALLS = {
         "the Tools tab's NAT and STUN, only after Start: UDP sockets that send STUN Binding "
         "requests and TURN Allocates to the two typed servers and a few dozen test "
         "datagrams to this network's own public address (the one the STUN server's first "
-        "answer gave), a TCP connection for one Allocate per TCP transport, and the route "
-        "probe - a connected UDP socket that asks the routing table and sends nothing. "
-        "tests/test_nettools_nat.py runs every job against a router held in memory",
+        "answer gave), a TCP connection for one Allocate per TCP or TLS transport, and the "
+        "route probe - a connected UDP socket that asks the routing table and sends "
+        "nothing. tests/test_nettools_nat.py runs every job against a router held in memory",
+    ("beantester/nettools/nat.py", "ssl", "create_default_context"):
+        "the Tools tab's NAT and STUN, its TLS transports only: the TLS context every TURN "
+        "over TLS row is made with - the server's certificate checked against this "
+        "computer's trusted roots and against the typed name, TLS 1.2 at least. Nothing "
+        "may make a context check less (TLS_WEAKENING, below)",
     ("beantester/icmpsock.py", "socket", "socket"):
         "the Tools tab's Ping on Linux: the ICMP socket ONE echo request to the typed "
         "address goes through - the system's ping socket, or a raw one under sudo - "
@@ -481,6 +523,22 @@ def _wire_name(node):
     return name if name in WIRE_FUNCTIONS else None
 
 
+def _tls_weakening(node, docstrings):
+    """The TLS_WEAKENING name ``node`` spells - as an attribute, a bare name or a
+    string that is not a docstring - or None."""
+    if isinstance(node, ast.Attribute):
+        name = node.attr
+    elif isinstance(node, ast.Name):
+        name = node.id
+    elif isinstance(node, ast.alias):
+        name = node.name
+    elif id(node) not in docstrings:
+        name = _folded_string(node)
+    else:
+        name = None
+    return name if name in TLS_WEAKENING else None
+
+
 def findings(source, rel):
     """Every network finding in one module: a list of ``(kind, detail, line)``.
 
@@ -499,7 +557,7 @@ def findings(source, rel):
                 top = alias.name.split(".")[0]
                 if top in FORBIDDEN_MODULES:
                     found.append(("import", alias.name, node.lineno))
-                elif top in ("socket", "webbrowser", "subprocess"):
+                elif top in REACHING_MODULES:
                     # Reported whether or not it is registered - the test decides.
                     # An import states its module whatever the local name becomes,
                     # so this is the check an alias cannot walk around.
@@ -508,7 +566,7 @@ def findings(source, rel):
             top = (node.module or "").split(".")[0]
             if top in FORBIDDEN_MODULES:
                 found.append(("import", node.module, node.lineno))
-            elif top in ("socket", "webbrowser", "subprocess"):
+            elif top in REACHING_MODULES:
                 found.append(("watched-import", (rel, top), node.lineno))
         elif isinstance(node, ast.Call):
             func = node.func
@@ -517,10 +575,13 @@ def findings(source, rel):
                 owner, name = modules.get(func.value.id), func.attr
             elif isinstance(func, ast.Name) and func.id in symbols:
                 owner, name = symbols[func.id]
-            if owner in ("socket", "webbrowser"):
+            if owner in CALLED_MODULES:
                 found.append(("call", (rel, owner, name), node.lineno))
             if owner in ("subprocess", "os") and name in SPAWN_CALLS:
                 found.append(("spawn", "%s.%s" % (owner, name), node.lineno))
+        weakening = _tls_weakening(node, docstrings)
+        if weakening:
+            found.append(("tls", weakening, getattr(node, "lineno", 0)))
         found.extend(_string_findings(node, docstrings))
         wire = _wire_name(node)
         if wire:
@@ -581,6 +642,75 @@ def test_only_named_files_may_import_a_module_that_reaches_outside():
     stale = sorted(entry for entry in ALLOWED_IMPORTS if entry not in used)
     check("no import permission outlives the import", not stale,
           f"(remove it from ALLOWED_IMPORTS: {stale})")
+
+
+def test_no_shipped_code_weakens_tls():
+    """The one TLS context the program makes is ``ssl.create_default_context()``: the
+    server's certificate checked against this computer's roots and against the name,
+    TLS 1.2 at least. Nothing in the package may turn any of that down or make a
+    context another way - no exception, no registry."""
+    bad = ["%s:%d %s" % (rel, line, detail) for rel, detail, line in _scan().get("tls", [])]
+    check("no shipped code weakens TLS or makes its own context", not bad, f"({bad})")
+
+
+def test_the_default_context_checks_what_security_md_says():
+    """What the guard above keeps in place, on the Python the packages are built with:
+    a certificate required, for the name asked, TLS 1.2 at least (the default since
+    Python 3.10). A scanner that models older Pythons reads the default context as
+    allowing TLS 1.0 and 1.1; this is the measured answer."""
+    import ssl
+    context = ssl.create_default_context()
+    check("a certificate is required", context.verify_mode == ssl.CERT_REQUIRED)
+    check("for the name asked", context.check_hostname)
+    check("TLS 1.2 at least", context.minimum_version >= ssl.TLSVersion.TLSv1_2,
+          f"({context.minimum_version!r})")
+
+
+def test_the_tls_guard_rejects_each_way_to_weaken_it():
+    """The canary for the check above, and for the one allowed call."""
+    weak = {
+        "no certificate check": "import ssl\nc = ssl.create_default_context()\n"
+                                "c.check_hostname = False\nc.verify_mode = ssl.CERT_NONE\n",
+        "the unverified context": "import ssl\nssl._create_unverified_context()\n",
+        "a context of its own": "from ssl import SSLContext, PROTOCOL_TLS_CLIENT\n"
+                                "SSLContext(PROTOCOL_TLS_CLIENT)\n",
+        "an older TLS allowed": "import ssl\nc = ssl.create_default_context()\n"
+                                "c.minimum_version = ssl.TLSVersion.TLSv1\n",
+        "an attribute by its string": "import ssl\nsetattr(c, 'check_hostname', False)\n",
+        "roots of its own": "import ssl\nc = ssl.create_default_context()\n"
+                            "c.load_verify_locations('roots.pem')\n",
+    }
+    for name, source in weak.items():
+        caught = [d for kind, d, _l in findings(source, "beantester/x.py") if kind == "tls"]
+        check(f"{name} is caught", caught, "(the TLS guard read nothing)")
+    allowed = ("def ask(raw, name):\n    import ssl\n"
+               "    return ssl.create_default_context().wrap_socket(raw, server_hostname=name)\n")
+    found = findings(allowed, "beantester/nettools/nat.py")
+    check("the default context is not a weakening", not [f for f in found if f[0] == "tls"],
+          f"({found})")
+    calls = {detail for kind, detail, _line in found if kind == "call"}
+    check("and its one call is seen, so ALLOWED_CALLS holds it",
+          calls == {("beantester/nettools/nat.py", "ssl", "create_default_context")},
+          f"({calls})")
+    other = findings("import ssl as s\ns.wrap_socket(raw)\n", "beantester/nettools/nat.py")
+    check("any other call on ssl is a call the registry must name",
+          ("beantester/nettools/nat.py", "ssl", "wrap_socket")
+          in {detail for kind, detail, _line in other if kind == "call"}, f"({other})")
+
+
+def test_opening_the_nat_panel_loads_no_tls_library():
+    """OpenSSL loads with the first TLS row, not with the window: the panel and the
+    tool's module import no ``ssl`` (measured in a fresh interpreter, because this
+    one may have loaded it for another test)."""
+    script = ("import sys\nsys.path.insert(0, %r)\n"
+              "import beantester.gui.toolbox.nat, beantester.nettools.nat\n"
+              "print('LOADED' if 'ssl' in sys.modules or '_ssl' in sys.modules else 'CLEAN')\n"
+              % ROOT)
+    proc = subprocess.run([sys.executable, "-c", script], cwd=ROOT, timeout=120,
+                          capture_output=True, text=True, check=False)
+    check("the panel imported at all", proc.returncode == 0, f"({proc.stderr[-800:]})")
+    check("and loaded no TLS library", proc.stdout.strip().endswith("CLEAN"),
+          f"({proc.stdout[-200:]})")
 
 
 def test_ctypes_opens_only_local_windows_libraries():
@@ -788,7 +918,7 @@ PROBE_ADDRESSES = ("8.8.8.8", "2001:4860:4860::8888")
 
 
 def _audit_run():
-    script = AUDIT_SCRIPT.format(root=ROOT, forbidden=sorted(FORBIDDEN_MODULES),
+    script = AUDIT_SCRIPT.format(root=ROOT, forbidden=sorted(RUNTIME_FORBIDDEN),
                                  wire=sorted(WIRE_FUNCTIONS))
     proc = subprocess.run([sys.executable, "-c", script], cwd=ROOT, timeout=180,
                           capture_output=True, text=True, check=False)
@@ -908,6 +1038,10 @@ TOOLS_TAB_SENDING = {
     ("beantester/nettools/nat.py", "socket", "socket"):
         ("nat", "STUN and TURN requests to the two typed servers and test datagrams to this "
                 "network's own public address, after Start"),
+    ("beantester/nettools/nat.py", "ssl"):
+        ("nat", "import for the TLS context below"),
+    ("beantester/nettools/nat.py", "ssl", "create_default_context"):
+        ("nat", "the TLS of the TURN server's TLS transports, after Start"),
 }
 
 # Findings in a Tools-tab file that were checked NOT to send, each with how - keyed
@@ -1066,6 +1200,108 @@ def test_the_promise_names_exactly_the_tools_that_send():
         if tool.sends:
             check(f"{tool.id} says above it what it sends",
                   bool(english.get(f"tools.{tool.id}.sends")), "(tools.<id>.sends missing)")
+
+
+# Every OTHER sentence that says what leaves the computer. #321 reworded the promise
+# above and SECURITY.md for NAT and STUN, and five places went on naming Ping alone -
+# the README's privacy section said "Two things go out" while there were three (found
+# 2026-11-10, before a release carried it). Each of them must name every tool that
+# sends, by the name its reader sees: the tab's name in the language the text is in
+# where the program speaks it (lang/<code>.json), and the English name in the README
+# translations the window has no language for, as their Tools entries do.
+README_NAME_LANGUAGE = {"README.zh-Hans.md": "zh"}
+
+
+def _languages():
+    import json
+    folder = os.path.join(ROOT, "lang")
+    return {name[:-5]: json.load(open(os.path.join(folder, name), encoding="utf-8"))
+            for name in sorted(os.listdir(folder)) if name.endswith(".json")}
+
+
+def _readme_parts(lines):
+    """The README's two sentences about what goes out: the feature bullet that names
+    Ping (with its wrapped lines) and the section just above the SmartScreen one."""
+    parts = []
+    for index, line in enumerate(lines):
+        if not line.startswith("- **"):
+            continue
+        end = index + 1
+        while end < len(lines) and lines[end].startswith("  "):
+            end += 1
+        bullet = "\n".join(lines[index:end])
+        if "Ping" in bullet:
+            parts.append(("feature list", bullet))
+            break
+    smart = next((i for i, line in enumerate(lines)
+                  if line.startswith("## ") and "SmartScreen" in line), None)
+    if smart is not None:
+        start = max(i for i in range(smart) if lines[i].startswith("## "))
+        parts.append(("privacy section", "\n".join(lines[start:smart])))
+    return parts
+
+
+def what_goes_out():
+    """``(where, text, language)`` of every sentence that lists what leaves the computer."""
+    from beantester import legal
+    found = []
+    for name in sorted(os.listdir(ROOT)):
+        if name.startswith("README") and name.endswith(".md"):
+            with open(os.path.join(ROOT, name), encoding="utf-8") as handle:
+                lines = handle.read().splitlines()
+            language = README_NAME_LANGUAGE.get(name, "en")
+            found += [(f"{name}, {part}", text, language)
+                      for part, text in _readme_parts(lines)]
+    with open(os.path.join(ROOT, "THIRD-PARTY-NOTICES.md"), encoding="utf-8") as handle:
+        notices = handle.read()
+    at = notices.find("## Telemetry")
+    if at >= 0:
+        end = notices.find("\n## ", at + 1)
+        found.append(("THIRD-PARTY-NOTICES.md, Telemetry",
+                      notices[at:end if end > 0 else None], "en"))
+    report = legal.cli_report()
+    found.append(("--license", report[report.find("Telemetry:"):], "en"))
+    for code, strings in _languages().items():
+        found.append((f"lang/{code}.json, about.no_telemetry",
+                      strings.get("about.no_telemetry", ""), code))
+    return found
+
+
+def unnamed(text, names):
+    """The tools of ``names`` (id -> name) that ``text`` does not name; line breaks
+    count as spaces, because the READMEs wrap their sentences."""
+    folded = " ".join(text.split())
+    return sorted(tool for tool, name in names.items() if name not in folded)
+
+
+def test_every_sentence_about_what_goes_out_names_every_tool_that_sends():
+    from beantester.gui.toolbox import TOOLS
+    languages = _languages()
+    sending = [tool for tool in TOOLS if tool.sends]
+    found = what_goes_out()
+    readmes = [name for name in os.listdir(ROOT)
+               if name.startswith("README") and name.endswith(".md")]
+    # Two per README, the notices, --license and one per window language: fewer means
+    # a sentence was not found, and a check over nothing passes everything.
+    check("every sentence about what goes out was found",
+          len(found) == 2 * len(readmes) + 2 + len(languages) and all(t for _w, t, _l in found),
+          f"({[(where, len(text)) for where, text, _l in found]})")
+    missing = {}
+    for where, text, language in found:
+        names = {tool.id: languages[language][tool.label] for tool in sending}
+        if unnamed(text, names):
+            missing[where] = unnamed(text, names)
+    check("each of them names every tool that sends", not missing,
+          f"(name the tool there, the way the Tools tab's promise does: {missing})")
+
+
+def test_a_sentence_that_leaves_a_sending_tool_out_is_caught():
+    """The canary for the check above: the sentence #321 left behind."""
+    names = {"ping": "Ping", "nat": "NAT and STUN"}
+    check("Ping alone is caught",
+          unnamed("Its Ping tool pings only the address you type.", names) == ["nat"])
+    check("a name wrapped across two lines still counts",
+          unnamed("Ping, and the NAT and\n  STUN tool", names) == [])
 
 
 def test_the_tools_tab_check_sees_each_way_out():

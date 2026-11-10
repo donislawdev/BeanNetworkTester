@@ -75,11 +75,13 @@ def test_the_declared_licences_are_real_spdx_and_match_the_registry():
     # official SPDX list before being added here - "Unlicense" (full name "The
     # Unlicense", active, OSI-approved) checked at spdx.org/licenses on 2026-08-17
     # when Tcl 9 brought libtommath into the bundle; "LGPL-2.1-only" and
-    # "BSD-2-Clause" (libbpf, the Linux package) on 2026-10-28, neither deprecated.
+    # "BSD-2-Clause" (libbpf, the Linux package) on 2026-10-28, neither deprecated;
+    # "Apache-2.0" (OpenSSL, the Windows zip; full name "Apache License 2.0", not
+    # deprecated, OSI-approved) on 2026-11-10.
     known_ids = {
         "GPL-3.0-only", "LGPL-3.0-only", "GPL-2.0-only", "LGPL-3.0-or-later",
         "GPL-2.0-or-later", "BSD-3-Clause", "PSF-2.0", "TCL", "Zlib", "MIT",
-        "Unlicense", "LGPL-2.1-only", "BSD-2-Clause",
+        "Unlicense", "LGPL-2.1-only", "BSD-2-Clause", "Apache-2.0",
     }
     known_exceptions = {"Bootloader-exception"}
 
@@ -148,11 +150,21 @@ def test_the_bundle_guard_notices_a_component_the_registry_lacks(tmp_path):
 
     dirty = tmp_path / "dirty.json"
     dirty.write_text(json.dumps({"artifacts": [
-        {"name": "Python"}, {"name": "libcurl"}, {"name": "OpenSSL"},
+        {"name": "Python"}, {"name": "libcurl"}, {"name": "SQLite"},
     ]}), encoding="utf-8")
     found = sbom.audit_bundle(str(dirty), "win32")
-    check("an unknown component is reported", "libcurl" in found and "OpenSSL" in found,
+    check("an unknown component is reported", "libcurl" in found and "SQLite" in found,
           f"({found})")
+
+    # OpenSSL ships in the Windows zip (the NAT and STUN tool's TLS); the Linux package
+    # takes the system's, so a Linux scan that finds it is a bundle carrying it.
+    tls = tmp_path / "tls.json"
+    tls.write_text(json.dumps({"artifacts": [{"name": "OpenSSL"}, {"name": "libssl-3"}]}),
+                   encoding="utf-8")
+    check("OpenSSL in the Windows zip is accounted for",
+          sbom.audit_bundle(str(tls), "win32") == [], f"({sbom.audit_bundle(str(tls), 'win32')})")
+    check("OpenSSL in the Linux package is not",
+          len(sbom.audit_bundle(str(tls), "linux")) == 2, f"({sbom.audit_bundle(str(tls), 'linux')})")
 
 
 def test_the_sbom_names_the_pyinstaller_that_froze_the_build(monkeypatch):

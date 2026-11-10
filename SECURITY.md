@@ -89,6 +89,13 @@ NAT and STUN, when the user presses Start, sends a few STUN and TURN requests to
 in its boxes and small test packets to the public address the STUN server reports for this
 network.
 
+NAT and STUN is also the program's only use of TLS: its TURN rows over TLS connect to the TURN
+server in its box, with Python's default context (the server's certificate checked against the
+roots the system trusts and against the server's name, TLS 1.2 at least), and a test keeps every
+other way of making a context out of the code. The Windows zip carries the OpenSSL that comes with
+its Python, so an OpenSSL fix reaches it with the next release built on a fixed Python. The Linux
+package uses the system's OpenSSL, which the distribution updates.
+
 Reports that are in scope include, for example: a way to make the tool affect traffic
 it was not told to target, a crash that corrupts a user's files (profiles, config,
 CSV), or unsafe handling of the files it reads and writes.

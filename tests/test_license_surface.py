@@ -354,8 +354,24 @@ def test_both_builds_are_in_the_registry_and_the_notices():
           "eBPFDivert" in linux and "WinDivert" not in linux and "WinDivert" in windows)
     check("the Windows runtime is not claimed for Linux",
           not linux & {"Microsoft C Runtime", "libtommath"})
+    check("OpenSSL ships in the Windows zip, and Linux takes the system's",
+          "OpenSSL" in windows and "OpenSSL" not in linux)
     check("this system's list is the one --license reports",
           legal.COMPONENTS == legal.components())
+
+
+def test_the_openssl_row_names_the_version_this_python_loads():
+    """3.5.9, not 3.5.0: OpenSSL 3 keeps its patch number in the fourth field of
+    ``ssl.OPENSSL_VERSION_INFO``, and the first version of this row read the third."""
+    import re
+    import ssl
+    version = {name: v for name, v, *_ in legal.component_rows("win32")}["OpenSSL"]
+    check("the row is the version text's", version == ssl.OPENSSL_VERSION.split()[1],
+          f"({version} vs {ssl.OPENSSL_VERSION})")
+    found = re.fullmatch(r"\d+\.\d+\.(\d+)", version)
+    check("with its patch number", found is not None
+          and int(found.group(1)) == ssl.OPENSSL_VERSION_INFO[3],
+          f"({version}, {ssl.OPENSSL_VERSION_INFO})")
 
 
 def test_the_parts_of_ebpfdivert_are_named_with_the_versions_read():

@@ -131,6 +131,20 @@ def test_field_name_strips_a_colon_of_either_width(monkeypatch):
           f"({i18n.field_name('fields.probe', 'xx')!r})")
 
 
+def test_sentences_join_with_a_space_except_after_a_full_width_stop():
+    """The NAT and STUN conclusions are two sentences in one line: English needs a
+    space between them, Chinese none after its full stop ("电脑。 这里" was on the
+    render of 2026-11-10)."""
+    from beantester import i18n
+    stop = chr(0x3002)
+    check("English sentences get a space",
+          i18n.sentences(["One.", "Two."]) == "One. Two.", f"({i18n.sentences(['One.', 'Two.'])!r})")
+    check("none after a full-width stop",
+          i18n.sentences(["电脑" + stop, "这里" + stop]) == "电脑" + stop + "这里" + stop)
+    check("nothing, and one sentence, stay as they are",
+          i18n.sentences([]) == "" and i18n.sentences(["One."]) == "One.")
+
+
 def test_no_semicolons_in_ui_text():
     """People do not write semicolons in ordinary prose - a full stop or a comma
     (PROJECT_NOTES convention 1b).

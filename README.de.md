@@ -66,7 +66,8 @@ der es braucht, dass es existiert.
 - **Export nach CSV** - Sitzungsstatistik und ein Schnappschuss der Verbindungstabelle.
 - **Befehlszeilenmodus** - skriptfähig für CI, mit Exit-Codes und JSON-Ausgabe.
 - **Keine Telemetrie, sendet nichts von sich aus** - das Werkzeug Ping pingt nur die Adresse, die
-  Sie eingeben.
+  Sie eingeben, und NAT and STUN sendet einige Anfragen an die beiden Server, die Sie eingeben, und
+  kleine Testpakete an die eigene öffentliche Adresse dieses Netzwerks, wenn Sie Start drücken.
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester fügt einem laufenden Ping Verzögerung und Paketverlust hinzu" width="820">
@@ -1901,8 +1902,9 @@ Das Programm verwendet Bibliotheken anderer Autoren unter deren eigenen Lizenzen
 **[WinDivert](https://www.reqrypt.org/windivert.html)** und
 **[PyDivert](https://github.com/ffalcinelli/pydivert)** unter **LGPLv3**,
 **[psutil](https://github.com/giampaolo/psutil)** (BSD), **[CPython](https://www.python.org/)** (PSF),
-**[Tcl/Tk](https://www.tcl-lang.org/)** und der Bootloader von
-**[PyInstaller](https://pyinstaller.org/)**. Die vollständige Liste, die Versionen und die
+**[Tcl/Tk](https://www.tcl-lang.org/)**, **[OpenSSL](https://www.openssl.org/)** (Apache 2.0, im
+Windows-Zip, für das TLS des Werkzeugs NAT and STUN - das Linux-Paket nutzt das des Systems) und
+der Bootloader von **[PyInstaller](https://pyinstaller.org/)**. Die vollständige Liste, die Versionen und die
 Quelladressen stehen in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), und die vollständigen
 Lizenztexte liegen im Verzeichnis `licenses/`. Aus dem Programm heraus: `--license` (CLI) oder die
 Schaltfläche **About** in der Oberfläche.
@@ -1922,10 +1924,13 @@ Projekts schränkt die Rechte ein, die sich aus ihnen ergeben.
 
 Bean Network Tester **sendet nichts von sich aus**. Es hat keine Telemetrie, keine Update-Prüfungen
 und keine externen Dienste. Das Werkzeug erfasst Netzwerkverkehr auf Ihrem Computer - und diese
-Daten **verlassen ihn nie**. Zwei Dinge gehen nur hinaus, wenn Sie darum bitten: eine Seite, die in
-Ihrem Browser geöffnet wird - die Unterstützungsseite oder die Seite des Projekts auf GitHub -, wenn
-Sie selbst auf die entsprechende Schaltfläche klicken, und die Echo-Anfragen des Werkzeugs **Ping**
-auf dem Tab Tools, die nur an die Adresse gehen, die Sie eingeben, von Start bis Stop. Wenn Sie statt
+Daten **verlassen ihn nie**. Drei Dinge gehen nur hinaus, wenn Sie darum bitten. Das eine ist eine
+Seite, die in Ihrem Browser geöffnet wird - die Unterstützungsseite oder die Seite des Projekts auf
+GitHub -, wenn Sie selbst auf die entsprechende Schaltfläche klicken. Das zweite sind die
+Echo-Anfragen des Werkzeugs **Ping** auf dem Tab Tools, die nur an die Adresse gehen, die Sie
+eingeben, von Start bis Stop. Das dritte ist, was das Werkzeug **NAT and STUN** auf demselben Tab
+sendet, wenn Sie Start drücken: einige Anfragen an die beiden Server, die Sie eingeben, und kleine
+Testpakete an die eigene öffentliche Adresse dieses Netzwerks. Wenn Sie statt
 einer Adresse einen Namen eingeben, schlägt Windows ihn zuerst nach, wie für jedes Programm.
 
 ## Ein Hinweis zu SmartScreen und Antivirenprogrammen

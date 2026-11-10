@@ -53,7 +53,7 @@ ping を増やす、パケットを破棄する、速度に上限をかける、
 - **リアルタイム表示** - グラフ、カウンター、検索できる接続テーブル、イベントログを備えています。
 - **CSV へのエクスポート** - セッションの統計と、接続テーブルのスナップショットを書き出せます。
 - **コマンドラインモード** - 終了コードと JSON 出力に対応し、CI からスクリプトで操作できます。
-- **テレメトリなし、自分からは何も送信しない** - Ping ツールは、入力したアドレスにだけ ping を送ります。
+- **テレメトリなし、自分からは何も送信しない** - Ping ツールは、入力したアドレスにだけ ping を送ります。NAT and STUN は Start を押したときに、入力した 2 つのサーバーへいくつかの要求を、このネットワーク自身のパブリックアドレスへ小さなテストパケットを送ります。
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester が実行中の ping に遅延とパケットロスを加えている様子" width="820">
@@ -1201,7 +1201,7 @@ Ookla、Speedtest、Starlink、HughesNet、Viasat は、それぞれの所有者
 **[WinDivert](https://www.reqrypt.org/windivert.html)** と
 **[PyDivert](https://github.com/ffalcinelli/pydivert)** は **LGPLv3**、
 **[psutil](https://github.com/giampaolo/psutil)** は (BSD)、**[CPython](https://www.python.org/)** は (PSF) です。
-そのほかに **[Tcl/Tk](https://www.tcl-lang.org/)** と **[PyInstaller](https://pyinstaller.org/)**
+そのほかに **[Tcl/Tk](https://www.tcl-lang.org/)**、**[OpenSSL](https://www.openssl.org/)** (Apache 2.0。Windows の zip に含まれ、NAT and STUN ツールの TLS に使います。Linux パッケージはシステムのものを使います)、**[PyInstaller](https://pyinstaller.org/)**
 のブートローダーがあります。完全な一覧、バージョン、ソースの所在は
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) に、ライセンス全文は `licenses/`
 ディレクトリにあります。プログラム内からは、`--license` (CLI) か、インターフェースの **About** ボタンで確認できます。
@@ -1218,8 +1218,8 @@ LGPL のライブラリは、インターフェース互換の自分のバージ
 
 Bean Network Tester は、**自分からは何も送信しません**。テレメトリも、更新の確認も、外部サービスもありません。
 ツールはあなたのコンピューター上のネットワークトラフィックをキャプチャしますが、そのデータは**コンピューターの外に出ることはありません**。
-外に出るのは、あなたが求めたときの2つだけです。1つは、あなた自身がボタンをクリックしたときにブラウザで開くページ (サポートページか GitHub のプロジェクトページ) です。
-もう1つは Tools タブの **Ping** ツールのエコー要求で、入力したアドレスにだけ、Start から Stop まで送られます。アドレスではなく名前を入力すると、どのプログラムの場合とも同じように、Windows がまずその名前を調べます。
+外に出るのは、あなたが求めたときの3つだけです。1つは、あなた自身がボタンをクリックしたときにブラウザで開くページ (サポートページか GitHub のプロジェクトページ) です。
+2つ目は Tools タブの **Ping** ツールのエコー要求で、入力したアドレスにだけ、Start から Stop まで送られます。3つ目は同じタブの **NAT and STUN** ツールで、Start を押したときに、入力した 2 つのサーバーへいくつかの要求を、このネットワーク自身のパブリックアドレスへ小さなテストパケットを送ります。アドレスではなく名前を入力すると、どのプログラムの場合とも同じように、Windows がまずその名前を調べます。
 
 ## SmartScreenとウイルス対策ソフトについて
 

@@ -66,7 +66,8 @@ en a besoin apprendra qu'il existe.
 - **Exporter en CSV** - les statistiques de la session et un instantané de la table des connexions.
 - **Mode ligne de commande** - scriptable pour la CI, avec des codes de sortie et une sortie JSON.
 - **Aucune télémétrie, n'envoie rien de lui-même** - l'outil Ping ne pingue que l'adresse que
-  vous saisissez.
+  vous saisissez, et NAT and STUN envoie quelques requêtes aux deux serveurs que vous saisissez et
+  de petits paquets de test à la propre adresse publique de ce réseau, quand vous appuyez sur Start.
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester ajoutant du lag et de la perte de paquets à un ping en direct" width="820">
@@ -1896,8 +1897,9 @@ Le programme utilise des bibliothèques d'autres auteurs, sous leurs propres lic
 **[WinDivert](https://www.reqrypt.org/windivert.html)** et
 **[PyDivert](https://github.com/ffalcinelli/pydivert)** sous **LGPLv3**,
 **[psutil](https://github.com/giampaolo/psutil)** (BSD), **[CPython](https://www.python.org/)** (PSF),
-**[Tcl/Tk](https://www.tcl-lang.org/)** et le chargeur d'amorçage de
-**[PyInstaller](https://pyinstaller.org/)**. La liste complète, les versions et les adresses des
+**[Tcl/Tk](https://www.tcl-lang.org/)**, **[OpenSSL](https://www.openssl.org/)** (Apache 2.0, dans le
+zip Windows, pour le TLS de l'outil NAT and STUN - le paquet Linux utilise celui du système) et le
+chargeur d'amorçage de **[PyInstaller](https://pyinstaller.org/)**. La liste complète, les versions et les adresses des
 sources se trouvent dans
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), et les textes complets des licences dans le dossier
 `licenses/`. Depuis le programme : `--license` (CLI) ou le bouton **About** de l'interface.
@@ -1917,10 +1919,13 @@ restreint les droits qui en découlent.
 
 Bean Network Tester **n'envoie rien de lui-même**. Il n'a ni télémétrie, ni vérification de mise à
 jour, ni service externe. L'outil capture le trafic réseau sur votre ordinateur - et ces données
-**ne le quittent jamais**. Deux choses sortent, et seulement quand vous les demandez : une page
-ouverte dans votre navigateur - la page de soutien ou la page du projet sur GitHub - quand vous
-cliquez vous-même sur le bouton correspondant, et les requêtes d'écho de l'outil **Ping** de
-l'onglet Tools, qui ne vont qu'à l'adresse que vous saisissez, de Start à Stop. Si vous saisissez un
+**ne le quittent jamais**. Trois choses sortent, et seulement quand vous les demandez. La première
+est une page ouverte dans votre navigateur - la page de soutien ou la page du projet sur GitHub -
+quand vous cliquez vous-même sur le bouton correspondant. La deuxième, ce sont les requêtes d'écho
+de l'outil **Ping** de l'onglet Tools, qui ne vont qu'à l'adresse que vous saisissez, de Start à
+Stop. La troisième est ce que l'outil **NAT and STUN** du même onglet envoie quand vous appuyez sur
+Start : quelques requêtes aux deux serveurs que vous saisissez et de petits paquets de test à la
+propre adresse publique de ce réseau. Si vous saisissez un
 nom au lieu d'une adresse, Windows le résout d'abord, comme pour n'importe quel programme.
 
 ## À propos de SmartScreen et des antivirus

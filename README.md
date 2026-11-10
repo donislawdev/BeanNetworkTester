@@ -60,7 +60,8 @@ exists.
 - **Export to CSV** - session statistics and a snapshot of the connections table.
 - **Command-line mode** - scriptable for CI, with exit codes and JSON output.
 - **No telemetry, nothing sent on its own** - the Ping tool pings only the address you type,
-  from Start to Stop.
+  from Start to Stop, and the NAT and STUN tool sends a few requests to the two servers you type
+  and small test packets to this network's own public address, when you press Start.
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester adding lag and packet loss to a live ping" width="820">
@@ -396,14 +397,17 @@ monitor is gone it returns to the centre of the current screen.
     hairpin rows say whether two devices behind this router reach each other through its
     public address, both sending at once and one side first: a router that closes the way
     after one side went first leaves such a call to the local network or a relay. The TURN
-    rows say whether the TURN server answers on UDP 3478 and 443 and on TCP 3478 and 80
-    (with a port typed, on that port only). It is asked for a relay without a login, and its
-    answer "401, login needed" shows it is there.
+    rows say whether the TURN server answers on UDP 3478 and 443, on TCP 3478 and 80 and over
+    TLS on 5349 and 443 (with a port typed, on that port only). It is asked for a relay
+    without a login, and its answer "401, login needed" shows it is there. Over TLS the
+    server's certificate is checked against the root certificates this computer trusts, as a
+    call app checks it: a certificate this computer does not trust can mean a proxy or a
+    firewall on the way that reads TLS.
     When the run ends, a line above the table sums it up in plain words. Two sockets of this
     computer stand in for two devices, and behind a provider's NAT or a VPN the result
     describes that whole chain. The tool does not check the router's filtering (whether it
-    lets in datagrams from an address this computer has not sent to) or TURN over TLS, and
-    the two servers see this network's public address. Before each hairpin test, each socket
+    lets in datagrams from an address this computer has not sent to), and the two servers
+    see this network's public address. Before each hairpin test, each socket
     sends one datagram that stops at the router (TTL 1), so this computer's firewall already
     knows the way the answer comes back.
     **"Copy results"** copies the table in English - with this network's public address in it.
@@ -2051,8 +2055,9 @@ The program uses libraries by other authors, under their own licenses - among th
 **[WinDivert](https://www.reqrypt.org/windivert.html)** and
 **[PyDivert](https://github.com/ffalcinelli/pydivert)** under **LGPLv3**,
 **[psutil](https://github.com/giampaolo/psutil)** (BSD), **[CPython](https://www.python.org/)** (PSF),
-**[Tcl/Tk](https://www.tcl-lang.org/)** and the **[PyInstaller](https://pyinstaller.org/)**
-bootloader. The full list, versions and source addresses are in
+**[Tcl/Tk](https://www.tcl-lang.org/)**, **[OpenSSL](https://www.openssl.org/)** (Apache 2.0, in the
+Windows zip, for the NAT and STUN tool's TLS - the Linux package uses the system's) and the
+**[PyInstaller](https://pyinstaller.org/)** bootloader. The full list, versions and source addresses are in
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), and the full license texts are in the `licenses/`
 directory. From within the program: `--license` (CLI) or the **About** button in the interface.
 
@@ -2070,10 +2075,13 @@ rights arising from them.
 
 Bean Network Tester **sends nothing on its own**. It has no telemetry, no update checks and no
 external services. The tool captures network traffic on your computer - and that data **never leaves
-it**. Two things go out only when you ask for them: a page opened in your browser - the support page
-or the project's page on GitHub - when you click the button for it yourself, and the echo requests of
-the **Ping** tool on the Tools tab, which go only to the address you type, from Start to Stop. When you
-type a name instead of an address, Windows looks it up first, the way it does for any program.
+it**. Three things go out, and only when you ask for them. One is a page opened in your browser - the
+support page or the project's page on GitHub - when you click the button for it yourself. Another is
+the echo requests of the **Ping** tool on the Tools tab, which go only to the address you type, from
+Start to Stop. The third is what the **NAT and STUN** tool on the same tab sends when you press Start:
+a few requests to the two servers you type and small test packets to this network's own public
+address. When you type a name instead of an address, Windows looks it up first, the way it does for
+any program.
 
 ## A note on SmartScreen and antivirus
 

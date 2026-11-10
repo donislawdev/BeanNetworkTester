@@ -108,6 +108,14 @@ WINDOWS_COMPONENTS = (
     ("libffi", None, "MIT-style (text inside Python-LICENSE.txt)",
      "https://github.com/libffi/libffi",
      "MIT"),
+    # OpenSSL (2026-11-10): the NAT and STUN tool's TURN over TLS. It arrives with the
+    # CPython Windows runtime - libssl-3.dll and libcrypto-3.dll beside _ssl.pyd - and
+    # its licence, the Apache License 2.0, is inside Python-LICENSE.txt as libffi's
+    # is. The version is the one the bundled `ssl` module loads. The Linux package
+    # uses the system's OpenSSL (tools/linux_bundle.py), so it is not listed there.
+    ("OpenSSL", None, "Apache-2.0 (text inside Python-LICENSE.txt)",
+     "https://github.com/openssl/openssl",
+     "Apache-2.0"),
     # 🔴 Found the same way, six days later (bundle scan, 2026-08-17), and it
     # arrived without a commit of ours: Python 3.14 ships Tcl/Tk 9.0, and Tcl 9
     # links libtommath for its bignum support. `libtommath.dll` sits in the
@@ -250,6 +258,21 @@ def _ebpfdivert_version():
         return "-"
 
 
+def _openssl_version():
+    """The OpenSSL the ``ssl`` module loads here, or ``-`` without one. Imported only
+    when asked (``--license``, the About window, the SBOM): nothing else loads it.
+
+    Read from the version TEXT ("OpenSSL 3.5.9 29 Sep 2026"): OpenSSL 3 numbers its
+    patch release in the fourth field of ``OPENSSL_VERSION_INFO`` - (3, 5, 0, 9, 15)
+    for 3.5.9 - so the first three fields said 3.5.0 (measured 2026-11-10)."""
+    try:
+        import ssl
+    except ImportError:            # a system without the library the module loads
+        return "-"
+    words = ssl.OPENSSL_VERSION.split()
+    return words[1] if len(words) > 1 and words[1][:1].isdigit() else "-"
+
+
 def component_rows(platform=None):
     """``(name, version, licence, source_url)`` for every third-party component."""
     rows = []
@@ -266,6 +289,8 @@ def component_rows(platform=None):
             version = WINDIVERT_VERSION
         elif name == "eBPFDivert":
             version = _ebpfdivert_version()
+        elif name == "OpenSSL":
+            version = _openssl_version()
         elif name.startswith("PyInstaller"):
             version = _pyinstaller_version()
         elif name in EBPFDIVERT_PARTS:
@@ -313,5 +338,7 @@ def cli_report():
               "Full notices:       %s" % resource_path(NOTICES_FILE),
               "",
               "Telemetry: none. This program sends nothing on its own. Its Ping tool "
-              "pings only the address you type."]
+              "pings only the address you type, and its NAT and STUN tool sends a few "
+              "requests to the two servers you type and small test datagrams to this "
+              "network's own public address, when you press Start."]
     return "\n".join(lines)

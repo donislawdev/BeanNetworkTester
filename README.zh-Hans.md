@@ -52,7 +52,7 @@
 - **实时观察**：图表、计数器、可搜索的连接表和事件日志。
 - **导出为 CSV**：会话统计数据，以及连接表的快照。
 - **命令行模式**：可用脚本调用，适合 CI，带有退出码和 JSON 输出。
-- **无遥测，不会自行发送任何内容**：Ping 工具只 ping 你输入的地址。
+- **无遥测，不会自行发送任何内容**：Ping 工具只 ping 你输入的地址。NAT 和 STUN 在你按下 Start 后向你输入的两个服务器发送少量请求，并向本网络自己的公网地址发送小测试包。
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester 为一次实时 ping 增加延迟和丢包" width="820">
@@ -1584,7 +1584,7 @@ Ookla、Speedtest、Starlink、HughesNet 和 Viasat 是其各自所有者的商�
 遵循 **LGPLv3** 的 **[WinDivert](https://www.reqrypt.org/windivert.html)** 和
 **[PyDivert](https://github.com/ffalcinelli/pydivert)**、
 **[psutil](https://github.com/giampaolo/psutil)**（BSD）、**[CPython](https://www.python.org/)**（PSF）、
-**[Tcl/Tk](https://www.tcl-lang.org/)** 以及 **[PyInstaller](https://pyinstaller.org/)**
+**[Tcl/Tk](https://www.tcl-lang.org/)**、**[OpenSSL](https://www.openssl.org/)**（Apache 2.0，包含在 Windows zip 中，用于 NAT 和 STUN 工具的 TLS，Linux 软件包使用系统自带的）以及 **[PyInstaller](https://pyinstaller.org/)**
 引导程序。完整的列表、版本和源码地址见
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)，完整的许可证文本位于 `licenses/`
 目录。在程序内部：使用 `--license`（CLI）或界面中的**关于**按钮。
@@ -1599,9 +1599,9 @@ GPLv3 与这些组件的许可证兼容，项目许可证中没有任何内容�
 ## 隐私：无遥测
 
 Bean Network Tester **不会自行发送任何内容**。它没有遥测，没有更新检查，也不使用外部服务。
-工具捕获你电脑上的网络流量，而这些数据**永远不会离开电脑**。只有在你要求时才会有两样东西发出：
+工具捕获你电脑上的网络流量，而这些数据**永远不会离开电脑**。只有在你要求时才会有三样东西发出：
 一是你自己点击对应按钮时在浏览器中打开的页面（支持页面或项目在 GitHub 上的页面），
-二是 Tools 选项卡上 **Ping** 工具的回显请求，它只在 Start 到 Stop 之间发往你输入的地址。如果你输入的是名称而不是地址，Windows 会像对待任何程序一样先查询该名称。
+二是 Tools 选项卡上 **Ping** 工具的回显请求，它只在 Start 到 Stop 之间发往你输入的地址。三是同一选项卡上的 **NAT 和 STUN** 工具，在你按下 Start 后向你输入的两个服务器发送少量请求，并向本网络自己的公网地址发送小测试包。如果你输入的是名称而不是地址，Windows 会像对待任何程序一样先查询该名称。
 
 ## 关于 SmartScreen 与杀毒软件的说明
 

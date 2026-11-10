@@ -117,6 +117,7 @@ def test_stop_in_the_middle_sends_nothing_more_and_says_what_was_not_checked():
 def test_a_run_stopped_after_one_failed_turn_transport_does_not_say_no_turn():
     run_gui(NAT + textwrap.dedent("""
         NET.udp_turn, NET.tcp = "420", {3478: "refused", 80: "refused"}
+        NET.tls = {5349: "not_tls", 443: "untrusted"}
         copied = []
         panel_mod.copy_confirmed = lambda app, text, said, area: copied.append(text)
         panel = open_nat()

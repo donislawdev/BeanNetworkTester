@@ -3,8 +3,10 @@
 One Start runs the jobs below, one worker run each: the panel checks Stop between
 them, and a job asks ``wanted()`` before everything it sends and after each name
 lookup, so Stop pressed during a slow job sends nothing more (the lesson of Ping's
-first version). A lookup itself cannot be cut short (``getaddrinfo`` has no
-timeout): a slow resolver makes the stop late, never the traffic.
+first version). Over TCP and TLS it is asked once the connection is made and again
+after the TLS handshake. A lookup, a connection or a handshake under way cannot be
+cut short (``getaddrinfo`` has no timeout, the other two end within ``TCP_S``): a
+slow resolver or server makes the stop late, and no request follows it.
 
 1. ``addresses`` - one UDP socket asks the STUN server which address it sees (the
    public address, and whether the router kept this computer's port), then asks the
@@ -18,8 +20,12 @@ timeout): a slow resolver makes the stop late, never the traffic.
    first. A router may close the pair for good then (measured 2026-11-04: dead for
    over 35 s on the development network's router) - the race that sends two devices
    behind one router to a relay. New sockets, because that pair is spent.
-4. ``turn`` - one Allocate WITHOUT credentials per transport: a TURN server answers
-   it with 401, which shows it is there and reachable that way.
+4. ``turn`` - one Allocate WITHOUT credentials per transport (UDP, TCP and TLS): a
+   TURN server answers it with 401, which shows it is there and reachable that way.
+   Over TLS the server's certificate is checked against this computer's trusted
+   roots, as a call app's TLS checks it: a certificate this computer does not trust
+   is a row of its own, because a device that reads TLS on the way (a proxy or a
+   firewall that inspects it) shows up exactly so.
 
 Every socket lives inside one job, so nothing outlives a Stop.
 
@@ -45,7 +51,7 @@ as the one it already answered (RFC 8656 section 7.2) - with a new ID it would s
 
 What it sends (the Tools tab's promise, README): a name lookup for each server, a
 few STUN Binding requests to the two servers, a few dozen small datagrams to this
-network's own public address, and one Allocate per TURN transport (on TCP, a
+network's own public address, and one Allocate per TURN transport (on TCP and TLS, a
 connection for that one request). Nothing before Start. The hairpin datagrams go
 only to the public address the FIRST answer gave: a server that names another one
 for the pair gets nothing sent there, and a "public" address on loopback or on the
@@ -69,12 +75,25 @@ STUN_PORT = 3478
 # The second port the mapping asks the TURN server on: Cloudflare's TURN answers
 # Binding on UDP 3478, 443 and 53 (measured 2026-11-09).
 SECOND_PORT = 443
-# Each TURN transport the tool asks on, when no port was typed (the owner's choice,
-# 2026-11-09: TLS comes with its own change).
-TURN_TRANSPORTS = (("UDP", 3478), ("UDP", 443), ("TCP", 3478), ("TCP", 80))
+# Each TURN transport the tool asks on, when no port was typed: the ways a call app is
+# usually given a TURN server - turn: on UDP and TCP, turns: (TLS) on 5349 and 443.
+TURN_TRANSPORTS = (("UDP", 3478), ("UDP", 443), ("TCP", 3478), ("TCP", 80),
+                   ("TLS", 5349), ("TLS", 443))
 # Where a TURN server speaks TLS rather than plain TCP: an answer that is not STUN
-# there is no sign that the server is not one.
+# there is no sign that the server is not one (the TLS row on that port says more).
 TLS_PORTS = frozenset({443, 5349})
+# A certificate the TLS handshake refused, by OpenSSL's verify code (X509_V_ERR_*):
+# 9 not yet valid and 10 expired, 62 and 64 a name or an address it is not for. Any
+# other code is a certificate this computer does not trust.
+CERT_FAILURES = {9: "date", 10: "date", 62: "name", 64: "name"}
+# What OpenSSL says when the other end does not speak TLS - it answered something
+# else, or closed the connection on the handshake. Measured 2026-11-10 (OpenSSL 3.5,
+# Windows and Linux): a STUN or HTTP answer is WRONG_VERSION_NUMBER (HTTP is
+# RECORD_LAYER_FAILURE on Linux), a TURN server's plain TCP ports 3478 and 80 close
+# the connection - UNEXPECTED_EOF_WHILE_READING.
+NOT_TLS_REASONS = frozenset({"WRONG_VERSION_NUMBER", "RECORD_LAYER_FAILURE",
+                             "UNEXPECTED_EOF_WHILE_READING", "PACKET_LENGTH_TOO_LONG",
+                             "HTTP_REQUEST"})
 # The error codes a STUN server that is not a TURN server gives an Allocate: Bad
 # Request and Unknown Attribute (it does not know REQUESTED-TRANSPORT).
 NOT_TURN_CODES = frozenset({400, 420})
@@ -172,9 +191,9 @@ def parse_server(text, which, default_port=STUN_PORT):
 
 
 def turn_transports(server):
-    """The TURN transports to ask: the usual four, or a typed port on UDP and TCP."""
+    """The TURN transports to ask: the usual six, or a typed port on UDP, TCP and TLS."""
     if server.typed_port:
-        return (("UDP", server.port), ("TCP", server.port))
+        return (("UDP", server.port), ("TCP", server.port), ("TLS", server.port))
     return TURN_TRANSPORTS
 
 
@@ -269,6 +288,36 @@ def _read(conn, size, deadline):
     return data
 
 
+def _connect(conn, address, port, timeout):
+    """Connect a stream socket: None, or what failed ("refused", "no_connection")."""
+    conn.settimeout(timeout)
+    try:
+        conn.connect((address, port))
+    except ConnectionRefusedError:
+        return "refused"
+    except OSError:
+        return "no_connection"
+    return None
+
+
+def _ask_stream(conn, data, deadline, wanted):
+    """Send one request on a connected stream (TCP, or TLS over it) and read one STUN
+    message back: ``(what, answer bytes)`` as ``_Net.tcp_ask`` says them. ``wanted()``
+    is asked first: a Stop pressed while the connection was being made sends nothing."""
+    if not wanted():
+        return "stopped", b""
+    try:
+        conn.sendall(data)
+        head = _read(conn, stun.HEADER, deadline)
+        total = stun.stream_length(head) if head else None
+        if total is None:
+            return "not_stun", b""
+        rest = _read(conn, total - stun.HEADER, deadline)
+    except OSError:
+        return "no_answer", b""
+    return ("answer", head + rest) if rest is not None else ("not_stun", b"")
+
+
 class _Net:
     """The system's resolver and sockets - what the tests replace (``portmap._Native``)."""
 
@@ -294,30 +343,55 @@ class _Net:
             return None
 
     @staticmethod
-    def tcp_ask(family, address, port, data, timeout):
+    def tcp_ask(family, address, port, data, timeout, wanted):
         """One request on a new TCP connection: ``(what, answer bytes)`` - what is
-        "answer", "refused", "no_connection", "no_answer" or "not_stun". Every read is
-        bounded (``stun.MAX_MESSAGE``) and the whole exchange takes ``timeout`` s at
-        most. Closing the connection ends an allocation made on it (RFC 8656)."""
+        "answer", "refused", "no_connection", "no_answer", "not_stun", or "stopped"
+        when ``wanted()`` says no once the connection is made (nothing is sent then).
+        Every read is bounded (``stun.MAX_MESSAGE``) and the whole exchange takes
+        ``timeout`` s at most. Closing the connection ends an allocation made on it
+        (RFC 8656)."""
         deadline = time.monotonic() + timeout
         with socket.socket(family, socket.SOCK_STREAM) as conn:
-            conn.settimeout(timeout)
+            failed = _connect(conn, address, port, timeout)
+            return (failed, b"") if failed else _ask_stream(conn, data, deadline, wanted)
+
+    @staticmethod
+    def tls_ask(family, address, port, name, data, timeout, wanted):
+        """``tcp_ask`` inside TLS, to ``name`` - the server's name as typed: the name the
+        handshake sends (SNI) and the one its certificate must be for. The certificate
+        is checked against this computer's trusted roots, as a call app's TLS checks it
+        (``ssl.create_default_context``, the one way this package makes a TLS context:
+        tests/test_no_telemetry.py). Besides ``tcp_ask``'s answers, what is "untrusted",
+        "name" or "date" (the certificate), "reset" (cut during the handshake),
+        "not_tls", "tls_failed", or "no_tls" when this system has no TLS library this
+        program can load. ``wanted()`` is asked before the handshake as well, which
+        sends the name. ``ssl`` is imported here, so opening the NAT and STUN panel does
+        not load OpenSSL: the first TLS row does."""
+        try:
+            import ssl
+        except ImportError:
+            return "no_tls", b""
+        deadline = time.monotonic() + timeout
+        with socket.socket(family, socket.SOCK_STREAM) as raw:
+            failed = _connect(raw, address, port, timeout)
+            if failed:
+                return failed, b""
+            if not wanted():
+                return "stopped", b""
+            raw.settimeout(max(deadline - time.monotonic(), POLL_S))
             try:
-                conn.connect((address, port))
-            except ConnectionRefusedError:
-                return "refused", b""
-            except OSError:
-                return "no_connection", b""
-            try:
-                conn.sendall(data)
-                head = _read(conn, stun.HEADER, deadline)
-                total = stun.stream_length(head) if head else None
-                if total is None:
-                    return "not_stun", b""
-                rest = _read(conn, total - stun.HEADER, deadline)
+                conn = ssl.create_default_context().wrap_socket(raw, server_hostname=name)
+            except ssl.SSLCertVerificationError as error:
+                return CERT_FAILURES.get(error.verify_code, "untrusted"), b""
+            except ssl.SSLError as error:
+                not_tls = isinstance(error, ssl.SSLEOFError) or error.reason in NOT_TLS_REASONS
+                return ("not_tls" if not_tls else "tls_failed"), b""
+            except (ConnectionResetError, ConnectionAbortedError):
+                return "reset", b""
             except OSError:
                 return "no_answer", b""
-            return ("answer", head + rest) if rest is not None else ("not_stun", b"")
+            with conn:
+                return _ask_stream(conn, data, deadline, wanted)
 
 
 def _family(address):
@@ -393,10 +467,33 @@ def conclusion(rows, transports=()):
         keys.append("tools.nat.conclusion.together_only")
     else:
         keys.append("tools.nat.conclusion.together")
+    turn = _turn_conclusion(rows, transports)
+    return tuple(keys) + ((turn,) if turn else ())
+
+
+def _all_failed(states):
+    """True when there are rows and every one was checked and failed."""
+    return bool(states) and all(state == FAIL for state in states)
+
+
+def _turn_conclusion(rows, transports):
+    """What the TURN rows say together, as an i18n key, or None. Each claim needs
+    every transport it is about checked and failed: "only over TLS" needs every UDP
+    and every TCP transport failed and a TLS one answering. A row not there yet, or
+    "not checked", is not a failure."""
     turn = {row.args[:2]: row.state for row in rows if row.test == "turn"}
-    if transports and all(turn.get(_turn_args(*transport)) == FAIL for transport in transports):
-        keys.append("tools.nat.conclusion.no_turn")
-    return tuple(keys)
+    states = {}
+    for kind, port in transports:
+        states.setdefault(kind, []).append(turn.get(_turn_args(kind, port)))
+    if _all_failed([state for found in states.values() for state in found]):
+        return "tools.nat.conclusion.no_turn"
+    if not _all_failed(states.get("UDP", [])):
+        return None
+    if _all_failed(states.get("TCP", [])) and OK in states.get("TLS", ()):
+        return "tools.nat.conclusion.turn_tls_only"
+    if any(OK in states.get(kind, ()) for kind in ("TCP", "TLS")):
+        return "tools.nat.conclusion.turn_no_udp"
+    return None
 
 
 def _skipped(test, detail, args=()):
@@ -442,6 +539,24 @@ def _turn_words(message, transport, port, ms):
                     args + (("code", code if code is not None else "-"),))
     return Step("turn", OK, "tools.nat.result.answers", "tools.nat.detail.turn_code",
                 args + (("code", code),))
+
+
+# A TCP or TLS transport that gave no TURN answer: (Result, Details) by what happened
+# (``_Net.tcp_ask`` and ``_Net.tls_ask``). "tls" is a TCP port where TURN usually
+# speaks TLS; anything not named is something that is not a TURN server.
+STREAM_WORDS = {
+    "refused": ("tools.nat.result.refused", "tools.nat.detail.refused"),
+    "no_connection": ("tools.nat.result.no_answer", "tools.nat.detail.no_connection"),
+    "no_answer": ("tools.nat.result.no_answer", "tools.nat.detail.no_answer"),
+    "not_stun": ("tools.nat.result.not_turn", "tools.nat.detail.not_turn"),
+    "tls": ("tools.nat.result.not_turn", "tools.nat.detail.not_turn_tls"),
+    "untrusted": ("tools.nat.result.certificate", "tools.nat.detail.tls_untrusted"),
+    "name": ("tools.nat.result.certificate", "tools.nat.detail.tls_name"),
+    "date": ("tools.nat.result.certificate", "tools.nat.detail.tls_date"),
+    "reset": ("tools.nat.result.cut", "tools.nat.detail.tls_reset"),
+    "not_tls": ("tools.nat.result.no_tls", "tools.nat.detail.not_tls"),
+    "tls_failed": ("tools.nat.result.tls_failed", "tools.nat.detail.tls_failed"),
+}
 
 
 def _relay_left(message):
@@ -818,9 +933,16 @@ class Run:
         if not wanted():
             return
         transaction = stun.transaction_id()
+        request = stun.allocate_request(transaction)
         began = time.monotonic()
-        what, data = self.net.tcp_ask(family, self.turn_at.address, port,
-                                      stun.allocate_request(transaction), TCP_S)
+        if transport == "TLS":
+            what, data = self.net.tls_ask(family, self.turn_at.address, port, self.turn.host,
+                                          request, TCP_S, wanted)
+        else:
+            what, data = self.net.tcp_ask(family, self.turn_at.address, port, request, TCP_S,
+                                          wanted)
+        if what == "stopped":
+            return              # the rows of a run stopped here say "not checked"
         ms = round((time.monotonic() - began) * 1000)
         if what == "answer":
             message = stun.decode(data)
@@ -830,15 +952,14 @@ class Run:
                 yield _turn_words(message, transport, port, ms)
                 return
             what = "not_stun"
-        if what == "not_stun" and port in TLS_PORTS:
+        if what == "no_tls":
+            yield _skipped("turn", "tools.nat.detail.no_tls_here", args)
+            return
+        if what == "not_stun" and transport == "TCP" and port in TLS_PORTS:
             what = "tls"
-        result, detail = {
-            "refused": ("tools.nat.result.refused", "tools.nat.detail.refused"),
-            "no_connection": ("tools.nat.result.no_answer", "tools.nat.detail.no_connection"),
-            "no_answer": ("tools.nat.result.no_answer", "tools.nat.detail.no_answer"),
-            "tls": ("tools.nat.result.not_turn", "tools.nat.detail.not_turn_tls"),
-        }.get(what, ("tools.nat.result.not_turn", "tools.nat.detail.not_turn"))
-        yield Step("turn", FAIL, result, detail, args + (("s", f"{TCP_S:g}"),))
+        result, detail = STREAM_WORDS.get(what, STREAM_WORDS["not_stun"])
+        yield Step("turn", FAIL, result, detail,
+                   args + (("s", f"{TCP_S:g}"), ("name", self.turn.host)))
 
     def _turn_udp(self, family, port, args, wanted):
         sock, _local = self._socket(family, self.turn_at.address)

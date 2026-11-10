@@ -204,6 +204,25 @@ version is linked above. Contact: https://donislawdev.com/
 
 ---
 
+## OpenSSL (`libssl-3.dll`, `libcrypto-3.dll`, the Windows zip)
+
+* Copyright (c) 1998-2025 The OpenSSL Project Authors, Copyright (c) 1995-1998
+  Eric A. Young, Tim J. Hudson
+* Used under: **Apache License 2.0**
+* Licence text: inside `licenses/Python-LICENSE.txt`, in CPython's section for
+  incorporated software - OpenSSL arrives with the CPython Windows runtime and is
+  licensed there
+* Source code: https://github.com/openssl/openssl (the version in this build:
+  `BeanNetworkTester.exe --license`)
+* Used unmodified, by Python's `ssl` module, for one thing: the NAT and STUN tool's
+  TURN test over TLS, which checks the TURN server's certificate against the root
+  certificates Windows trusts. Nothing else in the program uses TLS.
+* The Linux package carries no OpenSSL: it uses the system's own `libssl.so.3`,
+  with the system's certificates. A system without it shows the TLS rows as not
+  checked.
+
+---
+
 ## X.Org libraries (`libX11`, `libXext`, `libXft`, `libXrender`, `libXss`, the Linux package)
 
 * Copyright: the X Consortium, The Open Group, Keith Packard and many others; each
@@ -303,10 +322,12 @@ artwork is bundled: the interface uses the fonts already installed on the system
 
 None. Bean Network Tester does not phone home. It contains no analytics, no crash
 reporting service, no update check and nothing that sends on its own: the traffic it
-captures on your own machine never leaves the machine. Two things go out only when
+captures on your own machine never leaves the machine. Three things go out only when
 you ask for them. One is a page opened in **your** browser - the support page
 (`https://donislawdev.com/support/`) or the project's page on GitHub
 (`https://github.com/donislawdev/BeanNetworkTester`) - when you click the button for
-it yourself. The other is the **Ping** tool on the Tools tab: ICMP echo requests to
-the address you type, from Start to Stop (a name you type is looked up first, as for
-any program).
+it yourself. The second is the **Ping** tool on the Tools tab: ICMP echo requests to
+the address you type, from Start to Stop. The third is the **NAT and STUN** tool on
+the same tab: when you press Start, a few STUN and TURN requests to the two servers
+you type and small test packets to this network's own public address. A name you
+type is looked up first, as for any program.

@@ -20,7 +20,7 @@ import weakref
 from tkinter import ttk
 
 from ... import crashlog
-from ...i18n import T
+from ...i18n import T, sentences
 from ...nettools import Refused, nat
 from .. import dialogs
 from ..clipboard import copy_confirmed
@@ -69,6 +69,8 @@ RESULT_KEYS = ("tools.nat.result.address", "tools.nat.result.independent",
                "tools.nat.result.answers", "tools.nat.result.no_answer",
                "tools.nat.result.no_address", "tools.nat.result.not_found",
                "tools.nat.result.not_turn", "tools.nat.result.refused",
+               "tools.nat.result.certificate", "tools.nat.result.cut",
+               "tools.nat.result.no_tls", "tools.nat.result.tls_failed",
                "tools.nat.result.not_checked")
 
 
@@ -317,7 +319,7 @@ class NatPanel:
         # thing after the mapping and another after the hairpin.
         said = (nat.conclusion(runner.rows, runner.run.transports)
                 if runner.finished is not None else ())
-        self.summary.config(text=" ".join(T(key) for key in said))
+        self.summary.config(text=sentences(T(key) for key in said))
         rows = list(enumerate(runner.rows))
         column = self.table.sort["col"]
         if column in COLUMNS:
