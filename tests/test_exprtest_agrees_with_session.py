@@ -41,9 +41,29 @@ PROCESSES = ("", "chrome", "chrome, !chromedriver", "re:^py", "1234", ">1000", "
 OWNERS = (("chrome.exe", "1234"), ("chromedriver.exe", "77"), ("python3", "5000"),
           ("svchost.exe", "999"), ("CHROME.EXE", "4321"), ("chrome", "1001"))
 
+# Bytes of data in one packet. The same shapes as a port, on purpose: one syntax.
+SIZES = ("", "0", "!0", "64-1472", ">=64", "0, 64-1472", "<100, !20", "*", "65535",
+         " 1200 ")
+SIZE_VALUES = ("0", "20", "63", "64", "100", "1200", "1472", "1473")
+
 GRID = {"dst_ip": (IPS, IP_VALUES), "block_ip": (IPS, IP_VALUES),
         "dst_port": (PORTS, PORT_VALUES), "block_port": (PORTS, PORT_VALUES),
+        "payload_udp": (SIZES, SIZE_VALUES), "payload_tcp": (SIZES, SIZE_VALUES),
         "target": (PROCESSES, OWNERS)}
+
+
+def packet_carrying(size, is_tcp):
+    """An IPv4 packet with ``size`` bytes of data, as bytes: what ``wire`` reads."""
+    head = 40 if is_tcp else 28
+    raw = bytearray(head + size)
+    raw[0] = 0x45
+    raw[2:4] = len(raw).to_bytes(2, "big")
+    raw[9] = 6 if is_tcp else 17
+    if is_tcp:
+        raw[32] = 0x50                               # data offset: five words
+    else:
+        raw[24:26] = (8 + size).to_bytes(2, "big")   # the UDP length field
+    return bytes(raw)
 
 
 class _Table:
@@ -92,8 +112,11 @@ def session_takes(field, expression, value, pid=""):
     apply_settings(engine, {**DEFAULT_SETTINGS, field: expression})
     ip = value if field.endswith("_ip") else OTHER_IP
     port = int(value) if field.endswith("_port") else OTHER_PORT
+    # A payload field is asked about a packet of ITS protocol carrying that much data.
+    is_tcp = field != "payload_udp"
+    raw = packet_carrying(int(value), is_tcp) if field.startswith("payload") else None
     decision = engine.decide(100, True, LOCAL_PORT, 0.0, random.Random(0), remote_ip=ip,
-                             remote_port=port, is_tcp=True)
+                             remote_port=port, is_tcp=is_tcp, raw=raw)
     return decision.reason == "block" if field.startswith("block") else decision.scoped
 
 

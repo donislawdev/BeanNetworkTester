@@ -12,7 +12,7 @@ from contextlib import nullcontext
 from . import crashlog
 from . import fields as F
 from . import portmap
-from .core import burst_loss_params, compile_endpoint
+from .core import burst_loss_params, compile_endpoint, compile_payload
 from .jsonfile import load_json, write_json
 from .fields import FIELD_DEFS, FIELDS
 from .filters import CLI_FILTERS
@@ -36,13 +36,16 @@ DEFAULT_SETTINGS = dict(
     filter="both", target="", dst_ip="", dst_port="", lan_mode=False,
     ipv4_only=False, ipv6_only=False,
     call_checks=False, call_turn_control=False, call_media=False,   # all off = no call scope
+    payload_udp="", payload_tcp="",     # scope by bytes of data; both empty = no such scope
     internet_only=False,            # the mirror of lan_mode; loopback survives both
     block_ip="", block_port="",     # firewall: drop traffic to matching IP/port
     block_reject=False,             # ...and answer instead of dropping in silence
 
     syn_drop=0, max_size=0, spike_prob=0, spike_ms=0,
     nat_timeout=0, rst_prob=0, rst_cooldown=3,
-    flap_period=0, flap_down=0, rate_schedule="", seed=-1,
+    flap_period=0, flap_down=0,
+    flap_hold=False,     # an outage holds packets and delivers them later; off = it drops
+    rate_schedule="", seed=-1,
     duration=0,          # session length in seconds, 0 = until stopped (START-time only)
     row_limit=50000,     # most rows a table will show (0 = no limit); see fields.py
     narrow_filter=False, # fold the destination into the DRIVER's filter (START-time only)
@@ -89,6 +92,13 @@ def setting_expression(key, value):
     """Text form of a filter-expression setting (normalises legacy numbers)."""
     if key in ("dst_port", "block_port"):
         return port_expression(value)
+    if (key in ("payload_udp", "payload_tcp") and isinstance(value, (int, float))
+            and not isinstance(value, bool)):
+        # A bare number from a config file or a scenario, and 0 is a SIZE here - a
+        # bare acknowledgement, an empty datagram - not the "unset" a port's 0 was.
+        # Read as empty it would switch the scope off, which widens the session to
+        # everything it was sparing.
+        return str(int(value)) if float(value).is_integer() else str(value)
     return str(value or "").strip()
 
 
@@ -692,6 +702,21 @@ def _batch(engine):
 NOT_APPLIED_LIVE = tuple(f.key for f in FIELD_DEFS if f.start_only or f.ui_only)
 
 
+def _compiled_payload(g, log):
+    """The two payload-size matchers, compiled before the batch opens, or ``None``.
+
+    ``None`` is "leave the scope as it was", for an expression that could not be
+    read - the rule the destination follows in ``apply_settings``, and for the same
+    reason: switching a scope OFF widens the session to everything it was sparing.
+    """
+    try:
+        return compile_payload(setting_expression("payload_udp", g("payload_udp")),
+                               setting_expression("payload_tcp", g("payload_tcp")))
+    except ValueError as e:
+        log(f"{T('log.filter_skipped')}: {e}")
+        return None
+
+
 def apply_settings(engine, s, log=lambda *_: None, live=None):
     """Configure the engine from a flat settings dict (shared by GUI and CLI).
 
@@ -748,6 +773,7 @@ def apply_settings(engine, s, log=lambda *_: None, live=None):
     # like the tool doing what it was told.
     if g("ipv4_only") and g("ipv6_only"):
         log(T("log.ipv4_and_ipv6_only"))
+    payload = _compiled_payload(g, log)         # None = leave the payload scope alone
     # Both at once is a legal request - it is the union of two impairments, the
     # same as --loss 100 - but it is far more likely to be a mistake, and the
     # symptom (nothing but loopback moves) looks like the tool is broken rather
@@ -805,6 +831,8 @@ def apply_settings(engine, s, log=lambda *_: None, live=None):
         engine.set_ip_family(bool(g("ipv4_only")), bool(g("ipv6_only")))
         engine.set_call_parts(bool(g("call_checks")), bool(g("call_turn_control")),
                               bool(g("call_media")))
+        if payload is not None:
+            engine.set_payload(*payload)
         engine.set_lan(bool(g("lan_mode")))
         engine.set_internet_only(bool(g("internet_only")))
         if block is not None:
@@ -813,7 +841,8 @@ def apply_settings(engine, s, log=lambda *_: None, live=None):
         engine.set_spike(g("spike_prob"), g("spike_ms"))
         engine.set_nat(g("nat_timeout"))
         engine.set_rst(g("rst_prob"), g("rst_cooldown"))
-        engine.set_flap(g("flap_period") > 0, g("flap_period"), g("flap_down"))
+        engine.set_flap(g("flap_period") > 0, g("flap_period"), g("flap_down"),
+                        bool(g("flap_hold")))
         engine.set_schedule(schedule)
 
     # OUTSIDE the batch, deliberately, and this is the boundary of what "atomic"

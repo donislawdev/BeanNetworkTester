@@ -342,6 +342,7 @@ class _TargetedEngine:
     def set_dest(self, *_a, **_k): pass
     def set_ip_family(self, *_a, **_k): pass
     def set_call_parts(self, *_a, **_k): pass
+    def set_payload(self, *_a, **_k): pass
     def set_lan(self, *_a, **_k): pass
     def set_internet_only(self, *_a, **_k): pass
     def set_block(self, *_a, **_k): pass
@@ -461,6 +462,11 @@ def test_every_targeting_that_caught_nothing_is_called_out(monkeypatch):
                        (["--dst-port", "5004"], "destination targeting"),
                        (["--ipv6-only"], "destination targeting"),
                        (["--call-checks", "--call-media"], "call targeting: checks, media"),
+                       # a slip of the finger in a size is a session that impairs nothing
+                       (["--payload-udp", "6400-14720"],
+                        "payload size targeting: UDP 6400-14720"),
+                       (["--payload-udp", "64-1472", "--payload-tcp", "!0"],
+                        "payload size targeting: UDP 64-1472, TCP !0"),
                        (["--target", "probe.exe", "--call-turn-control"],
                         "process target 'probe.exe'; call targeting: TURN control")):
         _, _, err = _targeted_run(monkeypatch, _TargetedEngine(seen=500, scoped_seen=0),

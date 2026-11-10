@@ -202,7 +202,10 @@ def test_an_apply_holds_the_core_lock_over_assignments_only():
     try:
         apply_settings(sh, dict(loss=5, dst_ip="10.0.0.0/8", dst_port="80,443",
                                 block_ip="203.0.113.0/24", block_port="8080",
-                                target=""))
+                                # one of the pair left EMPTY on purpose: an empty
+                                # matcher is falsy, and a setter that tested it with
+                                # `or` compiled it a second time, under the lock
+                                payload_udp="64-1472", target=""))
     finally:
         core_mod.parse_matcher = real_parse
 
@@ -584,7 +587,8 @@ def test_build_matchers_covers_every_filter_field():
     from beantester import MATCH_FIELDS, build_matchers, DEFAULT_SETTINGS
     keys = {k for k, _, _, _ in MATCH_FIELDS}
     check("every filter field is declared in MATCH_FIELDS",
-          keys == {"target", "dst_ip", "dst_port", "block_ip", "block_port"}, f"({keys})")
+          keys == {"target", "dst_ip", "dst_port", "payload_udp", "payload_tcp",
+                   "block_ip", "block_port"}, f"({keys})")
     matchers = build_matchers(dict(DEFAULT_SETTINGS))
     check("build_matchers compiles one matcher per field", set(matchers) == keys)
     check("empty defaults compile to empty matchers",

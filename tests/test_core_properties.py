@@ -77,6 +77,10 @@ impairments = st.fixed_dictionaries({
     "flap_period": st.floats(min_value=0, max_value=60,
                              allow_nan=False, allow_infinity=False),
     "flap_down": pct,
+    # What the outage does with a packet: drop it, or hold it until the outage ends.
+    # Holding moves the clock the later steps read, so it rides through every
+    # property here - "released before it arrived" above all.
+    "flap_hold": st.booleans(),
     "lan": st.booleans(),
     "target_ports": st.one_of(st.none(),
                               st.sets(st.integers(0, 65535), max_size=4)),
@@ -114,7 +118,7 @@ def _core(s):
     core.set_spike(s["spike_prob"], s["spike_ms"])
     core.set_nat(s["nat_timeout"])
     core.set_rst(s["rst_prob"], s["rst_cooldown"])
-    core.set_flap(s["flap_enabled"], s["flap_period"], s["flap_down"])
+    core.set_flap(s["flap_enabled"], s["flap_period"], s["flap_down"], s["flap_hold"])
     core.set_lan(s["lan"])
     core.set_target(s["target_ports"] is not None, s["target_ports"])
     core.set_dest(bool(s["dst_ip"] or s["dst_port"]), s["dst_ip"], s["dst_port"])

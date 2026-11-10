@@ -78,8 +78,8 @@ SECTION_BY_ID = {s.id: s for s in SECTIONS}
 # Listed in form order, and every id must be a real Control-page section: a typo
 # here does NOT raise, it just leaves that panel expanded, which is invisible.
 # Guarded by tests/test_prefs.py::test_the_first_run_collapse_list_names_real_sections.
-FIRST_RUN_COLLAPSED = ["flapping", "destination", "call", "block", "advanced", "schedule",
-                       "session", "repro"]
+FIRST_RUN_COLLAPSED = ["flapping", "destination", "call", "payload", "block", "advanced",
+                       "schedule", "session", "repro"]
 
 
 class App:

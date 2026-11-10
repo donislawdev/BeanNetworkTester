@@ -17,9 +17,10 @@ from contextlib import contextmanager
 from typing import List, NamedTuple, Optional
 
 from .ice import CALL_CHECKS, CALL_LOOKS_MEDIA, CALL_MEDIA, CALL_TURN_CONTROL, call_part
-from .matchers import (KIND_INT, KIND_IP, PORT_BOUNDS, Matcher, parse_matcher,
-                       port_expression)
+from .matchers import (KIND_INT, KIND_IP, PAYLOAD_BOUNDS, PORT_BOUNDS, Matcher,
+                       parse_matcher, port_expression)
 from .utils import clamp01, is_lan_ip, is_local_ip
+from .wire import payload_length
 
 
 class Decision(NamedTuple):
@@ -323,6 +324,52 @@ def compile_endpoint(ip, port):
                           KIND_INT, "fields.port", bounds=PORT_BOUNDS))
 
 
+def compile_payload(udp, tcp):
+    """Compile the two payload-size expressions. NO LOCK IS HELD HERE - the reason
+    is the one given at :func:`compile_endpoint`, and so is the pass-through for a
+    matcher that is already compiled."""
+    # Handed on as they are, never through ``x or ""``: an EMPTY matcher is falsy,
+    # so that would turn a compiled one back into text and compile it again under
+    # the lock (tests/test_settings_config_scenario.py counts real compilations).
+    return (parse_matcher(udp, KIND_INT, "fields.payload_udp", bounds=PAYLOAD_BOUNDS),
+            parse_matcher(tcp, KIND_INT, "fields.payload_tcp", bounds=PAYLOAD_BOUNDS))
+
+
+# The most packets ONE outage holds back (``BeanCore._outage``); the rest of that
+# outage is dropped, as "flap". A bound because the delay queue is shared: it also
+# carries the packets this session does not touch, and a queue filled by a held
+# burst drops those too - on the machine the tool itself runs on. Counted here and
+# not from the queue's fill, which depends on how fast the injector happens to
+# drain it: the same traffic and the same seed must give the same decisions.
+# tests/test_link_stall.py holds it to at most half of ``BeanEngine.max_queue``.
+FLAP_HOLD_MAX = 10000
+
+
+class _SizeVerdicts(dict):
+    """Payload size -> is a packet of that size in scope? Filled in as sizes are met.
+
+    The packet path asks ``verdicts[size]``: a hit is one dictionary lookup, with no
+    call into Python, and only the FIRST packet of each size reaches the matcher.
+    MEASURED 2026-11-10 on the whole pipeline: asking the matcher for every packet
+    was a second Python call per packet on the capture thread, where a call costs
+    several times what it does in a loop of its own.
+
+    -1 is "the size could not be read" (``wire.payload_length``) and is never in
+    scope. Decided HERE, before the matcher: "!0" means "everything except 0" and
+    would accept it. Bounded by what one packet can carry, so about 65 000 entries
+    at the very most.
+    """
+    __slots__ = ("matcher",)
+
+    def __init__(self, matcher):
+        super().__init__()
+        self.matcher = matcher
+
+    def __missing__(self, size):
+        verdict = self[size] = size >= 0 and bool(self.matcher.matches(size))
+        return verdict
+
+
 class _Impairments:
     """Every value ONE direction applies, resolved once per apply.
 
@@ -466,7 +513,15 @@ class BeanCore:
         # says so while this stays False. One store per call packet in scope, and only
         # with a call scope armed.
         self.call_met = False
-        # Whether any of the three above is aimed: the one attribute decide() step 2
+        # The payload-size scope: ``None`` = no such scope, else a pair indexed by
+        # ``is_tcp`` - (verdicts for UDP, verdicts for TCP), each a ``_SizeVerdicts``
+        # - where ``None`` in a slot means that protocol was left empty and so is
+        # out of scope. One attribute and one index on the packet path rather than
+        # a flag plus two matchers.
+        # Like the family and unlike the call parts it is NOT a bound: ">=0" still
+        # reaches every datagram on the machine.
+        self._payload = None
+        # Whether any of the four above is aimed: the one attribute decide() step 2
         # reads per packet when nothing is. Kept by their setters (``_re_aim``), the
         # only code that writes them.
         self._aimed = False
@@ -492,6 +547,13 @@ class BeanCore:
         self.flap_enabled = False
         self.flap_period_s = 0.0
         self.flap_down = 0.0
+        # What an outage does with a packet: drop it (False) or hold it and let it
+        # through when the outage ends. See ``_outage``.
+        self.flap_hold = False
+        self.flap_held = 0          # packets an outage held instead of dropping
+        self.flap_refused = 0       # ...and those it dropped for want of room
+        self._flap_cycle = None     # the outage ``_flap_waiting`` is counting
+        self._flap_waiting = 0      # packets held in that outage so far
         self.syn_drop = 0.0
         self.max_size = 0
         self.spike_prob = 0.0       # chance of a latency spike
@@ -794,6 +856,26 @@ class BeanCore:
             self.call_parts = parts
             self._re_aim()
 
+    def set_payload(self, udp=None, tcp=None):
+        """Impair only packets carrying this many bytes of data. See ``wire``.
+
+        ``udp`` / ``tcp`` are filter expressions over the payload size in bytes
+        (or matchers already compiled - see :func:`compile_payload`). Both empty
+        = no such scope. One filled in = only that protocol's matching packets are
+        in scope and the other protocol is left alone; both = each packet is asked
+        the expression of its own protocol.
+
+        Raises a translated ``ValueError`` on a malformed expression.
+        """
+        udp_matcher, tcp_matcher = compile_payload(udp, tcp)
+        with self._lock:
+            # an empty matcher is falsy: "no expression", stored as None so the
+            # packet path tells "left empty" from "matches" with one identity test
+            self._payload = ((_SizeVerdicts(udp_matcher) if udp_matcher else None,
+                              _SizeVerdicts(tcp_matcher) if tcp_matcher else None)
+                             if udp_matcher or tcp_matcher else None)
+            self._re_aim()
+
     def read_call_flows_from(self, row_of):
         """``row_of(flowkey)``: the connection log's row for a flow, or ``None`` - the
         engine passes ``ConnectionLog.rows.get``, once. A row with an ICE label
@@ -815,7 +897,7 @@ class BeanCore:
     def _re_aim(self):
         """Whether anything in decide() step 2 is aimed. The lock is held."""
         self._aimed = bool(self.dst_active or self.family_wanted is not None
-                           or self.call_parts)
+                           or self.call_parts or self._payload is not None)
 
     def set_lan(self, enabled):
         with self._lock:
@@ -842,11 +924,11 @@ class BeanCore:
         be identified must not be damaged. Without a family chosen it is left to
         the destination matchers, exactly as before.
 
-        The parts of a call come last because they read the packet's bytes. The
-        same rule holds there: bytes this cannot read (``None``) are no part of a
-        call, and neither is TCP - a relay reached over TCP or TLS keeps its
-        messages inside a stream - which is also what keeps a browser's HTTPS from
-        paying for the parse.
+        The payload size and the parts of a call come last because they read the
+        packet's bytes. The same rule holds there: bytes this cannot read (``None``,
+        or a size of -1) are in no scope, and for a call neither is TCP - a relay
+        reached over TCP or TLS keeps its messages inside a stream - which is also
+        what keeps a browser's HTTPS from paying for the parse.
         """
         if self.family_wanted is not None and (
                 remote_ip is None or (":" in remote_ip) not in self.family_wanted):
@@ -860,9 +942,20 @@ class BeanCore:
                 or (self.dst_port_matcher
                     and not self.dst_port_matcher.matches(remote_port))):
             return True
+        # The payload size. Inline rather than a helper: a call to a Python
+        # function costs ~1 us on the capture thread, and this runs for every
+        # packet of a session that armed it. The verdicts are the ones for this
+        # packet's protocol; ``None`` in their place means that protocol was left
+        # empty. A size that could not be read is turned down by ``_SizeVerdicts``.
+        payload = self._payload
+        if payload is not None:
+            verdicts = payload[is_tcp]
+            if verdicts is None or raw is None or not verdicts[payload_length(raw, is_tcp)]:
+                return True
         # 🔴 Never behind an early "no destination, so in scope": with only the call
         # scope armed this is the one test between the packet and every impairment
         # of the session, and skipping it impairs everything it was meant to spare.
+        # The same goes for the payload test above, and for whatever joins them.
         parts = self.call_parts
         if not parts:
             return False
@@ -940,11 +1033,57 @@ class BeanCore:
             # answer, which is the atomicity the settings path was rebuilt for.
             self.block_reject = bool(reject)
 
-    def set_flap(self, enabled, period_s, down_pct):
+    def set_flap(self, enabled, period_s, down_pct, hold=False):
         with self._lock:
             self.flap_enabled = bool(enabled)
             self.flap_period_s = max(0.0, period_s)
             self.flap_down = clamp01(down_pct / 100.0)
+            self.flap_hold = bool(hold)
+
+    def _outage(self, now):
+        """Step 5 for one packet. MAY NOT be called with a period of 0, and assumes
+        ``self._lock`` is held.
+
+        Returns ``now`` while the link is up, ``None`` when the outage drops the
+        packet, and otherwise the moment the outage ENDS: the packet is held, and
+        the rest of the pipeline treats it as reaching the link at that moment. So
+        latency and jitter start when the link comes back, and a speed limit
+        carries the burst at the link's rate and tail-drops what its buffer cannot
+        take - what a link does after a stall, with no setting of its own.
+
+        The phase is session-relative: with the same seed and settings the outage
+        pattern repeats identically between sessions (an absolute-clock phase made
+        repro runs diverge on flapping). ``divmod`` gives the same remainder ``%``
+        gave, so with holding off this drops exactly the packets it always did.
+
+        🔴 The end is computed from the CYCLE, never from ``now``: every packet of
+        one outage must get the identical float. ``now + (down - phase)`` rounds
+        differently per packet, and the delay queue orders by release time before
+        arrival order - MEASURED 2026-11-10, in 25 of 20 000 outages a later packet
+        got an earlier end and would have overtaken the one before it.
+
+        An outage holds at most ``FLAP_HOLD_MAX`` packets and drops the rest, with
+        the reason an outage always had. A packet decided BEFORE an outage with a
+        release time inside it still leaves during it: the outage acts where
+        packets enter the link, as it does when it drops.
+        """
+        period = self.flap_period_s
+        cycle, phase = divmod(now - self._session_start, period)
+        down = period * self.flap_down
+        if phase >= down:
+            return now
+        if not self.flap_hold:
+            return None
+        if cycle != self._flap_cycle:
+            self._flap_cycle = cycle
+            self._flap_waiting = 0
+        if self._flap_waiting >= FLAP_HOLD_MAX:
+            self.flap_refused += 1
+            return None
+        self._flap_waiting += 1
+        self.flap_held += 1
+        end = self._session_start + cycle * period + down
+        return end if end > now else now
 
     def set_advanced(self, syn_drop_pct, max_size):
         with self._lock:
@@ -1040,6 +1179,11 @@ class BeanCore:
             self.loss_bursts = 0
             # a new session has met no call yet, whatever the last one met
             self.call_met = False
+            # ...and held nothing. Forgetting the cycle is what empties the count of
+            # the outage in progress: the new session's first outage is cycle 0
+            # again, and would otherwise inherit what the last session's held.
+            self.flap_held = self.flap_refused = 0
+            self._flap_cycle = None
 
     # -- helpers ------------------------------------------------------------ #
     @staticmethod
@@ -1105,10 +1249,11 @@ class BeanCore:
         self._reset_until.maybe_rotate(now)
 
     def targeting_active(self):
-        """True when any targeting (process, destination or the parts of a call) is
-        narrowing traffic."""
+        """True when any targeting (process, destination, the parts of a call or the
+        payload size) is narrowing traffic."""
         with self._lock:
-            return bool(self.target_active or self.dst_active or self.call_parts)
+            return bool(self.target_active or self.dst_active or self.call_parts
+                        or self._payload is not None)
 
     def process_target_active(self):
         """True when a PROCESS target (step 1) is narrowing what gets impaired.
@@ -1398,13 +1543,13 @@ class BeanCore:
                     self._reset_until.set(key, now + self.rst_cooldown_s)
                     return Decision(True, False, [], "rst", True)
 
-            # 5) link outage (flapping)
+            # 5) link outage (flapping). ``at`` is when this packet reaches the
+            # link: now, or the end of the outage that held it (``_outage``). Every
+            # step below that reads a clock reads ``at``.
+            at = now
             if self.flap_enabled and self.flap_period_s > 0:
-                # session-relative phase: with the same seed and settings the
-                # outage pattern repeats identically between sessions (an
-                # absolute-clock phase made repro runs diverge on flapping)
-                phase = (now - self._session_start) % self.flap_period_s
-                if phase < self.flap_period_s * self.flap_down:
+                at = self._outage(now)
+                if at is None:
                     # its own reason: a link outage is not packet loss, and
                     # mixing the two made "Dropped" (and the effective-loss
                     # figure in the session panel) report a link outage as loss
@@ -1442,7 +1587,7 @@ class BeanCore:
                     delay = 0.0
             if imp.spike_prob > 0 and rng.random() < imp.spike_prob:
                 delay += imp.spike_s
-            release = now + delay
+            release = at + delay
 
             # 11) throughput limit (time-variable, per-direction token bucket with
             #     a BOUNDED buffer). ``b`` is the link's virtual finish time: the
@@ -1464,11 +1609,11 @@ class BeanCore:
             #
             #     Without a schedule the constant limits are read where they are: the
             #     call cost more than anything else left on the default path (W-A7).
-            down_bps, up_bps = (self._current_rates(now) if self.schedule
+            down_bps, up_bps = (self._current_rates(at) if self.schedule
                                 else (self.rate_down, self.rate_up))
             rate = up_bps if is_outbound else down_bps
             if rate > 0:
-                release = self._shape(is_outbound, size, now, rate, release)
+                release = self._shape(is_outbound, size, at, rate, release)
                 if release is None:
                     return Decision(True, False, [], "rate")
 
@@ -1481,7 +1626,7 @@ class BeanCore:
                 # bounded buffer has no room for the copy, the COPY is what gets
                 # dropped - the original already went through, so this appends
                 # nothing rather than returning a drop.
-                if rate <= 0 or self._charge(is_outbound, size, now, rate) is not None:
+                if rate <= 0 or self._charge(is_outbound, size, at, rate) is not None:
                     releases.append(dup_release)
 
             return Decision(False, corrupt, releases)

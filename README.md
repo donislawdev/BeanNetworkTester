@@ -44,7 +44,8 @@ exists.
 - **Cap download/upload speed** - throttle to a set KB/s, with a buffer that adds queuing delay
   before it starts dropping.
 - **Tear connections down** - TCP resets, a dead link, or new connections that never come up.
-- **Flap the link on and off** - outages that come and go.
+- **Flap the link on and off** - outages that come and go, and either drop what arrives
+  meanwhile or hold it and deliver it late.
 - **Break the path, not only the packets** - an MTU black hole and NAT-style idle timeouts.
 - **Block ports or IPs** - a small built-in firewall, plus LAN mode (no internet) and internet
   only (no local network).
@@ -675,6 +676,23 @@ given percentage of the time. Simulates a flickering connection. This is **not**
 in a row: flapping is a fixed cycle you can predict, the runs above are random and short in the
 middle of otherwise normal traffic.
 
+Tick **Hold packets during an outage and deliver them when it ends** and an outage stops
+dropping: packets that arrive during it wait, and leave when it ends, in the order they came. That
+is what a Wi-Fi handover, or a radio that sleeps to save power, looks like to a program: nothing
+is lost, everything is late, and then it all arrives at once.
+- Latency and jitter are added after the wait, not hidden inside it.
+- A speed limit carries the burst at the link's rate, and its buffer drops what does not fit, as
+  a real link does after a stall. Set one to spread the burst out.
+- With *Downtime percent* at 100 the link delivers only in bursts, once per period.
+- One outage holds at most 10,000 packets. The rest of that outage is dropped and counted as
+  "Link outage", and the log says so when the session stops. The limit keeps a held burst from
+  filling the queue that also carries the traffic you did not aim at.
+- A large burst takes a moment to send, and while it leaves, the other traffic this tool
+  captured waits behind it, once, when the outage ends. Measured on one PC: about 45 ms behind
+  1,000 held packets, about 0.2 s behind 5,000 and about 0.5 s behind 10,000.
+- Pressing STOP drops what is still waiting. The Statistics page counts held packets as "Held by
+  outage".
+
 **Advanced (NAT / connections):**
 - *Target destination (IP/port)* - impair only traffic to/from chosen servers. Both fields accept
   lists, ranges, CIDR, wildcards, comparisons, exclusions and regular expressions - see
@@ -728,6 +746,35 @@ While no packet of a ticked part has matched the targeting, the card says so in 
 session impairs nothing. The target process and the destination count too, so a call they leave
 out never matches. At the end of a command-line run, a targeting that caught nothing is called out, and the
 `In scope` line says how many of the captured packets it reached.
+
+**Payload size targeting** - two fields that aim the impairments at packets by how many bytes of
+data they carry (the payload: what is left after the IP and UDP or TCP headers), one for UDP and
+one for TCP. Both take the [filter syntax](#filter-syntax-process--ip--port): `64-1472` is a range,
+`!0` is everything except empty packets, `0, 64-1472` is a list. Fill in one field and only that
+protocol's matching packets are impaired, while the other protocol is left alone. Fill in both and
+each packet is checked against the field of its own protocol. With both empty there is no such
+filter.
+- UDP `64-1472` - impair a game's or a call's data and leave its small keepalives alone.
+- TCP `!0` - impair the segments that carry data and leave bare acknowledgements alone. TCP `0`
+  does the opposite.
+- UDP `>=0` - impair all UDP and no TCP. Unlike the traffic filter, this can change with
+  "Apply changes" in the middle of a session.
+
+It combines with the target process, the destination and call targeting: a packet has to pass
+every one that is set. Packets whose size cannot be read are never impaired: ICMP, IP fragments
+and IPv6 behind an extension header. `--simulate` makes packets with no real headers, so nothing
+in it matches. A size filter alone does not count as narrowing a session: `>=0` still reaches
+every UDP packet on the computer, so the warning about impairing all traffic stays. At the end of
+a command-line run, a size filter that caught nothing is called out by name.
+
+The size is the one this computer's network stack hands over, and that differs between systems:
+- **Windows** - the size the application sent. TCP arrives one segment at a time (up to 1460
+  bytes on an ordinary network), and a UDP datagram larger than the MTU is seen whole, in both
+  directions.
+- **Linux** (experimental) - TCP is handed over in pieces much larger than one segment, because
+  the kernel splits and merges segments below the point where this tool captures. Use the TCP
+  field there to tell data from bare acknowledgements (`0`, `!0`), not to pick out segment
+  sizes. A UDP datagram larger than the MTU is seen as fragments, and fragments are left alone.
 
 **Session:**
 - *Duration (s)* - after this many seconds the program **stops itself** (exactly as if you clicked
@@ -784,7 +831,7 @@ next to the value says so instead of inventing a source. A few of them are worth
 
 A profile stores **what the link is like**: loss, how much of it arrives in a row, corruption,
 duplication, latency, jitter, latency
-spikes, link outages (flapping), the speed limits and the buffer. Everything else - the target, the
+spikes, link outages (flapping, and whether they hold packets), the speed limits and the buffer. Everything else - the target, the
 destination, blocking, RST, MTU, NAT expiry, the schedule, the seed - stays out of it. Saving a
 profile warns you about the ones you currently have switched on. Use **"Save file..."** for the
 complete configuration. Picking a profile or a preset sets **all** of those fields at once,
@@ -1146,6 +1193,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--nat-timeout` | s | after N s of silence the NAT mapping "disappears" (0 = off) |
 | `--rst-prob` `--rst-cooldown` | % / s | percentage of connections torn with RST and how long the tear-down is held |
 | `--flap-period` `--flap-down` | s / % | cyclic link outage: how often and for what fraction of the period |
+| `--flap-hold` | - | an outage holds the packets that arrive during it and delivers them when it ends, in order, instead of dropping them. Latency is added after the wait, and a speed limit spreads the burst out |
 | `--rate-schedule` | - | changing throughput: `"time:download:upload,..."` in KB/s, looped. Time above 0 and at most 86400 s, speeds 0 (no limit) to 10000000 |
 | `--asym` | - | give uploads their own values. Without it one set of numbers applies both ways, which is the default |
 | `--loss-up` `--corrupt-up` `--dup-up` | % | the same three impairments, for packets this machine SENDS. Used only with `--asym` |
@@ -1153,6 +1201,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--spike-prob-up` `--spike-ms-up` | % / ms | the occasional longer delay, for packets this machine SENDS. Used only with `--asym` |
 | `--ipv4-only` `--ipv6-only` | - | impair one address family only. The other keeps flowing untouched - this aims the tool, it does not block a protocol. Works with `--dst-ip` empty too, which means all addresses. Both flags at once exclude each other, nothing is impaired, and the log says so |
 | `--call-checks` `--call-turn-control` `--call-media` | - | impair only these parts of the calls that use ICE (WebRTC and similar): their STUN checks, their TURN control messages, their media. Any of them narrows every impairment, blocking and LAN mode included, to those packets, whichever program sends them (add `--target` to keep to one). See **Call targeting** in [All options explained](#all-options-explained) |
+| `--payload-udp` `--payload-tcp` | B | impair only packets that carry this many bytes of data (the payload, without headers), in the [filter syntax](#filter-syntax-process--ip--port): `--payload-udp 64-1472`, `--payload-tcp "!0"`. One of them alone leaves the other protocol untouched. See **Payload size targeting** in [All options explained](#all-options-explained) |
 | `--lan-mode` | - | LAN mode: cut off the internet (public addresses), keep the local network |
 | `--internet-only` | - | the mirror: cut off the local network (10.x, 172.16-31.x, 192.168.x, link-local, CGNAT), keep the internet. Loopback keeps working. Careful: DNS asked of your router is local traffic, so the internet can stop working with it |
 | `--narrow-filter` | - | push `--dst-ip`/`--dst-port` into the WinDivert filter so the driver never hands over traffic that could not be impaired (much faster at high packet rates). START-time only. While it is on, statistics and connections cover the narrowed traffic only |
@@ -1412,6 +1461,7 @@ what `packets_seen` counted in the first place - so every row records it in `cap
 | `dropped_local_network` | dropped by "Internet only" (local network cut, internet and loopback alive) |
 | `dropped_block` | dropped by the blocking (firewall) fields |
 | `dropped_link_outage` | dropped during a flapping outage |
+| `held_link_outage` | held by a flapping outage instead of being dropped, and delivered when it ended |
 | `dropped_rate_limit` | dropped by a full speed-limit buffer |
 | `dropped_at_stop` | queued packets discarded when the session stopped |
 | `dropped_send_failed` | the driver refused to re-inject them |
@@ -1764,6 +1814,7 @@ beantester/              the implementation package
   engine.py              capture/inject threads, statistics (BeanEngine)
   connlog.py             the session's connection log: one row per flow, and its cap
   ice.py                 the ICE column: which UDP flows carry STUN, and the path the data takes
+  wire.py                how many bytes of data a captured packet carries (payload size targeting)
   stun.py                STUN and TURN messages written and read for the NAT and STUN tool (pure)
   driverwait.py          how long packets waited in the driver's queue before the tool got them
   capture_backend.py     which packet-capture driver this platform uses - the one place that knows
@@ -1856,7 +1907,8 @@ BeanNetworkTester.spec   the build recipe (onedir, console, asInvoker)
 The core `BeanCore.decide()` is a pure function that decides a packet's fate in order:
 targeting -> LAN mode -> blocking (firewall) -> NAT -> RST -> flapping -> MTU -> SYN -> loss -> corruption ->
 delay/jitter/spike -> throughput limit (a token bucket with a bounded buffer, optionally from the
-schedule) -> duplication. The capture thread reads packets and runs the decision. The re-inject
+schedule) -> duplication. An outage that holds a packet does not end its run through the steps:
+the steps after it count from the moment the outage ends. The capture thread reads packets and runs the decision. The re-inject
 thread sends them at the chosen moment. All randomness goes through one generator (optionally
 seeded).
 

@@ -216,8 +216,13 @@ class ExprTestPanel:
             lines.append(T("tools.exprtest.note_everything"))
         elif verdict.bounds_nothing:
             lines.append(T("tools.exprtest.note_bounds_nothing"))
-        if FIELDS[self.field_key()].expr_kind == KIND_PROCESS:
+        field = FIELDS[self.field_key()]
+        if field.expr_kind == KIND_PROCESS:
             lines.append(T("tools.exprtest.note_process_tree"))
+        if field.section == "payload":
+            # the one thing a session does with this field that one expression,
+            # tested alone, cannot show
+            lines.append(T("tools.exprtest.note_payload"))
         return lines
 
     # -- acting -------------------------------------------------------------- #

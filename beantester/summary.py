@@ -74,6 +74,15 @@ def _call_part(g, tr):
     return [tr("summary.call", v=", ".join(named))] if named else []
 
 
+def _payload_part(g, tr):
+    """``["payload only: UDP 64-1472, TCP !0"]``, or nothing with no payload scope.
+    One phrase for both fields, like the parts of a call."""
+    named = [f"{name} {text}" for name, text in (
+        ("UDP", setting_expression("payload_udp", g("payload_udp"))),
+        ("TCP", setting_expression("payload_tcp", g("payload_tcp")))) if text]
+    return [tr("summary.payload", v=", ".join(named))] if named else []
+
+
 def _block_part(block_ip, block_port, tr):
     """The block rule, read the way the engine applies it.
 
@@ -157,7 +166,8 @@ def settings_summary(s, lang=None, prefix_key="summary.prefix"):
     if number_or_zero(g("rst_prob")):
         parts.append(tr("summary.rst", v=num("rst_prob")))
     if number_or_zero(g("flap_period")) and number_or_zero(g("flap_down")):
-        parts.append(tr("summary.flap", v=num("flap_period")))
+        parts.append(tr("summary.flap_hold" if g("flap_hold") else "summary.flap",
+                        v=num("flap_period")))
     # The plain on/off switches, as a table rather than four identical branches.
     # Each one adds a fixed phrase when it is on and nothing when it is off, so
     # there was never anything to tell them apart except the two names - and the
@@ -182,6 +192,7 @@ def settings_summary(s, lang=None, prefix_key="summary.prefix"):
         tgt = dst_ip or tr("summary.any_ip")
         parts.append(tr("summary.dest", v=tgt) + (f":{dst_port}" if dst_port else ""))
     parts += _call_part(g, tr)
+    parts += _payload_part(g, tr)
     block_ip = setting_expression("block_ip", g("block_ip"))
     block_port = setting_expression("block_port", g("block_port"))
     if block_ip or block_port:
