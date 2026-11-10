@@ -1670,8 +1670,9 @@ Network Tester를 사용한다고 해서 그것들이 GPL의 적용을 받게 �
 프로그램은 다른 저자들이 각자의 라이선스로 배포하는 라이브러리를 사용합니다. 그중에는 **LGPLv3**의
 **[WinDivert](https://www.reqrypt.org/windivert.html)**와
 **[PyDivert](https://github.com/ffalcinelli/pydivert)**, **[psutil](https://github.com/giampaolo/psutil)**(BSD),
-**[CPython](https://www.python.org/)**(PSF), **[Tcl/Tk](https://www.tcl-lang.org/)**, 그리고
-**[PyInstaller](https://pyinstaller.org/)** 부트로더가 있습니다. 전체 목록, 버전, 소스 주소는
+**[CPython](https://www.python.org/)**(PSF), **[Tcl/Tk](https://www.tcl-lang.org/)**,
+**[OpenSSL](https://www.openssl.org/)**(Apache 2.0, Windows zip에 포함되며 NAT and STUN 도구의 TLS에 쓰입니다.
+Linux 패키지는 시스템의 것을 씁니다), 그리고 **[PyInstaller](https://pyinstaller.org/)** 부트로더가 있습니다. 전체 목록, 버전, 소스 주소는
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)에 있고, 라이선스 전문은 `licenses/` 디렉터리에
 있습니다. 프로그램 안에서는 `--license`(CLI) 또는 인터페이스의 **About** 버튼으로 볼 수 있습니다.
 

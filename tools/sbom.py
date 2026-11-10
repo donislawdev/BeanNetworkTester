@@ -178,6 +178,9 @@ BUNDLE_PATTERNS = (
     # scan named it `\_internal\libtommath`, hence a substring match rather than
     # an anchored one - `re.search`, so the path prefix does not matter.
     (r"libtommath", "libtommath"),
+    # The NAT and STUN tool's TLS (2026-11-10): in the Windows zip only - a Linux scan
+    # that finds it means the bundle carries the OpenSSL it must take from the system.
+    (r"openssl|libssl|libcrypto", "OpenSSL"),
     (r"^pydivert", "PyDivert"),
     # The Linux .tar.gz.
     (r"ebpfdivert", "eBPFDivert"),

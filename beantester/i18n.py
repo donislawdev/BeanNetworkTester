@@ -37,6 +37,11 @@ UNSHIPPED_SCRIPT = ("zh_tw", "zh_hk", "zh_mo", "zh_hant", "(traditional)")
 # mistaken for each other in a review. See field_name().
 LABEL_COLONS = ":" + chr(0xFF1A)
 
+# The full-width sentence ends (U+3002 full stop, U+FF01 exclamation mark, U+FF1F
+# question mark): Chinese puts no space after them. Built from code points, like the
+# colon above. See sentences().
+WIDE_STOPS = (chr(0x3002), chr(0xFF01), chr(0xFF1F))
+
 _translations: dict[str, dict[str, str]] = {}   # language code -> {key: text}
 _language_names: dict[str, str] = {}            # code -> name (from "_meta")
 _LANG = None    # resolved lazily on first use (see _resolve_language)
@@ -298,6 +303,18 @@ def field_name(key, lang=None):
     is least likely to be the person reading this file.
     """
     return str(translate(key, lang)).rstrip().rstrip(LABEL_COLONS).rstrip()
+
+
+def sentences(texts):
+    """Translated sentences as one line: a space between two, as English writes them,
+    and none after a full-width stop - there a space is a gap in the middle of a
+    Chinese line (the NAT and STUN conclusions, seen on the render 2026-11-10)."""
+    out = ""
+    for text in texts:
+        if out and not out.endswith(WIDE_STOPS):
+            out += " "
+        out += text
+    return out
 
 
 def event_kind_label(kind, lang=None):

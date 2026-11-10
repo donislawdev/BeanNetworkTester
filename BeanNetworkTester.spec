@@ -105,12 +105,15 @@ a = Analysis(
     hiddenimports=["pydivert", "psutil"],
     hookspath=[],
     runtime_hooks=[],
-    # ssl/_ssl/_hashlib pull in OpenSSL (libcrypto ~6 MB + libssl ~1.3 MB). The app
-    # has ZERO network TLS (convention 36: no telemetry) - `import bean_network_tester`
-    # never touches `ssl` - and its only hashing is crashlog's sha1 fingerprint, which
-    # `hashlib` computes via the built-in `_sha1` module when `_hashlib` is absent
-    # (verified). Dropping them is ~7 MB off the release at no runtime cost.
-    excludes=["pytest", "ssl", "_ssl", "_hashlib"]
+    # The app's only hashing is crashlog's sha1 fingerprint, which `hashlib` computes
+    # via the built-in `_sha1` module when `_hashlib` is absent (verified), so
+    # `_hashlib` stays out. `ssl` and `_ssl` are in since 2026-11-10: the NAT and STUN
+    # tool asks a TURN server over TLS, importing `ssl` only in that step
+    # (nettools/nat.py; tests/test_no_telemetry.py holds it to one place and one
+    # call), and `import ssl` needs no `_hashlib` (measured). On Windows the bundle
+    # carries Python's own OpenSSL (libssl-3 and libcrypto-3, about 7.3 MB); the Linux
+    # bundle takes the system's (tools/linux_bundle.py says why).
+    excludes=["pytest", "_hashlib"]
              + ([] if WINDOWS else list(linux_bundle.NOT_NEEDED_MODULES)),
     noarchive=False,
 )
@@ -121,8 +124,8 @@ a = Analysis(
 # A Tcl 8.6 build bundles the full IANA timezone database (_tcl_data/tzdata) and its
 # own msgcat message catalogs (_tcl_data/msgs, _tk_data/msgs). This tool uses
 # Python's time (never Tcl's [clock]) and its own i18n (lang/*.json), so those files
-# are dead weight. Encodings are KEPT (Tk needs them). OpenSSL (libcrypto/libssl)
-# is dropped via the Analysis `excludes` above - see the note there.
+# are dead weight. Encodings are KEPT (Tk needs them), and so is OpenSSL, for the
+# NAT and STUN tool's TLS - see the note at the Analysis `excludes` above.
 #
 # 🔴 On Tcl 9 this filter is a NO-OP, and the sentence above used to claim it saved
 # "~750 files" unconditionally. MEASURED 2026-08-17 (Python 3.14.7, Tcl 9.0.4,

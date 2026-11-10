@@ -1201,7 +1201,7 @@ Ookla、Speedtest、Starlink、HughesNet、Viasat は、それぞれの所有者
 **[WinDivert](https://www.reqrypt.org/windivert.html)** と
 **[PyDivert](https://github.com/ffalcinelli/pydivert)** は **LGPLv3**、
 **[psutil](https://github.com/giampaolo/psutil)** は (BSD)、**[CPython](https://www.python.org/)** は (PSF) です。
-そのほかに **[Tcl/Tk](https://www.tcl-lang.org/)** と **[PyInstaller](https://pyinstaller.org/)**
+そのほかに **[Tcl/Tk](https://www.tcl-lang.org/)**、**[OpenSSL](https://www.openssl.org/)** (Apache 2.0。Windows の zip に含まれ、NAT and STUN ツールの TLS に使います。Linux パッケージはシステムのものを使います)、**[PyInstaller](https://pyinstaller.org/)**
 のブートローダーがあります。完全な一覧、バージョン、ソースの所在は
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) に、ライセンス全文は `licenses/`
 ディレクトリにあります。プログラム内からは、`--license` (CLI) か、インターフェースの **About** ボタンで確認できます。

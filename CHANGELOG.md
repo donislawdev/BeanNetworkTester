@@ -15,6 +15,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   filled in). Nothing is sent before Start, and the About window and `--license` name the
   tool among what the program sends.
 
+- **NAT and STUN asks the TURN server over TLS too.** The TURN rows include TLS on 5349 and
+  443 (and on a typed port), with the server's certificate checked the way a call app checks
+  it: a certificate this computer does not trust can mean a proxy or a firewall that reads
+  TLS. The line above the table says when the TURN server answers only over TCP or TLS, or
+  only over TLS. The Windows zip includes OpenSSL for this, and the Linux package uses the
+  system's.
+
 - **Connections: an ICE column shows which path a call takes.** For a call or another ICE
   connection (WebRTC and the like), the column says what each connection is: LAN (to this
   network), NAT (to this network's own public address, which the router sends back in), WAN

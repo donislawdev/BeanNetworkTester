@@ -15,6 +15,7 @@ reports 10054 on the next receive).
 """
 import errno
 import socket
+import struct
 import sys
 import threading
 
@@ -65,10 +66,13 @@ class FakeNat:
 
     def __init__(self, mapping=nat.INDEPENDENT, hairpin="public", lead_kills=True,
                  no_nat=False, silent=(), udp_turn="401", tcp=None, duplicate=False,
-                 keep_port=False, refuse_udp=False, flood=0):
+                 keep_port=False, refuse_udp=False, flood=0, tls=None):
         self.mapping, self.hairpin, self.lead_kills = mapping, hairpin, lead_kills
         self.no_nat, self.silent, self.udp_turn = no_nat, set(silent), udp_turn
         self.tcp = {3478: "401", 80: "401"} if tcp is None else tcp
+        # by port: an answer ("401", "success"...) or what tls_ask says went wrong
+        self.tls = {5349: "401", 443: "401"} if tls is None else tls
+        self.tls_names = []         # the name each TLS handshake was made to
         self.duplicate, self.keep_port, self.refuse_udp = duplicate, keep_port, refuse_udp
         self.flood = flood          # copies of each datagram, and as many from a stranger
         self.public = LOCAL if no_nat else PUBLIC
@@ -107,6 +111,15 @@ class FakeNat:
             return mode, b""
         if mode == "garbage":
             return "answer", b"\x01\x13\x00\x00" + stun.COOKIE + bytes(12)
+        return "answer", self._allocate_answer(request, mode)
+
+    def tls_ask(self, family, address, port, name, data, timeout):
+        mode = self.tls.get(port, "no_connection")
+        self.tls_names.append(name)
+        if not mode.isdigit() and mode != "success":
+            return mode, b""
+        request = stun.decode(data)
+        self.received.append(("tls", port, request))
         return "answer", self._allocate_answer(request, mode)
 
     # -- the wire ----------------------------------------------------------------- #
@@ -233,7 +246,8 @@ def test_what_was_typed_becomes_a_server():
     assert nat.parse_server("2001:db8::1", "stun").address == "2001:db8::1", "bare IPv6"
     assert nat.turn_transports(nat.parse_server("turn.test", "turn")) == nat.TURN_TRANSPORTS
     assert nat.turn_transports(nat.parse_server("turn.test:5000", "turn")) == (
-        ("UDP", 5000), ("TCP", 5000))
+        ("UDP", 5000), ("TCP", 5000), ("TLS", 5000))
+    assert ("TLS", 5349) in nat.TURN_TRANSPORTS and ("TLS", 443) in nat.TURN_TRANSPORTS
 
 
 @pytest.mark.parametrize("text, which, key", [
@@ -479,6 +493,60 @@ def test_each_turn_answer_says_what_it_is():
         nat.OK, "tools.nat.detail.turn_code", 438)
 
 
+def tls_row(run, port):
+    return by_test(run)[("turn", (("transport", "TLS"), ("port", port)))]
+
+
+@pytest.mark.parametrize("mode, result, detail", [
+    ("untrusted", "tools.nat.result.certificate", "tools.nat.detail.tls_untrusted"),
+    ("name", "tools.nat.result.certificate", "tools.nat.detail.tls_name"),
+    ("date", "tools.nat.result.certificate", "tools.nat.detail.tls_date"),
+    ("reset", "tools.nat.result.cut", "tools.nat.detail.tls_reset"),
+    ("not_tls", "tools.nat.result.no_tls", "tools.nat.detail.not_tls"),
+    ("tls_failed", "tools.nat.result.tls_failed", "tools.nat.detail.tls_failed"),
+    ("not_stun", "tools.nat.result.not_turn", "tools.nat.detail.not_turn"),
+    ("no_answer", "tools.nat.result.no_answer", "tools.nat.detail.no_answer"),
+    ("no_connection", "tools.nat.result.no_answer", "tools.nat.detail.no_connection"),
+    ("refused", "tools.nat.result.refused", "tools.nat.detail.refused"),
+])
+def test_each_tls_failure_says_what_it_is(mode, result, detail):
+    run = run_all(FakeNat(tls={5349: mode, 443: "401"}))
+    row = tls_row(run, 5349)
+    assert (row.state, row.result, row.detail) == (nat.FAIL, result, detail)
+    for lang in ("en", "pl", "zh"):
+        text = translate(detail, lang, **dict(row.args))
+        assert text and "{" not in text, (lang, text)
+    assert tls_row(run, 443).detail == "tools.nat.detail.turn_answers", "the other port is its own row"
+
+
+def test_tls_is_asked_by_the_typed_name_and_answers_like_tcp():
+    net = FakeNat(tls={5349: "success", 443: "401"})
+    run = run_all(net)
+    assert net.tls_names == ["turn.test", "turn.test"], "the name the certificate must be for"
+    assert tls_row(run, 5349).detail == "tools.nat.detail.turn_open"
+    assert tls_row(run, 443).detail == "tools.nat.detail.turn_answers"
+    allocates = [request for server, _port, request in net.received if server == "tls"]
+    assert len(allocates) == 2 and all(r.method == stun.ALLOCATE for r in allocates)
+    typed = FakeNat()
+    run = run_all(typed, turn_text=f"{TURN_AT}:443")
+    assert typed.tls_names == [TURN_AT], "an address typed is what the certificate is checked for"
+    assert [row.args[:2] for row in run.rows if row.test == "turn"] == [
+        (("transport", kind), ("port", 443)) for kind in ("UDP", "TCP", "TLS")]
+
+
+def test_no_tls_library_is_not_checked_and_no_failure():
+    """A system without the TLS library this program loads (a Linux without OpenSSL 3):
+    the TLS rows say "not checked", and no conclusion counts them as failed."""
+    failing = {"udp_turn": "420", "tcp": {3478: "refused", 80: "refused"},
+               "tls": {5349: "no_tls", 443: "no_tls"}}
+    run = run_all(FakeNat(**failing))
+    row = tls_row(run, 5349)
+    assert (row.state, row.result, row.detail) == (
+        nat.SKIPPED, "tools.nat.result.not_checked", "tools.nat.detail.no_tls_here")
+    said = nat.conclusion(run.rows, run.transports)
+    assert not [key for key in said if "turn" in key], said
+
+
 def released(net):
     return [request for server, _port, request in net.received
             if server == "turn" and request and request.method == stun.REFRESH]
@@ -671,13 +739,30 @@ def test_the_conclusion_from_the_rows():
         [ok_public, turn("UDP", nat.FAIL), turn("TCP", nat.SKIPPED)], transports), \
         "stopped before TCP"
     assert no_turn not in nat.conclusion([ok_public, turn("UDP", nat.FAIL)]), "no transports"
+    every = (("UDP", 1), ("TCP", 1), ("TLS", 1))
+    no_udp, tls_only = "tools.nat.conclusion.turn_no_udp", "tools.nat.conclusion.turn_tls_only"
+
+    def said(udp, tcp, tls=None):
+        rows = [ok_public, independent, turn("UDP", udp), turn("TCP", tcp)]
+        rows += [turn("TLS", tls)] if tls else []
+        return nat.conclusion(rows, every)[1:]
+    assert said(nat.FAIL, nat.FAIL, nat.FAIL) == (no_turn,)
+    assert said(nat.FAIL, nat.OK, nat.OK) == (no_udp,)
+    assert said(nat.FAIL, nat.OK, nat.FAIL) == (no_udp,)
+    assert said(nat.FAIL, nat.OK) == (no_udp,), "UDP checked and failed, TCP answers"
+    assert said(nat.FAIL, nat.FAIL, nat.OK) == (tls_only,)
+    assert said(nat.OK, nat.FAIL, nat.FAIL) == (), "UDP answers: nothing to say"
+    assert said(nat.FAIL, nat.FAIL, nat.SKIPPED) == (), "TLS not checked: no claim about it"
+    assert said(nat.FAIL, nat.FAIL) == (), "TLS not asked yet"
+    assert said(nat.FAIL, nat.SKIPPED) == (), "stopped before TCP"
 
 
 def test_no_turn_is_said_only_when_every_transport_was_checked():
     """A run stopped after one failed TURN transport must not say "no usable answer
     on any transport" - neither on the panel nor in the copied results."""
     said = translate("tools.nat.conclusion.no_turn", "en")
-    failing = {"udp_turn": "420", "tcp": {3478: "refused", 80: "refused"}}
+    failing = {"udp_turn": "420", "tcp": {3478: "refused", 80: "refused"},
+               "tls": {5349: "not_tls", 443: "untrusted"}}
     run = run_all(FakeNat(**failing))
     assert nat.conclusion(run.rows, run.transports)[-1] == "tools.nat.conclusion.no_turn"
     assert said in nat.report(run, run.rows)
@@ -688,7 +773,8 @@ def test_no_turn_is_said_only_when_every_transport_was_checked():
         if any(row.test == "turn" for row in run.rows):
             run.stop()
     rows = run.rows + list(run.not_checked())
-    assert [row.state for row in rows if row.test == "turn"] == [nat.FAIL] + [nat.SKIPPED] * 3
+    assert [row.state for row in rows if row.test == "turn"] == \
+        [nat.FAIL] + [nat.SKIPPED] * (len(run.transports) - 1)
     assert "tools.nat.conclusion.no_turn" not in nat.conclusion(rows, run.transports)
     assert said not in nat.report(run, rows)
 
@@ -785,6 +871,120 @@ def test_the_real_sockets_against_a_server_on_loopback():
     for transport in ("UDP", "TCP"):
         row = rows[("turn", (("transport", transport), ("port", server.port)))]
         assert (row.state, row.detail) == (nat.OK, "tools.nat.detail.turn_answers"), row
+    # The same port over TLS: this server takes the handshake for a request it cannot
+    # read and closes the connection, as a TURN server's plain TCP port does.
+    row = rows[("turn", (("transport", "TLS"), ("port", server.port)))]
+    assert (row.state, row.detail) == (nat.FAIL, "tools.nat.detail.not_tls"), row
+
+
+class NotTls:
+    """A TCP server on 127.0.0.1 that is not a TLS one: it answers what it is given
+    with STUN-looking bytes ("stun"), resets the connection ("reset") or says nothing
+    for a while ("silent"). One connection."""
+
+    def __init__(self, mode):
+        self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.listener.bind(("127.0.0.1", 0))
+        self.listener.listen(1)
+        self.port = self.listener.getsockname()[1]
+        self.thread = threading.Thread(target=self._serve, args=(mode,), daemon=True)
+        self.thread.start()
+
+    def _serve(self, mode):
+        conn, _source = self.listener.accept()
+        with conn:
+            conn.recv(4096)
+            if mode == "stun":
+                conn.sendall(b"\x01\x13\x00\x00" + stun.COOKIE + bytes(12))
+            elif mode == "reset":
+                conn.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+            else:
+                conn.recv(4096)          # until the client gives up and closes
+
+    def close(self):
+        self.thread.join(2)
+        self.listener.close()
+
+
+@pytest.mark.parametrize("mode, what", [("stun", "not_tls"), ("reset", "reset"),
+                                        ("silent", "no_answer")])
+def test_the_real_tls_client_against_servers_that_do_not_speak_it(mode, what):
+    """``_Net.tls_ask`` with the system's TLS library, on loopback (what OpenSSL says
+    was measured on Windows and Linux, internal probe of 2026-11-10)."""
+    server = NotTls(mode)
+    try:
+        found = nat._Net.tls_ask(socket.AF_INET, "127.0.0.1", server.port, "turn.test",
+                                 stun.allocate_request(stun.transaction_id()), 0.5)
+    finally:
+        server.close()
+    assert found == (what, b"")
+
+
+def test_a_closed_port_is_refused_before_any_tls():
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    probe.bind(("127.0.0.1", 0))
+    port = probe.getsockname()[1]
+    probe.close()
+    # 5 s: Windows tries a refused loopback connection again for about 2 s first.
+    assert nat._Net.tls_ask(socket.AF_INET, "127.0.0.1", port, "turn.test", b"x", 5) == (
+        "refused", b"")
+
+
+@pytest.mark.parametrize("code, what", [(20, "untrusted"), (19, "untrusted"), (18, "untrusted"),
+                                        (62, "name"), (64, "name"), (10, "date"), (9, "date"),
+                                        (7, "untrusted")])
+def test_a_refused_certificate_is_told_by_its_verify_code(monkeypatch, code, what):
+    """OpenSSL's verify code (X509_V_ERR_*) picks the words: a certificate out of date
+    or for another name has its own, every other refusal is "not trusted"."""
+    import ssl
+    asked = []
+
+    class Context:
+        def wrap_socket(self, raw, server_hostname):
+            asked.append(server_hostname)
+            error = ssl.SSLCertVerificationError(1, "certificate verify failed")
+            error.verify_code = code
+            raise error
+    monkeypatch.setattr(ssl, "create_default_context", Context)
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    try:
+        found = nat._Net.tls_ask(socket.AF_INET, "127.0.0.1", listener.getsockname()[1],
+                                 "turn.test", b"x", 1)
+    finally:
+        listener.close()
+    assert (found, asked) == ((what, b""), ["turn.test"])
+
+
+@pytest.mark.parametrize("reason, what", [("SSLV3_ALERT_HANDSHAKE_FAILURE", "tls_failed"),
+                                          ("WRONG_VERSION_NUMBER", "not_tls"),
+                                          ("RECORD_LAYER_FAILURE", "not_tls")])
+def test_a_handshake_that_fails_is_told_from_a_port_without_tls(monkeypatch, reason, what):
+    import ssl
+
+    class Context:
+        def wrap_socket(self, raw, server_hostname):
+            error = ssl.SSLError(1, "handshake")
+            error.reason = reason
+            raise error
+    monkeypatch.setattr(ssl, "create_default_context", Context)
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    try:
+        found = nat._Net.tls_ask(socket.AF_INET, "127.0.0.1", listener.getsockname()[1],
+                                 "turn.test", b"x", 1)
+    finally:
+        listener.close()
+    assert found == (what, b"")
+
+
+def test_no_tls_library_here_is_said_before_anything_is_sent(monkeypatch):
+    monkeypatch.setitem(sys.modules, "ssl", None)          # import ssl raises ImportError
+    monkeypatch.setattr(socket, "socket", None)            # and nothing may be opened
+    assert nat._Net.tls_ask(socket.AF_INET, "192.0.2.2", 443, "turn.test", b"x", 1) == (
+        "no_tls", b"")
 
 
 def test_the_receive_loop_takes_an_icmp_error_and_waits_on():

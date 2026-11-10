@@ -204,6 +204,25 @@ version is linked above. Contact: https://donislawdev.com/
 
 ---
 
+## OpenSSL (`libssl-3.dll`, `libcrypto-3.dll`, the Windows zip)
+
+* Copyright (c) 1998-2025 The OpenSSL Project Authors, Copyright (c) 1995-1998
+  Eric A. Young, Tim J. Hudson
+* Used under: **Apache License 2.0**
+* Licence text: inside `licenses/Python-LICENSE.txt`, in CPython's section for
+  incorporated software - OpenSSL arrives with the CPython Windows runtime and is
+  licensed there
+* Source code: https://github.com/openssl/openssl (the version in this build:
+  `BeanNetworkTester.exe --license`)
+* Used unmodified, by Python's `ssl` module, for one thing: the NAT and STUN tool's
+  TURN test over TLS, which checks the TURN server's certificate against the root
+  certificates Windows trusts. Nothing else in the program uses TLS.
+* The Linux package carries no OpenSSL: it uses the system's own `libssl.so.3`,
+  with the system's certificates. A system without it shows the TLS rows as not
+  checked.
+
+---
+
 ## X.Org libraries (`libX11`, `libXext`, `libXft`, `libXrender`, `libXss`, the Linux package)
 
 * Copyright: the X Consortium, The Open Group, Keith Packard and many others; each

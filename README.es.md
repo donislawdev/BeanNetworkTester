@@ -1853,8 +1853,9 @@ El programa usa bibliotecas de otros autores, con sus propias licencias, entre e
 **[WinDivert](https://www.reqrypt.org/windivert.html)** y
 **[PyDivert](https://github.com/ffalcinelli/pydivert)** con **LGPLv3**,
 **[psutil](https://github.com/giampaolo/psutil)** (BSD), **[CPython](https://www.python.org/)** (PSF),
-**[Tcl/Tk](https://www.tcl-lang.org/)** y el cargador de arranque de
-**[PyInstaller](https://pyinstaller.org/)**. La lista completa, las versiones y las direcciones del
+**[Tcl/Tk](https://www.tcl-lang.org/)**, **[OpenSSL](https://www.openssl.org/)** (Apache 2.0, en el
+zip de Windows, para el TLS de la herramienta NAT and STUN - el paquete de Linux usa el del sistema)
+y el cargador de arranque de **[PyInstaller](https://pyinstaller.org/)**. La lista completa, las versiones y las direcciones del
 código fuente están en [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), y los textos completos de
 las licencias están en el directorio `licenses/`. Desde el propio programa: `--license` (CLI) o el
 botón **About** de la interfaz.

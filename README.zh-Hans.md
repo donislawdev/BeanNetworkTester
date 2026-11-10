@@ -1584,7 +1584,7 @@ Ookla、Speedtest、Starlink、HughesNet 和 Viasat 是其各自所有者的商�
 遵循 **LGPLv3** 的 **[WinDivert](https://www.reqrypt.org/windivert.html)** 和
 **[PyDivert](https://github.com/ffalcinelli/pydivert)**、
 **[psutil](https://github.com/giampaolo/psutil)**（BSD）、**[CPython](https://www.python.org/)**（PSF）、
-**[Tcl/Tk](https://www.tcl-lang.org/)** 以及 **[PyInstaller](https://pyinstaller.org/)**
+**[Tcl/Tk](https://www.tcl-lang.org/)**、**[OpenSSL](https://www.openssl.org/)**（Apache 2.0，包含在 Windows zip 中，用于 NAT 和 STUN 工具的 TLS，Linux 软件包使用系统自带的）以及 **[PyInstaller](https://pyinstaller.org/)**
 引导程序。完整的列表、版本和源码地址见
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)，完整的许可证文本位于 `licenses/`
 目录。在程序内部：使用 `--license`（CLI）或界面中的**关于**按钮。

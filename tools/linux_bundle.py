@@ -20,6 +20,14 @@ Ubuntu 26.04, Fedora 44 and Arch:
 * libXau and libXdmcp: the system's libxcb - which PyInstaller never bundles -
   needs both (ldd on Ubuntu 26.04 and Arch), so every system that can show a
   window has them. libbsd and libmd came only with Ubuntu 24.04's libXdmcp.
+* OpenSSL (libssl, libcrypto), for the NAT and STUN tool's TURN over TLS, measured
+  2026-11-10: the Python CI freezes links Ubuntu 24.04's OpenSSL 3.0, whose
+  certificates directory is /usr/lib/ssl - which Fedora 44 (/etc/pki/tls) and Arch
+  (/etc/ssl) do not have, so a bundled copy would refuse every certificate there.
+  Every system measured has libssl.so.3 (Ubuntu 26.04 3.5.5, Fedora 44 3.5.9, Arch
+  3.6.5), and OpenSSL keeps its ABI within 3.x; the system's copy brings the
+  system's certificates, configuration and security fixes. A system without it
+  loses only the TLS rows ("not checked"). The ``_ssl`` module itself is carried.
 
 ``NOT_NEEDED_MODULES`` are standard modules the program never uses - no bz2, lzma
 or zstd anywhere in it - which the standard library only imports when it can
@@ -28,7 +36,8 @@ and BLT, a Tk extension Ubuntu's python3-tk installs and PyInstaller then collec
 (measured in an ubuntu:24.04 image); nothing here loads it.
 
 ``MUST_CARRY`` are the parts a bundle without them would ship broken: Tk and Xft
-for the window, and pydivert's ``libebpfdivert.so`` for any capture.
+for the window, pydivert's ``libebpfdivert.so`` for any capture, and ``_ssl`` for
+the TLS rows.
 
     python tools/linux_bundle.py check dist/BeanNetworkTester
 """
@@ -37,12 +46,13 @@ import sys
 
 FROM_SYSTEM = ("libfontconfig.so", "libfreetype.so", "libexpat.so", "libpng16.so",
                "libbrotlicommon.so", "libbrotlidec.so", "libbz2.so",
-               "libXau.so", "libXdmcp.so", "libbsd.so", "libmd.so")
+               "libXau.so", "libXdmcp.so", "libbsd.so", "libmd.so",
+               "libssl.so", "libcrypto.so")
 
 NOT_NEEDED_MODULES = ("_bz2", "_lzma", "_zstd")
 NOT_NEEDED_LIBRARIES = ("liblzma.so", "libzstd.so", "libBLT")
 
-MUST_CARRY = ("libtk", "libXft.so", "libebpfdivert.so")
+MUST_CARRY = ("libtk", "libXft.so", "libebpfdivert.so", "_ssl.")
 
 
 def taken_from_system(name):
@@ -89,7 +99,7 @@ def main(argv=None):
         print(f"linux bundle: {line}", file=sys.stderr)
     if not found:
         print(f"linux bundle: {len(libraries(argv[1]))} libraries, none of them the "
-              f"system's own, Tk, Xft and libebpfdivert present")
+              f"system's own, Tk, Xft, libebpfdivert and _ssl present")
     return 1 if found else 0
 
 
