@@ -551,6 +551,11 @@ def test_the_notebooks_inside_a_page_have_the_narrower_tabs():
         assert set(inner) >= {"statistics", "tools"}, sorted(inner)
         for page_id, nb in inner.items():
             assert nb.kw.get("style") == "Sub.TNotebook", (page_id, nb.kw)
+        # the Tools page's groups each hold a row of their tools: the same narrower tabs
+        tool_rows = app.pages["tools"].tool_nbs
+        assert tool_rows, "the Tools page has a row of tools in each group"
+        for group_id, nb in tool_rows.items():
+            assert nb.kw.get("style") == "Sub.TNotebook", (group_id, nb.kw)
 
         class Recorder:
             def __init__(self):
@@ -647,11 +652,12 @@ def test_every_question_mark_opens_its_own_sheet():
         import sys
         from beantester.gui.toolbox import adapters as adapters_panel
         from beantester.gui.toolbox import diagnostics as diagnostics_panel, ping as ping_panel
-        from beantester.gui.toolbox import tcphealth as tcphealth_panel
+        from beantester.gui.toolbox import nat as nat_panel, tcphealth as tcphealth_panel
         # The tools with one whole sheet per system: Linux has its own.
         per_system = {"adapters": adapters_panel, "tcphealth": tcphealth_panel}
-        # The sheets composed of paragraphs, one of them about this system.
-        composed = {"diagnostics": diagnostics_panel.help_keys, "ping": ping_panel.help_keys}
+        # The sheets composed of paragraphs (some with one about this system).
+        composed = {"diagnostics": diagnostics_panel.help_keys, "ping": ping_panel.help_keys,
+                    "nat": nat_panel.help_keys}
         for tool in TOOLS:               # every panel carries one "?" (the skeleton)
             [button] = helps_in(tools.panels[tool.id].frame)
             body = f"tools.{tool.id}.help_body"

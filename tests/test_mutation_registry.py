@@ -3374,9 +3374,35 @@ MUTATIONS = [
         # only from <<NotebookTabChanged>> would be an empty tab when measured.
         "label": "toolbox: select no longer builds the panel it shows",
         "file": "beantester/gui/pages/toolbox.py",
-        "old": "            self.nb.select(index)\n        self._ensure(tool_id)",
-        "new": "            self.nb.select(index)",
+        "old": "            self.tool_nbs[group_id].select(in_group.index(tool_id))\n"
+               "        self._ensure(tool_id)",
+        "new": "            self.tool_nbs[group_id].select(in_group.index(tool_id))",
         "test": "test_a_panel_is_built_on_first_view_and_the_open_tab_is_remembered",
+    },
+    {
+        # The row menus know tools, not groups: "Ping this address" from the
+        # Sockets tool would land on the This computer group's row.
+        "label": "toolbox groups: select shows the tool but not its group",
+        "file": "beantester/gui/pages/toolbox.py",
+        "old": "            self.nb.select([group.id for group in self.groups].index(group_id))\n",
+        "new": "",
+        "test": "test_the_tools_page_is_the_renderer_of_its_registry",
+    },
+    {
+        "label": "toolbox groups: a group with no tool still gets a tab",
+        "file": "beantester/gui/pages/toolbox.py",
+        "old": "        self.groups = tuple(group for group in GROUPS if tools_in(group.id, TOOLS))",
+        "new": "        self.groups = GROUPS",
+        "test": "test_a_panel_is_built_on_first_view_and_the_open_tab_is_remembered",
+    },
+    {
+        # A click on a group's tab changes the tool on screen: unheard, ui.json
+        # would keep the tool of the group left behind.
+        "label": "toolbox groups: a click on a group is not heard",
+        "file": "beantester/gui/pages/toolbox.py",
+        "old": "        self.nb.bind(\"<<NotebookTabChanged>>\", lambda e: self._on_subpage())\n",
+        "new": "",
+        "test": "test_a_group_keeps_its_own_tool_and_ui_json_keeps_the_tool",
     },
     {
         "label": "toolbox: a tool that is gone from the registry breaks the page",
@@ -3413,8 +3439,8 @@ MUTATIONS = [
     {
         "label": "capabilities: Ping forgets what it needs",
         "file": "beantester/gui/toolbox/__init__.py",
-        "old": "PingPanel, sends=True, needs=\"ping\"),\n",
-        "new": "PingPanel, sends=True),\n",
+        "old": "PingPanel, NETWORK, sends=True, needs=\"ping\"),\n",
+        "new": "PingPanel, NETWORK, sends=True),\n",
         "test": "test_every_tool_needs_a_real_capability_and_the_one_its_logic_imports",
     },
     {
@@ -3560,8 +3586,8 @@ MUTATIONS = [
         # guard below it would go quiet while the reworded promise stood unchecked.
         "label": "toolbox promise: the README sentence is reworded behind the check",
         "file": "README.md",
-        "old": "  Only **Ping** on this tab sends anything over the network: echo requests to the address you\n",
-        "new": "  Only **Ping** on this tab sends anything over the network: echo requests to any address you\n",
+        "old": "  requests to the two servers you type and small test packets to this network's own public\n",
+        "new": "  requests to any servers you type and small test packets to this network's own public\n",
         "test": "test_the_tools_tab_promise_holds_for_everything_its_code_can_send",
     },
     {
@@ -3577,8 +3603,8 @@ MUTATIONS = [
         # a tool that sends is not marked as sending, so the promise would not name it.
         "label": "toolbox promise: Ping is not marked as sending",
         "file": "beantester/gui/toolbox/__init__.py",
-        "old": "    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel, sends=True, needs=\"ping\"),\n",
-        "new": "    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel, needs=\"ping\"),\n",
+        "old": "    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel, NETWORK, sends=True, needs=\"ping\"),\n",
+        "new": "    Tool(PingPanel.ID, PingPanel.LABEL, PingPanel, NETWORK, needs=\"ping\"),\n",
         "test": "test_the_promise_names_exactly_the_tools_that_send",
     },
     {
@@ -11908,6 +11934,262 @@ MUTATIONS = [
         "new": "    if names and names[0].startswith(\"process\"):\n"
                "        # Text channel only",
         "test": "test_every_targeting_that_caught_nothing_is_called_out",
+    },
+    # -- the STUN codec of the NAT and STUN tool (2026-11-09) ------------------- #
+    {
+        # A stale or damaged answer read as this computer's address.
+        "label": "stun: a fingerprint that does not match is taken",
+        "file": "beantester/stun.py",
+        "old": "            if after != size or value_size != 4 or int.from_bytes(value, \"big\") != want:\n",
+        "new": "            if after != size or value_size != 4:\n",
+        "test": "test_a_changed_byte_or_a_cut_message_is_not_taken",
+    },
+    {
+        "label": "stun: an attribute running past the end is read",
+        "file": "beantester/stun.py",
+        "old": "        if after > size:\n            return None\n",
+        "new": "        if False:\n            return None\n",
+        "test": "test_what_is_not_a_stun_message_is_none",
+    },
+    {
+        "label": "stun: a message longer than the tool reads is taken",
+        "file": "beantester/stun.py",
+        "old": "    if size < HEADER or size > MAX_MESSAGE or data[0] & 0xC0",
+        "new": "    if size < HEADER or data[0] & 0xC0",
+        "test": "test_what_is_not_a_stun_message_is_none",
+    },
+    {
+        # The IPv6 address is XORed with the cookie AND the transaction ID.
+        "label": "stun: an IPv6 mapped address is unmasked with the cookie only",
+        "file": "beantester/stun.py",
+        "old": "                                        ^ int.from_bytes(mask, \"big\"))\n",
+        "new": "                                        ^ int.from_bytes(mask[:4], \"big\"))\n",
+        "test": "test_the_rfc_5769_answers_decode_to_the_addresses_the_rfc_states",
+    },
+    {
+        # A lying or broken server would point the hairpin datagrams at port 0 or a
+        # group address.
+        "label": "stun: a mapped address no request can come from is taken",
+        "file": "beantester/stun.py",
+        "old": "    if (not port or address.is_unspecified or address.is_multicast\n",
+        "new": "    if (False\n",
+        "test": "test_an_address_no_request_can_come_from_is_no_answer",
+    },
+    # -- the NAT and STUN tool's logic (2026-11-09) ----------------------------- #
+    {
+        # Measured on a Windows Server VM: a datagram reaching the socket unasked
+        # raises the firewall prompt (event 5031).
+        "label": "nat: a pair's firewall is not told before the datagrams come",
+        "file": "beantester/nettools/nat.py",
+        "old": "        self._open_way(socks, public)\n",
+        "new": "",
+        "test": "test_the_firewall_is_told_before_anything_can_come_unasked",
+    },
+    {
+        "label": "nat: a hairpin runs with a mapping that depends on the destination",
+        "file": "beantester/nettools/nat.py",
+        "old": "        if self.mapping != INDEPENDENT:\n",
+        "new": "        if False:\n",
+        "test": "test_a_mapping_that_depends_on_the_destination_sends_no_hairpin_at_all",
+    },
+    {
+        "label": "nat: Stop does not stop a hairpin round",
+        "file": "beantester/nettools/nat.py",
+        "old": "            if not wanted():\n                return\n            a.send(",
+        "new": "            a.send(",
+        "test": "test_nothing_more_is_sent_after_stop_and_the_rest_says_so",
+    },
+    {
+        "label": "nat: an answer from another address is taken",
+        "file": "beantester/nettools/nat.py",
+        "old": "                if source != (address, port):\n                    continue\n",
+        "new": "",
+        "test": "test_answers_from_another_address_or_to_another_question_are_not_taken",
+    },
+    {
+        # Asked twice at one address, any router gives one port: "independent" unseen.
+        "label": "nat: one address in both boxes is called independent",
+        "file": "beantester/nettools/nat.py",
+        "old": "        if _canonical(self.turn_at.address) == _canonical(self.stun_at.address):\n",
+        "new": "        if False:\n",
+        "test": "test_one_address_in_both_boxes_is_not_called_independent",
+    },
+    {
+        "label": "nat: a STUN server that is not TURN is said to answer as one",
+        "file": "beantester/nettools/nat.py",
+        "old": "NOT_TURN_CODES = frozenset({400, 420})",
+        "new": "NOT_TURN_CODES = frozenset()",
+        "test": "test_each_turn_answer_says_what_it_is",
+    },
+    {
+        "label": "nat: a relay handed out without a login is left on the server",
+        "file": "beantester/nettools/nat.py",
+        "old": "                    sock.send(stun.release_request(stun.transaction_id()),\n",
+        "new": "                    (stun.release_request(stun.transaction_id()),\n",
+        "test": "test_a_relay_handed_out_without_a_login_is_given_back",
+    },
+    {
+        "label": "nat: a name that was not found is called blocked UDP",
+        "file": "beantester/nettools/nat.py",
+        "old": "        if public.detail == DETAIL_NO_STUN:\n",
+        "new": "        if True:\n",
+        "test": "test_names_that_are_not_found",
+    },
+    {
+        # The hairpin datagrams go where the server says: only where its first answer said.
+        "label": "nat: the pair sends to whatever address the server names",
+        "file": "beantester/nettools/nat.py",
+        "old": "        if any(found[0] != self.public[0] for found in public):\n",
+        "new": "        if False:\n",
+        "test": "test_the_pair_sends_only_to_the_public_address_the_first_answer_gave",
+    },
+    {
+        # The TTL-1 datagrams delivered here and the lead are not the rounds.
+        "label": "nat: a datagram that is not one of the rounds is counted",
+        "file": "beantester/nettools/nat.py",
+        "old": "        if data not in self.rounds:\n            return\n",
+        "new": "",
+        "test": "test_the_owners_router_two_devices_meet_only_when_they_start_together",
+    },
+    # -- the NAT and STUN tool after its review (2026-11-09) -------------------- #
+    {
+        # RFC 8489 section 5 / RFC 8656 section 7.2: with a new ID, a lost success
+        # got 437 and its relay stayed on the server.
+        "label": "nat: each try of a request is a new transaction",
+        "file": "beantester/nettools/nat.py",
+        "old": "            sock.send(request, (address, port))\n",
+        "new": "            sock.send(build(stun.transaction_id()), (address, port))\n",
+        "test": "test_a_try_again_is_the_same_request_so_a_lost_answer_leaves_no_relay",
+    },
+    {
+        "label": "nat: a relay a 437 shows is left on the server",
+        "file": "beantester/nettools/nat.py",
+        "old": "    return message.kind == stun.SUCCESS or stun.error_code(message) == 437\n",
+        "new": "    return message.kind == stun.SUCCESS\n",
+        "test": "test_a_437_on_a_new_socket_is_a_relay_of_ours_and_is_given_back",
+    },
+    {
+        "label": "nat: Stop during the first name lookup does not stop the second",
+        "file": "beantester/nettools/nat.py",
+        "old": "        self.stun_at = lookup(self.stun, self.net)\n        if not wanted():\n            return\n",
+        "new": "        self.stun_at = lookup(self.stun, self.net)\n",
+        "test": "test_stop_during_a_name_lookup_asks_and_sends_nothing_more",
+    },
+    {
+        # int() refuses over 4300 digits with a ValueError, raised in a Tk callback.
+        "label": "nat: a port of thousands of digits reaches int()",
+        "file": "beantester/nettools/nat.py",
+        "old": "    if (not text.isascii() or not text.isdigit() or len(text) > len(str(MAX_PORT))\n",
+        "new": "    if (not text.isascii() or not text.isdigit()\n",
+        "test": "test_what_is_not_one_server_is_refused_before_anything_is_sent",
+    },
+    {
+        # A lying server would point the pair at a service of this computer.
+        "label": "nat: a loopback or link-local public address is taken",
+        "file": "beantester/nettools/nat.py",
+        "old": "        if found is not None and found[0] != self.local and _here_only(found[0]):\n",
+        "new": "        if False:\n",
+        "test": "test_a_public_address_on_loopback_or_the_link_is_no_address",
+    },
+    {
+        "label": "nat: a socket binds to every address of this computer",
+        "file": "beantester/nettools/nat.py",
+        "old": "            self.sock.bind((address, 0))\n",
+        "new": "            self.sock.bind(('', 0))\n",
+        "test": "test_the_receive_loop_takes_an_icmp_error_and_waits_on",
+    },
+    {
+        "label": "nat: the TURN sockets take the STUN server's route",
+        "file": "beantester/nettools/nat.py",
+        "old": "        local = self.net.route_source(family, toward)\n",
+        "new": "        local = self.local or self.net.route_source(family, toward)\n",
+        "test": "test_every_socket_is_bound_to_this_computers_address_towards_its_server",
+    },
+    {
+        # A run stopped after one failed transport said "no TURN on any transport".
+        "label": "nat: no TURN is said from part of the transports",
+        "file": "beantester/nettools/nat.py",
+        "old": "    if transports and all(turn.get(_turn_args(*transport)) == FAIL for transport in transports):\n",
+        "new": "    if turn and all(state != OK for state in turn.values()):\n",
+        "test": "test_no_turn_is_said_only_when_every_transport_was_checked",
+    },
+    {
+        "label": "nat: a receive that always fails spins until the deadline",
+        "file": "beantester/nettools/nat.py",
+        "old": "                if error.errno not in PASSING_ERRORS:\n                    raise\n",
+        "new": "",
+        "test": "test_the_receive_loop_waits_on_only_for_errors_about_an_earlier_datagram",
+    },
+    {
+        "label": "nat: a silent second port is called address-dependent",
+        "file": "beantester/nettools/nat.py",
+        "old": "        if third is None:\n            return BY_DESTINATION\n",
+        "new": "",
+        "test": "test_the_mapping_verdict_from_three_answers",
+    },
+    {
+        # Nothing sent (a name not found) blamed the session's traffic filter.
+        "label": "nat panel: a run with no flows is called not captured",
+        "file": "beantester/gui/toolbox/nat.py",
+        "old": "        if not run.flows:\n            return None\n",
+        "new": "",
+        "test": "test_the_session_line_says_what_the_session_does_to_these_packets",
+    },
+    {
+        "label": "nat panel: a conclusion from part of the rows",
+        "file": "beantester/gui/toolbox/nat.py",
+        "old": "                if runner.finished is not None else ())\n",
+        "new": "                if True else ())\n",
+        "test": "test_a_run_shows_each_row_the_conclusion_and_the_time_it_took",
+    },
+    {
+        "label": "nat panel: results are copied while the run goes on",
+        "file": "beantester/gui/toolbox/nat.py",
+        "old": "        if run is not None and self.runner.rows and not self.runner.running():\n",
+        "new": "        if run is not None and self.runner.rows:\n",
+        "test": "test_a_run_stopped_after_one_failed_turn_transport_does_not_say_no_turn",
+    },
+    {
+        "label": "nat panel: closing the window does not stop the run",
+        "file": "beantester/gui/toolbox/nat.py",
+        "old": "    if runner is not None:\n        runner.stop()\n",
+        "new": "    if runner is not None:\n        pass\n",
+        "test": "test_closing_the_window_stops_the_run",
+    },
+    {
+        "label": "ping panel: closing the window does not stop the ping",
+        "file": "beantester/gui/toolbox/ping.py",
+        "old": "    if runner is not None:\n        runner.stop()\n",
+        "new": "    if runner is not None:\n        pass\n",
+        "test": "test_closing_the_window_stops_every_tool_that_sends",
+    },
+    {
+        "label": "toolbox: closing the window stops no tool that sends",
+        "file": "beantester/gui/toolbox/__init__.py",
+        "old": "        if tool.sends:\n            tool.factory.stop_window(app)\n",
+        "new": "        if False:\n            tool.factory.stop_window(app)\n",
+        "test": "test_closing_the_window_stops_every_tool_that_sends",
+    },
+    {
+        "label": "app: the window closes without stopping the Tools tab's runs",
+        "file": "beantester/gui/app.py",
+        "old": "            toolbox.stop_sending(self)\n",
+        "new": "            pass\n",
+        "test": "test_closing_the_window_stops_every_tool_that_sends",
+    },
+    {
+        "label": "nat: an address of the other IP version is taken",
+        "file": "beantester/nettools/nat.py",
+        "old": "        if found is not None and _family(found[0]) != sock.family:\n",
+        "new": "        if False:\n",
+        "test": "test_an_answer_with_no_usable_address_is_said_as_that",
+    },
+    {
+        "label": "stun: an error class RFC 8489 does not have is a code",
+        "file": "beantester/stun.py",
+        "old": "    if not 3 <= hundreds <= 6 or number > 99:\n",
+        "new": "    if number > 99:\n",
+        "test": "test_the_error_code_is_a_number_and_a_wrong_one_is_none",
     },
 ]
 

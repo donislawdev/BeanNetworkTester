@@ -91,6 +91,16 @@ PORT_COLORS = {
     "unsure": {"foreground": CAUTION},
 }
 
+# NAT and STUN rows, by what the step found: a fault's red where the way is shut (no
+# answer), amber where it works only sometimes (one side first), muted for a step
+# that did not run. A row that works keeps the table's own colour, as a free port
+# does. The result column says the same in words (WCAG 1.4.1).
+NAT_COLORS = {
+    "fail": {"foreground": WARN},
+    "warn": {"foreground": CAUTION},
+    "skipped": {"foreground": MUT},
+}
+
 # Adapter rows. An adapter that is not up is muted: on a machine with virtual
 # adapters (two of seven on the development machine) the ones that carry traffic
 # are what the eye looks for, and the status column says "down" in words. An
@@ -244,6 +254,10 @@ CHARS = {
     "sent_at": 9,
     "result": 24,
     "seq": 6,
+    # NAT and STUN's details: born the widest of its table, so the window's spare
+    # width goes mostly to it (``widgets.sortable_tree.fitted_widths`` shares it in
+    # proportion). The longest sentence scrolls sideways and is whole in the copy.
+    "nat_details": 56,
 }
 
 # How many rows a table shows before it scrolls: the connection table's 18. The

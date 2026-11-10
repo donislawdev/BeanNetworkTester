@@ -232,9 +232,13 @@ revient au centre de l'écran actuel.
   défilement est instantané qu'elle contienne 400 lignes ou plusieurs centaines de milliers.
   L'ancienne limite stricte de 400 lignes a disparu - le nombre de lignes à afficher se règle avec
   le champ **"Row limit"** (section *Tables*, 0 = aucune limite, 50 000 par défaut).
-- **Tools** - de petits utilitaires pour les questions qu'on se pose avant ou pendant un test, un
-  sous-onglet chacun. Seul **Ping** envoie quelque chose sur le réseau dans cet onglet : des
-  requêtes d'écho à l'adresse que vous saisissez, de Start à Stop. Aujourd'hui :
+- **Tools** - de petits utilitaires pour les questions qu'on se pose avant ou pendant un test, en
+  trois groupes de sous-onglets : **Network** (Ping, NAT and STUN), **This computer** (Sockets,
+  TCP health, Port check, Adapters) et **This program** (Filter tester, Diagnostics). Seuls
+  **Ping** et **NAT and STUN** envoient quelque chose sur le réseau dans cet onglet : Ping envoie
+  des requêtes d'écho à l'adresse que vous saisissez, de Start à Stop, et NAT and STUN envoie
+  quelques requêtes aux deux serveurs que vous saisissez et de petits paquets de test à la propre
+  adresse publique de ce réseau, quand vous appuyez sur Start. Aujourd'hui :
   - **Sockets** - tous les sockets TCP et UDP de cet ordinateur, comme `netstat -ano`, sans qu'aucune
     session soit nécessaire : ce qui écoute, ce qui est connecté, son état (LISTEN,
     ESTABLISHED, TIME_WAIT...) et le programme qui le possède. Servez-vous-en pour voir sur quel
@@ -254,14 +258,6 @@ revient au centre de l'écran actuel.
     rend aussitôt le port. Le programme qui occupe un port vient de la même table que **Sockets**.
     Faites un clic droit sur une ligne pour cibler le programme qui occupe le port ou le laisser
     tranquille.
-  - **Filter tester** - choisissez un champ de la page Control (processus cible, IP ou port de
-    destination, IP ou port bloqué), saisissez une expression et une valeur, et voyez aussitôt si
-    elles correspondent. Il montre aussi quelle partie de l'expression a retenu la valeur, quelle
-    partie `!` l'a exclue, et comment le programme interprète ce que vous avez saisi. Une valeur qui
-    n'est ni une adresse, ni un port, ni un PID est signalée comme telle, et non comme "ne
-    correspond pas". **"Use in the Control field"** place l'expression dans ce champ, en remplaçant
-    ce qui s'y trouve. Ce que vous saisissez reste jusqu'à la fermeture du programme, même si vous
-    changez de langue.
   - **Adapters** - toutes les cartes réseau de cet ordinateur et les réglages dont dépend un test,
     ceux qu'affiche `ipconfig /all` (Windows uniquement). La carte par laquelle sort votre trafic
     Internet est en tête,
@@ -279,6 +275,14 @@ revient au centre de l'écran actuel.
     n'est pas résolu, et les mots de passe présents dans une adresse sont masqués.
     **"Copy report"** copie en anglais toutes les cartes et les réglages de proxy - le texte contient
     les adresses et les adresses MAC de cet ordinateur.
+  - **Filter tester** - choisissez un champ de la page Control (processus cible, IP ou port de
+    destination, IP ou port bloqué), saisissez une expression et une valeur, et voyez aussitôt si
+    elles correspondent. Il montre aussi quelle partie de l'expression a retenu la valeur, quelle
+    partie `!` l'a exclue, et comment le programme interprète ce que vous avez saisi. Une valeur qui
+    n'est ni une adresse, ni un port, ni un PID est signalée comme telle, et non comme "ne
+    correspond pas". **"Use in the Control field"** place l'expression dans ce champ, en remplaçant
+    ce qui s'y trouve. Ce que vous saisissez reste jusqu'à la fermeture du programme, même si vous
+    changez de langue.
   - **Diagnostics** - pourquoi START ne fonctionne pas, sans console. Il exécute les mêmes
     vérifications que `--doctor` (droits d'administrateur, pilote WinDivert, restes dans le dossier
     temporaire...) et marque chacune OK, Warning ou Problem. **"Clean up the driver"** décharge un

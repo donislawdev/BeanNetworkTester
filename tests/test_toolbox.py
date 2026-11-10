@@ -16,7 +16,7 @@ from gui_harness import run_gui
 TOYS = """
 from tkinter import ttk
 from beantester.gui.pages import toolbox as page_mod
-from beantester.gui.toolbox import Tool
+from beantester.gui.toolbox import GROUPS, Tool
 
 built = []
 
@@ -39,7 +39,8 @@ class ToyB(Toy):
     ID = "b"
 
 def use_toys(*classes):
-    page_mod.TOOLS = tuple(Tool(c.ID, "app.tabs.tools", c) for c in classes)
+    # all in the first group: the other groups have no tool, so no tab
+    page_mod.TOOLS = tuple(Tool(c.ID, "app.tabs.tools", c, GROUPS[0].id) for c in classes)
     page_mod.TOOL_BY_ID = {tool.id: tool for tool in page_mod.TOOLS}
 """
 
@@ -47,24 +48,30 @@ def use_toys(*classes):
 # the <<NotebookTabChanged>> of the Tools page's own `select` and runs it after the
 # constructor, whichever page is on screen (measured 2026-09-24 on Tk 8.6.15 and
 # 9.0.4) - then the tick. A tool that goes to work on either works at every start.
+# Since the groups (2026-11-09) that `select` changes two notebooks - the groups'
+# and the group's tools' - and each queues its own event.
 START_UP = """
 def opened_on_start_up():
     page = app.pages["tools"]
     assert app.current_page() is not page, "the window opens on another page"
-    for callback in page.nb.bindings["<<NotebookTabChanged>>"]:
-        callback(None)
+    for notebook in (page.nb, *page.tool_nbs.values()):
+        for callback in notebook.bindings["<<NotebookTabChanged>>"]:
+            callback(None)
     app._tick()
 """
 
 
 def test_the_tools_page_is_the_renderer_of_its_registry():
-    """Every registry entry is a tab, in order, and builds into its own panel class -
-    on a system that offers every capability, so the Linux runner sees the panels too
-    (what a system without one shows is the test after this one)."""
+    """Every group is a tab and every tool a tab in its group, in the registry's order,
+    and each builds into its own panel class - on a system that offers every capability,
+    so the Linux runner sees the panels too (what a system without one shows is the test
+    after this one). ``select`` takes a tool's id and puts its group on screen too: the
+    row menus' "Ping this address" and "Show TCP health" know tools, not groups."""
     run_gui("""
         from beantester import capabilities
         from beantester.gui.pages.toolbox import ToolboxPage
-        from beantester.gui.toolbox import TOOLS
+        from beantester.gui.toolbox import GROUPS, NETWORK, TOOLS, tools_in
+        from beantester.i18n import T
         for cap in capabilities.CAPABILITIES.values():
             cap.module.supported = lambda: True
         app._build_ui()
@@ -74,13 +81,86 @@ def test_the_tools_page_is_the_renderer_of_its_registry():
         # SUBPAGES is what the render check and the layout test walk - derived,
         # so a tool is measured in CI the day it is added
         assert page.SUBPAGES == tuple((t.id, t.label) for t in TOOLS), page.SUBPAGES
-        assert len(page.nb.tabs()) == len(TOOLS)
         assert len({t.id for t in TOOLS}) == len(TOOLS), "tool ids must be unique"
+        group_ids = [group.id for group in GROUPS]
+        assert len(set(group_ids)) == len(group_ids), "group ids must be unique"
+        for tool in TOOLS:
+            assert tool.group in group_ids, (tool.id, tool.group, "a tool on no tab")
+        for group in GROUPS:
+            assert tools_in(group.id), (group.id, "a group nothing is in")
+        # the network group is exactly the tools that send (README, "Tools")
+        assert {t.id for t in tools_in(NETWORK)} == {t.id for t in TOOLS if t.sends}
+
+        # (the fake notebook keeps no tab text: the order is checked through the frames)
+        assert len(page.nb.tabs()) == len(GROUPS), page.nb.tabs()
+        for group in GROUPS:
+            assert list(page.tool_nbs[group.id].tabs()) == \\
+                [page.tabs[t.id] for t in tools_in(group.id)], group.id
         for tool in TOOLS:
             page.select(tool.id)
             assert page.current() == tool.id, (tool.id, page.current())
+            assert page.nb.index(page.nb.select()) == group_ids.index(tool.group), tool.id
             assert isinstance(page.panels[tool.id], tool.factory), \\
                 (tool.id, type(page.panels[tool.id]))
+    """)
+
+
+def test_closing_the_window_stops_every_tool_that_sends():
+    """``App.on_close`` calls ``toolbox.stop_sending``, which reaches each tool marked
+    ``sends`` through its panel class's ``stop_window`` and no other: a run's worker
+    outlives the window, and a new tool that sends without a ``stop_window`` fails here."""
+    run_gui("""
+        from beantester.gui import toolbox
+        from beantester.gui.toolbox import ping as ping_panel
+        for tool in toolbox.TOOLS:
+            if tool.sends:
+                assert callable(getattr(tool.factory, "stop_window", None)), tool.id
+        stopped = []
+        class Sends:
+            stop_window = staticmethod(lambda window: stopped.append("sends"))
+        class Quiet:
+            stop_window = staticmethod(lambda window: stopped.append("quiet"))
+        toolbox.stop_sending(app, (toolbox.Tool("s", "l", Sends, toolbox.NETWORK, sends=True),
+                                   toolbox.Tool("q", "l", Quiet, toolbox.COMPUTER)))
+        assert stopped == ["sends"], stopped
+        pinging = ping_panel.window_run(app)
+        pinging.running = True
+        toolbox.stop_sending(app)
+        assert not pinging.running, "Ping's run is stopped by the real registry"
+        closed = []
+        toolbox.stop_sending = lambda window: closed.append(window)
+        app.on_close()
+        assert closed == [app]
+    """)
+
+
+def test_a_group_keeps_its_own_tool_and_ui_json_keeps_the_tool():
+    """Each group's row remembers its own tool: back on a group, the tool left open
+    there is on screen again, and that tool is what ``ui.json`` keeps. A file written
+    before the groups names a tool only - it opens that tool, in its group."""
+    run_gui("""
+        from beantester.gui.toolbox import COMPUTER, GROUPS, NETWORK
+        group_ids = [group.id for group in GROUPS]
+        app.ui.set("tools_page", "diagnostics")       # a pre-groups ui.json
+        app._build_ui()
+        page = app.pages["tools"]
+        assert page.current() == "diagnostics", page.current()
+        app.select_page("tools")
+
+        page.select("tcphealth")
+        page.select("ping")
+        assert page.current() == "ping"
+        # the person clicks the "This computer" group
+        page.nb.select(group_ids.index(COMPUTER))
+        for callback in page.nb.bindings["<<NotebookTabChanged>>"]:
+            callback(None)
+        assert page.current() == "tcphealth", page.current()
+        assert app.ui.get("tools_page") == "tcphealth", app.ui.get("tools_page")
+        assert "tcphealth" in page.panels, "the group's tool is built when its group is shown"
+        page.nb.select(group_ids.index(NETWORK))
+        for callback in page.nb.bindings["<<NotebookTabChanged>>"]:
+            callback(None)
+        assert page.current() == "ping" and app.ui.get("tools_page") == "ping"
     """)
 
 
@@ -158,6 +238,8 @@ def test_a_panel_is_built_on_first_view_and_the_open_tab_is_remembered():
         page = page_mod.ToolboxPage(app, root)
         assert built == ["b"], built                 # only the tab that is open
         assert page.current() == "b"
+        # both toys are in one group: the groups with no tool get no tab
+        assert len(page.nb.tabs()) == 1, page.nb.tabs()
 
         page.select("a")                             # built SYNCHRONOUSLY in select
         assert built == ["b", "a"], built

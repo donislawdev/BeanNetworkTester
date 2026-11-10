@@ -226,9 +226,13 @@ está, vuelve al centro de la pantalla actual.
   desplazamiento es instantáneo tanto si contiene 400 filas como unos cientos de miles. El antiguo
   límite fijo de 400 filas ha desaparecido: cuántas se muestran se define en el campo **"Row limit"**
   (sección *Tables*, 0 = sin límite, 50 000 por defecto).
-- **Tools** - pequeñas utilidades para las preguntas que surgen antes o durante una prueba, una
-  subpestaña cada una. Solo **Ping** envía algo por la red en esta pestaña: solicitudes de eco a la
-  dirección que se escribe, de Start a Stop. Hoy:
+- **Tools** - pequeñas utilidades para las preguntas que surgen antes o durante una prueba, en
+  tres grupos de subpestañas: **Network** (Ping, NAT and STUN), **This computer** (Sockets, TCP
+  health, Port check, Adapters) y **This program** (Filter tester, Diagnostics). Solo **Ping** y
+  **NAT and STUN** envían algo por la red en esta pestaña: Ping envía solicitudes de eco a la
+  dirección que se escribe, de Start a Stop, y NAT and STUN envía unas pocas solicitudes a los
+  dos servidores que se escriben y pequeños paquetes de prueba a la propia dirección pública de
+  esta red, al pulsar Start. Hoy:
   - **Sockets** - todos los sockets TCP y UDP de este equipo, como `netstat -ano`, sin necesidad de
     sesión: qué está escuchando, qué está conectado, su estado (LISTEN, ESTABLISHED, TIME_WAIT...) y
     el programa que lo posee. Sirve para ver en qué puerto escucha la aplicación antes de
@@ -247,13 +251,6 @@ está, vuelve al centro de la pantalla actual.
     dirección de loopback de este mismo equipo y lo devuelve al instante. Quién ocupa un puerto sale
     de la misma tabla que en **Sockets**. Con el botón derecho sobre una fila se puede apuntar al
     programa que ocupa el puerto o dejarlo en paz.
-  - **Filter tester** - elija un campo de la página Control (proceso objetivo, IP o puerto de
-    destino, IP o puerto bloqueados), escriba una expresión y un valor, y vea de inmediato si
-    coinciden. También muestra qué parte de la expresión seleccionó el valor, qué parte con `!` lo
-    excluyó y cómo interpreta el programa lo que se escribió. Un valor que no es una dirección, un
-    puerto ni un PID se indica como tal, no como "no coincide". **"Use in the Control field"** pone
-    la expresión en ese campo, sustituyendo lo que haya. Lo que se escribe se conserva hasta cerrar
-    el programa, incluso si se cambia el idioma.
   - **Adapters** - todos los adaptadores de red de este equipo y los ajustes de los que depende una
     prueba, del tipo que imprime `ipconfig /all` (solo Windows). El adaptador por el que sale el
     tráfico de internet aparece arriba, y después los que están activos. Al elegir uno se ven sus
@@ -270,6 +267,13 @@ está, vuelve al centro de la pantalla actual.
     contraseñas que haya en una dirección se ocultan. **"Copy report"** copia todos los adaptadores y
     los ajustes de proxy en inglés: el texto contiene las direcciones y las direcciones MAC de este
     equipo.
+  - **Filter tester** - elija un campo de la página Control (proceso objetivo, IP o puerto de
+    destino, IP o puerto bloqueados), escriba una expresión y un valor, y vea de inmediato si
+    coinciden. También muestra qué parte de la expresión seleccionó el valor, qué parte con `!` lo
+    excluyó y cómo interpreta el programa lo que se escribió. Un valor que no es una dirección, un
+    puerto ni un PID se indica como tal, no como "no coincide". **"Use in the Control field"** pone
+    la expresión en ese campo, sustituyendo lo que haya. Lo que se escribe se conserva hasta cerrar
+    el programa, incluso si se cambia el idioma.
   - **Diagnostics** - por qué START no funciona, sin consola. Ejecuta las mismas comprobaciones que
     `--doctor` (derechos de administrador, el controlador WinDivert, restos en la carpeta
     temporal...) y marca cada una como OK, Warning o Problem. **"Clean up the driver"** descarga un

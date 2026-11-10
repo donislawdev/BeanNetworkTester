@@ -229,9 +229,13 @@ zurück.
   Scrollen sofort geht, egal ob sie 400 Zeilen oder mehrere hunderttausend enthält. Die alte harte
   Grenze von 400 Zeilen ist weg - wie viele angezeigt werden, legt das Feld **"Row limit"** fest
   (Bereich *Tables*, 0 = keine Grenze, Standard 50 000).
-- **Tools** - kleine Helfer für Fragen, die Sie vor oder während eines Tests haben, je ein Untertab.
-  Nur **Ping** auf diesem Tab sendet etwas über das Netzwerk: Echo-Anfragen an die Adresse, die Sie
-  eingeben, von Start bis Stop. Derzeit:
+- **Tools** - kleine Helfer für Fragen, die Sie vor oder während eines Tests haben, in drei
+  Gruppen von Untertabs: **Network** (Ping, NAT and STUN), **This computer** (Sockets, TCP
+  health, Port check, Adapters) und **This program** (Filter tester, Diagnostics).
+  Nur **Ping** und **NAT and STUN** auf diesem Tab senden etwas über das Netzwerk: Ping sendet
+  Echo-Anfragen an die Adresse, die Sie eingeben, von Start bis Stop, und NAT and STUN sendet
+  einige Anfragen an die beiden Server, die Sie eingeben, und kleine Testpakete an die eigene
+  öffentliche Adresse dieses Netzwerks, wenn Sie Start drücken. Derzeit:
   - **Sockets** - jeder TCP- und UDP-Socket auf diesem Computer, wie `netstat -ano`, und es ist
     keine Sitzung nötig: was lauscht, was verbunden ist, sein Zustand (LISTEN,
     ESTABLISHED, TIME_WAIT ...) und das Programm, dem er gehört. Damit sehen Sie, auf welchem Port
@@ -252,14 +256,6 @@ zurück.
     Loopback-Adresse dieses Computers und gibt den Port sofort wieder zurück. Wer einen Port
     belegt, stammt aus derselben Tabelle wie bei **Sockets**. Klicken Sie mit rechts auf eine
     Zeile, um das Programm, das den Port belegt, als Ziel zu wählen oder in Ruhe zu lassen.
-  - **Filter tester** - wählen Sie ein Feld von der Seite Control (Zielprozess, Ziel-IP oder
-    -Port, gesperrte IP oder gesperrter Port), geben Sie einen Ausdruck und einen Wert ein und
-    sehen Sie sofort, ob sie zusammenpassen. Es zeigt auch, welcher Teil des Ausdrucks den Wert
-    ausgewählt hat, welcher `!`-Teil ihn ausgeschlossen hat und wie das Programm das liest, was
-    Sie eingegeben haben. Ein Wert, der keine Adresse, kein Port und keine PID ist, wird als
-    solcher gemeldet und nicht als "does not match". **"Use in the Control field"** schreibt den
-    Ausdruck in dieses Feld und ersetzt, was dort steht. Was Sie eingeben, bleibt bis zum Beenden
-    des Programms erhalten, auch wenn Sie die Sprache wechseln.
   - **Adapters** - jeder Netzwerkadapter auf diesem Computer und die Einstellungen, von denen ein
     Test abhängt, von der Art, wie sie `ipconfig /all` ausgibt (nur Windows). Der Adapter, über den
     Ihr Internetverkehr den Rechner verlässt, steht ganz oben,
@@ -277,6 +273,14 @@ zurück.
     Ein als Name angegebener Proxy wird nicht aufgelöst, und Passwörter in einer Adresse werden
     ausgeblendet. **"Copy report"** kopiert alle Adapter und die Proxy-Einstellungen auf Englisch -
     der Text enthält die Adressen und MAC-Adressen dieses Computers.
+  - **Filter tester** - wählen Sie ein Feld von der Seite Control (Zielprozess, Ziel-IP oder
+    -Port, gesperrte IP oder gesperrter Port), geben Sie einen Ausdruck und einen Wert ein und
+    sehen Sie sofort, ob sie zusammenpassen. Es zeigt auch, welcher Teil des Ausdrucks den Wert
+    ausgewählt hat, welcher `!`-Teil ihn ausgeschlossen hat und wie das Programm das liest, was
+    Sie eingegeben haben. Ein Wert, der keine Adresse, kein Port und keine PID ist, wird als
+    solcher gemeldet und nicht als "does not match". **"Use in the Control field"** schreibt den
+    Ausdruck in dieses Feld und ersetzt, was dort steht. Was Sie eingeben, bleibt bis zum Beenden
+    des Programms erhalten, auch wenn Sie die Sprache wechseln.
   - **Diagnostics** - warum START nicht funktioniert, ohne Konsole. Es führt dieselben Prüfungen
     aus wie `--doctor` (Administratorrechte, der WinDivert-Treiber, Überbleibsel im temporären
     Ordner ...) und markiert jede mit OK, Warning oder Problem. **"Clean up the driver"** entlädt

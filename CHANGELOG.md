@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **Tools: NAT and STUN, how this network's router treats a call.** Press **Start** and in a
+  few seconds the table shows this computer's public address, whether the router keeps one
+  public port for every server, whether two devices behind it reach each other through that
+  address (both at once and one side first), and on which transports a TURN server answers.
+  When the run ends, a line above the table says what it can mean for a call. The STUN and
+  TURN servers can be changed (Cloudflare's are filled in), and nothing is sent before Start.
+
 - **Connections: an ICE column shows which path a call takes.** For a call or another ICE
   connection (WebRTC and the like), the column says what each connection is: LAN (to this
   network), NAT (to this network's own public address, which the router sends back in), WAN
@@ -38,6 +45,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   the destination count too), because such a session impairs nothing.
 
 ### Changed
+
+- **Tools: the tools are in three groups.** A row of tabs above the tools: **Network**
+  (Ping, NAT and STUN), **This computer** (Sockets, TCP health, Port check, Adapters) and
+  **This program** (Filter tester, Diagnostics). Each group remembers the tool you left open
+  in it, and the program opens on the tool you used last, as before.
 
 - **Connections: "impaired?" says how much of a connection was in scope.** A connection
   with only some of its packets in scope shows the share, such as 97%, instead of "yes":
