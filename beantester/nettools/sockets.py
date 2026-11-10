@@ -11,6 +11,29 @@ for sockets - and the names from ONE process snapshot taken right after it. The
 search is the connection table's (``views.compile_query``) with this table's
 columns, so the window has one search language (convention 10). Nothing here
 draws or translates.
+
+A read can be handed the read before it (``read(previous)``), and then it also
+says what CHANGED: a socket that was not there is stamped with the time it
+appeared, and one that has gone stays for a few seconds, marked closed. That is
+what lets the table refresh itself and still be read: nothing vanishes or turns
+up without saying so. What one read hands the next is a ``Carry``, a value like
+the rest - no object lives between reads, so a read is still a function of its
+arguments and the worker shares nothing with the window.
+
+🔴 Windows has no notice of "the socket table changed" (IP Helper announces
+address, route and interface changes only - Learn, read 2026-11-10), so a table
+that keeps itself current reads on a timer. MEASURED 2026-11-10 on this project's
+development machine (``internal_tools`` probes ``2026-11-10-sockets-monitor``):
+of a 73 ms read of 212 sockets, 71 ms was the process snapshot - the same through
+either system call, and the same at 15 000 sockets. So a read that follows
+another keeps the names it was given (``_names``) and asks for the processes only
+when a PID it has not named turns up, and at most every ``NAMES_EVERY_S``
+otherwise. Without the snapshot a read is about 6 us a socket: 2 ms for an
+ordinary machine, 90 ms for 15 000 sockets. ``read_every_ms`` keeps even that to
+a twentieth of the time between two reads.
+
+A connection that opens and closes between two reads is never seen. That is what
+reading on a timer costs, and the window's help says so.
 """
 import ipaddress
 import itertools
@@ -39,14 +62,41 @@ class Socket(NamedTuple):
     state: str
     pid: int | None
     proc: str                   # "" when no process owns it or it could not be named
+    change: str = ""            # NEW or CLOSED while the table should point at it
+    at: float | None = None     # time.time() it appeared or closed; None = there
+                                # since the first read of this window
+
+
+# How a row that changed is marked (``Socket.change``); the window colours by it.
+NEW, CLOSED = "new", "closed"
+# How long a socket that appeared stays marked, and one that closed stays listed.
+# Long enough to be seen at the slowest pace offered (5 s: two reads).
+MARK_S = 10.0
+# The most closed sockets kept on show. A program that drops ten thousand
+# connections at once must not double the table for ten seconds.
+MAX_CLOSED = 2000
+# The longest a read goes on trusting the names an earlier one was given. A PID
+# given to another program while it still holds sockets from one read to the next
+# would keep the old name; this is how long, at most.
+NAMES_EVERY_S = 30.0
+
+
+class Carry(NamedTuple):
+    """What one read hands the next (``Snapshot.carry``). Never changed once made."""
+    names: dict                 # pid -> name, for the PIDs of that read's table
+    named_at: float             # time.monotonic() of the process snapshot behind them
+    last: dict                  # key -> Socket, the open sockets of that read
+    seen: dict                  # key -> (time.time(), time.monotonic()) it appeared
+    closed: tuple               # ((Socket, time.monotonic() it closed), ...)
 
 
 class Snapshot(NamedTuple):
     """One read of the machine."""
-    sockets: tuple
+    sockets: tuple              # the open sockets, then the ones that just closed
     failed: tuple               # the tables that did not answer ("tcp/v6"...)
-    read_at: float              # time.time() when the read finished
+    read_at: float              # time.time() when the table was read
     elapsed_ms: int
+    carry: Carry | None = None  # for the read after this one
 
 
 class View(NamedTuple):
@@ -83,8 +133,13 @@ UNREADABLE_KEYS = {"denied": "tools.sockets.error_denied",
                    "missing": "tools.sockets.error_missing"}
 
 
-def read():
+def read(previous=None, fresh_names=True):
     """Read every socket and name its process. Runs on a worker; may raise.
+
+    ``previous`` is the snapshot read before this one, when the caller has it: the
+    answer then also says what changed since (``_changes``). ``fresh_names=False``
+    lets the read keep the names ``previous`` was given (``_names``) - for a table
+    that reads itself; a read somebody asked for names everything again.
 
     ``Unreadable`` when no table can be read at all: an empty table would say "no
     sockets", which nobody here could know. Anything else that fails is the
@@ -95,13 +150,120 @@ def read():
         rows, failed = portmap.socket_rows()
     except portmap.SocketTableUnavailable as exc:
         raise Unreadable(UNREADABLE_KEYS.get(exc.reason, ""), str(exc)) from exc
+    now = _clock()
+    carry = previous.carry if previous is not None else None
     # Named AFTER the table is read, so a process that exited in between leaves
     # its rows without a name - which is true - instead of the table outliving the
     # names it was given. A PID reused inside those few milliseconds is the one
     # case left: named after its new owner. Accepted; it cannot be told apart.
-    names = portmap.process_names()
-    return Snapshot(tuple(_sockets(rows, names)), tuple(failed), time.time(),
-                    round((time.perf_counter() - started) * 1000))
+    names, named_at = _names(rows, None if fresh_names else carry, now[1])
+    shown, carry = _changes(list(_sockets(rows, names)), carry, bool(failed), now)
+    return Snapshot(tuple(shown), tuple(failed), now[0],
+                    round((time.perf_counter() - started) * 1000),
+                    carry._replace(names=names, named_at=named_at))
+
+
+def _clock():
+    """``(time.time(), time.monotonic())`` of a read: the first is what the window
+    shows, the second what a wait is measured with - a clock set back (NTP, a
+    resumed virtual machine) must neither keep a row marked for an hour nor drop
+    it at once."""
+    return time.time(), time.monotonic()
+
+
+def _names(rows, carry, monotonic):
+    """``(names, named_at)`` for the PIDs of ``rows``: ``carry``'s while they will
+    do, one process snapshot otherwise (``carry`` None = always the snapshot).
+
+    The names kept are only those of PIDs still in the table, so a PID whose
+    sockets have all gone is forgotten, and named again if it comes back - by then
+    it may be another program. A PID the snapshot does not know (its process
+    exited while its socket lingers) is kept as "", or every read would take the
+    snapshot again for it.
+    """
+    pids = {row.pid for row in rows if row.pid}
+    if (carry is not None and pids <= carry.names.keys()
+            and 0 <= monotonic - carry.named_at < NAMES_EVERY_S):
+        return {pid: carry.names[pid] for pid in pids}, carry.named_at
+    table = portmap.process_names()
+    if not table and carry is not None:
+        # The snapshot failed (it answers empty, and says so in the crash log).
+        # The names known so far stay, the others are asked for on the next read.
+        return {pid: carry.names[pid] for pid in pids if pid in carry.names}, carry.named_at
+    return {pid: table.get(pid, "") for pid in pids}, monotonic
+
+
+def _changes(live, carry, incomplete, now):
+    """``(shown, carry)``: ``live`` with what changed since ``carry`` marked, the
+    sockets that just closed after them, and what the next read needs.
+
+    ``now`` is the read's ``_clock()``.
+
+    ``incomplete``: a table did not answer, so its sockets are missing from
+    ``live`` without having closed. Such a read closes nothing and forgets
+    nothing: what the last read had stays known, so the table coming back does not
+    mark every socket of it as new.
+    """
+    wall, monotonic = now
+    current = {socket.key: socket for socket in live}
+    if carry is None:
+        # The first read: everything was simply there.
+        return live, Carry({}, monotonic, current, {}, ())
+    seen = {key: at for key, at in carry.seen.items() if key in current or incomplete}
+    for key in current.keys() - carry.last.keys() - seen.keys():
+        seen[key] = now
+    closed = [(socket, at) for socket, at in carry.closed
+              if monotonic - at < MARK_S and socket.key not in current]
+    if not incomplete:
+        arrived = {}
+        for key in current.keys() - carry.last.keys():
+            arrived.setdefault(_place(current[key]), []).append(current[key])
+        closed += [(socket._replace(change=CLOSED, at=wall), monotonic)
+                   for key, socket in carry.last.items()
+                   if key not in current and not _reshaped(socket, arrived)]
+    closed = closed[-MAX_CLOSED:]
+    shown = [_marked(socket, seen.get(socket.key), monotonic) for socket in live]
+    shown += [socket for socket, _at in closed]
+    last = {**carry.last, **current} if incomplete else current
+    return shown, Carry({}, monotonic, last, seen, tuple(closed))
+
+
+def _place(socket):
+    """Where a socket sits on this machine, and whose it is: what stays the same
+    while the rest of its row changes."""
+    return socket.proto, socket.local_ip, socket.local_port, socket.pid
+
+
+def _reshaped(gone, arrived):
+    """Did ``gone``'s row go because the same socket now has another row?
+
+    A row's key holds its far end, and a socket gets one while it lives: a program
+    binds a port and then connects, so the row without a far end goes and one with
+    it appears. SEEN 2026-11-10 on real Tk, within seconds: "LISTEN, closed" beside
+    "ESTABLISHED, appeared" for the same program and port. That is one socket
+    getting on with its life, and "closed" would be false.
+
+    So a row that went is not called closed when a row has just appeared at the
+    same place and one of the two has no far end. Two rows that both have one are
+    two connections of a server's port - one client left, another came - and are
+    told as that.
+    """
+    return any(not gone.remote_ip or not new.remote_ip
+               for new in arrived.get(_place(gone), ()))
+
+
+def _marked(socket, appeared, monotonic):
+    """``socket`` with the time it appeared, and NEW for MARK_S after it.
+
+    A row that turns up in TIME_WAIT is not a new socket: it is what a connection
+    that just closed leaves behind (under PID 0, so under another key). It gets
+    its time and no mark - marked, a closed connection would read as an opened one.
+    """
+    if appeared is None:
+        return socket
+    wall, at = appeared
+    fresh = 0 <= monotonic - at < MARK_S and socket.state != "TIME_WAIT"
+    return socket._replace(change=NEW if fresh else "", at=wall)
 
 
 def _sockets(rows, names):
@@ -149,7 +311,35 @@ def no_owner_note(platform=None):
 def without_owner(snapshot):
     """How many sockets the system would not name a process for (another account's,
     and on Linux also one held from outside it or by no process any more)."""
-    return sum(1 for socket in snapshot.sockets if socket.pid is None)
+    return sum(1 for socket in snapshot.sockets
+               if socket.pid is None and socket.change != CLOSED)
+
+
+# -- a table that reads itself ------------------------------------------------------- #
+# The paces the window offers, in seconds, and the one it starts with.
+EVERY_S = (1, 2, 5)
+DEFAULT_EVERY_S = 2
+# A read may take at most one part in this many of the time between two reads: 5%
+# of one core, however large the table is.
+BUSY_FACTOR = 20
+# After a read that failed the next one waits twice as long each time, up to this.
+RETRY_CAP_MS = 30_000
+# This many reads failing in a row turn the reading off: whatever is wrong is not
+# passing, and the window says so instead of asking for ever.
+FAILURES_TO_STOP = 5
+
+
+def read_every_ms(chosen_s, last_ms, failures=0):
+    """Milliseconds from the end of one read to the start of the next.
+
+    The pace the person chose, stretched when one read takes more than a twentieth
+    of it (``last_ms`` is what the last one took), and longer still after each
+    failure in a row - never shorter than without the failures.
+    """
+    pace = max(int(chosen_s * 1000), int(last_ms) * BUSY_FACTOR)
+    if failures:
+        pace = max(pace, min(pace * 2 ** failures, RETRY_CAP_MS))
+    return pace
 
 
 # -- search ------------------------------------------------------------------------ #
@@ -198,6 +388,7 @@ _SORT_KEYS = {
     "state": lambda s, c: s.state or None,
     "pid": lambda s, c: s.pid,
     "proc": lambda s, c: s.proc.lower() or None,
+    "change": lambda s, c: s.at,
 }
 COLUMNS = tuple(_SORT_KEYS)
 
@@ -219,9 +410,12 @@ def view(snapshot, query="", column=DEFAULT_SORT[0], reverse=False):
     return sort(kept, column, reverse)
 
 
-def table(snapshot, query, column, reverse):
-    """The worker's whole job: read (when ``snapshot`` is None), then filter and sort."""
+def table(snapshot, query, column, reverse, previous=None, fresh_names=True):
+    """The worker's whole job: read (when ``snapshot`` is None), then filter and sort.
+
+    ``previous`` and ``fresh_names`` are ``read``'s, for a read that follows another.
+    """
     if snapshot is None:
-        snapshot = read()
+        snapshot = read(previous, fresh_names)
     return View(snapshot, view(snapshot, query, column, reverse), query,
                 (column, reverse), next(_MADE))

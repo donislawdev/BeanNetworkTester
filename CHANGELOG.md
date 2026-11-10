@@ -21,6 +21,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   as "Delayed by outage" (`held_link_outage`), a total that only grows. "Queued" shows how
   many are waiting right now.
 
+- **Tools: the Sockets table can refresh itself.** Tick "Refresh automatically" and choose
+  1, 2 or 5 seconds. The table then reads itself while the tab is on screen: on another
+  tab, or with the window minimized, nothing is read. A socket that appeared is highlighted
+  for a few seconds, one that closed stays for a few seconds, greyed, and the new "change"
+  column gives the time of either. A connection that opens and closes between two reads is
+  never shown. With tens of thousands of sockets the table reads less often by itself.
+
 - **Tools: NAT and STUN, how this network's router treats a call.** Press **Start** and in a
   few seconds the table shows this computer's public address, whether the router keeps one
   public port for every server, whether two devices behind it reach each other through that
@@ -67,6 +74,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   the destination count too), because such a session impairs nothing.
 
 ### Changed
+
+- **Tools: Sockets shows a remote address only where there is one.** On Windows a TCP socket
+  that is bound to a port and not connected yet showed "0.0.0.0" and port 0 as its other
+  end. It now shows none, as a listening socket always did. A socket whose row names
+  another end is shown with it, whatever state Windows reports for it.
 
 - **Tools: the tools are in three groups.** A row of tabs above the tools: **Network**
   (Ping, NAT and STUN), **This computer** (Sockets, TCP health, Port check, Adapters) and

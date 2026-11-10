@@ -81,7 +81,7 @@ class SocketRow(NamedTuple):
     family: int                 # 4 / 6
     local_ip: str
     local_port: int
-    remote_ip: str              # "" for UDP and for a listener (see _tcp4_row)
+    remote_ip: str              # "" for UDP and for no far end (see _tcp4_row)
     remote_port: int | None
     state: str                  # a TCP_STATES name; "" for UDP
     pid: int | None             # 0: owned by no process (TIME_WAIT); None: the OS would not say
@@ -128,25 +128,41 @@ def _ipv6(raw, scope):
     return f"{text}%{int(scope)}" if scope else text
 
 
+# A far end of all zeros is no far end: nobody is at 0.0.0.0:0. That is a listener,
+# or a socket bound and not connected yet, and its remote half is left empty rather
+# than shown as the zeros the row holds.
+#
+# 🔴 Decided by the far end ITSELF, not by the state's name. Until 2026-11-10 it was
+# "empty when the state is LISTEN", after Learn's "the remote half of a listener has
+# no meaning" (MIB_TCPROW_OWNER_PID). Two measurements moved it:
+#
+# * a healthy Windows (Server 2025, build 26100): LISTEN in 1400 rows of 1400 held
+#   zeros there, and no other state did - so on such a machine the two rules give
+#   the same rows;
+# * a Windows 11 Insider build (26300.9818): every way of asking for the table, and
+#   the system's own netstat, gave the state column wrong on most calls - listeners
+#   up for days as 0, CLOSED or FIN_WAIT_1, connected sockets as LISTEN. By the
+#   state's name the same socket then had a far end on one read and none on the
+#   next: two different rows to a table that says what changed
+#   (``nettools/sockets.py``), and a connection shown without its far end.
+#
+# The state column still says what the system said. Probes: ``internal_tools``
+# ``2026-11-10-sockets-monitor``.
 def _tcp4_row(row):
-    # A listener's remote half "has no meaning" (Learn, MIB_TCPROW_OWNER_PID), so
-    # it is left empty rather than shown as the 0.0.0.0:0 the row happens to hold.
-    state = _tcp_state(row.dwState)
-    idle = state == "LISTEN"
+    idle = not (row.dwRemoteAddr or row.dwRemotePort & 0xFFFF)
     return SocketRow("TCP", 4, _ipv4(row.dwLocalAddr), _swap16(row.dwLocalPort & 0xFFFF),
                      "" if idle else _ipv4(row.dwRemoteAddr),
                      None if idle else _swap16(row.dwRemotePort & 0xFFFF),
-                     state, int(row.dwOwningPid))
+                     _tcp_state(row.dwState), int(row.dwOwningPid))
 
 
 def _tcp6_row(row):
-    state = _tcp_state(row.dwState)
-    idle = state == "LISTEN"
+    idle = not (any(row.ucRemoteAddr) or row.dwRemotePort & 0xFFFF)
     return SocketRow("TCP", 6, _ipv6(row.ucLocalAddr, row.dwLocalScopeId),
                      _swap16(row.dwLocalPort & 0xFFFF),
                      "" if idle else _ipv6(row.ucRemoteAddr, row.dwRemoteScopeId),
                      None if idle else _swap16(row.dwRemotePort & 0xFFFF),
-                     state, int(row.dwOwningPid))
+                     _tcp_state(row.dwState), int(row.dwOwningPid))
 
 
 def _udp4_row(row):

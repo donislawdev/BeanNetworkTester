@@ -85,9 +85,9 @@ def _machine():
     """One of everything the table can hold, and everything the port map drops."""
     return {
         TCP4: [
-            # a listener whose remote half holds junk: "no meaning" per Learn
+            # a listener: its remote half is zeros (1400 rows of 1400, measured)
             dict(dwState=2, dwLocalAddr=_v4("0.0.0.0"), dwLocalPort=_port(445),
-                 dwRemoteAddr=_v4("1.2.3.4"), dwRemotePort=_port(99), dwOwningPid=4),
+                 dwRemoteAddr=0, dwRemotePort=0, dwOwningPid=4),
             dict(dwState=5, dwLocalAddr=_v4("10.0.0.2"), dwLocalPort=_port(50000),
                  dwRemoteAddr=_v4("93.184.216.34"), dwRemotePort=_port(443),
                  dwOwningPid=1234),
@@ -139,6 +139,48 @@ def test_the_socket_table_keeps_every_row_the_port_map_drops():
           f"({flat})")
     check("...and still records the owner it could not keep", owners == {5353: {100, 200}},
           f"({owners})")
+
+
+def test_the_far_end_is_judged_by_itself_and_never_by_the_states_name():
+    """Nobody is at 0.0.0.0:0, and a row that names somebody has a far end. The
+    state cannot always be believed: a Windows 11 Insider build (26300.9818, measured
+    2026-11-10) gave listeners as state 0, CLOSED or FIN_WAIT_1 and connected
+    sockets as LISTEN on most calls, netstat included. Judged by the state's name,
+    the same socket had a far end on one read and none on the next - two rows to a
+    table that says what changed."""
+    machine = {
+        TCP4: [dict(dwState=state, dwLocalAddr=_v4("0.0.0.0"), dwLocalPort=_port(135),
+                    dwRemoteAddr=0, dwRemotePort=0, dwOwningPid=2008)
+               for state in (0, 1, 2, 6)]
+        # an address with no port, and a port with no address, are still a far end
+        + [dict(dwState=1, dwLocalAddr=_v4("10.0.0.2"), dwLocalPort=_port(50000),
+                dwRemoteAddr=_v4("10.0.0.9"), dwRemotePort=0, dwOwningPid=7),
+           dict(dwState=1, dwLocalAddr=_v4("10.0.0.2"), dwLocalPort=_port(50001),
+                dwRemoteAddr=0, dwRemotePort=_port(443), dwOwningPid=7),
+           # connected, with a state that reads LISTEN by mistake
+           dict(dwState=2, dwLocalAddr=_v4("10.0.0.2"), dwLocalPort=_port(50003),
+                dwRemoteAddr=_v4("10.0.0.9"), dwRemotePort=_port(443), dwOwningPid=7)],
+        TCP6: [dict(ucLocalAddr=_v6("::"), dwLocalScopeId=0, dwLocalPort=_port(135),
+                    ucRemoteAddr=_v6("::"), dwRemoteScopeId=0, dwRemotePort=0,
+                    dwState=state, dwOwningPid=2008) for state in (0, 6)]
+        + [dict(ucLocalAddr=_v6("::1"), dwLocalScopeId=0, dwLocalPort=_port(50002),
+                ucRemoteAddr=_v6("::1"), dwRemoteScopeId=0, dwRemotePort=0,
+                dwState=1, dwOwningPid=7),
+           dict(ucLocalAddr=_v6("::1"), dwLocalScopeId=0, dwLocalPort=_port(50004),
+                ucRemoteAddr=_v6("::1"), dwRemoteScopeId=0, dwRemotePort=_port(443),
+                dwState=2, dwOwningPid=7)],
+        UDP4: [], UDP6: [],
+    }
+    rows, _failed = _native(FakeIphlpapi(machine)).socket_rows()
+    ends = [(row.local_port, row.state, row.remote_ip, row.remote_port) for row in rows]
+    check("the same far end for every state the system may claim", ends == [
+        (135, "0", "", None), (135, "CLOSED", "", None), (135, "LISTEN", "", None),
+        (135, "FIN_WAIT_1", "", None),
+        (50000, "CLOSED", "10.0.0.9", 0), (50001, "CLOSED", "0.0.0.0", 443),
+        (50003, "LISTEN", "10.0.0.9", 443),
+        (135, "0", "", None), (135, "FIN_WAIT_1", "", None),
+        (50002, "CLOSED", "::1", 0), (50004, "LISTEN", "::1", 443),
+    ], f"({ends})")
 
 
 def test_the_walk_grows_its_buffer_and_remembers_the_size():
@@ -397,8 +439,14 @@ def test_the_real_socket_table_reads_as_sockets():
         check("a state that is a state",
               (row.state in words or row.state.isdigit()) if row.proto == "TCP"
               else row.state == "", f"({row})")
-        if row.state == "LISTEN":
-            check("a listener has no remote half", row.remote_ip == "" and
-                  row.remote_port is None, f"({row})")
+        # A far end is whole or absent. Not "a listener has none": that held only
+        # while the far end was emptied by the state's NAME, which made it true of
+        # any table, and it is the system's claim to make, not this code's - a
+        # Windows build whose states cannot be believed (26300.9818, see
+        # ``portmap._tcp4_row``) hands over connected sockets called LISTEN.
+        check("a far end is an address and a port, or neither",
+              (row.remote_ip == "") == (row.remote_port is None), f"({row})")
+        check("and nobody is at all zeros", (row.remote_ip, row.remote_port) not in
+              (("0.0.0.0", 0), ("::", 0)), f"({row})")
     if sys.platform == "win32":
         check("on Windows every table answers", failed == [], f"({failed})")

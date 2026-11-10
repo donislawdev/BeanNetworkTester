@@ -128,6 +128,15 @@ PING_COLORS = {
     "changed": {"foreground": CAUTION},
 }
 
+# Socket rows that changed since the read before: one that appeared is the "all
+# is well" green for a few seconds, one that closed is muted and stays as long.
+# The change column says the same in words, with the time (WCAG 1.4.1). The keys
+# are ``nettools.sockets.NEW`` and ``CLOSED``.
+SOCKET_COLORS = {
+    "new": {"foreground": OK},
+    "closed": {"foreground": MUT},
+}
+
 GRID_C = "#333845"        # chart grid lines
 TIP_BG, TIP_FG = "#0f1116", "#e4e6eb"
 LINE_C = "#2f3542"        # separators

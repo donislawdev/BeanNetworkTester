@@ -890,13 +890,36 @@ NAMES = {1234: "chrome.exe", 100: "mdns.exe"}
 gate = threading.Event()
 gate.set()
 reads, failed_tables = [], []
+asked = []          # of each read: (it had the read before it, it named every process again)
 
-def fake_read():
+def fake_read(previous=None, fresh_names=True):
     reads.append(1)
+    asked.append((previous is not None, fresh_names))
     gate.wait(5)
-    return sk.Snapshot(tuple(sk._sockets(ROWS, NAMES)), tuple(failed_tables), time.time(), 3)
+    # What changed since the read before is the logic's own (test_nettools_sockets.py).
+    carry = previous.carry if previous is not None else None
+    shown, carry = sk._changes(list(sk._sockets(ROWS, NAMES)), carry, bool(failed_tables),
+                               (time.time(), time.monotonic()))
+    return sk.Snapshot(tuple(shown), tuple(failed_tables), time.time(), 3, carry)
 
 sk.read = fake_read
+
+def refusing(*_read_arguments):
+    raise OSError("the socket table refused on purpose")
+
+def by_itself(panel):
+    # Tick "Refresh automatically" the way a click does. The fake's timers never
+    # fire, so each wait is recorded in `waits` and a test runs it out with
+    # `panel._tick()`.
+    waits = []
+    def after(ms, func=None, *a):
+        if func == panel._tick:             # the poll for an answer waits here too
+            waits.append(ms)
+            return "wait %d" % len(waits)
+    panel.frame.after = after
+    panel.live.set(True)
+    panel._live_ticked()
+    return waits
 
 def open_sockets():
     app.select_page("tools")
@@ -947,7 +970,7 @@ def test_the_socket_table_reads_when_first_looked_at_and_not_at_start_up():
         cells = dict(zip(COLUMNS, render(panel.table.items[1]), strict=True))
         assert cells == {"proc": "chrome.exe", "pid": 1234, "proto": "TCP",
                          "local_ip": "0.0.0.0", "local_port": 8080, "state": "LISTEN",
-                         "remote_ip": "", "remote_port": ""}, cells
+                         "change": "", "remote_ip": "", "remote_port": ""}, cells
         app._tick()
         panel.refresh()
         settle(panel)
@@ -1000,9 +1023,7 @@ def test_a_read_that_fails_says_why_and_keeps_the_rows_it_had():
     run_gui(SOCK + textwrap.dedent("""
         panel = open_sockets()
         settle(panel)
-        def refused():
-            raise OSError("the socket table refused on purpose")
-        sk.read = refused
+        sk.read = refusing
         panel.read()
         settle(panel)
         status = panel.status.label
@@ -1024,7 +1045,7 @@ def test_a_socket_table_the_system_refuses_is_said_in_the_windows_language():
     """A failure the tool can name is not an English exception in a Polish window;
     the program's own words still go to the crash log."""
     run_gui(SOCK + textwrap.dedent("""
-        def refused():
+        def refused(*_read_arguments):
             raise sk.Unreadable("tools.sockets.error_denied", "the system refused on purpose")
         sk.read = refused
         panel = open_sockets()
@@ -1038,7 +1059,7 @@ def test_a_socket_table_the_system_refuses_is_said_in_the_windows_language():
 def test_a_first_read_that_fails_is_not_an_empty_machine_and_is_not_retried_by_itself():
     run_gui(SOCK + textwrap.dedent("""
         calls = []
-        def refused():
+        def refused(*_read_arguments):
             calls.append(1)
             raise OSError("nothing to read on purpose")
         sk.read = refused
@@ -1075,7 +1096,232 @@ def test_the_table_says_why_it_is_empty_and_what_its_rows_are_missing():
         failed_tables.clear()
         panel.read()
         settle(panel)
+        closed = [s.change for s in panel._latest().snapshot.sockets]
+        assert closed == [sk.CLOSED] * 5, "what closed stays listed for a while"
+        sk.MARK_S = 0                   # and that while is over
+        panel.read()
+        settle(panel)
+        assert panel.table.items == []
         assert panel.table._empty_text == "tools.sockets.empty", panel.table._empty_text
+    """))
+
+
+def test_the_table_reads_by_itself_only_while_it_is_looked_at():
+    """The owner's condition (2026-11-10): a table nobody looks at costs nothing -
+    no read, and no timer waiting to make one. Looked at means the Tools page in
+    front, this tab chosen on it, and the window not minimised."""
+    run_gui(SOCK + textwrap.dedent("""
+        panel = open_sockets()
+        settle(panel)
+        idle = []
+        panel.frame.after = lambda ms, func=None, *a: idle.append(func)
+        panel.refresh()
+        assert idle == [], "not ticked: the tick starts no wait"
+
+        waits = by_itself(panel)
+        assert waits == [50], ("ticked: the first read is now", waits)
+        panel._tick()
+        settle(panel)
+        assert reads == [1, 1], reads
+        assert asked[-1] == (True, False), ("with the read before it, names kept", asked)
+        assert len(waits) == 2 and 1900 <= waits[1] <= 2000, ("then the pace chosen", waits)
+        at = time.strftime("%H:%M:%S", time.localtime(panel.job.last["read"].finished))
+        said = panel.status.label.cget("text")
+        assert said == T("tools.sockets.status_live", time=at, every=2,
+                         ms=panel.job.last["read"].elapsed_ms), said
+
+        def away(why):
+            panel._tick()                       # the wait runs out with nobody looking
+            settle(panel)
+            assert reads == [1, 1], (why, "a read", reads)
+            panel._arm()
+            assert len(waits) == 2, (why, "a wait", waits)
+
+        app.select_page("control")
+        away("another page")
+        app.select_page("tools")
+        app.pages["tools"].select("ping")
+        away("another tool")
+        app.pages["tools"].select("sockets")
+        visible, app._visible = app._visible, lambda: False
+        away("a minimised window")
+        app._visible = visible
+
+        panel.refresh()                         # looked at again: the tick starts the wait
+        assert len(waits) == 3, waits
+        panel._tick()
+        settle(panel)
+        assert reads == [1, 1, 1], reads
+
+        panel.live.set(False)
+        panel._live_ticked()
+        panel._tick()
+        settle(panel)
+        panel.refresh()
+        assert reads == [1, 1, 1] and len(waits) == 4, ("unticked: nothing more", reads, waits)
+        assert panel.status.label.cget("text") == T(
+            "tools.common.done", time=time.strftime(
+                "%H:%M:%S", time.localtime(panel.job.last["read"].finished)),
+            ms=panel.job.last["read"].elapsed_ms)
+    """))
+
+
+def test_a_read_the_table_starts_does_not_blink_the_status_line_or_the_button():
+    run_gui(SOCK + textwrap.dedent("""
+        panel = open_sockets()
+        settle(panel)
+        by_itself(panel)
+        before = panel.status.label.cget("text")
+        gate.clear()
+        panel._tick()
+        panel.pending()
+        assert panel.job.busy(), "the read is out"
+        assert "disabled" not in panel.refresh_btn.state(), "the button stays as it was"
+        assert panel.status.label.cget("text") == before, panel.status.label.cget("text")
+        panel._arm()
+        panel.refresh()
+        assert reads == [1, 1], "and nothing is asked for while a read is out"
+        gate.set()
+        settle(panel)
+
+        gate.clear()
+        panel.read()                            # the person's own Refresh still shows
+        panel.pending()
+        assert "disabled" in panel.refresh_btn.state()
+        assert panel.status.label.cget("text") == T("tools.common.working")
+        assert asked[-1] == (True, True), ("names every process again", asked)
+        gate.set()
+        settle(panel)
+    """))
+
+
+def test_a_socket_that_appears_or_closes_is_marked_in_the_table():
+    """Colour is never the only signal (WCAG 1.4.1): the change column says the same
+    in words, with the time."""
+    run_gui(SOCK + textwrap.dedent("""
+        from beantester.gui.theme import SOCKET_COLORS
+        assert set(SOCKET_COLORS) == {sk.NEW, sk.CLOSED}, "a colour per mark, by its name"
+        panel = open_sockets()
+        settle(panel)
+        assert all(tags == () for _key, _cells, tags in panel.table.rows), "the first read"
+        by_itself(panel)
+        ROWS.append(SocketRow("TCP", 4, "10.0.0.2", 50007, "198.51.100.7", 443,
+                              "ESTABLISHED", 1234))
+        del ROWS[0]                             # the listener on 8080 closes
+        panel._tick()
+        settle(panel)
+        change = list(panel.table.columns).index("change")
+        by_port = {s.local_port: (cells[change], tags)
+                   for s, (_key, cells, tags) in zip(panel.table.items, panel.table.rows)}
+        at = time.strftime("%H:%M:%S", time.localtime(panel._latest().snapshot.read_at))
+        assert by_port[50007] == (T("tools.sockets.appeared_at", time=at), (sk.NEW,)), by_port
+        assert by_port[8080] == (T("tools.sockets.closed_at", time=at), (sk.CLOSED,)), by_port
+        assert by_port[5353] == ("", ()), by_port
+        assert panel.count.cget("text") == T("conns.shown_of", shown=5, total=5)
+
+        sk.MARK_S = 0                           # the marks' time is over
+        panel._tick()
+        settle(panel)
+        by_port = {s.local_port: (cells[change], tags)
+                   for s, (_key, cells, tags) in zip(panel.table.items, panel.table.rows)}
+        assert 8080 not in by_port, "the closed socket has gone"
+        assert by_port[50007] == (T("tools.sockets.appeared_at", time=at), ()), by_port
+    """))
+
+
+def test_a_read_keeps_the_view_where_it_is_and_a_new_order_does_not():
+    run_gui(SOCK + textwrap.dedent("""
+        for port in range(20000, 20400):
+            ROWS.append(SocketRow("UDP", 4, "0.0.0.0", port, "", None, "", 100))
+        panel = open_sockets()
+        settle(panel)
+        panel.table.set_offset(200)
+        top = panel.table.items[panel.table.offset].local_port
+        by_itself(panel)
+        ROWS.append(SocketRow("UDP", 4, "0.0.0.0", 6000, "", None, "", 100))   # sorts above
+        panel._tick()
+        settle(panel)
+        assert panel.table.items[panel.table.offset].local_port == top, "the same row on top"
+        assert panel.table.offset == 201, panel.table.offset
+
+        panel.table._clicked("pid")             # a new order: the table's own rule
+        settle(panel)
+        assert panel.table.offset == 0, panel.table.offset
+    """))
+
+
+def test_reads_that_keep_failing_wait_longer_and_then_stop_with_a_note():
+    run_gui(SOCK + textwrap.dedent("""
+        panel = open_sockets()
+        settle(panel)
+        waits = by_itself(panel)
+        sk.read = refusing
+        for failures in range(1, sk.FAILURES_TO_STOP):
+            panel._tick()
+            settle(panel)
+            assert panel.live.get(), failures
+            want = sk.read_every_ms(2, min(panel._took), failures)
+            assert want - 100 <= waits[-1] <= want, (failures, waits)
+            assert "refused on purpose" in panel.status.label.cget("text")
+        assert waits[-1] > 2 * waits[1], ("each failure waits longer", waits)
+        panel._tick()
+        settle(panel)
+        assert not panel.live.get(), "unticked after the last failure"
+        stopped = T("tools.sockets.note_live_stopped", n=sk.FAILURES_TO_STOP)
+        assert stopped in panel.note.cget("text"), panel.note.cget("text")
+        armed = len(waits)
+        panel.refresh()
+        assert len(waits) == armed, "and nothing waits any more"
+
+        app._build_ui()                         # the note outlives a rebuild
+        again = open_sockets()
+        assert stopped in again.note.cget("text"), again.note.cget("text")
+        sk.read = fake_read
+        by_itself(again)                        # ticked again: the note goes
+        assert stopped not in again.note.cget("text"), again.note.cget("text")
+        assert again.live.get()
+    """), allow_faults=("on purpose",))
+
+
+def test_a_slow_read_stretches_the_pace_and_the_status_line_says_so():
+    run_gui(SOCK + textwrap.dedent("""
+        panel = open_sockets()
+        settle(panel)
+        waits = by_itself(panel)
+        panel._tick()
+        settle(panel)
+        slow = panel.job.last["read"]._replace(elapsed_ms=400)     # twenty times: 8 s
+        panel._took = [3, 400]
+        assert panel._pace_ms() == 2000, "one slow read (a new program named) is not a slow table"
+        panel._took = [400, 450]
+        panel._say(slow)
+        at = time.strftime("%H:%M:%S", time.localtime(slow.finished))
+        said = panel.status.label.cget("text")
+        assert said == T("tools.sockets.status_live_slow", time=at, ms=400, every=8,
+                         chosen=2), said
+        panel._timer = None
+        panel._arm()
+        assert 7800 <= waits[-1] <= 8000, waits
+    """))
+
+
+def test_the_box_and_the_pace_outlive_a_rebuild_and_the_wait_does_not():
+    run_gui(SOCK + textwrap.dedent("""
+        panel = open_sockets()
+        settle(panel)
+        by_itself(panel)
+        panel.every_box.kw["textvariable"].set(T("tools.sockets.seconds", n=5))
+        for handler in panel.every_box.bindings["<<ComboboxSelected>>"]:
+            handler(None)
+        assert panel.every() == 5, panel.every()
+        cancelled = []
+        panel.frame.after_cancel = cancelled.append
+        waiting = panel._timer
+        assert waiting is not None
+        app._build_ui()                         # a language change tears the panel down
+        assert cancelled == [waiting], "the wait is put away before its widget goes"
+        again = open_sockets()
+        assert again.live.get() and again.every() == 5, (again.live.get(), again.every())
     """))
 
 

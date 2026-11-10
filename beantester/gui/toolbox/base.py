@@ -12,14 +12,17 @@ line. The "?" help button and the shared "Copy" are not here: they belong to the
 whole window (``dialogs.help_button``, ``gui/clipboard.py``).
 """
 import time
+import tkinter as tk
 import weakref
+from tkinter import ttk
 from typing import NamedTuple
 
 from ...i18n import T
 from ...nettools import Refused
 from ..labels import wrapping_label
 from ..model_worker import AsyncModel
-from ..theme import PAGE_WRAP_PAD
+from ..theme import PAGE_WRAP_PAD, popdown_height, popdown_width, space
+from ..tooltip import add_tooltip
 from ... import crashlog
 
 # The pause after the last key before a panel reacts to typing. The same quarter
@@ -41,6 +44,39 @@ _INPUTS: "weakref.WeakKeyDictionary[object, dict[str, dict[str, str]]]" = \
 def remembered(app, tool_id):
     """The dict of inputs this tool keeps for this window (created empty)."""
     return _INPUTS.setdefault(app, {}).setdefault(tool_id, {})
+
+
+def choice(parent, memory, label_key, values, name, default, tip_key, text):
+    """A labelled read-only box of fixed choices, remembered for the window.
+
+    ``text(value)`` is what a choice reads as. Returns ``(chosen, box)``: a call
+    that answers the value chosen now, and the widget. Ping's three boxes were the
+    first; the socket table's pace made it a part of every panel (GUI rule 2).
+    """
+    shown = [text(value) for value in values]
+    by_text = dict(zip(shown, values, strict=True))
+    chosen = memory.get(name, default)
+    var = tk.StringVar(value=text(chosen if chosen in values else default))
+    ttk.Label(parent, text=T(label_key)).pack(side="left")
+    box = ttk.Combobox(parent, textvariable=var, values=shown, state="readonly",
+                       height=popdown_height(shown), width=popdown_width(shown, 0))
+    box.pack(side="left", padx=(space("tight"), space("row")))
+    box.bind("<<ComboboxSelected>>",
+             lambda _e: memory.__setitem__(name, by_text.get(var.get(), default)), add="+")
+    add_tooltip(box, tip_key)
+    return (lambda: by_text.get(var.get(), default)), box
+
+
+def on_screen(app, tool_id):
+    """Is this tool what the person is looking at right now: the Tools page in
+    front, this tool's tab chosen on it, and the window not minimised.
+
+    What a tool that works by itself asks before each piece of work. A tool nobody
+    is looking at must cost nothing - no read, and no timer waiting to make one.
+    """
+    page = app.pages.get("tools")
+    return bool(page is not None and app.current_page() is page
+                and page.current() == tool_id and app._visible())
 
 
 class Debounce:

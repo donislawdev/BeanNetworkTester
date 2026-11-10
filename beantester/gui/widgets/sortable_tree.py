@@ -532,23 +532,35 @@ class SortableTree:
                        key_of=lambda r: r[0],
                        tag_of=lambda r: r[2] if len(r) > 2 else "")
 
-    def set_model(self, items, render, key_of, tag_of=None):
+    def set_model(self, items, render, key_of, tag_of=None, keep_view=False):
         """Lazy: keep ``items`` as they are; format only what is visible.
 
         ``render(item) -> values``   called for the visible rows only
         ``key_of(item) -> key``      stable identity (selection survives sorting)
         ``tag_of(item) -> tag``      optional row tag (colouring)
+        ``keep_view``                the row at the top of the view stays there
 
         No O(n) work happens here at all - not even building a key index. That is
         deliberate: at 200 000 rows, an index rebuild per refresh costs more than
         everything else in this class put together, and it is only needed when the
         user actually copies or right-clicks a row (see ``_ensure_index``).
+
+        ``keep_view`` is the one exception, and only for a table scrolled away
+        from its top: a table that refreshes itself would otherwise slide under
+        the pointer by one row for every row that appears or goes above the view.
+        At the top nothing is kept, so a row that sorts first is seen arriving.
+        The index it needs is the one a click would build anyway.
         """
+        first = None
+        if keep_view and 0 < self.offset < len(self.items):
+            first = str(self._key_of(self.items[self.offset]))
         self.items = list(items)
         self._render = render
         self._key_of = key_of
         self._tag_of = tag_of or (lambda _item: "")
         self._index = None                  # invalidated; rebuilt on demand
+        if first is not None:
+            self.offset = self._ensure_index().get(first, self.offset)
         self.offset = min(self.offset, self.max_offset())
         self.repaint()
         self._show_empty_note(not self.items)

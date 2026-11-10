@@ -33,11 +33,10 @@ from .. import dialogs
 from ..chart import chart_canvas, draw_ping_chart
 from ..clipboard import copy_confirmed
 from ..labels import wrapping_label
-from ..theme import (CHARS, PAGE_WRAP_PAD, PING_COLORS, ROWS, popdown_height, popdown_width,
-                     size, space)
+from ..theme import CHARS, PAGE_WRAP_PAD, PING_COLORS, ROWS, size, space
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
-from .base import Poller, StatusLine, job, remembered
+from .base import Poller, StatusLine, choice, job, remembered
 from .details import say
 
 AREA = "gui.toolbox.ping"
@@ -426,20 +425,8 @@ class PingPanel:
 
     def _choice(self, parent, label_key, values, name, default, tip_key, text=None):
         """A read-only box of fixed choices, remembered for the window."""
-        text = text or pace_text
-        shown = [text(v) for v in values]
-        by_text = dict(zip(shown, values, strict=True))
-        chosen = self.memory.get(name, default)
-        var = tk.StringVar(value=text(chosen if chosen in values else default))
-        ttk.Label(parent, text=T(label_key)).pack(side="left")
-        box = ttk.Combobox(parent, textvariable=var, values=shown, state="readonly",
-                           height=popdown_height(shown), width=popdown_width(shown, 0))
-        box.pack(side="left", padx=(space("tight"), space("row")))
-        box.bind("<<ComboboxSelected>>",
-                 lambda _e: self.memory.__setitem__(name, by_text.get(var.get(), default)),
-                 add="+")
-        add_tooltip(box, tip_key)
-        return (lambda: by_text.get(var.get(), default)), box
+        return choice(parent, self.memory, label_key, values, name, default, tip_key,
+                      text or pace_text)
 
     # -- the page calls ------------------------------------------------------ #
     def refresh(self):
