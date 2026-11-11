@@ -412,6 +412,8 @@ monitor is gone it returns to the centre of the current screen.
     sends one datagram that stops at the router (TTL 1), so this computer's firewall already
     knows the way the answer comes back.
     **"Copy results"** copies the table in English - with this network's public address in it.
+    Right-click a row for **"Copy public address"**, which copies the address alone (without
+    the port, which belonged to a socket of the test), and **"Copy row"**.
   - **Sockets** - every TCP and UDP socket on this computer, like `netstat -ano`, and no
     session is needed: what is listening, what is connected, its state (LISTEN,
     ESTABLISHED, TIME_WAIT...) and the program that owns it. Use it to see which port your
@@ -419,17 +421,19 @@ monitor is gone it returns to the centre of the current screen.
     is read when you open the tab and when you press **Refresh**. Tick **Refresh
     automatically** and it reads itself every 1, 2 or 5 seconds, but only while the tab is on
     screen: on another tab, or with the window minimized, nothing is read. A socket that
-    appeared since the read before is highlighted for a few seconds, one that closed stays
-    for a few seconds, greyed, and the **change** column gives the time of either, so
-    sorting by it shows the latest changes first. A connection that opens and closes
-    between two reads is never shown. When one read takes long (tens of thousands of
-    sockets) the table reads less often by itself and the status line says so. **Show**
-    narrows the list to the sockets that are listening (no other end, every UDP socket
-    included), the connections (an address at the other end), the ones that changed, or
-    the ones since the mark: press **Mark now**, then start or use your program, and the
-    table lists what it opened after the click and what closed, keeping the closed ones
-    until you mark again. The **opened** column is when the program opened the socket, as
-    Windows records it (Linux does not record it, so the column stays empty there). For
+    appeared since the read before is green for a few seconds, with `new` in the **change**
+    column, and one that closed stays for a few seconds, grey, with `closed` and the time,
+    so sorting by that column shows the latest changes first. A TIME_WAIT row is what a
+    closed connection leaves behind, so it is never new or closed: the connection closed in
+    its program's row. A connection that opens and closes between two reads is never shown.
+    When one read takes long (tens of thousands of sockets) the table reads less often by
+    itself and the status line says so. **Show** narrows the list to the sockets that are
+    listening (no other end, every UDP socket included), the connections (an address at the
+    other end), or the ones that **opened or closed** since the tab was first read, keeping
+    the closed ones. Press **Mark now**, then start or use your program, and that list
+    starts again from the click. The **opened** column is when the program opened the
+    socket, as Windows records it. Linux does not record it, so there it shows `~` and the
+    time of the read that first saw the socket. For
     `svchost.exe` the process column adds the Windows service the socket belongs to, such
     as `svchost.exe (Dnscache)`, when the program runs as administrator. **Save CSV**
     writes the rows on screen to a file (see "CSV exports" below). Search it the way you
@@ -1411,13 +1415,15 @@ so a call can show four or five rows with an `ICE` label. A call that was alread
 session started gets its labels a few seconds later, at the next check it sends to keep the
 connection, and so does its relay. Once a second the program looks at the labelled connections
 that carried media and at how much each delivered over the last three seconds (1500 bytes or more
-counts as data, and the checks that keep a call alive are far less). A connection is named once
-it leads for two seconds in a row, and the named one keeps its place while it still carries data,
-unless another carries more than twice as much. Each change puts a `PATH` entry in the event log,
-such as `ICE path: LAN 192.168.0.20:50000 -> TURN 203.0.113.10:3478`, and in the reproduction
-report. When no path has carried data for five seconds, the entry reads
-`ICE path: no data (was ...)`. A path this session blocks delivers nothing, so it is never the
-one named. Search with `ice:turn` (or `ice:lan`, `ice:nat`...) to see one kind of path only.
+counts as data, and the checks that keep a call alive are far less). A path is the address and
+port at the other end: a call that sends and receives on two connections to one relay's address
+and port, or shares its screen on a connection of its own to it, still takes one path. A path is named once it leads for two
+seconds in a row, and the named one keeps its place for as long as it carries data. Each change
+puts a `PATH` entry in the event log, such as
+`ICE path: LAN 192.168.0.20:50000 -> TURN 203.0.113.10:3478`, and in the reproduction report.
+When no path has carried data for five seconds, the entry reads `ICE path: no data (was ...)`,
+and when data comes back on the same path, `ICE path: data again on ...`. A path this session
+blocks delivers nothing, so it is never the one named. Search with `ice:turn` (or `ice:lan`, `ice:nat`...) to see one kind of path only.
 
 ## CSV exports
 
@@ -1531,8 +1537,8 @@ computer's time zone.
 | `service` | for `svchost.exe`, the Windows service the socket belongs to (needs administrator rights), empty otherwise |
 | `proto`, `local_ip`, `local_port`, `remote_ip`, `remote_port`, `state` | as in the table. The remote end is empty for a socket that is listening and for UDP, `state` for UDP |
 | `opened` | when the program opened the socket, as Windows records it. Empty on Linux, which does not record it |
-| `change` | `new` for a socket that appeared a few seconds ago, `closed` for one that closed, empty otherwise |
-| `changed_at` | when the socket appeared or closed, if that was after the first read of the table, empty otherwise |
+| `first_seen` | when the program first read the socket, if that was after the first read of the table, empty otherwise. On Linux this is the only time of opening there is |
+| `closed_at` | when the program found the socket closed, empty for one that is open |
 
 ## Scenario file format
 

@@ -118,9 +118,10 @@ class Flow:
     """One flow fed the way ``ConnectionLog.log`` feeds it: the packet is counted on
     the row first, and ``observe`` runs only while the row's budget is above zero."""
 
-    def __init__(self, watch, remote, port=3478, local=HOME, v6=False):
+    def __init__(self, watch, remote, port=3478, local=HOME, v6=False, local_port=50000):
         self.watch, self.remote, self.port, self.local, self.v6 = watch, remote, port, local, v6
-        self.key = (50000, remote, port)
+        self.local_port = local_port
+        self.key = (local_port, remote, port)
         self.row = dict(remote_ip=remote, remote_port=port, packets=0, bytes=0, sent=0,
                         ice="", ice_n=ice.PROBE_FIRST)
         self.reads = 0
@@ -134,7 +135,8 @@ class Flow:
     def _feed(self, payload, is_out):
         src, dst = (self.local, self.remote) if is_out else (self.remote, self.local)
         build = udp6 if self.v6 else udp4
-        raw = build(src, dst, payload, *((50000, self.port) if is_out else (self.port, 50000)))
+        ports = (self.local_port, self.port)
+        raw = build(src, dst, payload, *(ports if is_out else ports[::-1]))
         self.row["packets"] += 1
         if self.row["ice_n"] > 0:
             self.reads += 1
@@ -735,8 +737,9 @@ def lan_path(watch):
     return Flow(watch, PEER_LAN, 50001).out(message(BINDING_REQUEST, PRIORITY)).out(DTLS)
 
 
-def turn_path(watch):
-    return Flow(watch, TURN_SERVER).out(message(ALLOCATE_REQUEST)).back(channel_data(DTLS))
+def turn_path(watch, local_port=50000):
+    return (Flow(watch, TURN_SERVER, local_port=local_port).out(message(ALLOCATE_REQUEST))
+            .back(channel_data(DTLS)))
 
 
 def wan_path(watch, port=50002):
@@ -812,18 +815,77 @@ def test_a_path_this_session_blocks_carries_nothing():
           f"({events})")
 
 
-def test_two_paths_with_data_do_not_flip_on_a_lead_under_twice():
+def test_the_named_path_keeps_its_place_while_it_carries_data():
+    """However much more another path carries: audio on one connection and a screen
+    shared on another took turns at every burst while a lead of twice won."""
     watch = IceWatch()
     lan, wan = lan_path(watch), wan_path(watch)
-    events = run(watch, [{lan: 5000}] * 3 + [{lan: 5000, wan: 9000}] * 10)
+    events = run(watch, [{lan: 5000}] * 3 + [{lan: 5000, wan: 60000}] * 10)
     check("the first path stays", [t for _, t in events] == [
         "ICE path: LAN 10.0.0.20:50001"], f"({events})")
+
+
+def test_two_flows_to_one_relay_are_one_path():
+    """A call that sends and receives on two connections through one relay, or
+    shares a screen on its own: two flows, one far end. MEASURED before: "TURN a ->
+    TURN a" at every burst of the second (internal_tools probes 2026-11-11-ice-events)."""
+    watch = IceWatch()
+    audio, screen = turn_path(watch), turn_path(watch, local_port=50010)
+    quiet, burst = {audio: 4000, screen: 1500}, {audio: 4000, screen: 60000}
+    events = run(watch, [quiet] * 4 + ([burst] + [quiet] * 4) * 4)
+    check("named once", [t for _, t in events] == ["ICE path: TURN 1.1.1.1:3478"],
+          f"({events})")
+
+
+def test_two_flows_to_one_far_end_are_summed():
+    """Neither alone is data (under ACTIVE_BYTES in the window), the two together are."""
+    watch = IceWatch()
+    one, two = turn_path(watch), turn_path(watch, local_port=50010)
+    each = ice.ACTIVE_BYTES // 2
+    events = run(watch, [{one: each // 2, two: each // 2}] * 6)
+    check("one path, from both", [t for _, t in events] == ["ICE path: TURN 1.1.1.1:3478"],
+          f"({events})")
+
+
+@hypothesis_settings(max_examples=150, deadline=None)
+@given(st.lists(st.tuples(st.integers(0, 3), st.integers(0, 80_000)), min_size=1,
+                max_size=120))
+def test_no_line_names_one_path_on_both_sides(steps):
+    """Whatever the flows deliver, a move is from one path to ANOTHER: four flows,
+    two of them to one relay."""
+    watch = IceWatch()
+    flows = [turn_path(watch), turn_path(watch, local_port=50010), lan_path(watch),
+             wan_path(watch)]
+    events = run(watch, [{flows[which]: size} for which, size in steps])
+    for _, text in events:
+        if " -> " in text:
+            before, after = text.removeprefix("ICE path: ").split(" -> ")
+            check("another path", before != after, f"({text})")
+
+
+def test_data_again_on_the_same_path_says_so():
+    watch = IceWatch()
+    lan = lan_path(watch)
+    events = run(watch, [{lan: 5000}] * 3 + [{}] * 12 + [{lan: 5000}] * 3)
+    check("stopped, then the same path again", [t for _, t in events] == [
+        "ICE path: LAN 10.0.0.20:50001",
+        "ICE path: no data (was LAN 10.0.0.20:50001)",
+        "ICE path: data again on LAN 10.0.0.20:50001"], f"({events})")
+
+
+def test_data_on_another_path_after_a_pause_is_named_as_a_path():
+    watch = IceWatch()
+    lan, relay = lan_path(watch), turn_path(watch)
+    events = run(watch, [{lan: 5000}] * 3 + [{}] * 12 + [{relay: 5000}] * 3)
+    check("the relay, as any path is named", [t for _, t in events][-1]
+          == "ICE path: TURN 1.1.1.1:3478", f"({events})")
 
 
 def test_a_path_has_to_lead_twice_in_a_row():
     watch = IceWatch()
     lan, relay, wan = lan_path(watch), turn_path(watch), wan_path(watch)
-    events = run(watch, [{lan: 5000}] * 4 + [{relay: 25000}, {wan: 30000}, {}])
+    # The LAN path stops first, so its window is empty when the others lead.
+    events = run(watch, [{lan: 5000}] * 4 + [{}] * 3 + [{relay: 25000}, {wan: 30000}, {}])
     check("the relay led once, the WAN path twice", [t for _, t in events] == [
         "ICE path: LAN 10.0.0.20:50001",
         "ICE path: LAN 10.0.0.20:50001 -> WAN 8.8.8.8:50002"], f"({events})")

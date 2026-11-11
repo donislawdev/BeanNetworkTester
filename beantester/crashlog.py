@@ -76,7 +76,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 
 from .appinfo import __version__
-from .paths import hand_back, make_dirs, temp_beside, user_data_dir
+from .paths import hand_back, make_dirs, user_data_dir, write_atomically
 
 CRASH_DIR_NAME = "crashes"
 LOG_NAME = "crashes.ndjson"
@@ -787,22 +787,13 @@ def _write_breadcrumb(state):
         return None
     path = os.path.join(directory, breadcrumb_name())
     # Unique per writer: two copies of the GUI both leave a breadcrumb, and they
-    # used to leave it through one `breadcrumb.json.tmp`. See paths.temp_beside -
-    # and note that this one is written from a TICK, so "two writers at the same
+    # used to leave it through one `breadcrumb.json.tmp`. See paths.write_atomically
+    # - and note that this one is written from a TICK, so "two writers at the same
     # moment" is not a corner case here, it is 1.4 chances a second.
-    tmp = None
     try:
-        tmp = temp_beside(path)
-        with open(tmp, "w", encoding="utf-8") as f:
-            f.write(text)
-        os.replace(tmp, path)
+        write_atomically(path, lambda f: f.write(text))
     except OSError:
-        try:
-            if tmp and os.path.exists(tmp):
-                os.remove(tmp)
-        except OSError:
-            pass
-        return None
+        return None                     # no temp file left: write_atomically took it
     return text
 
 
@@ -891,7 +882,7 @@ def _sweep_breadcrumbs(directory, own, mine):
     way. A copy still running is not caught by the age: it writes its breadcrumb
     again every ``BREADCRUMB_REFRESH_S``, changed or not.
 
-    A temp file is unique per writer (``paths.temp_beside``) and lives for
+    A temp file is unique per writer (``paths.write_atomically``) and lives for
     milliseconds, so one older than ``STALE_TEMP_S`` belongs to a writer that was
     killed mid-write - and an orphan here stops ``crashes/`` from ever being
     removed. A younger one may be another copy's write in progress: sweeping it

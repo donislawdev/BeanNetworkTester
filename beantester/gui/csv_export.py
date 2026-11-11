@@ -11,13 +11,13 @@ The column tables live here too, and they are the source the README guard reads.
 """
 import csv
 import os
-import tempfile
 import threading
 import time
 
 from .. import crashlog
 from ..i18n import T
-from ..paths import CONNECTIONS_CSV_FILE, CSV_FILE, SOCKETS_CSV_FILE, hand_back
+from ..nettools.sockets import CLOSED
+from ..paths import CONNECTIONS_CSV_FILE, CSV_FILE, SOCKETS_CSV_FILE, hand_back, write_atomically
 from ..views import (avg_packet_bytes, connection_proc, filter_sort_connections,
                      scoped_packets)
 
@@ -261,39 +261,31 @@ def _replace_csv(path, header, rows):
     """Put a CSV of ``header`` and ``rows`` at ``path`` whole, or leave the one
     there as it was. Raises what went wrong, with nothing left behind.
 
-    The connections and sockets exports' one write. A file beside the real one,
-    renamed over it once written - under a name nobody else picks (``mkstemp``:
-    made by this call, never a link someone put there) and written through the
-    descriptor that made it, never opened again by name. The old ``<file>.tmp``
-    was a name known in advance: a link put there by anyone who may write in that
-    folder sent the write - root's, under sudo - wherever it pointed. Handed back
-    under sudo before it takes the place of the person's file (``hand_back``,
-    which changes the entry, never what a link there points at). The previous
-    export is untouched by a failure: a half-written file left beside it was the
-    connections export's litter for a while, overwritten by the next export.
+    The connections and sockets exports' one write, through the program's one
+    atomic write (``paths.write_atomically``, which is where this way of writing
+    started). The old ``<file>.tmp`` was a name known in advance: a link put there
+    by anyone who may write in that folder sent the write - root's, under sudo -
+    wherever it pointed. The previous export is untouched by a failure: a
+    half-written file left beside it was the connections export's litter for a
+    while, overwritten by the next export.
     """
-    directory, name = os.path.split(path)
-    handle, tmp = tempfile.mkstemp(dir=directory or ".", prefix=name + ".", suffix=".tmp")
-    try:
-        with os.fdopen(handle, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(header)
-            writer.writerows(rows)
-        hand_back(tmp)
-        os.replace(tmp, path)
-    except BaseException:
-        with crashlog.quiet("gui.csv_export"):
-            os.remove(tmp)
-        raise
+    def write(f):
+        writer = csv.writer(f)
+        writer.writerow(header)
+        writer.writerows(rows)
+
+    write_atomically(path, write, newline="")
 
 
 # The socket table (Tools > Sockets), its columns in the table's own words where
-# a spreadsheet can take them: times as "YYYY-MM-DD HH:MM:SS" in this computer's
-# time zone, `change` as the program's own "new" / "closed" (English, like the
-# connections export's yes/no). `opened` is when the socket was bound, as the
-# system says it - empty on Linux, which does not say.
+# a spreadsheet can take them, times as "YYYY-MM-DD HH:MM:SS" in this computer's
+# time zone. `opened` is when the socket was bound, as the system says it - empty on
+# Linux, which does not say. `first_seen` is the read that first saw it (empty for
+# one there at the window's first read), and `closed_at` the read that found it
+# gone. The window's "new" is not a column: it lasts seconds, and a file is read later.
 SOCKETS_CSV_HEADER = ["process", "service", "pid", "proto", "local_ip", "local_port",
-                      "remote_ip", "remote_port", "state", "opened", "change", "changed_at"]
+                      "remote_ip", "remote_port", "state", "opened", "first_seen",
+                      "closed_at"]
 
 # One export of the socket table at a time - its own file, so its own lock.
 _SOCKETS_LOCK = threading.Lock()
@@ -329,7 +321,7 @@ def _socket_cells(s):
         s.proc, s.service, "" if s.pid is None else s.pid, s.proto,
         s.local_ip, s.local_port, s.remote_ip,
         "" if s.remote_port is None else s.remote_port, s.state,
-        _stamp(s.created), s.change, _stamp(s.at))]
+        _stamp(s.created), _stamp(s.seen_at), _stamp(s.at if s.change == CLOSED else None))]
 
 
 def _write_sockets(app, rows):

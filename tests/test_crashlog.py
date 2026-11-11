@@ -805,7 +805,7 @@ def test_a_breadcrumb_that_cannot_be_serialised_is_swallowed(isolated):
     ever being cleaned up again.
 
     The leftover is looked for by SCANNING, not by name: the temp file is unique
-    per writer now (``paths.temp_beside``), so a check for one known name would
+    per writer now (``paths.write_atomically``), so a check for one known name would
     pass without looking at anything - green, and blind to the very leftover it
     was written to catch.
     """
@@ -879,7 +879,7 @@ def test_a_temp_breadcrumb_left_by_a_kill_is_swept_on_the_next_clean_exit(isolat
     directory = crashlog.crash_dir()
     long_ago = time.time() - crashlog.STALE_TEMP_S - 5
     for name in (crashlog.BREADCRUMB_NAME + ".tmp",             # pre-2026-09-03
-                 crashlog.BREADCRUMB_NAME + ".9kz1ab.tmp",      # one name, temp_beside
+                 crashlog.BREADCRUMB_NAME + ".9kz1ab.tmp",      # one name, unique temp
                  crashlog.breadcrumb_name() + ".4hq8zz.tmp"):   # one file per process
         path = os.path.join(directory, name)
         with open(path, "w", encoding="utf-8") as f:
@@ -1081,13 +1081,13 @@ def test_a_breadcrumb_write_that_failed_is_tried_again(isolated, monkeypatch):
 def _counting_temp_files(monkeypatch):
     """Every temp file a breadcrumb write creates, in a list."""
     created = []
-    real_temp_beside = crashlog.temp_beside
+    real_write = crashlog.write_atomically
 
-    def counting(path):
-        created.append(path)
-        return real_temp_beside(path)
+    def counting(path, *args, **kwargs):
+        created.append(path)                    # one temp file per atomic write
+        return real_write(path, *args, **kwargs)
 
-    monkeypatch.setattr(crashlog, "temp_beside", counting)
+    monkeypatch.setattr(crashlog, "write_atomically", counting)
     return created
 
 

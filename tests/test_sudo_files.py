@@ -163,8 +163,8 @@ def test_make_dirs_hands_back_only_the_levels_it_created_top_down(tmp_path, sudo
 
 
 def test_every_atomic_write_publishes_a_file_that_is_theirs(tmp_path, sudo):
-    """``temp_beside`` is the one door: ``write_json`` (profiles, ui.json, configs),
-    the repro report and the crash files all go through it."""
+    """``write_atomically`` is the one door: ``write_json`` (profiles, ui.json,
+    configs), the repro report, the crash files and the CSV exports all go through it."""
     sudo.owners[str(tmp_path)] = 1000
     target = tmp_path / "bean_network_tester_ui.json"
     check("written", jsonfile.write_json(str(target), {"a": 1}) is None)
@@ -173,6 +173,78 @@ def test_every_atomic_write_publishes_a_file_that_is_theirs(tmp_path, sudo):
     check("its temp file was handed back before it took the target's place",
           len(handed) == 1 and os.path.dirname(handed[0]) == str(tmp_path)
           and os.path.basename(handed[0]).startswith(target.name + "."), f"({handed})")
+
+
+def test_a_link_planted_after_the_hand_back_is_never_written_through(tmp_path, sudo,
+                                                                     monkeypatch):
+    """The person behind sudo owns the folder, so the moment their temp file is
+    theirs they can swap it for a link. ``temp_beside`` handed the file back and
+    returned its NAME, and every caller opened it again by that name - root then
+    wrote through the link, into any file root can reach. Written through the
+    descriptor before the hand-back, nothing of it goes anywhere but the target."""
+    sudo.owners[str(tmp_path)] = 1000
+    probe = tmp_path / "probe-link"
+    try:
+        os.symlink(tmp_path / "nowhere", probe)
+    except (OSError, NotImplementedError):
+        pytest.skip("this system makes no symbolic links for this user")
+    probe.unlink()
+    victim = tmp_path / "root-only"
+    victim.write_text("root's own", encoding="utf-8")
+    real_hand_back = paths.hand_back
+    swapped = []
+
+    def then_swap_in_a_link(path):
+        handed = real_hand_back(path)
+        os.remove(path)
+        os.symlink(victim, path)
+        swapped.append(path)
+        return handed
+
+    monkeypatch.setattr(paths, "hand_back", then_swap_in_a_link)
+    target = tmp_path / "bean_network_tester_ui.json"
+    written = jsonfile.write_json(str(target), {"a": 1})
+    # Without these the check below would pass for a save that never got as far
+    # as the hand-back, and so proved nothing about it.
+    check("the save went through", written is None, f"({written})")
+    check("the link was swapped in after the hand-back", len(swapped) == 1, f"({swapped})")
+    check("the file the link points at is untouched",
+          victim.read_text(encoding="utf-8") == "root's own",
+          f"({victim.read_text(encoding='utf-8')!r})")
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows opens no descriptor on a folder")
+def test_a_temp_file_its_file_object_refused_leaves_no_descriptor_open(tmp_path, monkeypatch):
+    """Until a file object owns the temp file's descriptor, nothing else closes it.
+    ``os.fdopen`` closed it when its text layer failed, but not when the file object
+    itself did (MEASURED on 3.15) - and on a descriptor of a folder it does. Each
+    such save would have kept one open for as long as the program ran."""
+    real_mkstemp = paths.tempfile.mkstemp
+    handles = []
+
+    def onto_a_folder(**kw):
+        handle, tmp = real_mkstemp(**kw)
+        os.close(handle)
+        handles.append(os.open(tmp_path, os.O_RDONLY))
+        return handles[-1], tmp
+
+    monkeypatch.setattr(paths.tempfile, "mkstemp", onto_a_folder)
+    target = tmp_path / "bean_network_tester_ui.json"
+    with pytest.raises(OSError):
+        paths.write_atomically(str(target), lambda f: f.write("{}"))
+    check("the temp file was made", len(handles) == 1, f"({handles})")
+    folder = os.stat(tmp_path)
+    try:
+        held = os.fstat(handles[0])
+    except OSError:
+        held = None
+    open_on_the_folder = held is not None and (held.st_dev, held.st_ino) == (
+        folder.st_dev, folder.st_ino)
+    if open_on_the_folder:
+        os.close(handles[0])
+    check("its descriptor is closed", not open_on_the_folder)
+    check("and the temp file is gone", sorted(os.listdir(tmp_path)) == [],
+          f"({sorted(os.listdir(tmp_path))})")
 
 
 def test_the_page_buttons_start_no_browser_as_root(monkeypatch):
@@ -201,13 +273,15 @@ def test_the_page_buttons_start_no_browser_as_root(monkeypatch):
 # -- every place that makes a file or a directory ----------------------------------- #
 # What may create one without handing it back, and why. Everything else that opens a
 # file for writing, makes a directory or a temp file must be in a function that calls
-# hand_back, make_dirs or temp_beside.
+# hand_back or make_dirs - or write through paths.write_atomically, which does.
 CREATES_WITHOUT_HANDING_BACK = {
     ("beantester/paths.py", "directory_is_writable"): "a probe file, removed at once",
     ("beantester/winenv.py", "detach_console"): "os.devnull",
     ("beantester/paths.py", "make_dirs"): "the helper itself (hands back each level)",
+    ("beantester/paths.py", "make_temp"): "write_atomically's opener: write_atomically "
+                                          "hands the temp file back once it is written",
 }
-HANDS_BACK = {"hand_back", "make_dirs", "temp_beside"}
+HANDS_BACK = {"hand_back", "make_dirs"}
 _WRITE_MODES = set("wax+")
 
 
@@ -292,9 +366,11 @@ def test_every_place_that_makes_a_file_hands_it_back():
                 seen += sum(1 for n in ast.walk(ast.parse(source))
                             if isinstance(n, ast.Call) and _creates(n))
                 bad.extend(f"{rel}:{line} {func} ({kind})" for func, line, kind in _unhanded(source, rel))
-    check("the scan sees the places it is about", seen >= 12, f"({seen})")
+    # 12 until 2026-11-11, when the four atomic writes that opened their temp file
+    # by name moved into paths.write_atomically, one place.
+    check("the scan sees the places it is about", seen >= 9, f"({seen})")
     check("every one hands back what it makes, or says why it need not",
-          not bad, f"({bad} - call paths.hand_back / make_dirs, write through temp_beside, or "
+          not bad, f"({bad} - call paths.hand_back / make_dirs, write through write_atomically, or "
                    f"list it in CREATES_WITHOUT_HANDING_BACK with the reason)")
     # A renamed or removed function would leave its exception behind, ready to excuse
     # the next function that takes the old name - so the name must still be defined.
@@ -311,6 +387,8 @@ def test_the_scan_for_files_made_can_fail():
         "mkstemp": "import tempfile\ndef f(d):\n    return tempfile.mkstemp(dir=d)\n",
         "a nested hand_back does not cover the outer open":
             "def f(p):\n    open(p, 'w').close()\n    def g(q):\n        hand_back(q)\n",
+        # The old door: a name handed back, then opened again by the caller.
+        "a temp name opened again": "def f(p):\n    t = temp_beside(p)\n    open(t, 'w').close()\n",
     }
     for name, code in shapes.items():
         check(f"{name} is seen", _unhanded(code, "beantester/x.py") != [], f"({name})")
@@ -325,7 +403,7 @@ def test_the_scan_for_files_made_can_fail():
         "read": "def f(p):\n    return open(p).read()\n",
         "read rb": "def f(p):\n    return open(p, 'rb').read()\n",
         "handed back": "def f(p):\n    open(p, 'a').close()\n    hand_back(p)\n",
-        "through temp_beside": "def f(p):\n    t = temp_beside(p)\n    open(t, 'w').close()\n",
+        "through write_atomically": "def f(p):\n    write_atomically(p, lambda f: f.write('x'))\n",
     }
     for name, code in quiet.items():
         check(f"{name} is fine", _unhanded(code, "beantester/x.py") == [], f"({name})")

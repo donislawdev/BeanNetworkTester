@@ -988,6 +988,16 @@ ROW_NAMES = {"public": "tools.nat.row.public", "mapping": "tools.nat.row.mapping
              "hairpin_first": "tools.nat.row.hairpin_first", "turn": "tools.nat.row.turn"}
 
 
+def public_address(rows):
+    """This network's public address as the run found it, or None: what "Copy public
+    address" copies. The address alone - the public port belonged to a socket of the
+    run, and means nothing once the run has closed it."""
+    for row in rows:
+        if row.test == "public" and row.result == "tools.nat.result.address":
+            return dict(row.args).get("address")
+    return None
+
+
 def words(row, lang=None):
     """``(test, result, detail)`` of a row in ``lang`` (the window's when None)."""
     args = dict(row.args)

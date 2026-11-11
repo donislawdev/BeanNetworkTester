@@ -307,48 +307,85 @@ def directory_is_writable(path):
     return True
 
 
-def temp_beside(path):
-    """A temp file NO other writer will pick, in the same directory as ``path``.
+def write_atomically(path, write, newline=None, binary=False):
+    """Write ``path`` whole or not at all: ``write(file)`` fills a temp file beside it
+    (text, UTF-8, ``newline`` as ``open`` takes it; bytes with ``binary``), which
+    then replaces ``path``. Raises what the write or the filesystem raised, with the
+    temp file gone.
 
-    Every atomic write in this program is "write a temp file, then ``os.replace``
-    it over the target", and the temp name was ``<target>.tmp`` in all three
-    places that do it. That name is a FUNCTION OF THE TARGET, so two writers of
-    one file are two writers of one temp file: the second truncates what the
-    first is still writing, and the first then publishes the result as the user's
-    profiles, settings or window state. Nothing stops that - the program has no
-    single-instance lock, and the mutex in ``driver.py`` guards the DRIVER, not
-    these files. Two copies running at once is an ordinary thing to do.
+    Every atomic write in this program goes through here: ``write_json`` (profiles,
+    ui.json, configs), the repro report, the crash breadcrumb, the Linux menu entry,
+    the CSV exports and the user files adopted from beside a frozen program.
+
+    🔴 The temp file is written through the descriptor ``mkstemp`` opened, and
+    handed back to the person behind sudo only AFTER that (``hand_back``). It used
+    to be closed, handed back and then opened again BY NAME by each caller
+    (``temp_beside``, until 2026-11-11): that person owns the folder, so between
+    the hand-back and the open they could swap the file for a link, and root wrote
+    through it - into any file root can reach. ``mkstemp`` creates the file with
+    O_EXCL, so the descriptor is never a link someone planted; what is published
+    by ``os.replace`` afterwards is whatever then has the temp name, in that
+    person's own folder, and nothing writes through it.
+
+    Why a temp file with a name of its own, not ``<target>.tmp``: that name was a
+    FUNCTION OF THE TARGET, so two writers of one file were two writers of one temp
+    file: the second truncates what the first is still writing, and the first then
+    publishes the result as the user's profiles, settings or window state. Nothing
+    stops that - the program has no single-instance lock, and the mutex in
+    ``driver.py`` guards the DRIVER, not these files. Two copies running at once is
+    an ordinary thing to do.
 
     The same DIRECTORY, not the system temp dir: ``os.replace`` is only atomic
-    within one filesystem, and that is the whole point of the dance.
+    within one filesystem, and that is the whole point of the dance. No makedirs: a
+    missing directory is the CALLER's error to report, and ``mkstemp`` raising
+    OSError here is how it finds out (see ``jsonfile.write_json``).
 
-    What it costs, said out loud because it is a real trade and not a free win:
-    the old name healed itself, since the next write reused it. A unique one
-    cannot, so a process killed between the create and the replace leaves a stray
-    ``.tmp`` behind for good. That is a corrupt user file traded for a stray one,
-    which is the right way round - and where a leftover would do more than sit
-    there (``crashes/``, which has to be EMPTY before it can be removed), the
-    caller sweeps by prefix instead of relying on one known name.
+    What a unique name costs, said out loud because it is a real trade and not a
+    free win: ``<target>.tmp`` healed itself, since the next write reused it. A
+    unique one cannot, so a process killed between the create and the replace
+    leaves a stray ``.tmp`` behind for good. That is a corrupt user file traded for
+    a stray one, which is the right way round - and where a leftover would do more
+    than sit there (``crashes/``, which has to be EMPTY before it can be removed),
+    the caller sweeps by prefix instead of relying on one known name.
 
     One more consequence, decided rather than overlooked: on POSIX ``mkstemp``
     creates the file 0600, and ``os.replace`` carries that mode onto the target, so
     a config file that used to be 0644 becomes owner-only. On Windows the mode is not
     what decides access at all, and everywhere else these files sit in the user's
-    own data directory - under sudo on Linux too, handed back to that user (below) -
-    so the change is a tightening in a private place. Copying the old file's mode across
+    own data directory - under sudo on Linux too, handed back to that user - so the
+    change is a tightening in a private place. Copying the old file's mode across
     would buy nothing and add a failure path to a function that must not have one.
-
-    Under sudo the temp file is handed back to whoever ran it (``hand_back``) before
-    anything is written, so the file ``os.replace`` publishes is theirs: this is the
-    one place every atomic write goes through, so it is the one place that has to.
     """
     directory, name = os.path.split(path)
-    # No makedirs: a missing directory is the CALLER's error to report, and
-    # mkstemp raising OSError here is how it finds out (see jsonfile.write_json).
-    fd, tmp = tempfile.mkstemp(dir=directory or ".", prefix=name + ".", suffix=".tmp")
-    os.close(fd)
-    hand_back(tmp)
-    return tmp
+    directory = directory or "."
+    made: list[str] = []
+
+    def make_temp(_name, _flags):
+        handle, tmp = tempfile.mkstemp(dir=directory, prefix=name + ".", suffix=".tmp")
+        made.append(tmp)
+        return handle
+
+    try:
+        # The descriptor reaches ``open`` through ``opener``, as in the standard
+        # library's own NamedTemporaryFile, so the file object owns it from the
+        # start and closes it whatever fails. ``os.fdopen`` closed it on some
+        # failures and not on others (MEASURED on 3.15: a wrapper that failed
+        # closed it, a FileIO that failed did not) - and on Windows a descriptor
+        # left open keeps the temp file from being removed below.
+        # (The name ``open`` is given only reaches ``make_temp``, which ignores it.)
+        with (open(directory, "wb", opener=make_temp) if binary
+              else open(directory, "w", encoding="utf-8", newline=newline,
+                        opener=make_temp)) as f:
+            write(f)
+        hand_back(made[0])
+        os.replace(made[0], path)
+    except BaseException:
+        if made:
+            # Imported here, not at the top: crashlog imports this module.
+            from . import crashlog
+            with crashlog.quiet("paths.write_atomically"):
+                os.remove(made[0])
+        raise
 
 
 def _same_directory(a, b):
@@ -393,23 +430,18 @@ def migrate_user_files(source=None, target=None):
             continue
         # Two copies of the program launched together both migrate, and they used
         # to do it through one `<dst>.tmp`: the loser's half-copy became the
-        # user's adopted profile file. See temp_beside.
-        tmp = None
+        # user's adopted profile file. Atomic, so a half-copy is never readable,
+        # and byte for byte. See write_atomically.
         try:
-            tmp = temp_beside(dst)
-            shutil.copyfile(src, tmp)
-            os.replace(tmp, dst)        # atomic, so a half-copy is never readable
+            write_atomically(dst, lambda f, src=src: _copy_into(src, f), binary=True)
         except OSError as e:
             problems.append(f"{name}: {e}")
-            try:
-                if tmp and os.path.exists(tmp):
-                    os.remove(tmp)
-            except OSError as _exc:
-                # The leftover is harmless, the silence would not be (convention 30).
-                # Imported here because crashlog imports this module.
-                from . import crashlog
-                crashlog.note(_exc, "paths")
     return problems
+
+
+def _copy_into(source, target_file):
+    with open(source, "rb") as f:
+        shutil.copyfileobj(f, target_file)
 
 
 def prepare_user_data():

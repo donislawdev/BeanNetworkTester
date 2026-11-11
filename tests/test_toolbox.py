@@ -1107,7 +1107,8 @@ def test_the_table_says_why_it_is_empty_and_what_its_rows_are_missing():
         panel.read()
         settle(panel)
         closed = [s.change for s in panel._latest().snapshot.sockets]
-        assert closed == [sk.CLOSED] * 5, "what closed stays listed for a while"
+        # Four: the TIME_WAIT row going is no close (``sockets._tail``).
+        assert closed == [sk.CLOSED] * 4, ("what closed stays listed for a while", closed)
         sk.MARK_S = 0                   # and that while is over
         panel.read()
         settle(panel)
@@ -1170,7 +1171,7 @@ def test_the_table_reads_by_itself_only_while_it_is_looked_at():
         panel.refresh()
         assert reads == [1, 1, 1] and len(waits) == 4, ("unticked: nothing more", reads, waits)
         assert panel.status.label.cget("text") == T(
-            "tools.common.done", time=time.strftime(
+            "tools.sockets.status_read", time=time.strftime(
                 "%H:%M:%S", time.localtime(panel.job.last["read"].finished)),
             ms=panel.job.last["read"].elapsed_ms)
     """))
@@ -1256,16 +1257,20 @@ def test_the_show_box_narrows_the_table_by_the_far_end_and_outlives_a_rebuild():
 
 
 def test_mark_now_reads_marks_and_shows_what_opened_and_closed_since():
-    """A read of its own that sets the mark, the "Show" box on "Since the mark", and
-    from then on what opened and what closed - the closed ones counted in what the
-    table chose from, so "shown of total" never shows more than all."""
+    """A read of its own that sets the mark, the "Show" box on "Opened or closed",
+    and from then on what opened and what closed - the closed ones counted in what
+    the table chose from, so "shown of total" never shows more than all. Before any
+    click the view counts from the first read, and the line says so."""
     run_gui(SOCK + textwrap.dedent("""
         from beantester.gui.toolbox import sockets as tool
         panel = open_sockets()
         settle(panel)
         choose(panel, sk.SINCE_MARK)
-        assert shown(panel) == [] and panel.table._empty_text == "tools.sockets.empty_no_mark", \\
-            ("nothing marked yet, and the table says what to press", panel.table._empty_text)
+        first = panel._latest().snapshot.carry.mark
+        assert shown(panel) == [] and panel.table._empty_text == "tools.sockets.empty_since_mark", \\
+            ("nothing since the first read", panel.table._empty_text)
+        since_first = T("tools.sockets.note_since_first", time=tool.clock(first.at))
+        assert since_first in panel.note.cget("text"), panel.note.cget("text")
         choose(panel, sk.ALL)
         panel.mark()
         settle(panel)
@@ -1276,6 +1281,7 @@ def test_mark_now_reads_marks_and_shows_what_opened_and_closed_since():
         mark = panel._latest().snapshot.carry.mark
         said = T("tools.sockets.note_mark", time=tool.clock(mark.at))
         assert said in panel.note.cget("text"), panel.note.cget("text")
+        assert since_first not in panel.note.cget("text"), "the click, not the first read"
 
         ROWS.append(SocketRow("TCP", 4, "10.0.0.2", 50002, "93.184.216.34", 443,
                               "ESTABLISHED", 1234))
@@ -1315,8 +1321,8 @@ def test_mark_now_pressed_during_the_tables_own_read_is_a_mark_and_follows_it():
 
 def test_save_csv_writes_the_rows_on_screen_as_they_are_and_reads_nothing():
     """The rows the window shows - this search, this "Show", this order - with the
-    service, the bind time and the change, in a file a spreadsheet takes: a process
-    name a spreadsheet would run as a formula is written as text."""
+    service and the times, in a file a spreadsheet takes: a process name a
+    spreadsheet would run as a formula is written as text."""
     run_gui(SOCK + textwrap.dedent("""
         import csv, os, tempfile
         import beantester.gui.csv_export as m
@@ -1365,15 +1371,20 @@ def test_a_service_hosts_socket_shows_its_service_and_a_socket_says_when_it_open
         earlier = time.mktime((2026, 10, 29, 21, 35, 11, 0, 0, -1))
         assert opened_text(today, now) == "08:05:09", opened_text(today, now)
         assert opened_text(earlier, now) == "2026-10-29 21:35", opened_text(earlier, now)
-        assert opened_text(None, now) == "", "Linux does not say"
+        assert opened_text(None, now) == "", "Linux does not say, and it was there at the first read"
+        assert opened_text(None, now, seen=today) == T("tools.sockets.opened_seen", time="08:05:09"), \\
+            "Linux: the read that first saw it, marked as such"
+        assert opened_text(today, now, seen=earlier) == "08:05:09", "the system's time wins"
         cells = render(s._replace(created=today))
         assert cells[0] == proc_text(s) and cells[6] == opened_text(today), cells
+        assert render(s._replace(seen_at=today))[6] == opened_text(None, seen=today)
     """))
 
 
 def test_a_socket_that_appears_or_closes_is_marked_in_the_table():
     """Colour is never the only signal (WCAG 1.4.1): the change column says the same
-    in words, with the time."""
+    in words - and for exactly as long. It said "appeared <time>" for good while the
+    colour went after seconds."""
     run_gui(SOCK + textwrap.dedent("""
         from beantester.gui.theme import SOCKET_COLORS
         assert set(SOCKET_COLORS) == {sk.NEW, sk.CLOSED}, "a colour per mark, by its name"
@@ -1390,7 +1401,7 @@ def test_a_socket_that_appears_or_closes_is_marked_in_the_table():
         by_port = {s.local_port: (cells[change], tags)
                    for s, (_key, cells, tags) in zip(panel.table.items, panel.table.rows)}
         at = time.strftime("%H:%M:%S", time.localtime(panel._latest().snapshot.read_at))
-        assert by_port[50007] == (T("tools.sockets.appeared_at", time=at), (sk.NEW,)), by_port
+        assert by_port[50007] == (T("tools.sockets.new"), (sk.NEW,)), by_port
         assert by_port[8080] == (T("tools.sockets.closed_at", time=at), (sk.CLOSED,)), by_port
         assert by_port[5353] == ("", ()), by_port
         assert panel.count.cget("text") == T("conns.shown_of", shown=5, total=5)
@@ -1401,7 +1412,7 @@ def test_a_socket_that_appears_or_closes_is_marked_in_the_table():
         by_port = {s.local_port: (cells[change], tags)
                    for s, (_key, cells, tags) in zip(panel.table.items, panel.table.rows)}
         assert 8080 not in by_port, "the closed socket has gone"
-        assert by_port[50007] == (T("tools.sockets.appeared_at", time=at), ()), by_port
+        assert by_port[50007] == ("", ()), ("the word goes with the colour", by_port)
     """))
 
 

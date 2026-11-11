@@ -9,7 +9,7 @@ silently:
 * **atomic writes** - the new content is written to a temporary file and then
   ``os.replace``d over the target, which is atomic on Windows and POSIX alike.
   A crash halfway through can no longer leave a half-written profile file. The
-  temporary file is unique per writer (``paths.temp_beside``), because two copies
+  temporary file is unique per writer (``paths.write_atomically``), because two copies
   of the program saving at once used to share one, and the name it shared was
   derived from the target.
 * **quarantine instead of overwrite** - a file that cannot be parsed is renamed
@@ -21,9 +21,9 @@ silently:
 import json
 import os
 import time
-from typing import Any, Optional, Tuple, Union
-from . import crashlog
-from .paths import temp_beside
+from typing import Any, Optional, TextIO, Tuple, Union
+
+from .paths import write_atomically
 
 # The biggest file any of these formats produces, with room to grow. MEASURED on
 # this repository 2026-08-26: the largest JSON the program reads is `lang/pl.json`
@@ -177,25 +177,18 @@ def _write_json(path: str, data: Any, indent: int) -> Optional[str]:
     whatever was saving. The reader's half already made this decision (see
     ``load_json``); this is the writer catching up with it.
     """
-    tmp = None
+    def write(f: TextIO) -> None:
+        json.dump(data, f, ensure_ascii=False, indent=indent, allow_nan=False)
+        f.flush()
+        os.fsync(f.fileno())
+
     try:
         # No makedirs(): a path whose directory does not exist is an ERROR, and the
         # CLI contract says so (exit code IO). Inventing the directory would turn a
-        # typo in --save-config into a silent success. `temp_beside` does not
+        # typo in --save-config into a silent success. `write_atomically` does not
         # create it either, so a bad path still fails here rather than succeeding.
-        tmp = temp_beside(path)
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=indent, allow_nan=False)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
+        # It leaves no temp file behind whatever fails.
+        write_atomically(path, write)
         return None
     except (OSError, TypeError, ValueError) as e:
-        try:
-            # `tmp` can still be None: temp_beside is the first thing that can
-            # fail, and it fails for the commonest reason of all - no directory.
-            if tmp and os.path.exists(tmp):
-                os.remove(tmp)
-        except OSError as _exc:
-            crashlog.note(_exc, "jsonfile")
         return str(e)

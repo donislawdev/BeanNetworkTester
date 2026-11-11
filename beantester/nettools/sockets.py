@@ -63,11 +63,15 @@ class Socket(NamedTuple):
     pid: int | None
     proc: str                   # "" when no process owns it or it could not be named
     change: str = ""            # NEW or CLOSED while the table should point at it
-    at: float | None = None     # time.time() it appeared or closed; None = there
-                                # since the first read of this window
+    at: float | None = None     # time.time() of that change, while ``change`` says
+                                # one; None otherwise
     created: float | None = None    # time.time() of its bind, as the system says it
                                     # (``portmap.SocketRow.created``; Windows only)
     service: str = ""           # the service a service host runs it for (_sockets)
+    seen_at: float | None = None    # time.time() of the read that first saw it; None =
+                                    # there at the window's first read, or a TIME_WAIT
+                                    # row (``_tail``). What "opened" shows where the
+                                    # system keeps no bind time (Linux).
 
 
 # How a row that changed is marked (``Socket.change``); the window colours by it.
@@ -94,7 +98,8 @@ SERVICES_PER_READ = 400
 
 
 class Mark(NamedTuple):
-    """The point "Mark now" set: what was open then, and what has closed since.
+    """The point the "Opened or closed" view counts from: what was open then, and
+    what has closed since. The window's first read sets one, and "Mark now" moves it.
 
     ``closed`` keeps each socket that closed after the mark until the next mark -
     not MARK_S like the table's own closed rows - because "what did my program
@@ -105,6 +110,7 @@ class Mark(NamedTuple):
     keys: frozenset             # the sockets open then (their keys)
     closed: tuple = ()          # Sockets that closed since, marked CLOSED
     dropped: int = 0
+    asked: bool = False         # set by "Mark now", not by the first read
 
 
 class Carry(NamedTuple):
@@ -112,7 +118,9 @@ class Carry(NamedTuple):
     names: dict                 # pid -> name, for the PIDs of that read's table
     named_at: float             # time.monotonic() of the process snapshot behind them
     last: dict                  # key -> Socket, the open sockets of that read
-    seen: dict                  # key -> (time.time(), time.monotonic()) it appeared
+    seen: dict                  # key -> (time.time(), time.monotonic()) its row appeared,
+                                # time.time() its socket was first seen (None: at the
+                                # first read; another row's, ``_reshaped``)
     closed: tuple               # ((Socket, time.monotonic() it closed), ...)
     mark: Mark | None = None    # set by "Mark now", kept until the next one
     services: dict | None = None    # key -> service, for the service hosts' sockets
@@ -172,7 +180,9 @@ def read(previous=None, fresh_names=True, mark=False):
     that reads itself; a read somebody asked for names everything again.
     ``mark=True`` sets the mark ("Mark now") on THIS read's sockets: on a fresh
     read, not the last one the window has - that may be minutes old, and what
-    opened since would count as opened after the click.
+    opened since would count as opened after the click. A first read (no
+    ``previous``) sets one by itself, not ``asked``: the window counts what opens
+    and closes from its first look until "Mark now" moves it.
 
     ``Unreadable`` when no table can be read at all: an empty table would say "no
     sockets", which nobody here could know. Anything else that fails is the
@@ -250,29 +260,61 @@ def _changes(live, carry, failed, now, mark=False):
     wall, monotonic = now
     current = {socket.key: socket for socket in live}
     if carry is None:
-        # The first read: everything was simply there.
+        # The first read: everything was simply there, and what opens or closes
+        # from now on is "opened or closed" - a mark of its own, until "Mark now".
         return live, Carry({}, monotonic, current, {}, (),
-                           Mark(wall, frozenset(current)) if mark else None)
+                           Mark(wall, frozenset(current), asked=mark))
     unread = {key: socket for key, socket in carry.last.items()
               if key not in current and _table(socket) in failed}
     known = current.keys() | unread.keys()
+    arrived = _arrivals(current, carry.last)
+    fresh, firsts = [], {}
+    for key, socket in carry.last.items():
+        if key in known or _tail(socket):
+            continue
+        if _reshaped(socket, arrived):
+            # The same socket under another row: it keeps the time it was first seen
+            firsts[_place(socket)] = _first(carry.seen.get(key))
+        else:
+            fresh.append(_closed(socket, wall, carry.seen.get(key)))
     seen = {key: at for key, at in carry.seen.items() if key in known}
     for key in current.keys() - carry.last.keys() - seen.keys():
-        seen[key] = now
+        seen[key] = (wall, monotonic, firsts.get(_place(current[key]), wall))
     closed = [(socket, at) for socket, at in carry.closed
               if monotonic - at < MARK_S and socket.key not in current]
-    arrived = _arrivals(current, carry.last)
-    fresh = [socket._replace(change=CLOSED, at=wall) for key, socket in carry.last.items()
-             if key not in known and not _reshaped(socket, arrived)]
     closed = (closed + [(socket, monotonic) for socket in fresh])[-MAX_CLOSED:]
     shown = [_marked(socket, seen.get(socket.key), monotonic) for socket in live]
     shown += [socket for socket, _at in closed]
     last = {**unread, **current}
     # Set on what this read found (the sockets of a table that did not answer
     # included: they are there, only unread), so what closed in it closed before.
-    marked = (Mark(wall, frozenset(last)) if mark
+    marked = (Mark(wall, frozenset(last), asked=True) if mark
               else _still_marked(carry.mark, fresh, current))
     return shown, Carry({}, monotonic, last, seen, tuple(closed), marked)
+
+
+def _tail(socket):
+    """A TCP row no program holds (PID 0, ``portmap._psutil_row`` on Linux too):
+    TIME_WAIT, what a connection that closed leaves behind for a minute or two.
+
+    It is shown - it still holds the port - but it tells nothing: the connection
+    it is left of closed in its program's row, under another key. SEEN 2026-11-11
+    on real Tk: one close read as three changes, "closed" on the program's row,
+    "appeared" on the TIME_WAIT row (an opened connection, to the eye), and
+    "closed" again when that row went. So it neither opens nor closes."""
+    return socket.proto == "TCP" and (socket.pid == 0 or socket.state == "TIME_WAIT")
+
+
+def _first(seen):
+    """The time a socket was first seen, from its ``Carry.seen`` entry (None: there
+    at the first read, which has no entries)."""
+    return seen[2] if seen else None
+
+
+def _closed(socket, wall, seen):
+    """``socket`` marked closed at ``wall``, with the time it was first seen
+    (``seen`` is its ``Carry.seen`` entry, or None)."""
+    return socket._replace(change=CLOSED, at=wall, seen_at=_first(seen))
 
 
 def _still_marked(mark, fresh, current):
@@ -337,17 +379,22 @@ def _reshaped(gone, arrived):
 
 
 def _marked(socket, appeared, monotonic):
-    """``socket`` with the time it appeared, and NEW for MARK_S after it.
+    """``socket`` with the time it was first seen, and NEW for MARK_S after its row
+    appeared - the word and its time go together, as the colour does.
 
-    A row that turns up in TIME_WAIT is not a new socket: it is what a connection
-    that just closed leaves behind (under PID 0, so under another key). It gets
-    its time and no mark - marked, a closed connection would read as an opened one.
+    A socket that got or lost its far end (``_reshaped``) is NEW - the connection
+    is - but was first seen when its earlier row was, or not at all if that was
+    there at the first read: on Linux that time is what "opened" shows.
+
+    A TIME_WAIT row is left as it is (``_tail``): marked, a closed connection would
+    read as an opened one.
     """
-    if appeared is None:
+    if appeared is None or _tail(socket):
         return socket
-    wall, at = appeared
-    fresh = 0 <= monotonic - at < MARK_S and socket.state != "TIME_WAIT"
-    return socket._replace(change=NEW if fresh else "", at=wall)
+    wall, at, first = appeared
+    fresh = 0 <= monotonic - at < MARK_S
+    return socket._replace(change=NEW if fresh else "", at=wall if fresh else None,
+                           seen_at=first)
 
 
 def _sockets(rows, names, known=None, services=None, ask=None):
@@ -499,7 +546,8 @@ _SORT_KEYS = {
     # A service host's sockets together, and by service among them.
     "proc": lambda s, c: (s.proc.lower(), s.service.lower()) if s.proc else None,
     "change": lambda s, c: s.at,
-    "opened": lambda s, c: s.created,
+    # As the column shows it: the bind time, else (Linux) the read that first saw it.
+    "opened": lambda s, c: s.created if s.created is not None else s.seen_at,
 }
 COLUMNS = tuple(_SORT_KEYS)
 
@@ -515,18 +563,18 @@ def sort(sockets, column, reverse=False):
 
 
 # -- which sockets: the "Show" box ------------------------------------------------- #
-ALL, LISTENING, CONNECTED, CHANGED, SINCE_MARK = (
-    "all", "listening", "connected", "changed", "mark")
-SHOWS = (ALL, LISTENING, CONNECTED, CHANGED, SINCE_MARK)
+ALL, LISTENING, CONNECTED, SINCE_MARK = ("all", "listening", "connected", "mark")
+# "Changed" (the rows with a time in the change column) went on 2026-11-11: the
+# first read sets a mark, so "Opened or closed" answers the same from the start and
+# keeps the closed ones, which "Changed" let go after MARK_S.
+SHOWS = (ALL, LISTENING, CONNECTED, SINCE_MARK)
 # 🔴 Listening and connected are told by the far end, never by the state's name:
 # a Windows build was measured giving connected sockets as LISTEN and listeners
 # as CLOSED on most reads (``portmap._tcp4_row``), and the far end is what stays
 # true. UDP has no far end in the system's table, so its sockets listen.
-# Changed: the rows the change column has a time for (``Socket.at``).
 _SHOWN = {ALL: None,
           LISTENING: lambda s: not s.remote_ip,
-          CONNECTED: lambda s: bool(s.remote_ip),
-          CHANGED: lambda s: s.at is not None}
+          CONNECTED: lambda s: bool(s.remote_ip)}
 
 
 def chosen(snapshot, show=ALL):
@@ -535,15 +583,18 @@ def chosen(snapshot, show=ALL):
 
     Since the mark: the open sockets that were not open at the mark, then every
     socket that closed since it - also those older than MARK_S, which the table
-    itself no longer lists. Nothing without a mark. ``total`` counts those closed
-    ones too, so "shown of total" never shows more than all.
+    itself no longer lists. A TIME_WAIT row is neither (``_tail``). Nothing
+    without a mark, which only a window that has read nothing yet lacks.
+    ``total`` counts those closed ones too, so "shown of total" never shows more
+    than all.
     """
     if show == SINCE_MARK:
         mark = snapshot.carry.mark if snapshot.carry is not None else None
         if mark is None:
             return [], len(snapshot.sockets)
         open_now = [s for s in snapshot.sockets if s.change != CLOSED]
-        kept = [s for s in open_now if s.key not in mark.keys] + list(mark.closed)
+        kept = [s for s in open_now if s.key not in mark.keys and not _tail(s)]
+        kept += mark.closed
         return kept, len(open_now) + len(mark.closed)
     keep = _SHOWN.get(show)
     if keep is None:

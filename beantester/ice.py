@@ -310,11 +310,6 @@ def endpoint(ip, port):
     return f"[{ip}]:{port}" if ":" in str(ip) else f"{ip}:{port}"
 
 
-def describe(row):
-    """``LAN 192.168.1.20:50000`` - a path as the event log names it."""
-    return f"{row['ice']} {endpoint(row['remote_ip'], row['remote_port'])}"
-
-
 class _Flow:
     """What one flow has shown so far. Only a flow that carried STUN gets one."""
 
@@ -357,11 +352,12 @@ class IceWatch:
         self._wan = {}          # flowkey -> _Flow labelled WAN: may turn out NAT
         self._paths = {}        # flowkey -> _Flow that is done: the path candidates
         self._next_tick = 0.0
-        self._active = None     # flowkey of the path with the data, or None
+        self._active = None     # far end (``endpoint``) of the path with the data, or None
         self._shown = ""        # how that path was last described
-        self._rival = None      # flowkey leading the active path, and for how long
+        self._rival = None      # far end leading the active path, and for how long
         self._held = 0
         self._quiet_since = None
+        self._was = None        # far end of the path named before "no data"
 
     def clear(self):
         """A new session: every flow, address and path is forgotten."""
@@ -545,7 +541,14 @@ class IceWatch:
     def tick(self, now):
         """The event log's line when the path with the data changed, else ``None``.
 
-        The path is the candidate that delivered the most bytes over the last
+        A path is what the line names: its label and its far end. The flows to one
+        far end are one path, their bytes summed - a call that sends and receives
+        on two connections through one relay, or shares a screen on a connection of
+        its own, has two flows to one TURN server. Told apart by flow, the two took
+        turns leading and the log read "TURN a -> TURN a" several times a minute
+        (2026-11-11, ``internal_tools`` probes ``2026-11-11-ice-events``).
+
+        The path is the far end that delivered the most bytes over the last
         ``WINDOW_TICKS`` ticks, if that is at least ``ACTIVE_BYTES``. Delivered
         (``sent``), not offered: a path this session blocks carries nothing, and the
         timeline shows where the data really went.
@@ -555,28 +558,28 @@ class IceWatch:
         self._next_tick = now + TICK_S
         if not self._paths and self._active is None:
             return None
-        best, best_bytes, active_bytes = None, 0, 0
-        for key, flow in self._paths.items():
-            carried = _carried(flow)
-            if key == self._active:
-                active_bytes = carried
+        ends = _by_far_end(self._paths.values())
+        best, best_bytes = None, 0
+        for end, (carried, _label) in ends.items():
             if carried >= ACTIVE_BYTES and carried > best_bytes:
-                best, best_bytes = key, carried
-        if self._active in self._paths:
+                best, best_bytes = end, carried
+        active = ends.get(self._active)
+        if active is not None:
             # the label can still move from WAN to NAT under a path that is active
-            self._shown = describe(self._paths[self._active].row)
-        return self._decide(now, best, best_bytes, active_bytes)
+            self._shown = f"{active[1]} {self._active}"
+        return self._decide(now, best, ends, active[0] if active is not None else 0)
 
-    def _decide(self, now, best, best_bytes, active_bytes):
+    def _decide(self, now, best, ends, active_bytes):
         if best is None:
             self._rival, self._held = None, 0
             return self._quiet(now)
         self._quiet_since = None
-        # The active path keeps its place while it still carries data, unless the
-        # leader carries more than twice as much: two calls side by side must not
-        # make the path flip every tick.
-        holds = active_bytes >= ACTIVE_BYTES and best_bytes <= 2 * active_bytes
-        if best == self._active or holds:
+        # The named path keeps its place for as long as it carries data. It gave
+        # way to one carrying twice as much, and two flows of one call - audio, and
+        # a screen shared on its own connection - took turns at every burst. A
+        # call that moves leaves nothing on the old path but checks (~100-200 B/s,
+        # far under ACTIVE_BYTES), so the move is still named, a window later.
+        if best == self._active or active_bytes >= ACTIVE_BYTES:
             self._rival, self._held = None, 0
             return None
         if best != self._rival:
@@ -584,9 +587,15 @@ class IceWatch:
         self._held += 1
         if self._held < SWITCH_TICKS:
             return None
-        new = describe(self._paths[best].row)
-        text = f"ICE path: {new}" if self._active is None else f"ICE path: {self._shown} -> {new}"
-        self._active, self._shown = best, new
+        new = f"{ends[best][1]} {best}"
+        if self._active is not None:
+            text = f"ICE path: {self._shown} -> {new}"
+        elif best == self._was:
+            # After "no data": the same path again, not a new choice of one.
+            text = f"ICE path: data again on {new}"
+        else:
+            text = f"ICE path: {new}"
+        self._active, self._shown, self._was = best, new, None
         self._rival, self._held = None, 0
         return text
 
@@ -598,8 +607,25 @@ class IceWatch:
         if now - self._quiet_since < QUIET_S:
             return None
         text = f"ICE path: no data (was {self._shown})"
+        self._was = self._active
         self._active, self._shown, self._quiet_since = None, "", None
         return text
+
+
+def _by_far_end(flows):
+    """``{far end: (bytes carried, label)}`` over the path candidates ``flows``, this
+    tick's sample taken (``_carried``). The label is that of the flow that carried
+    the most: flows to one far end share it, but a label moves up flow by flow."""
+    ends = {}
+    for flow in flows:
+        row = flow.row
+        end = endpoint(row["remote_ip"], row["remote_port"])
+        carried = _carried(flow)
+        total, label, most = ends.get(end, (0, row["ice"], -1))
+        if carried > most:
+            label, most = row["ice"], carried
+        ends[end] = (total + carried, label, most)
+    return {end: (total, label) for end, (total, label, _most) in ends.items()}
 
 
 def _carried(flow):

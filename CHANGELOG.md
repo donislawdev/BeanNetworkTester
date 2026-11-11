@@ -8,9 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 ### Added
 
 - **Tools: more from the Sockets table.** "Show" lists only the sockets that are listening, the
-  connections, the ones that changed, or the ones since the mark: press "Mark now", then start
-  your program, to see what it opens and closes. The new "opened" column says when a program
-  opened its socket (Windows only), and svchost.exe shows the service it runs for, such as
+  connections, or the ones that opened or closed since the tab was first read. Press "Mark
+  now", then start your program, to see what it opens and closes. The new "opened" column
+  says when a program opened its socket (on Linux, when the table first saw it), and
+  svchost.exe shows the service it runs for, such as
   `svchost.exe (Dnscache)`. "Save CSV" writes the rows on screen to a file, and the row menu
   can reset a connection, as on the Connections page.
 
@@ -30,19 +31,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 - **Tools: the Sockets table can refresh itself.** Tick "Refresh automatically" and choose
   1, 2 or 5 seconds. It then reads itself while the tab is on screen: on another tab, or
-  with the window minimized, nothing is read. A socket that appeared is highlighted for a
-  few seconds, one that closed stays for a few seconds, greyed, and the new "change" column
-  gives the time of either. Click its header for the latest changes first. A connection that
-  opens and closes between two reads is never shown. With tens of thousands of sockets it
-  reads less often.
+  with the window minimized, nothing is read. A socket that appeared is green for a few
+  seconds, "new" in the new "change" column, and one that closed stays a few seconds,
+  grey, "closed" and the time. A TIME_WAIT row, what a closed connection
+  leaves behind, is neither. A connection open only between two reads is never shown.
+  With tens of thousands of sockets it reads less often.
 
 - **Tools: NAT and STUN, how this network's router treats a call.** Press **Start** and in a
   few seconds the table shows this computer's public address, whether the router keeps one
-  public port for every server, whether two devices behind it reach each other through that
-  address, and on which transports a TURN server answers. When the run ends, a line above
-  the table says what it can mean for a call. The servers can be changed (Cloudflare's are
-  filled in). Nothing is sent before Start, and the About window and `--license` name the
-  tool among what the program sends.
+  public port for every server, whether devices behind it reach each other through it, and
+  on which transports a TURN server answers. A line above the table then says what it can
+  mean for a call. Right-click a row to copy the public address. The servers can be changed
+  from Cloudflare's. Nothing goes out before Start, and About and `--license`
+  list the tool among what the program sends.
 
 - **NAT and STUN asks the TURN server over TLS too.** The TURN rows include TLS on 5349 and
   443 (and on a typed port), with the server's certificate checked the way a call app checks
@@ -59,10 +60,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   `ice:turn` to see the relays only. A TURN relay over TCP or TLS is not recognised.
 
 - **The event log says when a call moves to another path.** A PATH entry, for example
-  `ICE path: LAN 192.168.0.20:50000 -> TURN 203.0.113.10:3478`, names the connection that
-  now carries the call's data, and the reproduction report has it too. A path the session
-  blocks delivers nothing, so it is never the one named. A call that was already going when
-  the session started gets its labels a few seconds later, through a relay too.
+  `ICE path: LAN 192.168.0.20:50000 -> TURN 203.0.113.10:3478`, names the path that now
+  carries the call's data, also in the reproduction report. A path is the address and port
+  at the other end, so two connections to one relay port are one path. The entry also says
+  when data stops and comes back. A path the session blocks is never named: it delivers
+  nothing. A call already going when the session started gets its labels a few seconds
+  later, through a relay too.
 
 - **The ICE column in the CSV, in `--log-conns` and in a saved column layout.** The
   connections CSV has a new last column, `ice`, and `--log-conns` ends the line of such a
@@ -113,6 +116,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   advance, and followed a link someone had placed under that name. With the rights the program
   runs with, that could overwrite another file. Each save now creates a temporary file of its
   own.
+
+- **Linux: under sudo, saving settings can no longer be redirected into another file.** The
+  window state, profiles, saved configurations and reproduction reports were
+  written through a temporary file that was handed to you and then opened again by its name.
+  Any program running under your account could swap it for a link in between, and this
+  program, running as root, wrote through that link. Each save now writes the file first and
+  hands it to you after.
 
 - **"Show only the targeted traffic" counts only the packets in scope.** After the target
   changed during a session, the downloaded and uploaded figures, the chart and the CSV kept

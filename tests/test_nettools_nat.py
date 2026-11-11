@@ -1151,3 +1151,20 @@ def test_the_receive_loop_waits_on_only_for_errors_about_an_earlier_datagram():
     with pytest.raises(OSError):
         broken.receive(5.0)
     assert broken.sock.calls == 1, "raised at the first one, not spun on"
+
+
+def test_the_public_address_is_the_public_row_s_address_alone():
+    """What "Copy public address" copies: the address, without the port - that one
+    belonged to a socket of the run - and nothing when the run found none."""
+    found = nat.Step("public", nat.OK, "tools.nat.result.address", "tools.nat.detail.port_kept",
+                     (("address", "203.0.113.7"), ("port", 40000), ("local", "192.168.1.5")))
+    own = nat.Step("public", nat.OK, "tools.nat.result.address", nat.DETAIL_NO_NAT,
+                   (("address", "2001:db8::5"), ("port", 40000)))
+    failed = nat.Step("public", nat.FAIL, "tools.nat.result.no_answer", nat.DETAIL_NO_STUN,
+                      (("s", 3),))
+    mapping = nat.Step("mapping", nat.OK, "tools.nat.result.independent",
+                       "tools.nat.detail.independent", (("address", "198.51.100.1"),))
+    assert nat.public_address([mapping, found]) == "203.0.113.7"
+    assert nat.public_address([own]) == "2001:db8::5", "no NAT: still this network's address"
+    assert nat.public_address([failed, mapping]) is None
+    assert nat.public_address([]) is None

@@ -212,9 +212,11 @@ MUTATIONS = [
         # The name that shipped: derived from the target, so two writers of one
         # file are two writers of one temp file. This is not an invented break.
         "label": "jsonfile: the temp file gets a predictable name again",
-        "file": "beantester/jsonfile.py",
-        "old": "        tmp = temp_beside(path)",
-        "new": '        tmp = f"{path}.tmp"',
+        "file": "beantester/paths.py",
+        "old": ("        handle, tmp = tempfile.mkstemp(dir=directory, prefix=name + \".\", "
+                "suffix=\".tmp\")\n"),
+        "new": ("        tmp = path + \".tmp\"\n"
+                "        handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)\n"),
         "test": "test_two_writers_do_not_share_one_temp_file",
     },
     {
@@ -229,8 +231,10 @@ MUTATIONS = [
     {
         "label": "paths: two copies migrate through one temp file again",
         "file": "beantester/paths.py",
-        "old": "            tmp = temp_beside(dst)",
-        "new": '            tmp = dst + ".tmp"',
+        "old": ("        handle, tmp = tempfile.mkstemp(dir=directory, prefix=name + \".\", "
+                "suffix=\".tmp\")\n"),
+        "new": ("        tmp = path + \".tmp\"\n"
+                "        handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)\n"),
         "test": "test_two_copies_migrating_at_once_do_not_share_one_temp_file",
     },
     {
@@ -1095,7 +1099,7 @@ MUTATIONS = [
         # once, and an entry that fells a crowd proves nothing about any one of them.
         "label": "ratchet: the nesting crowd count is frozen looser than the measurement",
         "file": "tests/test_code_shape.py",
-        "old": "DEPTHS_NEAR_CEILING = 6         # make_gear_icon at 5, five more at 4",
+        "old": "DEPTHS_NEAR_CEILING = 5         # make_gear_icon at 5, four more at 4",
         "new": "DEPTHS_NEAR_CEILING = 20        # make_gear_icon at 5, eleven more at 4",
         "test": "test_the_depth_ceiling_and_its_count_are_not_set_so_loosely_they_never_fire",
     },
@@ -2604,9 +2608,11 @@ MUTATIONS = [
         # Written from the GUI tick, so the shared name is 1.4 chances a second
         # for as long as two windows are open.
         "label": "crashlog: the breadcrumb temp file gets a predictable name again",
-        "file": "beantester/crashlog.py",
-        "old": "        tmp = temp_beside(path)",
-        "new": '        tmp = path + ".tmp"',
+        "file": "beantester/paths.py",
+        "old": ("        handle, tmp = tempfile.mkstemp(dir=directory, prefix=name + \".\", "
+                "suffix=\".tmp\")\n"),
+        "new": ("        tmp = path + \".tmp\"\n"
+                "        handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)\n"),
         "test": "test_two_breadcrumb_writers_do_not_share_one_temp_file",
     },
     {
@@ -5145,8 +5151,8 @@ MUTATIONS = [
         # as corrupt by their next start.
         "label": "sudo files: an atomic write publishes root's temp file",
         "file": "beantester/paths.py",
-        "old": "    os.close(fd)\n    hand_back(tmp)\n    return tmp\n",
-        "new": "    os.close(fd)\n    return tmp\n",
+        "old": "        hand_back(made[0])\n        os.replace(made[0], path)\n",
+        "new": "        os.replace(made[0], path)\n",
         "test": "test_every_atomic_write_publishes_a_file_that_is_theirs",
     },
     {
@@ -7832,7 +7838,7 @@ MUTATIONS = [
         "label": "crashlog: a temp breadcrumb exists before its text does",
         "file": "beantester/crashlog.py",
         "old": "        text = json.dumps(payload, ensure_ascii=False, indent=2)\n",
-        "new": "        temp_beside(os.path.join(directory, BREADCRUMB_NAME))\n"
+        "new": "        write_atomically(os.path.join(directory, BREADCRUMB_NAME), lambda f: None)\n"
                "        text = json.dumps(payload, ensure_ascii=False, indent=2)\n",
         "test": "test_a_state_json_cannot_hold_never_creates_a_file",
     },
@@ -10429,16 +10435,53 @@ MUTATIONS = [
     {
         "label": "sockets: a socket that appeared stays marked for ever",
         "file": "beantester/nettools/sockets.py",
-        "old": "    fresh = 0 <= monotonic - at < MARK_S and ",
-        "new": "    fresh = True and ",
+        "old": "    fresh = 0 <= monotonic - at < MARK_S\n",
+        "new": "    fresh = True\n",
         "test": "test_a_socket_that_appears_is_marked_with_its_time_and_only_for_a_while",
     },
     {
-        "label": "sockets: a TIME_WAIT row that turns up is marked new",
+        # The colour went after seconds and "appeared <time>" stayed for good.
+        "label": "sockets: the change's time outlives its word",
         "file": "beantester/nettools/sockets.py",
-        "old": " and socket.state != \"TIME_WAIT\"\n",
-        "new": "\n",
-        "test": "test_a_row_that_turns_up_in_time_wait_is_not_a_new_socket",
+        "old": "    return socket._replace(change=NEW if fresh else \"\", at=wall if fresh else None,\n",
+        "new": "    return socket._replace(change=NEW if fresh else \"\", at=wall,\n",
+        "test": "test_a_socket_that_appears_is_marked_with_its_time_and_only_for_a_while",
+    },
+    {
+        # One close read as three changes on real Tk.
+        "label": "sockets: a TIME_WAIT row opens and closes like a socket",
+        "file": "beantester/nettools/sockets.py",
+        "old": "    return socket.proto == \"TCP\" and (socket.pid == 0 or socket.state == \"TIME_WAIT\")\n",
+        "new": "    return False\n",
+        "test": "test_one_close_is_one_change_and_its_time_wait_row_tells_nothing",
+    },
+    {
+        "label": "sockets: a TIME_WAIT row counts as opened since the mark",
+        "file": "beantester/nettools/sockets.py",
+        "old": "        kept = [s for s in open_now if s.key not in mark.keys and not _tail(s)]\n",
+        "new": "        kept = [s for s in open_now if s.key not in mark.keys]\n",
+        "test": "test_one_close_is_one_change_and_its_time_wait_row_tells_nothing",
+    },
+    {
+        "label": "sockets: the first read sets no mark",
+        "file": "beantester/nettools/sockets.py",
+        "old": "                           Mark(wall, frozenset(current), asked=mark))\n",
+        "new": "                           Mark(wall, frozenset(current), asked=mark) if mark else None)\n",
+        "test": "test_the_first_read_sets_a_mark_nobody_asked_for",
+    },
+    {
+        "label": "sockets: a closed row forgets when it was first seen",
+        "file": "beantester/nettools/sockets.py",
+        "old": "    return socket._replace(change=CLOSED, at=wall, seen_at=_first(seen))\n",
+        "new": "    return socket._replace(change=CLOSED, at=wall)\n",
+        "test": "test_a_socket_seen_arriving_keeps_that_time_once_it_has_closed",
+    },
+    {
+        "label": "sockets: opened sorts by the bind time only, not as it is shown",
+        "file": "beantester/nettools/sockets.py",
+        "old": "    \"opened\": lambda s, c: s.created if s.created is not None else s.seen_at,\n",
+        "new": "    \"opened\": lambda s, c: s.created,\n",
+        "test": "test_the_opened_column_falls_back_to_the_read_that_first_saw_a_socket",
     },
     {
         "label": "sockets: a closed socket stays listed for ever",
@@ -10494,8 +10537,8 @@ MUTATIONS = [
     {
         "label": "sockets: a socket that got its far end is called closed",
         "file": "beantester/nettools/sockets.py",
-        "old": "             if key not in known and not _reshaped(socket, arrived)]\n",
-        "new": "             if key not in known]\n",
+        "old": "        if _reshaped(socket, arrived):\n",
+        "new": "        if False:\n",
         "test": "test_a_socket_that_gets_its_far_end_did_not_close",
     },
     {
@@ -11247,16 +11290,19 @@ MUTATIONS = [
     },
     {
         "label": "menu entry: two installs share one temporary file",
-        "file": "beantester/desktop.py",
-        "old": "        temporary = paths.temp_beside(target)\n",
-        "new": "        temporary = target + \".tmp\"\n",
+        "file": "beantester/paths.py",
+        "old": ("        handle, tmp = tempfile.mkstemp(dir=directory, prefix=name + \".\", "
+                "suffix=\".tmp\")\n"),
+        "new": ("        tmp = path + \".tmp\"\n"
+                "        handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)\n"),
         "test": "test_a_failed_write_takes_away_its_own_temporary_file_only",
     },
     {
         "label": "menu entry: a failed write leaves its temporary file",
-        "file": "beantester/desktop.py",
-        "old": "                os.unlink(temporary)\n",
-        "new": "                pass\n",
+        "file": "beantester/paths.py",
+        "old": ("            with crashlog.quiet(\"paths.write_atomically\"):\n"
+                "                os.remove(made[0])\n"),
+        "new": "            pass\n",
         "test": "test_a_failed_write_takes_away_its_own_temporary_file_only",
     },
     {
@@ -11786,11 +11832,33 @@ MUTATIONS = [
         "test": "test_a_path_has_to_lead_twice_in_a_row",
     },
     {
-        "label": "ice: the active path flips on any lead, however small",
+        "label": "ice: the named path gives way while it still carries data",
         "file": "beantester/ice.py",
-        "old": "        holds = active_bytes >= ACTIVE_BYTES and best_bytes <= 2 * active_bytes\n",
-        "new": "        holds = False\n",
-        "test": "test_two_paths_with_data_do_not_flip_on_a_lead_under_twice",
+        "old": "        if best == self._active or active_bytes >= ACTIVE_BYTES:\n",
+        "new": "        if best == self._active:\n",
+        "test": "test_the_named_path_keeps_its_place_while_it_carries_data",
+    },
+    {
+        # "TURN a -> TURN a" at every burst of a call's second connection to one relay.
+        "label": "ice: each flow is a path of its own, not each far end",
+        "file": "beantester/ice.py",
+        "old": "        end = endpoint(row[\"remote_ip\"], row[\"remote_port\"])\n",
+        "new": "        end = (endpoint(row[\"remote_ip\"], row[\"remote_port\"]), id(flow))\n",
+        "test": "test_two_flows_to_one_relay_are_one_path",
+    },
+    {
+        "label": "ice: the flows to one far end are not summed",
+        "file": "beantester/ice.py",
+        "old": "        ends[end] = (total + carried, label, most)\n",
+        "new": "        ends[end] = (max(total, carried), label, most)\n",
+        "test": "test_two_flows_to_one_far_end_are_summed",
+    },
+    {
+        "label": "ice: data back on the same path reads as a new choice",
+        "file": "beantester/ice.py",
+        "old": "        self._was = self._active\n",
+        "new": "",
+        "test": "test_data_again_on_the_same_path_says_so",
     },
     {
         "label": "ice: the timeline counts offered bytes instead of delivered ones",
@@ -11803,6 +11871,7 @@ MUTATIONS = [
         "label": "ice: data that stops is never said to have stopped",
         "file": "beantester/ice.py",
         "old": "        text = f\"ICE path: no data (was {self._shown})\"\n"
+               "        self._was = self._active\n"
                "        self._active, self._shown, self._quiet_since = None, \"\", None\n"
                "        return text\n",
         "new": "        return None\n",
@@ -12495,6 +12564,28 @@ MUTATIONS = [
         "test": "test_a_run_stopped_after_one_failed_turn_transport_does_not_say_no_turn",
     },
     {
+        "label": "nat panel: Copy public address offered before there is one",
+        "file": "beantester/gui/toolbox/nat.py",
+        "old": "        popup(self.menu, {COPY_ADDRESS: nat.public_address(self.runner.rows) is not None,\n",
+        "new": "        popup(self.menu, {COPY_ADDRESS: True,\n",
+        "test": "test_the_row_menu_copies_the_public_address_without_logging_it",
+    },
+    {
+        # The log is what goes with a bug report.
+        "label": "nat panel: the copied public address is written to the log",
+        "file": "beantester/gui/toolbox/nat.py",
+        "old": "            copy_confirmed(self.app, address, T(\"tools.nat.address_logged\"), AREA)\n",
+        "new": "            copy_confirmed(self.app, address, address, AREA)\n",
+        "test": "test_the_row_menu_copies_the_public_address_without_logging_it",
+    },
+    {
+        "label": "nat: the public address is taken from a row that has none",
+        "file": "beantester/nettools/nat.py",
+        "old": "        if row.test == \"public\" and row.result == \"tools.nat.result.address\":\n",
+        "new": "        if row.result == \"tools.nat.result.address\" or row.test == \"mapping\":\n",
+        "test": "test_the_public_address_is_the_public_row_s_address_alone",
+    },
+    {
         "label": "nat panel: closing the window does not stop the run",
         "file": "beantester/gui/toolbox/nat.py",
         "old": "    if runner is not None:\n        runner.stop()\n",
@@ -13003,17 +13094,10 @@ MUTATIONS = [
         "test": "test_listening_and_connected_are_told_by_the_far_end_not_by_the_state",
     },
     {
-        "label": "sockets: changed keeps only the rows still marked",
-        "file": "beantester/nettools/sockets.py",
-        "old": "          CHANGED: lambda s: s.at is not None}\n",
-        "new": "          CHANGED: lambda s: bool(s.change)}\n",
-        "test": "test_changed_keeps_the_rows_the_change_column_has_a_time_for",
-    },
-    {
         "label": "sockets: the mark shows nothing that closed",
         "file": "beantester/nettools/sockets.py",
-        "old": "        kept = [s for s in open_now if s.key not in mark.keys] + list(mark.closed)\n",
-        "new": "        kept = [s for s in open_now if s.key not in mark.keys]\n",
+        "old": "        kept += mark.closed\n",
+        "new": "",
         "test": "test_what_closed_since_the_mark_stays_until_the_next_mark",
     },
     {
@@ -13026,8 +13110,8 @@ MUTATIONS = [
     {
         "label": "sockets: the mark forgets the sockets of a table that did not answer",
         "file": "beantester/nettools/sockets.py",
-        "old": "    marked = (Mark(wall, frozenset(last)) if mark\n",
-        "new": "    marked = (Mark(wall, frozenset(current)) if mark\n",
+        "old": "    marked = (Mark(wall, frozenset(last), asked=True) if mark\n",
+        "new": "    marked = (Mark(wall, frozenset(current), asked=True) if mark\n",
         "test": "test_a_table_that_did_not_answer_at_the_mark_brings_nothing_new_when_it_does",
     },
     {
@@ -13110,9 +13194,45 @@ MUTATIONS = [
     {
         "label": "sockets: the opened column sorts by something else",
         "file": "beantester/nettools/sockets.py",
-        "old": "    \"opened\": lambda s, c: s.created,\n",
+        "old": "    \"opened\": lambda s, c: s.created if s.created is not None else s.seen_at,\n",
         "new": "    \"opened\": lambda s, c: s.at,\n",
         "test": "test_the_opened_column_sorts_by_the_bind_time_with_unknown_last",
+    },
+    {
+        "label": "sockets panel: a new row has no word beside its colour",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "    if s.change == sockets.NEW:\n        return T(NEW_WORD)\n",
+        "new": "",
+        "test": "test_a_socket_that_appears_or_closes_is_marked_in_the_table",
+    },
+    {
+        "label": "sockets panel: Linux shows no opened time for a socket seen arriving",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "        return \"\" if seen is None else T(OPENED_SEEN, time=_day_or_time(seen, now))\n",
+        "new": "        return \"\"\n",
+        "test": "test_a_service_hosts_socket_shows_its_service_and_a_socket_says_when_it_opened",
+    },
+    {
+        "label": "sockets panel: the status line says Done, not Read",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "        if not self.live.get():\n            self.status.label.config(",
+        "new": "        if not self.live.get():\n            self.status.show(read)\n"
+               "            return\n            self.status.label.config(",
+        "test": "test_the_table_reads_by_itself_only_while_it_is_looked_at",
+    },
+    {
+        "label": "sockets panel: the first read's mark reads as a click",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "            key = \"tools.sockets.note_mark\" if mark.asked else \"tools.sockets.note_since_first\"\n",
+        "new": "            key = \"tools.sockets.note_mark\"\n",
+        "test": "test_mark_now_reads_marks_and_shows_what_opened_and_closed_since",
+    },
+    {
+        "label": "sockets csv: closed_at is written for a socket still open",
+        "file": "beantester/gui/csv_export.py",
+        "old": "_stamp(s.at if s.change == CLOSED else None))]\n",
+        "new": "_stamp(s.at))]\n",
+        "test": "test_a_socket_row_says_when_it_was_first_seen_and_when_it_closed",
     },
     {
         "label": "portmap: a bind time of 0 reads as 1601",
@@ -13219,10 +13339,10 @@ MUTATIONS = [
         "test": "test_mark_now_reads_marks_and_shows_what_opened_and_closed_since",
     },
     {
-        "label": "sockets panel: no word on what to press when nothing is marked",
+        "label": "sockets panel: nothing opened or closed reads as a search that found nothing",
         "file": "beantester/gui/toolbox/sockets.py",
-        "old": "        if view.show == sockets.SINCE_MARK and mark is None:\n",
-        "new": "        if False:\n",
+        "old": "        elif view.show == sockets.SINCE_MARK and not view.query:\n",
+        "new": "        elif False:\n",
         "test": "test_mark_now_reads_marks_and_shows_what_opened_and_closed_since",
     },
     {
@@ -13256,8 +13376,8 @@ MUTATIONS = [
     {
         "label": "csv: the sockets file writes raw clock numbers",
         "file": "beantester/gui/csv_export.py",
-        "old": "        _stamp(s.created), s.change, _stamp(s.at))]\n",
-        "new": "        s.created, s.change, s.at)]\n",
+        "old": "        _stamp(s.created), _stamp(s.seen_at), _stamp(s.at if s.change == CLOSED else None))]\n",
+        "new": "        s.created, s.seen_at, s.at)]\n",
         "test": "test_save_csv_writes_the_rows_on_screen_as_they_are_and_reads_nothing",
     },
     {
@@ -13269,17 +13389,35 @@ MUTATIONS = [
     },
     {
         "label": "csv: a failed export leaves its half-written file beside the real one",
-        "file": "beantester/gui/csv_export.py",
-        "old": "        with crashlog.quiet(\"gui.csv_export\"):\n            os.remove(tmp)\n",
-        "new": "        pass\n",
+        "file": "beantester/paths.py",
+        "old": ("            with crashlog.quiet(\"paths.write_atomically\"):\n"
+                "                os.remove(made[0])\n"),
+        "new": "            pass\n",
         "test": "test_a_csv_is_written_under_a_name_of_its_own_and_never_through_a_link",
     },
     {
-        "label": "sudo files: the CSV exports' file stays root's",
-        "file": "beantester/gui/csv_export.py",
-        "old": "        hand_back(tmp)\n        os.replace(tmp, path)\n",
-        "new": "        os.replace(tmp, path)\n",
+        "label": "sudo files: every atomic write's file stays root's",
+        "file": "beantester/paths.py",
+        "old": "        hand_back(made[0])\n        os.replace(made[0], path)\n",
+        "new": "        os.replace(made[0], path)\n",
         "test": "test_every_place_that_makes_a_file_hands_it_back",
+    },
+    {
+        # The race found in the review round of #325 (2026-11-11): handed back, then
+        # opened again BY NAME - the person behind sudo could swap in a link first.
+        "label": "sudo files: the temp file is reopened by name after its hand-back",
+        "file": "beantester/paths.py",
+        "old": ("        with (open(directory, \"wb\", opener=make_temp) if binary\n"
+                "              else open(directory, \"w\", encoding=\"utf-8\", newline=newline,\n"
+                "                        opener=make_temp)) as f:\n"
+                "            write(f)\n"
+                "        hand_back(made[0])\n"),
+        "new": ("        os.close(make_temp(None, None))\n"
+                "        hand_back(made[0])\n"
+                "        with open(made[0], \"wb\" if binary else \"w\", encoding=None if binary "
+                "else \"utf-8\", newline=None if binary else newline) as f:\n"
+                "            write(f)\n"),
+        "test": "test_a_link_planted_after_the_hand_back_is_never_written_through",
     },
     {
         "label": "sockets: a socket open at the mark keeps its key when it closes",

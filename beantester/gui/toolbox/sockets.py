@@ -89,14 +89,17 @@ MIN_CHARS = {"proto": CHARS["proto"], "local_ip": CHARS["address"],
              "remote_port": CHARS["port"], "state": CHARS["tcp_state"],
              "pid": CHARS["pid"], "proc": CHARS["process"], "change": CHARS["tcp_state"],
              "opened": CHARS["tcp_state"]}
-# What the change column says, by ``Socket.change``; any other row that has a time
-# appeared earlier and is no longer pointed at.
-APPEARED, CLOSED_AT = "tools.sockets.appeared_at", "tools.sockets.closed_at"
+# What the change column says, by ``Socket.change`` - for exactly as long as the
+# row has that change's colour (``SOCKET_COLORS``), so the word explains the colour.
+# It said "appeared <time>" for good while the colour went after seconds, next to an
+# "opened" column a second apart: two times and a colour that did not match.
+NEW_WORD, CLOSED_AT = "tools.sockets.new", "tools.sockets.closed_at"
+# "opened" where the system keeps no bind time: the read that first saw the socket.
+OPENED_SEEN = "tools.sockets.opened_seen"
 # The "Show" box: what each choice reads as.
 SHOW_TEXT = {sockets.ALL: "tools.sockets.show_all",
              sockets.LISTENING: "tools.sockets.show_listening",
              sockets.CONNECTED: "tools.sockets.show_connected",
-             sockets.CHANGED: "tools.sockets.show_changed",
              sockets.SINCE_MARK: "tools.sockets.show_mark"}
 
 READ, VIEW = "read", "view"
@@ -119,11 +122,13 @@ def clock(at):
 
 
 def change_text(s):
-    """The change column: when the socket appeared or closed, "" for one that was
-    there at the window's first read."""
-    if s.at is None:
-        return ""
-    return T(CLOSED_AT if s.change == sockets.CLOSED else APPEARED, time=clock(s.at))
+    """The change column: "new", or "closed" and when, while the row is coloured for
+    it; "" otherwise."""
+    if s.change == sockets.NEW:
+        return T(NEW_WORD)
+    if s.change == sockets.CLOSED:
+        return T(CLOSED_AT, time=clock(s.at))
+    return ""
 
 
 def seconds_text(seconds):
@@ -134,12 +139,17 @@ def show_text(which):
     return T(SHOW_TEXT.get(which, SHOW_TEXT[sockets.ALL]))
 
 
-def opened_text(created, now=None):
+def opened_text(created, now=None, seen=None):
     """When the socket was bound: the time for one bound today, the date and time
-    for an older one, "" where the system does not say (Linux)."""
+    for an older one. Where the system does not say (Linux): "~" and the time of the
+    read that first saw it (``Socket.seen_at``), and "" for one there at the first."""
     if created is None:
-        return ""
-    when = time.localtime(created)
+        return "" if seen is None else T(OPENED_SEEN, time=_day_or_time(seen, now))
+    return _day_or_time(created, now)
+
+
+def _day_or_time(at, now=None):
+    when = time.localtime(at)
     today = time.localtime(time.time() if now is None else now)
     if (when.tm_year, when.tm_yday) == (today.tm_year, today.tm_yday):
         return time.strftime("%H:%M:%S", when)
@@ -157,7 +167,8 @@ def proc_text(s):
 def render(s):
     """One row's cells, in ``COLUMNS`` order. Called only for the rows on screen."""
     return (proc_text(s), "" if s.pid is None else s.pid, s.proto, s.local_ip,
-            s.local_port, s.state, opened_text(s.created), change_text(s), s.remote_ip,
+            s.local_port, s.state, opened_text(s.created, seen=s.seen_at), change_text(s),
+            s.remote_ip,
             "" if s.remote_port is None else s.remote_port)
 
 
@@ -265,9 +276,10 @@ class SocketsPanel:
                                   numeric=NUMERIC, centered=CENTERED, tags=SOCKET_COLORS,
                                   empty_text="tools.common.working")
         self.table.start_reversed = NEWEST_FIRST
-        make_room(self.table, {"change": [T(key, time=clock(0))
-                                          for key in (APPEARED, CLOSED_AT)],
-                               "opened": [opened_text(0, now=86_400 * 365)]})
+        a_year_on = 86_400 * 365
+        make_room(self.table, {"change": [T(NEW_WORD), T(CLOSED_AT, time=clock(0))],
+                               "opened": [opened_text(0, now=a_year_on),
+                                          opened_text(None, now=a_year_on, seen=0)]})
         self._build_menu()
 
         self.poller = Poller(self.frame, self.job, self._on_outcome)
@@ -279,7 +291,7 @@ class SocketsPanel:
             self._show(latest)
         read = self.job.last.get(READ)
         if read is not None:
-            self.status.show(read)
+            self._say(read)
             if read.error:
                 self._show_failure()
         if self.job.busy():
@@ -538,9 +550,14 @@ class SocketsPanel:
 
     def _say(self, read):
         """The status line for a read: when it was, and when the next one comes if
-        the table reads itself."""
-        if read.error or not self.live.get():
+        the table reads itself. "Read at", not the other tools' "Done at": the rows
+        are a reading of the machine, and the table that reads itself says "Read" too."""
+        if read.error:
             self.status.show(read)
+            return
+        if not self.live.get():
+            self.status.label.config(text=T("tools.sockets.status_read", time=clock(read.finished),
+                                            ms=read.elapsed_ms), style="Muted.TLabel")
             return
         # To a tenth of a second, and "slow" only when that shows: in whole seconds
         # 2.4 s read "every 2 s, not every 2 s", and 2.02 s is not worth saying.
@@ -557,10 +574,7 @@ class SocketsPanel:
 
     def _show(self, view, keep_view=False):
         snapshot = view.snapshot
-        mark = _mark_of(snapshot)
-        if view.show == sockets.SINCE_MARK and mark is None:
-            empty = "tools.sockets.empty_no_mark"
-        elif not snapshot.sockets:
+        if not snapshot.sockets:
             empty = "tools.sockets.empty"
         elif view.show == sockets.SINCE_MARK and not view.query:
             empty = "tools.sockets.empty_since_mark"
@@ -585,7 +599,9 @@ class SocketsPanel:
         lines = []
         mark = _mark_of(snapshot)
         if mark is not None and self.which() == sockets.SINCE_MARK:
-            lines.append(T("tools.sockets.note_mark", time=clock(mark.at)))
+            # Since when: the click, or the first read when nobody has clicked.
+            key = "tools.sockets.note_mark" if mark.asked else "tools.sockets.note_since_first"
+            lines.append(T(key, time=clock(mark.at)))
             if mark.dropped:
                 lines.append(T("tools.sockets.note_mark_dropped", n=mark.dropped,
                                max=sockets.MAX_CLOSED))
