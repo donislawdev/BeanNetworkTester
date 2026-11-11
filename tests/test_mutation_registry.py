@@ -12518,6 +12518,28 @@ MUTATIONS = [
         "test": "test_a_run_stopped_after_one_failed_turn_transport_does_not_say_no_turn",
     },
     {
+        "label": "nat panel: Copy public address offered before there is one",
+        "file": "beantester/gui/toolbox/nat.py",
+        "old": "        popup(self.menu, {COPY_ADDRESS: nat.public_address(self.runner.rows) is not None,\n",
+        "new": "        popup(self.menu, {COPY_ADDRESS: True,\n",
+        "test": "test_the_row_menu_copies_the_public_address_without_logging_it",
+    },
+    {
+        # The log is what goes with a bug report.
+        "label": "nat panel: the copied public address is written to the log",
+        "file": "beantester/gui/toolbox/nat.py",
+        "old": "            copy_confirmed(self.app, address, T(\"tools.nat.address_logged\"), AREA)\n",
+        "new": "            copy_confirmed(self.app, address, address, AREA)\n",
+        "test": "test_the_row_menu_copies_the_public_address_without_logging_it",
+    },
+    {
+        "label": "nat: the public address is taken from a row that has none",
+        "file": "beantester/nettools/nat.py",
+        "old": "        if row.test == \"public\" and row.result == \"tools.nat.result.address\":\n",
+        "new": "        if row.result == \"tools.nat.result.address\" or row.test == \"mapping\":\n",
+        "test": "test_the_public_address_is_the_public_row_s_address_alone",
+    },
+    {
         "label": "nat panel: closing the window does not stop the run",
         "file": "beantester/gui/toolbox/nat.py",
         "old": "    if runner is not None:\n        runner.stop()\n",

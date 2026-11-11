@@ -25,15 +25,18 @@ from ...nettools import Refused, nat
 from .. import dialogs
 from ..clipboard import copy_confirmed
 from ..labels import wrapping_label
-from ..theme import CHARS, NAT_COLORS, PAGE_WRAP_PAD, ROWS, space
+from ..theme import CHARS, NAT_COLORS, PAGE_WRAP_PAD, ROWS, space, style_menu
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
 from ..widgets.sortable_tree import make_room
 from .base import Poller, StatusLine, job, remembered, tab_chosen
+from .details import popup
 
 AREA = "gui.toolbox.nat"
 ID = "nat"
 STEP = "step"
+# The row menu, by position: the public address (from any row), then the row.
+COPY_ADDRESS, COPY_ROW = 0, 1
 
 COLUMNS = {"test": "tools.nat.col.test", "result": "tools.nat.col.result",
            "details": "tools.nat.col.details"}
@@ -234,11 +237,24 @@ class NatPanel:
             height=ROWS["table"], horizontal=True, min_chars=MIN_CHARS, tips=TIPS,
             tags=NAT_COLORS, selectmode="browse", empty_text="tools.nat.empty")
         make_room(self.table, result_words())
+        self._build_menu()
 
         self.runner.watch(self)
         self.changed()
 
     # -- building ------------------------------------------------------------ #
+    def _build_menu(self):
+        """"Copy public address" - what the tool is most often opened for, from any
+        row - and "Copy row", the entry every table's menu starts with."""
+        self.menu = style_menu(tk.Menu(self.frame, tearoff=0))
+        self.menu.add_command(label=T("tools.nat.copy_address"), command=self.copy_address)
+        self.menu.add_command(label=T("menu.copy_row"), command=self._copy_rows)
+        self.table.bind_row_menu(self._show_menu)
+
+    def _show_menu(self, x_root, y_root):
+        popup(self.menu, {COPY_ADDRESS: nat.public_address(self.runner.rows) is not None,
+                          COPY_ROW: bool(self.table.selected_keys())}, x_root, y_root, AREA)
+
     @staticmethod
     def _button(bar, text_key, tip_key, command):
         button = ttk.Button(bar, text=T(text_key), command=command)
@@ -291,6 +307,19 @@ class NatPanel:
         if run is not None and self.runner.rows and not self.runner.running():
             copy_confirmed(self.app, nat.report(run, self.runner.rows),
                            T("tools.nat.report_logged"), AREA)
+
+    def copy_address(self):
+        """The public address alone, as soon as the run has it. The log line does not
+        carry it: the log is what goes with a bug report, and "Copy results" puts the
+        address anywhere only when asked as well."""
+        address = nat.public_address(self.runner.rows)
+        if address:
+            copy_confirmed(self.app, address, T("tools.nat.address_logged"), AREA)
+
+    def _copy_rows(self):
+        text = self.table.copy_text()
+        if text:
+            self.app.copy_to_clipboard(text)
 
     # -- answers ------------------------------------------------------------- #
     def changed(self):

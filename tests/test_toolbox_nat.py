@@ -211,3 +211,25 @@ def test_copy_results_is_the_english_report():
         assert copied == [nat.report(panel.runner.run, panel.runner.rows)]
         assert "Public address: 203.0.113.7" in copied[0]
     """))
+
+
+def test_the_row_menu_copies_the_public_address_without_logging_it():
+    run_gui(NAT + textwrap.dedent("""
+        copied, logged, offered = [], [], []
+        panel_mod.copy_confirmed = lambda app, text, said, area: (copied.append(text),
+                                                                   logged.append(said))
+        panel_mod.popup = lambda menu, entries, x, y, area: offered.append(dict(entries))
+        panel = open_nat()
+        panel._show_menu(0, 0)
+        assert offered[-1][panel_mod.COPY_ADDRESS] is False, "nothing to copy before a run"
+        panel.copy_address()
+        assert copied == []
+        start(panel)
+        finish(panel.runner, until=lambda: nat.public_address(panel.runner.rows))
+        panel._show_menu(0, 0)
+        assert offered[-1][panel_mod.COPY_ADDRESS] is True, "as soon as the run has it"
+        panel.copy_address()
+        assert copied == ["203.0.113.7"], copied
+        assert "203.0.113.7" not in logged[-1], logged
+        finish(panel.runner)
+    """))

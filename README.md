@@ -412,6 +412,8 @@ monitor is gone it returns to the centre of the current screen.
     sends one datagram that stops at the router (TTL 1), so this computer's firewall already
     knows the way the answer comes back.
     **"Copy results"** copies the table in English - with this network's public address in it.
+    Right-click a row for **"Copy public address"**, which copies the address alone (without
+    the port, which belonged to a socket of the test), and **"Copy row"**.
   - **Sockets** - every TCP and UDP socket on this computer, like `netstat -ano`, and no
     session is needed: what is listening, what is connected, its state (LISTEN,
     ESTABLISHED, TIME_WAIT...) and the program that owns it. Use it to see which port your

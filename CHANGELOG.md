@@ -38,11 +38,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 - **Tools: NAT and STUN, how this network's router treats a call.** Press **Start** and in a
   few seconds the table shows this computer's public address, whether the router keeps one
-  public port for every server, whether two devices behind it reach each other through that
-  address, and on which transports a TURN server answers. When the run ends, a line above
-  the table says what it can mean for a call. The servers can be changed (Cloudflare's are
-  filled in). Nothing is sent before Start, and the About window and `--license` name the
-  tool among what the program sends.
+  public port for every server, whether devices behind it reach each other through it, and
+  on which transports a TURN server answers. A line above the table then says what it can
+  mean for a call. Right-click a row to copy the public address. The servers can be changed
+  from Cloudflare's. Nothing goes out before Start, and About and `--license`
+  list the tool among what the program sends.
 
 - **NAT and STUN asks the TURN server over TLS too.** The TURN rows include TLS on 5349 and
   443 (and on a typed port), with the server's certificate checked the way a call app checks
