@@ -1418,6 +1418,73 @@ def test_the_row_menu_offers_what_the_row_can_do_and_fills_the_control_fields():
     """))
 
 
+def test_the_row_menu_resets_an_open_connection_and_the_table_reads_once_it_ended():
+    """"Reset this connection" is the Connections page's (field_actions): offered for
+    an open connection a program holds, never for a listener, for TIME_WAIT (PID 0,
+    which Windows refuses) or for a row already marked closed. The reset runs on its
+    own worker; the table reads once when it has ended, so the row says it closed."""
+    run_gui(SOCK + textwrap.dedent("""
+        from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
+        from beantester.gui.toolbox import sockets as tool
+        ROWS.append(SocketRow("TCP", 4, "10.0.0.2", 50002, "93.184.216.34", 443,
+                              "ESTABLISHED", 1234))
+        tool.can_reset = lambda row: True       # as on a system that resets both families
+        started = []
+
+        class Worker:
+            alive = True
+            def is_alive(self):
+                return self.alive
+
+        worker = Worker()
+        def fake_reset(_app, row):
+            started.append(row)
+            return worker
+        tool.reset_connection = fake_reset
+
+        panel = open_sockets()
+        settle(panel)
+        for port, offered in ((50002, True), (50001, True), (13882, False), (8080, False),
+                              (5353, False)):
+            select_port(panel, port)
+            panel._show_menu(0, 0)
+            want = MENU_ENTRY_LIVE if offered else MENU_ENTRY_INERT
+            assert panel.menu.entry_states[tool.RESET] == want, (port, offered)
+        tool.can_reset = lambda row: False      # ... and nothing where this system cannot
+        select_port(panel, 50002)
+        panel._show_menu(0, 0)
+        assert panel.menu.entry_states[tool.RESET] == MENU_ENTRY_INERT
+        panel._reset()
+        assert started == [], "a greyed-out entry still runs its command: refused there"
+        tool.can_reset = lambda row: True
+
+        select_port(panel, 13882)
+        panel._reset()
+        assert started == [], started
+        select_port(panel, 50002)
+        panel._reset()
+        assert started == [{"proto": "TCP", "local_port": 50002,
+                            "remote_ip": "93.184.216.34", "remote_port": 443}], started
+        before = len(reads)
+        panel.refresh()
+        settle(panel)
+        assert len(reads) == before, "no read while the reset still runs"
+        worker.alive = False
+        ROWS.pop()                              # the reset worked: the connection is gone
+        panel.refresh()
+        settle(panel)
+        assert len(reads) == before + 1, "one read once it has ended"
+        panel.refresh()
+        settle(panel)
+        assert len(reads) == before + 1, "and one only"
+        gone = next(s for s in panel.table.items if s.local_port == 50002)
+        assert gone.change == sk.CLOSED, gone
+        select_port(panel, 50002)
+        panel._show_menu(0, 0)
+        assert panel.menu.entry_states[tool.RESET] == MENU_ENTRY_INERT, "nothing left to reset"
+    """))
+
+
 # -- TCP health ---------------------------------------------------------------------- #
 # The socket table above, and Windows' EStats stood in for at ``tcpestats.watch`` and
 # ``tcpestats.read`` - what those answer is test_tcpestats.py's. ``ANSWER[0]`` is what

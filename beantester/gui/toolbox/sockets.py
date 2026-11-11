@@ -42,7 +42,7 @@ from ...nettools import sockets
 from ...nettools.tcphealth import Request
 from ...tcprow import Connection
 from .. import dialogs
-from ..field_actions import block_ip_address, leave_process_alone
+from ..field_actions import block_ip_address, can_reset, leave_process_alone, reset_connection
 from ..labels import wrapping_label
 from ..theme import (CHARS, PAGE_WRAP_PAD, ROWS, SOCKET_COLORS, set_menu_entry_available,
                      space, style_menu)
@@ -89,8 +89,9 @@ MIN_WAIT_MS = 50
 # Menu entries a row may be refused, by position (0 is "Copy", 1 the separator).
 NEEDS_NAME = (2, 3)         # target / leave alone: the process's name
 NEEDS_REMOTE = (4, 5)       # limit to / block: an address on the other end
-HEALTH = 6                  # "Show TCP health": a TCP connection (tcphealth.offered)
-PING = 7                    # "Ping this address": one address on the other end
+RESET = 6                   # "Reset this connection": one this system can reset
+HEALTH = 7                  # "Show TCP health": a TCP connection (tcphealth.offered)
+PING = 8                    # "Ping this address": one address on the other end
 
 
 def clock(at):
@@ -124,6 +125,22 @@ def address(s):
 def connection_of(s):
     """The row's four numbers, as TCP health names a connection."""
     return Connection(s.local_ip, s.local_port, s.remote_ip, s.remote_port)
+
+
+def reset_row(s):
+    """The row as "Reset this connection" reads one: the Connections page's words."""
+    return {"proto": s.proto, "local_port": s.local_port, "remote_ip": s.remote_ip,
+            "remote_port": s.remote_port}
+
+
+def reset_offered(s):
+    """"Reset this connection" for a row that IS one, and one this system resets
+    (``field_actions.can_reset``, the Connections page's own rule). Not for a row
+    marked closed - there is nothing left to reset - nor for PID 0: a connection
+    in TIME_WAIT, which no program holds and which Windows refuses (317, measured
+    in ``tcpreset``)."""
+    return bool(s and s.change != sockets.CLOSED and s.pid != 0 and s.remote_ip
+                and s.remote_port is not None and can_reset(reset_row(s)))
 
 
 class SocketsPanel:
@@ -167,6 +184,7 @@ class SocketsPanel:
         self._took = []             # what the last two reads took, in ms
         self._quiet = False         # the read that is out was started by the table
         self._asked = False         # Refresh was pressed while that read was out
+        self._resetting = None      # the worker of a reset from the row menu
         self.count = ttk.Label(bar, text="", style="Muted.TLabel")
         self.count.pack(side="right")
 
@@ -218,6 +236,7 @@ class SocketsPanel:
         self.menu.add_command(label=T("menu.leave_process_alone"), command=self._leave_alone)
         self.menu.add_command(label=T("menu.limit_dest"), command=self._limit)
         self.menu.add_command(label=T("menu.block_ip"), command=self._block)
+        self.menu.add_command(label=T("menu.reset_connection"), command=self._reset)
         self.menu.add_command(label=T("menu.show_tcp_health"), command=self._health)
         self.menu.add_command(label=T("menu.ping_address"), command=self._ping)
         self.table.bind_row_menu(self._show_menu)
@@ -227,6 +246,7 @@ class SocketsPanel:
         """The tick, while this tab is on screen: the first look reads, and a table
         that reads itself goes back to waiting for its next read."""
         self._read_if_never()
+        self._read_after_reset()
         self._arm()
         self._sync_buttons()
 
@@ -501,6 +521,7 @@ class SocketsPanel:
         # A listening socket's remote side is 0.0.0.0 or ::, which is nobody.
         pingable = bool(s and ping_offered(s.remote_ip))
         for indexes, allowed in ((NEEDS_NAME, named), (NEEDS_REMOTE, remote),
+                                 ((RESET,), reset_offered(s)),
                                  ((HEALTH,), health), ((PING,), pingable)):
             for index in indexes:
                 with crashlog.quiet(AREA):
@@ -525,6 +546,20 @@ class SocketsPanel:
         s = self._selected()
         if s:
             leave_process_alone(self.app, s.proc)
+
+    def _reset(self):
+        """Reset the row's connection - the Connections page's reset, on its worker,
+        with its line in the log. When it has ended the table reads once (``refresh``),
+        so the row says it closed; with the tab out of sight, at the next look."""
+        s = self._selected()
+        if reset_offered(s):
+            self._resetting = reset_connection(self.app, reset_row(s))
+
+    def _read_after_reset(self):
+        worker = self._resetting
+        if worker is not None and not worker.is_alive():
+            self._resetting = None
+            self.read()
 
     def _health(self):
         """The connection onto TCP health's list, that tool on screen. The row has

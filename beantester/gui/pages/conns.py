@@ -21,13 +21,11 @@ Notable behaviour:
   driver's own filter has been narrowed to the destination.
 """
 
-import sys
-import threading
 import time
 import tkinter as tk
 from tkinter import ttk
 
-from ... import capabilities, tcpreset
+from ... import tcpreset
 from ...i18n import T
 from ...nettools.tcphealth import Request
 from ...processes import port_process_map
@@ -35,7 +33,8 @@ from ...utils import human_bytes
 from ...views import (avg_packet_bytes, connection_proc, filter_connections,
                       scope_share, share_text, sort_connections, sum_traffic)
 from .. import dialogs
-from ..field_actions import block_ip_address, leave_process_alone
+from ..field_actions import (block_ip_address, can_reset, leave_process_alone,
+                             reset_connection)
 from ..model_worker import AsyncModel
 from ..labels import sync_note, wrapping_label
 from ..scaling import scaled
@@ -160,54 +159,6 @@ def port_cell(port):
     return "" if port is None else port
 
 
-# What the log says for each way "Reset this connection" can end (tcpreset.Outcome).
-RESET_LOG = {tcpreset.RESET: "log.conn_reset_done", tcpreset.GONE: "log.conn_reset_gone",
-             tcpreset.AMBIGUOUS: "log.conn_reset_ambiguous",
-             tcpreset.REFUSED: "log.conn_reset_refused",
-             tcpreset.NEEDS_ADMIN: "log.conn_reset_needs_admin",
-             tcpreset.UNREADABLE: "log.conn_reset_unreadable",
-             tcpreset.NOT_IPV4: "log.conn_reset_not_ipv4",
-             tcpreset.FAILED: "log.conn_reset_failed"}
-# Where Linux's words differ: its rights are root's, the rule on states is this
-# program's own (tcpreset.RESETS), and a socket missing from the kernel's list may
-# belong to a container or another network namespace, not only to the past.
-RESET_LOG_LINUX = {**RESET_LOG, tcpreset.GONE: "log.conn_reset_gone_linux",
-                   tcpreset.REFUSED: "log.conn_reset_refused_linux",
-                   tcpreset.NEEDS_ADMIN: "log.conn_reset_needs_root"}
-
-
-def reset_log(platform=None):
-    """The sentence for each way a reset can end, on this system or ``platform``."""
-    return RESET_LOG_LINUX if (platform or sys.platform).startswith("linux") else RESET_LOG
-
-
-def can_reset(row):
-    """Whether "Reset this connection" acts on ``row``: TCP over the families this
-    system resets - IPv4 on Windows, which has no IPv6 form of the call, IPv4 and IPv6
-    on Linux (tcpreset) - and nothing at all on a system without it (capabilities).
-    The menu greys the entry out by it, and the entry's command refuses by it, so the
-    two cannot answer differently."""
-    return capabilities.available("tcp_reset") and tcpreset.resettable(
-        row.get("proto"), row.get("remote_ip"))
-
-
-def reset_connection(app, row):
-    """Reset the connection a row names: the row is read HERE, as plain data, and
-    the reset runs on a worker - it reads the socket table - which says how it ended
-    in one log line (``app.log`` is thread-safe; the same shape as
-    ``csv_export.export_connections``). Returns the worker, or None for a row with
-    no ports to reset."""
-    try:
-        target = tcpreset.Target(int(row["local_port"]), str(row["remote_ip"]),
-                                 int(row["remote_port"]))
-    except (KeyError, TypeError, ValueError):
-        return None
-    worker = threading.Thread(target=_reset_and_say, args=(app, target),
-                              name="conn-reset", daemon=True)
-    worker.start()
-    return worker
-
-
 def show_health(app, row):
     """"Show TCP health" for a row: the Tools tab's TCP health on screen, the
     connection on its list. The row names no local address - it is looked up in the
@@ -222,13 +173,6 @@ def show_health(app, row):
     tcphealth.watch_from(app, Request(str(row.get("proc") or ""), pid if pid else None,
                                       target=target))
     return True
-
-
-def _reset_and_say(app, target):
-    outcome = tcpreset.reset(target)
-    app.log(T(reset_log().get(outcome.kind, "log.conn_reset_failed"),
-              address=f"{target.remote_ip}:{target.remote_port}", state=outcome.state or "?",
-              code=outcome.code, detail=outcome.detail))
 
 
 SEARCH_DEBOUNCE_MS = 250
