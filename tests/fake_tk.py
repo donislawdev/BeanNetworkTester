@@ -461,6 +461,17 @@ class Interp:
 INTERP = Interp()
 
 
+class Combobox(W):
+    """ttk.Combobox. ``set`` writes its text into the ``textvariable``, as Tk's does:
+    a panel that chooses from code (the Sockets "Show" box, on Mark now) is read
+    back through that variable, and a no-op would leave the old choice."""
+
+    def set(self, value):
+        var = self.kw.get("textvariable")
+        if var is not None:
+            var.set(value)
+
+
 class Text(W):
     """A text widget that keeps line accounting, so trimming can be tested.
 
@@ -754,7 +765,7 @@ def install():
     sys.modules["tkinter"] = tk
 
     ttk = types.ModuleType("tkinter.ttk")
-    for name, value in dict(Frame=W, Label=W, Button=W, Combobox=W, Notebook=Notebook,
+    for name, value in dict(Frame=W, Label=W, Button=W, Combobox=Combobox, Notebook=Notebook,
                             Checkbutton=W, Entry=W, LabelFrame=W, Scrollbar=W,
                             Treeview=Treeview, Style=W, PanedWindow=Paned,
                             Menubutton=W, Separator=W).items():

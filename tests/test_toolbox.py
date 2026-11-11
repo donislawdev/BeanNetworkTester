@@ -891,15 +891,17 @@ gate = threading.Event()
 gate.set()
 reads, failed_tables = [], []
 asked = []          # of each read: (it had the read before it, it named every process again)
+marks = []          # of each read: whether it set the mark
 
-def fake_read(previous=None, fresh_names=True):
+def fake_read(previous=None, fresh_names=True, mark=False):
     reads.append(1)
     asked.append((previous is not None, fresh_names))
+    marks.append(mark)
     gate.wait(5)
     # What changed since the read before is the logic's own (test_nettools_sockets.py).
     carry = previous.carry if previous is not None else None
     shown, carry = sk._changes(list(sk._sockets(ROWS, NAMES)), carry, frozenset(failed_tables),
-                               (time.time(), time.monotonic()))
+                               (time.time(), time.monotonic()), mark)
     return sk.Snapshot(tuple(shown), tuple(failed_tables), time.time(), 3, carry)
 
 sk.read = fake_read
@@ -944,6 +946,14 @@ def search(panel, text):
 def select_port(panel, port):
     key = next(s.key for s in panel.table.items if s.local_port == port)
     panel.table.select_keys([key])
+
+def choose(panel, which):
+    # The "Show" box chosen the way a click does: its text, then its handlers.
+    from beantester.gui.toolbox.sockets import SHOW_TEXT
+    panel.which_box.kw["textvariable"].set(T(SHOW_TEXT[which]))
+    for handler in panel.which_box.bindings["<<ComboboxSelected>>"]:
+        handler(None)
+    settle(panel)
 """
 
 
@@ -970,7 +980,7 @@ def test_the_socket_table_reads_when_first_looked_at_and_not_at_start_up():
         cells = dict(zip(COLUMNS, render(panel.table.items[1]), strict=True))
         assert cells == {"proc": "chrome.exe", "pid": 1234, "proto": "TCP",
                          "local_ip": "0.0.0.0", "local_port": 8080, "state": "LISTEN",
-                         "change": "", "remote_ip": "", "remote_port": ""}, cells
+                         "opened": "", "change": "", "remote_ip": "", "remote_port": ""}, cells
         app._tick()
         panel.refresh()
         settle(panel)
@@ -1221,6 +1231,146 @@ def test_refresh_pressed_during_the_tables_own_read_is_taken_and_follows_it():
     """))
 
 
+def test_the_show_box_narrows_the_table_by_the_far_end_and_outlives_a_rebuild():
+    """Listening and connections by the far end (``sockets._SHOWN``): a choice is a
+    view of the read the window has, never a read of its own."""
+    run_gui(SOCK + textwrap.dedent("""
+        panel = open_sockets()
+        settle(panel)
+        choose(panel, sk.LISTENING)
+        assert shown(panel) == [5353, 8080], shown(panel)
+        assert panel.count.cget("text") == T("conns.shown_of", shown=2, total=4)
+        assert panel.memory["which"] == sk.LISTENING, panel.memory
+        choose(panel, sk.CONNECTED)
+        assert shown(panel) == [13882, 50001], shown(panel)
+        search(panel, "port:443")
+        settle(panel)
+        assert shown(panel) == [50001], ("the search narrows what is shown", shown(panel))
+        assert reads == [1], ("no read for a choice or a search", reads)
+        app._build_ui()                         # a language change rebuilds the panel
+        again = open_sockets()
+        settle(again)
+        assert again.which() == sk.CONNECTED and shown(again) == [50001], (
+            again.which(), shown(again))
+    """))
+
+
+def test_mark_now_reads_marks_and_shows_what_opened_and_closed_since():
+    """A read of its own that sets the mark, the "Show" box on "Since the mark", and
+    from then on what opened and what closed - the closed ones counted in what the
+    table chose from, so "shown of total" never shows more than all."""
+    run_gui(SOCK + textwrap.dedent("""
+        from beantester.gui.toolbox import sockets as tool
+        panel = open_sockets()
+        settle(panel)
+        choose(panel, sk.SINCE_MARK)
+        assert shown(panel) == [] and panel.table._empty_text == "tools.sockets.empty_no_mark", \\
+            ("nothing marked yet, and the table says what to press", panel.table._empty_text)
+        choose(panel, sk.ALL)
+        panel.mark()
+        settle(panel)
+        assert marks == [False, True] and len(reads) == 2, ("a read that marks", marks)
+        assert panel.which() == sk.SINCE_MARK and panel.memory["which"] == sk.SINCE_MARK
+        assert shown(panel) == [] and panel.table._empty_text == "tools.sockets.empty_since_mark", \\
+            ("nothing since the click", shown(panel), panel.table._empty_text)
+        mark = panel._latest().snapshot.carry.mark
+        said = T("tools.sockets.note_mark", time=tool.clock(mark.at))
+        assert said in panel.note.cget("text"), panel.note.cget("text")
+
+        ROWS.append(SocketRow("TCP", 4, "10.0.0.2", 50002, "93.184.216.34", 443,
+                              "ESTABLISHED", 1234))
+        ROWS.pop(0)                              # the listener on 8080 closes
+        panel.read()
+        settle(panel)
+        assert marks[-1] is False, "Refresh keeps the mark, it does not set one"
+        assert shown(panel) == [8080, 50002], shown(panel)
+        closed = next(s for s in panel.table.items if s.local_port == 8080)
+        assert closed.change == sk.CLOSED, closed
+        assert panel.count.cget("text") == T("conns.shown_of", shown=2, total=5), \\
+            panel.count.cget("text")
+        choose(panel, sk.ALL)
+        assert said not in panel.note.cget("text"), "the note goes with the view it is for"
+    """))
+
+
+def test_mark_now_pressed_during_the_tables_own_read_is_a_mark_and_follows_it():
+    run_gui(SOCK + textwrap.dedent("""
+        panel = open_sockets()
+        settle(panel)
+        by_itself(panel)
+        gate.clear()
+        panel._tick()
+        panel.pending()
+        assert panel.job.busy() and marks[-1] is False
+        panel.mark()
+        panel.read()                            # a Refresh after it must not lose it
+        assert "disabled" in panel.mark_btn.state(), "taken, and the button says so"
+        gate.set()
+        settle(panel)
+        assert marks == [False, False, True], ("the mark follows the table's read", marks)
+        assert panel._latest().snapshot.carry.mark is not None
+        assert "disabled" not in panel.mark_btn.state()
+    """))
+
+
+def test_save_csv_writes_the_rows_on_screen_as_they_are_and_reads_nothing():
+    """The rows the window shows - this search, this "Show", this order - with the
+    service, the bind time and the change, in a file a spreadsheet takes: a process
+    name a spreadsheet would run as a formula is written as text."""
+    run_gui(SOCK + textwrap.dedent("""
+        import csv, os, tempfile
+        import beantester.gui.csv_export as m
+        path = os.path.join(tempfile.mkdtemp(), "sockets.csv")
+        m.SOCKETS_CSV_FILE = path
+        ROWS[0] = ROWS[0]._replace(created=1_700_000_000.0)
+        NAMES[1234] = "=cmd.exe"
+        panel = open_sockets()
+        settle(panel)
+        choose(panel, sk.LISTENING)
+        before = len(reads)
+        worker = m.export_sockets(app, panel._latest().rows)
+        worker.join(20)
+        app._logview.drain()
+        with open(path, newline="", encoding="utf-8") as f:
+            rows = list(csv.reader(f))
+        assert rows[0] == m.SOCKETS_CSV_HEADER, rows[0]
+        assert [r[5] for r in rows[1:]] == ["5353", "8080"], ("the view's rows, in order", rows)
+        listener = rows[2]
+        assert listener[0] == "'=cmd.exe", ("a formula is written as text", listener)
+        assert listener[9].startswith("2023-11-1"), listener
+        assert listener[10] == "" and listener[11] == "", listener
+        assert any(path in line and "(2)" in line for line in app._log_lines), app._log_lines[-2:]
+        assert len(reads) == before, "nothing read again"
+        os.remove(path)
+        panel._export().join(20)                # the button: the same, from the window
+        assert os.listdir(os.path.dirname(path)) == ["sockets.csv"], "no temporary file left"
+        with open(path, newline="", encoding="utf-8") as f:
+            assert list(csv.reader(f)) == rows
+        assert len(reads) == before, "nothing read again"
+    """))
+
+
+def test_a_service_hosts_socket_shows_its_service_and_a_socket_says_when_it_opened():
+    run_gui(SOCK + textwrap.dedent("""
+        import time
+        from beantester.gui.toolbox.sockets import opened_text, proc_text, render
+        s = sk.Socket("k", "UDP", 4, "0.0.0.0", 53, "", None, "", 4784, "svchost.exe",
+                      service="SharedAccess")
+        assert proc_text(s) == T("tools.sockets.proc_service", proc="svchost.exe",
+                                 service="SharedAccess"), proc_text(s)
+        assert "SharedAccess" in proc_text(s) and proc_text(s).startswith("svchost.exe")
+        assert proc_text(s._replace(service="")) == "svchost.exe"
+        now = time.mktime((2026, 11, 11, 12, 0, 0, 0, 0, -1))
+        today = time.mktime((2026, 11, 11, 8, 5, 9, 0, 0, -1))
+        earlier = time.mktime((2026, 10, 29, 21, 35, 11, 0, 0, -1))
+        assert opened_text(today, now) == "08:05:09", opened_text(today, now)
+        assert opened_text(earlier, now) == "2026-10-29 21:35", opened_text(earlier, now)
+        assert opened_text(None, now) == "", "Linux does not say"
+        cells = render(s._replace(created=today))
+        assert cells[0] == proc_text(s) and cells[6] == opened_text(today), cells
+    """))
+
+
 def test_a_socket_that_appears_or_closes_is_marked_in_the_table():
     """Colour is never the only signal (WCAG 1.4.1): the change column says the same
     in words, with the time."""
@@ -1415,6 +1565,115 @@ def test_the_row_menu_offers_what_the_row_can_do_and_fills_the_control_fields():
         menu.posted = 0
         assert panel.table.row_menu_at_pointer(Ev()) == "break"
         assert menu.posted == 0, "a menu with no row under the pointer"
+    """))
+
+
+def test_the_row_menu_resets_an_open_connection_and_the_table_reads_once_it_ended():
+    """"Reset this connection" is the Connections page's (field_actions): offered for
+    an open connection a program holds, never for a listener, for TIME_WAIT (PID 0,
+    which Windows refuses) or for a row already marked closed. The reset runs on its
+    own worker; the table reads once when it has ended, so the row says it closed."""
+    run_gui(SOCK + textwrap.dedent("""
+        from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
+        from beantester.gui.toolbox import sockets as tool
+        ROWS.append(SocketRow("TCP", 4, "10.0.0.2", 50002, "93.184.216.34", 443,
+                              "ESTABLISHED", 1234))
+        tool.can_reset = lambda row: True       # as on a system that resets both families
+        started = []
+
+        class Worker:
+            alive = True
+            def is_alive(self):
+                return self.alive
+
+        worker = Worker()
+        def fake_reset(_app, row):
+            started.append(row)
+            return worker
+        tool.reset_connection = fake_reset
+
+        panel = open_sockets()
+        settle(panel)
+        for port, offered in ((50002, True), (50001, True), (13882, False), (8080, False),
+                              (5353, False)):
+            select_port(panel, port)
+            panel._show_menu(0, 0)
+            want = MENU_ENTRY_LIVE if offered else MENU_ENTRY_INERT
+            assert panel.menu.entry_states[tool.RESET] == want, (port, offered)
+        tool.can_reset = lambda row: False      # ... and nothing where this system cannot
+        select_port(panel, 50002)
+        panel._show_menu(0, 0)
+        assert panel.menu.entry_states[tool.RESET] == MENU_ENTRY_INERT
+        panel._reset()
+        assert started == [], "a greyed-out entry still runs its command: refused there"
+        tool.can_reset = lambda row: True
+
+        select_port(panel, 13882)
+        panel._reset()
+        assert started == [], started
+        select_port(panel, 50002)
+        panel._reset()
+        assert started == [{"proto": "TCP", "local_port": 50002,
+                            "remote_ip": "93.184.216.34", "remote_port": 443}], started
+        before = len(reads)
+        panel.refresh()
+        settle(panel)
+        assert len(reads) == before, "no read while the reset still runs"
+        worker.alive = False
+        ROWS.pop()                              # the reset worked: the connection is gone
+        panel.refresh()
+        settle(panel)
+        assert len(reads) == before + 1, "one read once it has ended"
+        panel.refresh()
+        settle(panel)
+        assert len(reads) == before + 1, "and one only"
+        gone = next(s for s in panel.table.items if s.local_port == 50002)
+        assert gone.change == sk.CLOSED, gone
+        select_port(panel, 50002)
+        panel._show_menu(0, 0)
+        assert panel.menu.entry_states[tool.RESET] == MENU_ENTRY_INERT, "nothing left to reset"
+    """))
+
+
+def test_after_two_resets_the_table_reads_once_both_ended_a_rebuild_between_too():
+    """The second reset done first: the read waits for BOTH - one between them would
+    show the first one's connection open, and none would follow it - and a rebuild
+    of the window in between (a language change) loses neither."""
+    run_gui(SOCK + textwrap.dedent("""
+        from beantester.gui.toolbox import sockets as tool
+        ROWS.append(SocketRow("TCP", 4, "10.0.0.2", 50003, "93.184.216.34", 443,
+                              "ESTABLISHED", 1234))
+        tool.can_reset = lambda row: True
+
+        class Worker:
+            alive = True
+            def is_alive(self):
+                return self.alive
+
+        first, second = Worker(), Worker()
+        workers = [first, second]
+        tool.reset_connection = lambda _app, row: workers.pop(0)
+        panel = open_sockets()
+        settle(panel)
+        for port in (50001, 50003):
+            select_port(panel, port)
+            panel._reset()
+        assert workers == [], "both resets started"
+        second.alive = False
+        before = len(reads)
+        panel.refresh()
+        settle(panel)
+        assert len(reads) == before, "no read while the first reset still runs"
+        app._build_ui()                         # a language change rebuilds the panel
+        panel = open_sockets()
+        settle(panel)
+        panel.refresh()
+        settle(panel)
+        assert len(reads) == before, "nor after the rebuild"
+        first.alive = False
+        panel.refresh()
+        settle(panel)
+        assert len(reads) == before + 1, "one read once both have ended"
     """))
 
 

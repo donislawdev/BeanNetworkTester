@@ -1,4 +1,5 @@
-"""The two CSV exports: the appended session stats and the connection snapshot.
+"""The CSV exports: the appended session stats, and the connection and socket
+snapshots.
 
 Carved out of ``gui/app.py`` when it sat at the size ceiling (convention 32b says
 split rather than raise the number). They still read the App - the engine snapshot,
@@ -10,12 +11,13 @@ The column tables live here too, and they are the source the README guard reads.
 """
 import csv
 import os
+import tempfile
 import threading
 import time
 
 from .. import crashlog
 from ..i18n import T
-from ..paths import CONNECTIONS_CSV_FILE, CSV_FILE, hand_back
+from ..paths import CONNECTIONS_CSV_FILE, CSV_FILE, SOCKETS_CSV_FILE, hand_back
 from ..views import (avg_packet_bytes, connection_proc, filter_sort_connections,
                      scoped_packets)
 
@@ -227,40 +229,118 @@ def _write_connections_now(app, payload):
         payload["sort"]["col"], payload["sort"]["reverse"],
         now=now, proc_map=proc_map, limit=0)
     path = CONNECTIONS_CSV_FILE
-    tmp = path + ".tmp"
     try:
-        with open(tmp, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(CONN_CSV_HEADER)
-            for c in rows:
-                last = c.get("last", now)
-                packets = c.get("packets", 0) or 0
-                writer.writerow([formula_safe(v) for v in (
-                    connection_proc(c, proc_map) or "?",
-                    c.get("pid") or "",
-                    c.get("proto", "IP"), c.get("remote_ip", ""),
-                    c.get("remote_port", ""), c.get("local_port", ""),
-                    packets, "yes" if c.get("scoped") else "no",
-                    c.get("dropped", 0),
-                    c.get("sent_in", 0), c.get("sent_out", 0), c.get("sent", 0),
-                    c.get("bytes_in", 0), c.get("bytes_out", 0), c.get("bytes", 0),
-                    avg_packet_bytes(c),
-                    f"{max(0.0, last - c.get('first', now)):.1f}",
-                    f"{max(0.0, now - last):.1f}",
-                    c.get("ice") or "", scoped_packets(c))])
-        hand_back(tmp)                  # before it takes the place of theirs
-        os.replace(tmp, path)
-        app.log(f"{T('log.conns_saved_to')} {path} ({len(rows)})")
+        _replace_csv(path, CONN_CSV_HEADER, (_connection_cells(c, now, proc_map) for c in rows))
     except Exception as e:
-        # Clean up the half-written temp file, the way jsonfile.write_json
-        # already does. Without this a failed export left a `.csv.tmp` next to
-        # the real file for the user to find and wonder about - and the next
-        # export silently overwrote it, so the litter was never even stable.
-        # A failure here must leave the previous export untouched and nothing
-        # else behind.
-        try:
-            if os.path.exists(tmp):
-                os.remove(tmp)
-        except OSError as _exc:
-            crashlog.note(_exc, "gui.app")
+        crashlog.note(e, "gui.csv_export")
         app.log(f"{T('log.csv_error')}: {e}")
+        return
+    app.log(f"{T('log.conns_saved_to')} {path} ({len(rows)})")
+
+
+def _connection_cells(c, now, proc_map):
+    """One connection's cells, in ``CONN_CSV_HEADER`` order."""
+    last = c.get("last", now)
+    packets = c.get("packets", 0) or 0
+    return [formula_safe(v) for v in (
+        connection_proc(c, proc_map) or "?",
+        c.get("pid") or "",
+        c.get("proto", "IP"), c.get("remote_ip", ""),
+        c.get("remote_port", ""), c.get("local_port", ""),
+        packets, "yes" if c.get("scoped") else "no",
+        c.get("dropped", 0),
+        c.get("sent_in", 0), c.get("sent_out", 0), c.get("sent", 0),
+        c.get("bytes_in", 0), c.get("bytes_out", 0), c.get("bytes", 0),
+        avg_packet_bytes(c),
+        f"{max(0.0, last - c.get('first', now)):.1f}",
+        f"{max(0.0, now - last):.1f}",
+        c.get("ice") or "", scoped_packets(c))]
+
+
+def _replace_csv(path, header, rows):
+    """Put a CSV of ``header`` and ``rows`` at ``path`` whole, or leave the one
+    there as it was. Raises what went wrong, with nothing left behind.
+
+    The connections and sockets exports' one write. A file beside the real one,
+    renamed over it once written - under a name nobody else picks (``mkstemp``:
+    made by this call, never a link someone put there) and written through the
+    descriptor that made it, never opened again by name. The old ``<file>.tmp``
+    was a name known in advance: a link put there by anyone who may write in that
+    folder sent the write - root's, under sudo - wherever it pointed. Handed back
+    under sudo before it takes the place of the person's file (``hand_back``,
+    which changes the entry, never what a link there points at). The previous
+    export is untouched by a failure: a half-written file left beside it was the
+    connections export's litter for a while, overwritten by the next export.
+    """
+    directory, name = os.path.split(path)
+    handle, tmp = tempfile.mkstemp(dir=directory or ".", prefix=name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(handle, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(header)
+            writer.writerows(rows)
+        hand_back(tmp)
+        os.replace(tmp, path)
+    except BaseException:
+        with crashlog.quiet("gui.csv_export"):
+            os.remove(tmp)
+        raise
+
+
+# The socket table (Tools > Sockets), its columns in the table's own words where
+# a spreadsheet can take them: times as "YYYY-MM-DD HH:MM:SS" in this computer's
+# time zone, `change` as the program's own "new" / "closed" (English, like the
+# connections export's yes/no). `opened` is when the socket was bound, as the
+# system says it - empty on Linux, which does not say.
+SOCKETS_CSV_HEADER = ["process", "service", "pid", "proto", "local_ip", "local_port",
+                      "remote_ip", "remote_port", "state", "opened", "change", "changed_at"]
+
+# One export of the socket table at a time - its own file, so its own lock.
+_SOCKETS_LOCK = threading.Lock()
+
+
+def export_sockets(app, rows):
+    """Write the socket table's rows - as the window shows them: its search, its
+    "Show" and its order - to their CSV, overwritten each time like the connections
+    snapshot, and on a worker for its reason. ``rows`` are the window's own
+    ``nettools.sockets.Socket`` values, which nothing changes once made, so they
+    are handed over as they are. Returns the worker, or None when an export was
+    already running."""
+    if not _SOCKETS_LOCK.acquire(blocking=False):
+        app.log(T("log.conns_export_busy"))
+        return None
+    try:
+        worker = threading.Thread(target=_write_sockets, args=(app, list(rows)),
+                                  name="sockets-csv", daemon=True)
+        worker.start()
+    except BaseException:
+        _SOCKETS_LOCK.release()
+        raise
+    return worker
+
+
+def _stamp(at):
+    return "" if at is None else time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(at))
+
+
+def _socket_cells(s):
+    """One socket's cells, in ``SOCKETS_CSV_HEADER`` order."""
+    return [formula_safe(v) for v in (
+        s.proc, s.service, "" if s.pid is None else s.pid, s.proto,
+        s.local_ip, s.local_port, s.remote_ip,
+        "" if s.remote_port is None else s.remote_port, s.state,
+        _stamp(s.created), s.change, _stamp(s.at))]
+
+
+def _write_sockets(app, rows):
+    """Worker thread: the connections snapshot's write (``_replace_csv``), so a
+    failure leaves the previous export whole."""
+    path = SOCKETS_CSV_FILE
+    try:
+        _replace_csv(path, SOCKETS_CSV_HEADER, (_socket_cells(s) for s in rows))
+        app.log(f"{T('log.sockets_saved_to')} {path} ({len(rows)})")
+    except Exception as e:
+        crashlog.note(e, "gui.csv_export")
+        app.log(f"{T('log.csv_error')}: {e}")
+    finally:
+        _SOCKETS_LOCK.release()

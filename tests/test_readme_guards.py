@@ -145,7 +145,7 @@ def test_both_readmes_document_every_csv_column():
     (``impaired`` for "impaired?", ``delivered_down_bytes`` for "down[KB]").
     """
     from beantester.gui import csv_export
-    names = set(csv_export.CONN_CSV_HEADER)
+    names = set(csv_export.CONN_CSV_HEADER) | set(csv_export.SOCKETS_CSV_HEADER)
     names |= {csv_export.CSV_COLUMNS.get(k, k) for k in csv_export.CSV_COLUMNS}
     # Session columns are part of the same header and just as undocumentable by
     # inspection - `capture_narrowed` decides what `packets_seen` next to it even
@@ -157,7 +157,9 @@ def test_both_readmes_document_every_csv_column():
     names |= set(capture_backend.OVERLOAD_STATS)
     for readme in READMES:
         text = _read(readme)
-        missing = sorted(n for n in names if n not in text)
+        # Each as a whole name in backticks, as the column tables write them: as a
+        # bare substring `changed_at` alone would pass for `change` too.
+        missing = sorted(n for n in names if f"`{n}`" not in text)
         check(f"{readme} documents every CSV column", not missing,
               f"(missing: {missing})")
 

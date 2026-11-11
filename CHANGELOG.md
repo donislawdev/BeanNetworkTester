@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **Tools: more from the Sockets table.** "Show" lists only the sockets that are listening, the
+  connections, the ones that changed, or the ones since the mark: press "Mark now", then start
+  your program, to see what it opens and closes. The new "opened" column says when a program
+  opened its socket (Windows only), and svchost.exe shows the service it runs for, such as
+  `svchost.exe (Dnscache)`. "Save CSV" writes the rows on screen to a file, and the row menu
+  can reset a connection, as on the Connections page.
+
 - **Payload size targeting.** A new card on the Control page aims the impairments at packets
   by how many bytes of data they carry, with one field for UDP and one for TCP
   (`--payload-udp`, `--payload-tcp`). Both take the usual filter syntax: `64-1472` leaves a
@@ -100,6 +107,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   them too.
 
 ### Fixed
+
+- **Saving a CSV can no longer be redirected into another file.** The Connections export and
+  the Sockets table's "Save CSV" first wrote to a temporary file whose name was known in
+  advance, and followed a link someone had placed under that name. With the rights the program
+  runs with, that could overwrite another file. Each save now creates a temporary file of its
+  own.
 
 - **"Show only the targeted traffic" counts only the packets in scope.** After the target
   changed during a session, the downloaded and uploaded figures, the chart and the CSV kept

@@ -600,7 +600,8 @@ def test_a_connection_reset_runs_off_the_ui_thread_and_says_how_it_ended():
     run_gui("""
         import threading
         from beantester import tcpreset
-        from beantester.gui.pages import conns
+        # Both tables' row menus reset through the same helpers (field_actions).
+        from beantester.gui import field_actions as conns
         asked = []
 
         def fake_reset(target):
