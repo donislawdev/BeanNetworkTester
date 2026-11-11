@@ -298,6 +298,23 @@ def test_the_ports_an_expression_names():
               f"({caught.value.user_key})")
     with pytest.raises(ValueError):
         pc.parse("9100-9000")          # the port language's own message, already translated
+
+
+def test_a_check_of_every_port_reaches_the_last_one():
+    """The range is named to 65535 (above); this is the check going all the way there:
+    the last bind is port 65535, and a holder on it is a row of its own."""
+    calls = []
+    result = run(pc.ALL_PORTS, {("TCP", 4, 65535): 10048}, rows=[sock(65535)],
+                 protocols=("TCP",), families=(4,), calls=calls)
+    binds = [c for c in calls if c[0] == "bind"]
+    check("every port was bound, the last one last",
+          (len(binds), binds[-1]) == (65535, ("bind", "TCP", 4, 65535)), f"({len(binds)})")
+    check("and the check says it finished",
+          (result.made, result.planned, result.stopped) == (65535, 65535, False),
+          f"({result.made}, {result.planned})")
+    shape = sorted((r.port, r.last, r.verdict) for r in result.rows)
+    check("the free ports are one row and the held last port its own",
+          shape == [(1, 65534, pc.FREE), (65535, 65535, pc.IN_USE)], f"({shape})")
     check("the binds a check would make", pc.planned(pc.parse("80, 443"), *ALL) == 8, "")
     check("none for ports it refuses (the worker says why)",
           pc.planned(pc.parse("0"), *ALL) == 0, "")

@@ -468,20 +468,22 @@ monitor is gone it returns to the centre of the current screen.
     way you type ports on the Control page (`8080`, `80, 443`, `9000-9100`), and press
     **Check** (or Enter), or press **All ports** to check every port from 1 to 65535. That
     takes from a few seconds to about a minute. The status line says how far it is, and
-    **Stop** ends it early with the ports it reached. Each port is checked for TCP and UDP,
-    on IPv4 and IPv6, and marked **Free**, **In use** (with the program that holds it and
-    its PID) or **Reserved by Windows** - a range Windows set aside, the usual reason a
-    server will not start on a port nothing seems to use. The ranges are per protocol, so a
-    port can be free for UDP and not for TCP. Ports next to each other with the same result
-    are one row (`49152-49999`), and **Hide free ports** leaves only the ones a program
-    could not take. **Listens on** says where the program that holds a port waits for
+    **Stop** ends it early with the ports it reached. Each port is checked for the
+    protocols and IP versions ticked (TCP and UDP, IPv4 and IPv6), and marked **Free**,
+    **In use** (with the program that holds it and its PID) or **Reserved by Windows** - a
+    range Windows set aside, the usual reason a server will not start on a port nothing
+    seems to use. The ranges are per protocol, so a port can be free for UDP and not for
+    TCP. Ports next to each other with the same result are one row (`49152-49999`), and
+    **Hide free ports** hides the rows marked **Free** and keeps every other result,
+    **Unknown** included. **Listens on** says where the program that holds a port waits for
     connections: all networks, this computer only, or one network adapter by name - not
     whether a firewall lets anyone in. For each port the tool asks the system on this
     computer's own loopback address and gives the port back at once. Who holds a port
     comes from the same table as **Sockets**. On a Windows that writes every permitted
-    connection to its Security log (an audit setting some organisations turn on), each
-    port checked adds an entry there, so the tool asks before a check of thousands of
-    ports when it runs as administrator and can see that setting. Right-click a row to
+    connection to its Security log (an audit setting some organisations turn on), the check
+    adds an entry there for each port, protocol and IP version it checks, so the tool asks
+    before a check that would add thousands of entries when it runs as administrator and
+    can see that setting. Right-click a row to
     target the program that holds the port or leave it alone. **Save CSV** writes the
     rows on screen to a file (see "CSV exports" below).
   - **Adapters** - every network adapter on this computer and the settings a test depends
