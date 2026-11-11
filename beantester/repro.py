@@ -12,10 +12,9 @@ from .appinfo import TOOL_ID, command_name
 from .capture_backend import OVERLOAD_STATS
 from .damage import corruption_pct, impairment_loss_pct
 from .i18n import translate
-from .paths import temp_beside
+from .paths import write_atomically
 from .settings import DEFAULT_SETTINGS, setting_expression
 from .utils import bytes_to_mb, number_string, to_number
-from . import crashlog
 
 # Settings whose flag takes a WHOLE number (`type=int` in cli.build_arg_parser).
 # The field itself is a number like any other, so the form and a config file can
@@ -281,27 +280,20 @@ def save_repro_report(path, engine, settings, connections=None):
     ``report_path`` and exit 0 over a file that was never written, which is a
     worse outcome than the duplication.
 
-    Atomic for the reason in ``paths.temp_beside``: a temp name derived from the
-    target is a name a second writer of that target picks too. Here the target is
-    chosen by the user rather than fixed, so the collision is rarer than the one
-    that motivated ``temp_beside`` - but a crash halfway through no longer leaves
-    a truncated report sitting where a whole one is expected, which is the half
-    that matters for an artefact people attach to bug reports.
+    Atomic for the reason in ``paths.write_atomically``: a temp name derived from
+    the target is a name a second writer of that target picks too. Here the target
+    is chosen by the user rather than fixed, so the collision is rarer than the one
+    that motivated it - but a crash halfway through no longer leaves a truncated
+    report sitting where a whole one is expected, which is the half that matters
+    for an artefact people attach to bug reports. Nothing half-written is left
+    behind, an interrupt included, and the caller sees the failure.
     """
     rep = build_repro_report(engine, settings, connections)
-    tmp = temp_beside(path)
-    try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(rep, f, indent=2, ensure_ascii=False)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-    except BaseException:
-        # Leave no half-written file behind, then let the caller see the failure.
-        # BaseException, not Exception: an interrupt here is exactly when the
-        # litter would be left, and the cleanup must not depend on how we left.
-        with crashlog.quiet("repro.cleanup"):
-            if os.path.exists(tmp):
-                os.remove(tmp)
-        raise
+
+    def write(f):
+        json.dump(rep, f, indent=2, ensure_ascii=False)
+        f.flush()
+        os.fsync(f.fileno())
+
+    write_atomically(path, write)
     return rep

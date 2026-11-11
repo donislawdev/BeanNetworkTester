@@ -11,14 +11,13 @@ The column tables live here too, and they are the source the README guard reads.
 """
 import csv
 import os
-import tempfile
 import threading
 import time
 
 from .. import crashlog
 from ..i18n import T
 from ..nettools.sockets import CLOSED
-from ..paths import CONNECTIONS_CSV_FILE, CSV_FILE, SOCKETS_CSV_FILE, hand_back
+from ..paths import CONNECTIONS_CSV_FILE, CSV_FILE, SOCKETS_CSV_FILE, hand_back, write_atomically
 from ..views import (avg_packet_bytes, connection_proc, filter_sort_connections,
                      scoped_packets)
 
@@ -262,30 +261,20 @@ def _replace_csv(path, header, rows):
     """Put a CSV of ``header`` and ``rows`` at ``path`` whole, or leave the one
     there as it was. Raises what went wrong, with nothing left behind.
 
-    The connections and sockets exports' one write. A file beside the real one,
-    renamed over it once written - under a name nobody else picks (``mkstemp``:
-    made by this call, never a link someone put there) and written through the
-    descriptor that made it, never opened again by name. The old ``<file>.tmp``
-    was a name known in advance: a link put there by anyone who may write in that
-    folder sent the write - root's, under sudo - wherever it pointed. Handed back
-    under sudo before it takes the place of the person's file (``hand_back``,
-    which changes the entry, never what a link there points at). The previous
-    export is untouched by a failure: a half-written file left beside it was the
-    connections export's litter for a while, overwritten by the next export.
+    The connections and sockets exports' one write, through the program's one
+    atomic write (``paths.write_atomically``, which is where this way of writing
+    started). The old ``<file>.tmp`` was a name known in advance: a link put there
+    by anyone who may write in that folder sent the write - root's, under sudo -
+    wherever it pointed. The previous export is untouched by a failure: a
+    half-written file left beside it was the connections export's litter for a
+    while, overwritten by the next export.
     """
-    directory, name = os.path.split(path)
-    handle, tmp = tempfile.mkstemp(dir=directory or ".", prefix=name + ".", suffix=".tmp")
-    try:
-        with os.fdopen(handle, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(header)
-            writer.writerows(rows)
-        hand_back(tmp)
-        os.replace(tmp, path)
-    except BaseException:
-        with crashlog.quiet("gui.csv_export"):
-            os.remove(tmp)
-        raise
+    def write(f):
+        writer = csv.writer(f)
+        writer.writerow(header)
+        writer.writerows(rows)
+
+    write_atomically(path, write, newline="")
 
 
 # The socket table (Tools > Sockets), its columns in the table's own words where

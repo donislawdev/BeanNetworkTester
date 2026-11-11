@@ -117,6 +117,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   runs with, that could overwrite another file. Each save now creates a temporary file of its
   own.
 
+- **Linux: under sudo, saving settings can no longer be redirected into another file.** The
+  window state, profiles, saved configurations, reproduction reports and the menu entry were
+  written through a temporary file that was handed to you and then opened again by its name.
+  Any program running under your account could swap it for a link in between, and this
+  program, running as root, wrote through that link. Each save now writes the file first and
+  hands it to you after.
+
 - **"Show only the targeted traffic" counts only the packets in scope.** After the target
   changed during a session, the downloaded and uploaded figures, the chart and the CSV kept
   counting the connections of the old target until the session ended. Now each packet counts

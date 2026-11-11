@@ -29,7 +29,7 @@ import os
 import posixpath
 import sys
 
-from . import appinfo, crashlog, paths
+from . import appinfo, paths
 
 ENTRY_ID = "com.donislawdev.BeanNetworkTester"   # reverse DNS, as the spec recommends
 FILE_NAME = ENTRY_ID + ".desktop"
@@ -114,21 +114,16 @@ def install(program=None, icon=None, environ=None):
                       "program there; move the folder")
     folder = applications_dir(environ)
     target = posixpath.join(folder, FILE_NAME)
-    temporary = None
+    text = entry_text(program, icon)
     try:
         paths.make_dirs(folder)
-        # A name of its own (paths.temp_beside): two installs at once shared
+        # A temp file of its own (paths.write_atomically): two installs at once shared
         # "<target>.tmp", and one truncated what the other was writing. mkstemp
         # makes it 0600 and os.replace keeps that - the person's own menu reads it,
-        # nobody else needs to, and no execute bit is set.
-        temporary = paths.temp_beside(target)
-        with open(temporary, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(entry_text(program, icon))
-        os.replace(temporary, target)
+        # nobody else needs to, and no execute bit is set. Nothing half-written is
+        # left behind whatever fails.
+        paths.write_atomically(target, lambda handle: handle.write(text), newline="\n")
     except OSError as exc:
-        if temporary:
-            with crashlog.quiet("desktop.temporary"):  # nothing half-written left behind
-                os.unlink(temporary)
         return None, f"cannot write {target}: {exc.strerror or exc}"
     return target, None
 

@@ -226,12 +226,12 @@ def test_a_failed_copy_is_reported_and_leaves_no_half_written_file(tmp_path, mon
     source, target = _dirs(tmp_path)
     (source / paths.PROFILE_NAME).write_text("{}", encoding="utf-8")
 
-    def boom(src, dst):
-        with open(dst, "w", encoding="utf-8") as f:
-            f.write("half")             # the temp file exists when it fails
+    def boom(source_file, target_file):
+        target_file.write(b"half")     # the temp file exists, half written, when it fails
+        target_file.flush()
         raise OSError("disk full")
 
-    monkeypatch.setattr(paths.shutil, "copyfile", boom)
+    monkeypatch.setattr(paths.shutil, "copyfileobj", boom)
     problems = paths.migrate_user_files(str(source), str(target))
 
     check("the failure is reported, not swallowed", len(problems) == 1, f"({problems})")

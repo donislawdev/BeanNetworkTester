@@ -208,8 +208,10 @@ DEPTH_BAND = 4                  # absolute: see above
 # 8 -> 7 on 2026-10-02: the packet reads left `engine._capture_loop` for
 # `BeanCore.packet_meta` (performance review R-1). 7 -> 6 the same day: the queue
 # peak in `engine._enqueue` stopped taking a lock of its own (performance review
-# R-2, W-A6), and the block that held it was the function's deepest.
-DEPTHS_NEAR_CEILING = 6         # make_gear_icon at 5, five more at 4
+# R-2, W-A6), and the block that held it was the function's deepest. 6 -> 5 on
+# 2026-11-11: the user files adopted from beside a frozen program stopped cleaning
+# up their own temp file in a nested try (`paths.write_atomically` does it).
+DEPTHS_NEAR_CEILING = 5         # make_gear_icon at 5, four more at 4
 
 
 def _logic_lines(source):
