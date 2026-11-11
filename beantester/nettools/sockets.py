@@ -65,6 +65,9 @@ class Socket(NamedTuple):
     change: str = ""            # NEW or CLOSED while the table should point at it
     at: float | None = None     # time.time() it appeared or closed; None = there
                                 # since the first read of this window
+    created: float | None = None    # time.time() of its bind, as the system says it
+                                    # (``portmap.SocketRow.created``; Windows only)
+    service: str = ""           # the service a service host runs it for (_sockets)
 
 
 # How a row that changed is marked (``Socket.change``); the window colours by it.
@@ -79,6 +82,29 @@ MAX_CLOSED = 2000
 # given to another program while it still holds sockets from one read to the next
 # would keep the old name; this is how long, at most.
 NAMES_EVERY_S = 30.0
+# The process that runs services for others, whose own name says nothing about who
+# holds a socket; its sockets are asked for the service (``portmap.owner_module``).
+# MEASURED 2026-11-11 on this project's development machine (``internal_tools``
+# probes ``2026-11-11-sockets-slice2``): 60 svchost sockets, 11 services. The call
+# costs 60-150 us a socket - 0.7 s for 10 000 - so it is asked for these only, once
+# per socket (a socket's owner never changes), and at most this many a read: about
+# 60 ms at the slowest measured.
+SERVICE_HOSTS = frozenset({"svchost.exe"})
+SERVICES_PER_READ = 400
+
+
+class Mark(NamedTuple):
+    """The point "Mark now" set: what was open then, and what has closed since.
+
+    ``closed`` keeps each socket that closed after the mark until the next mark -
+    not MARK_S like the table's own closed rows - because "what did my program
+    open and close since I started it?" is the question the mark is for. At most
+    MAX_CLOSED, the newest; ``dropped`` counts the older ones let go.
+    """
+    at: float                   # time.time() of the read that set it
+    keys: frozenset             # the sockets open then (their keys)
+    closed: tuple = ()          # Sockets that closed since, marked CLOSED
+    dropped: int = 0
 
 
 class Carry(NamedTuple):
@@ -88,6 +114,8 @@ class Carry(NamedTuple):
     last: dict                  # key -> Socket, the open sockets of that read
     seen: dict                  # key -> (time.time(), time.monotonic()) it appeared
     closed: tuple               # ((Socket, time.monotonic() it closed), ...)
+    mark: Mark | None = None    # set by "Mark now", kept until the next one
+    services: dict | None = None    # key -> service, for the service hosts' sockets
 
 
 class Snapshot(NamedTuple):
@@ -106,6 +134,8 @@ class View(NamedTuple):
     query: str
     sort: tuple                 # (column, reverse)
     made: int                   # a count, not a clock: the newest view is the one shown
+    show: str = "all"           # which sockets (SHOWS)
+    total: int = 0              # how many the query chose from (``view``)
 
 
 # Which view is newest, counted rather than timed. It was ``time.time()``, and a
@@ -133,13 +163,16 @@ UNREADABLE_KEYS = {"denied": "tools.sockets.error_denied",
                    "missing": "tools.sockets.error_missing"}
 
 
-def read(previous=None, fresh_names=True):
+def read(previous=None, fresh_names=True, mark=False):
     """Read every socket and name its process. Runs on a worker; may raise.
 
     ``previous`` is the snapshot read before this one, when the caller has it: the
     answer then also says what changed since (``_changes``). ``fresh_names=False``
     lets the read keep the names ``previous`` was given (``_names``) - for a table
     that reads itself; a read somebody asked for names everything again.
+    ``mark=True`` sets the mark ("Mark now") on THIS read's sockets: on a fresh
+    read, not the last one the window has - that may be minutes old, and what
+    opened since would count as opened after the click.
 
     ``Unreadable`` when no table can be read at all: an empty table would say "no
     sockets", which nobody here could know. Anything else that fails is the
@@ -147,7 +180,7 @@ def read(previous=None, fresh_names=True):
     """
     started = time.perf_counter()
     try:
-        rows, failed = portmap.socket_rows()
+        rows, failed = portmap.socket_rows(owners=True)
     except portmap.SocketTableUnavailable as exc:
         raise Unreadable(UNREADABLE_KEYS.get(exc.reason, ""), str(exc)) from exc
     now = _clock()
@@ -157,10 +190,13 @@ def read(previous=None, fresh_names=True):
     # names it was given. A PID reused inside those few milliseconds is the one
     # case left: named after its new owner. Accepted; it cannot be told apart.
     names, named_at = _names(rows, None if fresh_names else carry, now[1])
-    shown, carry = _changes(list(_sockets(rows, names)), carry, frozenset(failed), now)
+    services = {}
+    live = list(_sockets(rows, names, (carry.services if carry else None) or {}, services,
+                         portmap.owner_module))
+    shown, carry = _changes(live, carry, frozenset(failed), now, mark)
     return Snapshot(tuple(shown), tuple(failed), now[0],
                     round((time.perf_counter() - started) * 1000),
-                    carry._replace(names=names, named_at=named_at))
+                    carry._replace(names=names, named_at=named_at, services=services))
 
 
 def _clock():
@@ -197,11 +233,12 @@ def _names(rows, carry, monotonic):
     return {pid: table.get(pid, "") for pid in pids}, monotonic
 
 
-def _changes(live, carry, failed, now):
+def _changes(live, carry, failed, now, mark=False):
     """``(shown, carry)``: ``live`` with what changed since ``carry`` marked, the
     sockets that just closed after them, and what the next read needs.
 
-    ``now`` is the read's ``_clock()``.
+    ``now`` is the read's ``_clock()``. ``mark``: set the mark on this read
+    (``read``); otherwise the one ``carry`` holds is kept up to date (``_still_marked``).
 
     ``failed`` names the tables that did not answer (``portmap.table_of``). Their
     sockets are missing from ``live`` without having closed, so they are kept as
@@ -214,7 +251,8 @@ def _changes(live, carry, failed, now):
     current = {socket.key: socket for socket in live}
     if carry is None:
         # The first read: everything was simply there.
-        return live, Carry({}, monotonic, current, {}, ())
+        return live, Carry({}, monotonic, current, {}, (),
+                           Mark(wall, frozenset(current)) if mark else None)
     unread = {key: socket for key, socket in carry.last.items()
               if key not in current and _table(socket) in failed}
     known = current.keys() | unread.keys()
@@ -224,13 +262,33 @@ def _changes(live, carry, failed, now):
     closed = [(socket, at) for socket, at in carry.closed
               if monotonic - at < MARK_S and socket.key not in current]
     arrived = _arrivals(current, carry.last)
-    closed += [(socket._replace(change=CLOSED, at=wall), monotonic)
-               for key, socket in carry.last.items()
-               if key not in known and not _reshaped(socket, arrived)]
-    closed = closed[-MAX_CLOSED:]
+    fresh = [socket._replace(change=CLOSED, at=wall) for key, socket in carry.last.items()
+             if key not in known and not _reshaped(socket, arrived)]
+    closed = (closed + [(socket, monotonic) for socket in fresh])[-MAX_CLOSED:]
     shown = [_marked(socket, seen.get(socket.key), monotonic) for socket in live]
     shown += [socket for socket, _at in closed]
-    return shown, Carry({}, monotonic, {**unread, **current}, seen, tuple(closed))
+    last = {**unread, **current}
+    # Set on what this read found (the sockets of a table that did not answer
+    # included: they are there, only unread), so what closed in it closed before.
+    marked = (Mark(wall, frozenset(last)) if mark
+              else _still_marked(carry.mark, fresh, current))
+    return shown, Carry({}, monotonic, last, seen, tuple(closed), marked)
+
+
+def _still_marked(mark, fresh, current):
+    """``mark`` after a read in which ``fresh`` closed and ``current`` is open.
+
+    A socket that closed since the mark and is open again under the same key is a
+    new socket: its closed entry goes - one key, one row - and it leaves the
+    mark's keys, so the view shows it as opened since the mark, which it was.
+    """
+    if mark is None:
+        return None
+    reopened = {socket.key for socket in mark.closed if socket.key in current}
+    kept = [socket for socket in mark.closed if socket.key not in reopened] + fresh
+    over = max(0, len(kept) - MAX_CLOSED)
+    return mark._replace(keys=mark.keys - reopened if reopened else mark.keys,
+                         closed=tuple(kept[over:]), dropped=mark.dropped + over)
 
 
 def _table(socket):
@@ -289,25 +347,42 @@ def _marked(socket, appeared, monotonic):
     return socket._replace(change=NEW if fresh else "", at=wall)
 
 
-def _sockets(rows, names):
+def _sockets(rows, names, known=None, services=None, ask=None):
     """``Socket`` per row, each with a key no other row of this read has.
 
     Two rows can be identical in every column: one process may hold two UDP
     sockets on the same address and port (SO_REUSEADDR). The table finds a row by
     its key through a dict, so a duplicate key would send a click on one to the
     other - the numbering of repeats keeps them apart.
+
+    A socket of a service host (SERVICE_HOSTS) is given the service it runs for:
+    from ``known`` (key -> service, the read before this one's), else by ``ask``
+    (``portmap.owner_module``), at most SERVICES_PER_READ times. ``services`` is
+    filled with what this read knows, for the next one; a socket the limit left
+    unasked is not in it, and is asked next time.
     """
     seen = {}
+    known = known or {}
+    budget = SERVICES_PER_READ if ask is not None else 0
     for row in rows:
         base = (f"{row.proto}|{row.local_ip}|{row.local_port}|{row.remote_ip}|"
                 f"{row.remote_port}|{row.pid}")
         repeat = seen.get(base, 0)
         seen[base] = repeat + 1
+        key = f"{base}|{repeat}"
         # No name for PID 0 or for an owner the system would not say: ``_names``.
         name = names.get(row.pid, "")
-        yield Socket(f"{base}|{repeat}", row.proto, row.family, row.local_ip,
-                     row.local_port, row.remote_ip, row.remote_port, row.state,
-                     row.pid, name)
+        service = None
+        if name.lower() in SERVICE_HOSTS:
+            service = known.get(key)
+            if service is None and budget:
+                budget -= 1
+                service = ask(row)
+            if service is not None and services is not None:
+                services[key] = service
+        yield Socket(key, row.proto, row.family, row.local_ip, row.local_port,
+                     row.remote_ip, row.remote_port, row.state, row.pid, name,
+                     created=row.created, service=service or "")
 
 
 NO_OWNER, NO_OWNER_LINUX, NO_OWNER_ROOT = ("tools.sockets.note_no_pid",
@@ -381,10 +456,12 @@ SEARCH_FIELDS = {
 
 
 def _blob(s, _m):
-    """What plain text is searched in: every column, the way it is shown."""
+    """What plain text is searched in: every column, the way it is shown - the
+    service too. ``proc:`` stays the process alone: ``proc:*.exe`` matches a whole
+    name, and would stop finding svchost.exe if its service were part of it."""
     remote_port = "" if s.remote_port is None else s.remote_port
     pid = "" if s.pid is None else s.pid
-    return (f"{s.proc} {s.proto} {s.state} {s.local_ip}:{s.local_port} "
+    return (f"{s.proc} {s.service} {s.proto} {s.state} {s.local_ip}:{s.local_port} "
             f"{s.remote_ip}:{remote_port} {pid}").lower()
 
 
@@ -409,8 +486,10 @@ _SORT_KEYS = {
     "remote_port": lambda s, c: s.remote_port,
     "state": lambda s, c: s.state or None,
     "pid": lambda s, c: s.pid,
-    "proc": lambda s, c: s.proc.lower() or None,
+    # A service host's sockets together, and by service among them.
+    "proc": lambda s, c: (s.proc.lower(), s.service.lower()) if s.proc else None,
     "change": lambda s, c: s.at,
+    "opened": lambda s, c: s.created,
 }
 COLUMNS = tuple(_SORT_KEYS)
 
@@ -425,19 +504,66 @@ def sort(sockets, column, reverse=False):
     return [s for _k, s in present] + [s for k, s in keyed if k is None]
 
 
-def view(snapshot, query="", column=DEFAULT_SORT[0], reverse=False):
-    """The sockets ``query`` keeps, sorted. The search box's rules: see views.py."""
+# -- which sockets: the "Show" box ------------------------------------------------- #
+ALL, LISTENING, CONNECTED, CHANGED, SINCE_MARK = (
+    "all", "listening", "connected", "changed", "mark")
+SHOWS = (ALL, LISTENING, CONNECTED, CHANGED, SINCE_MARK)
+# 🔴 Listening and connected are told by the far end, never by the state's name:
+# a Windows build was measured giving connected sockets as LISTEN and listeners
+# as CLOSED on most reads (``portmap._tcp4_row``), and the far end is what stays
+# true. UDP has no far end in the system's table, so its sockets listen.
+# Changed: the rows the change column has a time for (``Socket.at``).
+_SHOWN = {ALL: None,
+          LISTENING: lambda s: not s.remote_ip,
+          CONNECTED: lambda s: bool(s.remote_ip),
+          CHANGED: lambda s: s.at is not None}
+
+
+def chosen(snapshot, show=ALL):
+    """``(sockets, total)``: the sockets ``show`` keeps, before any search, and how
+    many it chose from.
+
+    Since the mark: the open sockets that were not open at the mark, then every
+    socket that closed since it - also those older than MARK_S, which the table
+    itself no longer lists. Nothing without a mark. ``total`` counts those closed
+    ones too, so "shown of total" never shows more than all.
+    """
+    if show == SINCE_MARK:
+        mark = snapshot.carry.mark if snapshot.carry is not None else None
+        if mark is None:
+            return [], len(snapshot.sockets)
+        open_now = [s for s in snapshot.sockets if s.change != CLOSED]
+        kept = [s for s in open_now if s.key not in mark.keys] + list(mark.closed)
+        return kept, len(open_now) + len(mark.closed)
+    keep = _SHOWN.get(show)
+    if keep is None:
+        return list(snapshot.sockets), len(snapshot.sockets)
+    return [s for s in snapshot.sockets if keep(s)], len(snapshot.sockets)
+
+
+def _kept(snapshot, query, show):
+    """``(sockets, total)``: what ``show`` and ``query`` keep, unsorted, and how many
+    they were chosen from (``chosen``)."""
     tests = compile_query(query, fields=SEARCH_FIELDS, blob=_blob, bools=())
-    kept = [s for s in snapshot.sockets if all(t(s, None) for t in tests)]
-    return sort(kept, column, reverse)
+    sockets, total = chosen(snapshot, show)
+    return [s for s in sockets if all(t(s, None) for t in tests)], total
 
 
-def table(snapshot, query, column, reverse, previous=None, fresh_names=True):
+def view(snapshot, query="", column=DEFAULT_SORT[0], reverse=False, show=ALL):
+    """The sockets ``show`` and ``query`` keep, sorted. The search box's rules: see
+    views.py."""
+    return sort(_kept(snapshot, query, show)[0], column, reverse)
+
+
+def table(snapshot, query, column, reverse, previous=None, fresh_names=True, show=ALL,
+          mark=False):
     """The worker's whole job: read (when ``snapshot`` is None), then filter and sort.
 
-    ``previous`` and ``fresh_names`` are ``read``'s, for a read that follows another.
+    ``previous``, ``fresh_names`` and ``mark`` are ``read``'s, for a read that
+    follows another.
     """
     if snapshot is None:
-        snapshot = read(previous, fresh_names)
-    return View(snapshot, view(snapshot, query, column, reverse), query,
-                (column, reverse), next(_MADE))
+        snapshot = read(previous, fresh_names, mark)
+    kept, total = _kept(snapshot, query, show)
+    return View(snapshot, sort(kept, column, reverse), query, (column, reverse),
+                next(_MADE), show, total)

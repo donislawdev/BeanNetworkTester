@@ -25,6 +25,13 @@ sight there is no read and no timer either: ``refresh`` (the page's tick, which
 only the tool on screen gets) is what starts the waiting again. The next wait
 starts when an answer lands, never while a read is out.
 
+The "Show" box, "Mark now" and "Save CSV" (slice 2, 2026-11-11) take nothing more
+from the machine: a choice and the file are views of the read the window has, and
+a mark is ONE read the person asked for, while looking. Only that read sets the
+mark - on what it found, not on the window's last read, which may be minutes old.
+A row's "Reset this connection" is the Connections page's (``field_actions``);
+when it has ended, the next tick on screen reads once, so the row says it closed.
+
 One request at a time. The worker keeps only the LAST request that waits
 (``gui/model_worker.py``), and a search queued behind a read would have been
 computed on the table it was queued against - the old one - and shown after the
@@ -41,7 +48,7 @@ from ...i18n import T
 from ...nettools import sockets
 from ...nettools.tcphealth import Request
 from ...tcprow import Connection
-from .. import dialogs
+from .. import csv_export, dialogs
 from ..field_actions import block_ip_address, can_reset, leave_process_alone, reset_connection
 from ..labels import wrapping_label
 from ..theme import (CHARS, PAGE_WRAP_PAD, ROWS, SOCKET_COLORS, set_menu_entry_available,
@@ -63,7 +70,8 @@ AREA = "gui.toolbox.sockets"
 # goes last.
 COLUMNS = {"proc": "conns.process", "pid": "conns.pid", "proto": "conns.proto",
            "local_ip": "tools.sockets.col.local_ip", "local_port": "conns.local_port",
-           "state": "tools.sockets.col.state", "change": "tools.sockets.col.change",
+           "state": "tools.sockets.col.state", "opened": "tools.sockets.col.opened",
+           "change": "tools.sockets.col.change",
            "remote_ip": "conns.remote_ip", "remote_port": "conns.remote_port"}
 TIPS = {column: f"tips.tools_sockets_col_{column}" for column in COLUMNS}
 NUMERIC = frozenset({"local_port", "remote_port", "pid"})
@@ -76,12 +84,21 @@ NEWEST_FIRST = frozenset({"change"})
 MIN_CHARS = {"proto": CHARS["proto"], "local_ip": CHARS["address"],
              "local_port": CHARS["port"], "remote_ip": CHARS["address"],
              "remote_port": CHARS["port"], "state": CHARS["tcp_state"],
-             "pid": CHARS["pid"], "proc": CHARS["process"], "change": CHARS["tcp_state"]}
+             "pid": CHARS["pid"], "proc": CHARS["process"], "change": CHARS["tcp_state"],
+             "opened": CHARS["tcp_state"]}
 # What the change column says, by ``Socket.change``; any other row that has a time
 # appeared earlier and is no longer pointed at.
 APPEARED, CLOSED_AT = "tools.sockets.appeared_at", "tools.sockets.closed_at"
+# The "Show" box: what each choice reads as.
+SHOW_TEXT = {sockets.ALL: "tools.sockets.show_all",
+             sockets.LISTENING: "tools.sockets.show_listening",
+             sockets.CONNECTED: "tools.sockets.show_connected",
+             sockets.CHANGED: "tools.sockets.show_changed",
+             sockets.SINCE_MARK: "tools.sockets.show_mark"}
 
 READ, VIEW = "read", "view"
+# A read that also sets the mark ("Mark now"): a READ to the worker, with mark=True.
+MARK = "mark"
 # The shortest wait before a read the table starts by itself: a tick's worth of
 # room for the window to draw the answer it has just been given.
 MIN_WAIT_MS = 50
@@ -110,10 +127,34 @@ def seconds_text(seconds):
     return T("tools.sockets.seconds", n=seconds)
 
 
+def show_text(which):
+    return T(SHOW_TEXT.get(which, SHOW_TEXT[sockets.ALL]))
+
+
+def opened_text(created, now=None):
+    """When the socket was bound: the time for one bound today, the date and time
+    for an older one, "" where the system does not say (Linux)."""
+    if created is None:
+        return ""
+    when = time.localtime(created)
+    today = time.localtime(time.time() if now is None else now)
+    if (when.tm_year, when.tm_yday) == (today.tm_year, today.tm_yday):
+        return time.strftime("%H:%M:%S", when)
+    return time.strftime("%Y-%m-%d %H:%M", when)
+
+
+def proc_text(s):
+    """The process cell: a service host's sockets with the service they belong to,
+    as Resource Monitor writes it."""
+    if s.service and s.proc:
+        return T("tools.sockets.proc_service", proc=s.proc, service=s.service)
+    return s.proc
+
+
 def render(s):
     """One row's cells, in ``COLUMNS`` order. Called only for the rows on screen."""
-    return (s.proc, "" if s.pid is None else s.pid, s.proto, s.local_ip, s.local_port,
-            s.state, change_text(s), s.remote_ip,
+    return (proc_text(s), "" if s.pid is None else s.pid, s.proto, s.local_ip,
+            s.local_port, s.state, opened_text(s.created), change_text(s), s.remote_ip,
             "" if s.remote_port is None else s.remote_port)
 
 
@@ -125,6 +166,10 @@ def address(s):
 def connection_of(s):
     """The row's four numbers, as TCP health names a connection."""
     return Connection(s.local_ip, s.local_port, s.remote_ip, s.remote_port)
+
+
+def _mark_of(snapshot):
+    return snapshot.carry.mark if snapshot.carry is not None else None
 
 
 def reset_row(s):
@@ -183,10 +228,11 @@ class SocketsPanel:
         self._failures = 0          # reads that failed in a row
         self._took = []             # what the last two reads took, in ms
         self._quiet = False         # the read that is out was started by the table
-        self._asked = False         # Refresh was pressed while that read was out
+        self._asked = None          # READ or MARK pressed while that read was out
         self._resetting = None      # the worker of a reset from the row menu
         self.count = ttk.Label(bar, text="", style="Muted.TLabel")
         self.count.pack(side="right")
+        self._build_which_row()
 
         self.status = StatusLine(self.frame)
         self.status.label.pack(fill="x", padx=space("page"), pady=(space("row"), 0))
@@ -205,7 +251,8 @@ class SocketsPanel:
                                   empty_text="tools.common.working")
         self.table.start_reversed = NEWEST_FIRST
         make_room(self.table, {"change": [T(key, time=clock(0))
-                                          for key in (APPEARED, CLOSED_AT)]})
+                                          for key in (APPEARED, CLOSED_AT)],
+                               "opened": [opened_text(0, now=86_400 * 365)]})
         self._build_menu()
 
         self.poller = Poller(self.frame, self.job, self._on_outcome)
@@ -227,6 +274,23 @@ class SocketsPanel:
             # typed inside the pause before a rebuild: remembered, never searched
             self._ask(VIEW)
         self._sync_buttons()
+
+    def _build_which_row(self):
+        """Which sockets, the mark and the file: a row of their own, the first one
+        being full (``render_live``: the pace box ends just before the count)."""
+        which = ttk.Frame(self.frame)
+        which.pack(fill="x", padx=space("page"), pady=(space("row"), 0))
+        self.which, self.which_box = choice(
+            which, self.memory, "tools.sockets.show", sockets.SHOWS, "which", sockets.ALL,
+            "tips.tools_sockets_show", show_text)
+        self.which_box.bind("<<ComboboxSelected>>", self._which_chosen, add="+")
+        self.mark_btn = ttk.Button(which, text=T("tools.sockets.mark"), command=self.mark)
+        self.mark_btn.pack(side="left")
+        add_tooltip(self.mark_btn, "tips.tools_sockets_mark")
+        self.export_btn = ttk.Button(which, text=T("tools.sockets.export"),
+                                     command=self._export)
+        self.export_btn.pack(side="left", padx=(space("inline"), 0))
+        add_tooltip(self.export_btn, "tips.tools_sockets_export")
 
     def _build_menu(self):
         self.menu = style_menu(tk.Menu(self.frame, tearoff=0))
@@ -274,13 +338,24 @@ class SocketsPanel:
     # -- asking -------------------------------------------------------------- #
     def read(self):
         """Read the machine again (the Refresh button)."""
+        self._take(READ)
+
+    def mark(self):
+        """"Mark now": a read that sets the mark, and the table showing what opened
+        and closed since it (``sockets.Mark``). A read of its own, not the last one:
+        that may be minutes old (``sockets.read``)."""
+        self._set_which(sockets.SINCE_MARK)
+        self._take(MARK)
+
+    def _take(self, kind):
         if not self.job.busy():
-            self._ask(READ)
+            self._ask(kind)
         elif self._quiet:
             # The table's own read is out, and the button did not say so (_ask). The
             # person's read follows it, naming every process again; until then the
-            # window shows it was taken.
-            self._asked, self._quiet = True, False
+            # window shows it was taken. A mark asked for is never lost to a Refresh.
+            self._asked = MARK if MARK in (self._asked, kind) else READ
+            self._quiet = False
             self.status.working()
             self._sync_buttons()
 
@@ -291,17 +366,18 @@ class SocketsPanel:
             self._ask(READ)
 
     def _ask(self, kind, by_itself=False):
-        query, (column, reverse) = self.query.get(), self._sort()
+        query, (column, reverse), which = self.query.get(), self._sort(), self.which()
         # Taken HERE, on the UI thread: the worker does not reach back into the
         # window (convention 26), and nothing reads while this runs.
         latest = self._latest()
         snapshot = latest.snapshot if latest is not None else None
-        if kind == READ:
+        if kind in (READ, MARK):
             # The read before this one goes with it, so the answer says what
             # changed. A read the table starts keeps the names it has; one the
             # person asked for names every process again.
-            self.job.run(READ, lambda: sockets.table(None, query, column, reverse,
-                                                     snapshot, not by_itself))
+            mark = kind == MARK
+            self.job.run(READ, lambda: sockets.table(None, query, column, reverse, snapshot,
+                                                     not by_itself, which, mark))
             self._quiet = by_itself
             if not by_itself:
                 # Not for the table's own reads: "Working..." would blink in the
@@ -310,7 +386,8 @@ class SocketsPanel:
         elif snapshot is None:
             return
         else:
-            self.job.run(VIEW, lambda: sockets.table(snapshot, query, column, reverse))
+            self.job.run(VIEW, lambda: sockets.table(snapshot, query, column, reverse,
+                                                     show=which))
         self._sync_buttons()
         self.poller.start()
 
@@ -397,6 +474,15 @@ class SocketsPanel:
             column = sockets.DEFAULT_SORT[0]
         return column, bool(self.memory.get("reverse", ""))
 
+    def _which_chosen(self, _event=None):
+        self._asked_again()
+
+    def _set_which(self, which):
+        """Choose in the "Show" box from code, as a click would, remembered."""
+        self.memory["which"] = which
+        with crashlog.quiet(AREA):
+            self.which_box.set(show_text(which))
+
     # -- answers ------------------------------------------------------------- #
     def _latest(self):
         """The newest view this window has, whichever kind of work made it."""
@@ -420,10 +506,10 @@ class SocketsPanel:
         else:
             self._show(outcome.value, keep_view=outcome.kind == READ)
         if self._asked and not self.job.busy():
-            # Refresh pressed during the table's own read (``read``). Taken with
-            # the inputs as they are now, so it answers a search typed meanwhile too.
-            self._asked = False
-            self._ask(READ)
+            # Refresh or Mark pressed during the table's own read (``_take``). Taken
+            # with the inputs as they are now, so it answers a search typed meanwhile too.
+            kind, self._asked = self._asked, None
+            self._ask(kind)
             return
         # Typed or sorted while the worker was busy: those inputs were remembered,
         # not sent (see the module docstring), so this answer may be for older ones.
@@ -449,12 +535,18 @@ class SocketsPanel:
         self.status.label.config(text=text, style="Muted.TLabel")
 
     def _answers_the_inputs(self, view):
-        return (view.query, view.sort) == (self.query.get(), self._sort())
+        return ((view.query, view.sort, view.show)
+                == (self.query.get(), self._sort(), self.which()))
 
     def _show(self, view, keep_view=False):
         snapshot = view.snapshot
-        if not snapshot.sockets:
+        mark = _mark_of(snapshot)
+        if view.show == sockets.SINCE_MARK and mark is None:
+            empty = "tools.sockets.empty_no_mark"
+        elif not snapshot.sockets:
             empty = "tools.sockets.empty"
+        elif view.show == sockets.SINCE_MARK and not view.query:
+            empty = "tools.sockets.empty_since_mark"
         else:
             empty = "tools.sockets.empty_match"
         self.table.set_empty_text(empty)
@@ -462,8 +554,7 @@ class SocketsPanel:
         # order is a view of the same read, and starts where the table stood, as before.
         self.table.set_model(view.rows, render=render, key_of=lambda s: s.key,
                              tag_of=lambda s: s.change, keep_view=keep_view)
-        self.count.config(text=T("conns.shown_of", shown=len(view.rows),
-                                 total=len(snapshot.sockets)))
+        self.count.config(text=T("conns.shown_of", shown=len(view.rows), total=view.total))
         # Asked of the job, not remembered by the panel: a search or a sort after a
         # failed Refresh shows the same old rows, and they must still say how old.
         self.note.config(text="\n".join(self._notes(snapshot, stale=self._read_failed())))
@@ -475,6 +566,12 @@ class SocketsPanel:
 
     def _notes(self, snapshot, stale=False):
         lines = []
+        mark = _mark_of(snapshot)
+        if mark is not None and self.which() == sockets.SINCE_MARK:
+            lines.append(T("tools.sockets.note_mark", time=clock(mark.at)))
+            if mark.dropped:
+                lines.append(T("tools.sockets.note_mark_dropped", n=mark.dropped,
+                               max=sockets.MAX_CLOSED))
         if self.memory.get("stopped"):
             lines.append(T("tools.sockets.note_live_stopped", n=sockets.FAILURES_TO_STOP))
         if stale:
@@ -497,9 +594,18 @@ class SocketsPanel:
         self.note.config(text="\n".join(self._notes(latest.snapshot, stale=True)))
 
     def _sync_buttons(self):
-        # A read the table started leaves the button as it is: see _ask.
+        # A read the table started leaves the buttons as they are: see _ask.
         busy = self.job.busy() and not self._quiet
-        self.refresh_btn.state(["disabled"] if busy else ["!disabled"])
+        for button in (self.refresh_btn, self.mark_btn):
+            button.state(["disabled"] if busy else ["!disabled"])
+
+    def _export(self):
+        """"Save CSV": the rows on screen - this search, this "Show", this order -
+        as they are, read from what the window holds. Nothing is read again. The
+        writer, or None when one was already running (``csv_export.export_sockets``)."""
+        latest = self._latest()
+        return csv_export.export_sockets(self.app,
+                                         list(latest.rows) if latest is not None else [])
 
     # -- the menu on a row ---------------------------------------------------- #
     def _selected(self):
@@ -556,8 +662,10 @@ class SocketsPanel:
             self._resetting = reset_connection(self.app, reset_row(s))
 
     def _read_after_reset(self):
+        # Not while any read is out: it may have started before the reset ended,
+        # and would show the connection open. The next tick asks again.
         worker = self._resetting
-        if worker is not None and not worker.is_alive():
+        if worker is not None and not worker.is_alive() and not self.job.busy():
             self._resetting = None
             self.read()
 

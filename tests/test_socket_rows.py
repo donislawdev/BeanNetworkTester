@@ -50,29 +50,39 @@ class FakeIphlpapi:
         self.refuse = refuse or {}      # (proto, family) -> an error code
         self.grow_forever = grow_forever
         self.calls = []                 # ((proto, family), buffer size offered)
+        self.classes = []               # ((proto, family), table class asked for)
 
-    def _answer(self, key, buffer, size_ref):
+    def _answer(self, key, buffer, size_ref, table_class):
         size = size_ref._obj            # byref() keeps what it points at here
         self.calls.append((key, size.value))
+        self.classes.append((key, table_class))
         if key in self.refuse:
             return self.refuse[key]
         if self.grow_forever:
             size.value += 4096          # the table outgrew every buffer offered
             return portmap._ERROR_INSUFFICIENT_BUFFER
-        row_type = self.native.rows[key]
+        # The row the CLASS asked for, as iphlpapi does: a fake that wrote the small
+        # row whatever it was asked would read back wrong - past its buffer, measured.
+        module = table_class == (portmap._TCP_TABLE_OWNER_MODULE_ALL if key[0] == "tcp"
+                                 else portmap._UDP_TABLE_OWNER_MODULE)
+        row_type = (self.native.module_rows if module else self.native.rows)[key]
         rows = [row_type(**fields) for fields in self.tables.get(key, [])]
-        payload = bytes(wintypes.DWORD(len(rows))) + b"".join(bytes(r) for r in rows)
+        # The count, then the rows at their own alignment: 8 for a row holding a
+        # LARGE_INTEGER (the OWNER_MODULE ones), as the C compiler lays the table out.
+        header = max(ctypes.sizeof(wintypes.DWORD), ctypes.alignment(row_type))
+        payload = (bytes(wintypes.DWORD(len(rows))).ljust(header, b"\0")
+                   + b"".join(bytes(r) for r in rows))
         if size.value < len(payload):
             size.value = len(payload)
             return portmap._ERROR_INSUFFICIENT_BUFFER
         ctypes.memmove(buffer, payload, len(payload))
         return 0
 
-    def GetExtendedTcpTable(self, buffer, size_ref, _order, family, _table_class, _reserved):
-        return self._answer(("tcp", family), buffer, size_ref)
+    def GetExtendedTcpTable(self, buffer, size_ref, _order, family, table_class, _reserved):
+        return self._answer(("tcp", family), buffer, size_ref, table_class)
 
-    def GetExtendedUdpTable(self, buffer, size_ref, _order, family, _table_class, _reserved):
-        return self._answer(("udp", family), buffer, size_ref)
+    def GetExtendedUdpTable(self, buffer, size_ref, _order, family, table_class, _reserved):
+        return self._answer(("udp", family), buffer, size_ref, table_class)
 
 
 def _native(api):
@@ -183,6 +193,118 @@ def test_the_far_end_is_judged_by_itself_and_never_by_the_states_name():
     ], f"({ends})")
 
 
+def test_the_socket_table_reads_the_bind_time_and_the_port_map_keeps_its_small_rows():
+    """The Sockets tool reads the OWNER_MODULE tables - the same sockets, each with
+    the FILETIME of its bind - and the capture side's map keeps the OWNER_PID ones it
+    always read: 24 bytes a row against 160, on a path that runs at every refresh of
+    the port table. A stamp of 0 is the system not saying, not 1601."""
+    machine = _machine()
+    stamp = (1_700_000_000 + portmap._FILETIME_EPOCH_S) * 10_000_000   # 2023-11-14
+    machine[TCP4][1]["liCreateTimestamp"] = stamp
+    api = FakeIphlpapi(machine)
+    native = _native(api)
+    rows, _failed = native.socket_rows()
+    check("the bind time, as time.time()", rows[1].created == 1_700_000_000.0,
+          f"({rows[1].created})")
+    check("0 is no answer", rows[0].created is None, f"({rows[0].created})")
+    check("and no owner data unless asked", all(row.owner is None for row in rows))
+    module = {("tcp", portmap._TCP_TABLE_OWNER_MODULE_ALL),
+              ("udp", portmap._UDP_TABLE_OWNER_MODULE)}
+    check("every table asked for its module rows",
+          {(key[0], cls) for key, cls in api.classes} == module, f"({api.classes})")
+
+    api.classes.clear()
+    native.port_pid_map()
+    check("the port map asks for the small rows it always did",
+          {(key[0], cls) for key, cls in api.classes}
+          == {("tcp", portmap._TCP_TABLE_OWNER_PID_ALL), ("udp", portmap._UDP_TABLE_OWNER_PID)},
+          f"({api.classes})")
+
+
+class _Owners:
+    """GetOwnerModuleFrom*Entry: the name for a socket's PID, written the way
+    iphlpapi writes TCPIP_OWNER_MODULE_BASIC_INFO - two pointers, then the strings
+    they point at - with ERROR_INSUFFICIENT_BUFFER for a buffer too small."""
+
+    def __init__(self, names, code=0):
+        self.names, self.code, self.asked = names, code, []
+
+    def _call(self, entry_ref, info_class, buffer, size_ref):
+        entry = entry_ref._obj
+        self.asked.append((type(entry).__name__, int(entry.dwOwningPid), info_class))
+        if self.code:
+            return self.code
+        name = self.names.get(int(entry.dwOwningPid), "")
+        # wchar_t is 2 bytes on Windows and 4 on Linux, where the walk is tested too
+        wide = "utf-16-le" if ctypes.sizeof(ctypes.c_wchar) == 2 else "utf-32-le"
+        text = (name + "\0").encode(wide)
+        pointers = 2 * ctypes.sizeof(ctypes.c_void_p)
+        need = pointers + 2 * len(text)
+        size = size_ref._obj
+        if size.value < need:
+            size.value = need
+            return portmap._ERROR_INSUFFICIENT_BUFFER
+        start = ctypes.addressof(buffer) + pointers
+        ctypes.memmove(start, text, len(text))
+        ctypes.memmove(start + len(text), text, len(text))
+        ctypes.cast(buffer, ctypes.POINTER(ctypes.c_void_p))[0] = start
+        ctypes.cast(buffer, ctypes.POINTER(ctypes.c_void_p))[1] = start + len(text)
+        return 0
+
+    GetOwnerModuleFromTcpEntry = GetOwnerModuleFromTcp6Entry = _call
+    GetOwnerModuleFromUdpEntry = GetOwnerModuleFromUdp6Entry = _call
+
+
+def test_a_row_read_with_its_owner_data_names_the_service_behind_it():
+    """``owners=True`` keeps each row's own bytes, and ``owner_module`` hands them
+    back to the system, which names the module that bound the socket - for svchost,
+    the service. The row it is handed is the one that was read, field for field;
+    a name longer than the first buffer is asked again; a refusal is no name."""
+    class Both(FakeIphlpapi, _Owners):
+        def __init__(self, tables, names, code=0):
+            FakeIphlpapi.__init__(self, tables)
+            _Owners.__init__(self, names, code)
+
+    api = Both(_machine(), {900: "RpcSs", 100: "Dnscache" * 80})
+    native = _native(api)
+    rows, _failed = native.socket_rows(owners=True)
+    check("each row carries its own bytes",
+          all(isinstance(row.owner, bytes) for row in rows), f"({rows[0].owner!r})")
+    by_pid = {row.pid: native.owner_module(row) for row in rows}
+    check("the TCPv6 listener's service", by_pid[900] == "RpcSs", f"({by_pid})")
+    check("a long name comes whole", by_pid[100] == "Dnscache" * 80, f"({by_pid[100]})")
+    check("a PID the system knows nothing of: no name", by_pid[1234] == "")
+    check("asked with the module row of each table and the BASIC class",
+          {(kind, cls) for kind, _pid, cls in api.asked} == {
+              ("MIB_TCPROW_OWNER_MODULE", 0), ("MIB_TCP6ROW_OWNER_MODULE", 0),
+              ("MIB_UDPROW_OWNER_MODULE", 0), ("MIB_UDP6ROW_OWNER_MODULE", 0)},
+          f"({sorted(set(api.asked))})")
+    check("a row without owner data asks nothing",
+          native.owner_module(rows[0]._replace(owner=None)) == "")
+    api.code = 1168                                     # ERROR_NOT_FOUND
+    check("an error is no name", native.owner_module(rows[4]) == "")
+
+
+def test_owner_module_off_windows_and_on_a_failure_is_no_name(monkeypatch):
+    """A missing service name is not worth a failed read: the program's own fault
+    goes to the crash log, and the row shows its process alone."""
+    row = SocketRow("TCP", 4, "0.0.0.0", 135, "", None, "LISTEN", 900, None, b"x")
+    monkeypatch.setattr(portmap, "_OWNER_API", [None])              # off Windows
+    check("no system to ask: no name", portmap.owner_module(row) == "")
+    check("and no owner data: nothing asked",
+          portmap.owner_module(row._replace(owner=None)) == "")
+
+    class Broken:
+        def owner_module(self, _row):
+            raise ValueError("a binding that broke")
+
+    noted = []
+    monkeypatch.setattr(portmap, "_OWNER_API", [Broken()])
+    monkeypatch.setattr(crashlog, "note", lambda exc, area: noted.append(area))
+    check("a failure is no name", portmap.owner_module(row) == "")
+    check("and it is recorded", noted == ["portmap.owner_module"], f"({noted})")
+
+
 def test_the_walk_grows_its_buffer_and_remembers_the_size():
     """A table larger than the first buffer answers 122 with the size it needs; the
     walk tries again with that, and the next walk starts from it."""
@@ -215,11 +337,11 @@ class _GrowingIphlpapi(FakeIphlpapi):
     def _row(n):
         return dict(dwLocalAddr=_v4("0.0.0.0"), dwLocalPort=_port(1024 + n), dwOwningPid=n + 1)
 
-    def _answer(self, key, buffer, size_ref):
+    def _answer(self, key, buffer, size_ref, table_class):
         if key == UDP4:
             rows = self.tables[UDP4]
             rows.extend(self._row(len(rows) + n) for n in range(self.per_call))
-        return super()._answer(key, buffer, size_ref)
+        return super()._answer(key, buffer, size_ref, table_class)
 
 
 def _asked(api, key):
@@ -450,3 +572,17 @@ def test_the_real_socket_table_reads_as_sockets():
               (("0.0.0.0", 0), ("::", 0)), f"({row})")
     if sys.platform == "win32":
         check("on Windows every table answers", failed == [], f"({failed})")
+        # The OWNER_MODULE rows as Learn lays them out (x64): a field off by one
+        # would shift every row after the first, and the stamps with them.
+        sizes = {key: ctypes.sizeof(row) for key, row in portmap._Native().module_rows.items()}
+        check("the module rows are Windows' size", sizes == {
+            TCP4: 160, TCP6: 192, UDP4: 160, UDP6: 176} or ctypes.sizeof(ctypes.c_void_p) == 4,
+            f"({sizes})")
+        import time
+        now = time.time()
+        stamped = [row.created for row in rows if row.created is not None]
+        check("most sockets say when they were bound", len(stamped) >= len(rows) // 2,
+              f"({len(stamped)} of {len(rows)})")
+        check("none in the future, none before this century",
+              all(946_684_800 < at <= now + 1 for at in stamped),
+              f"({min(stamped, default=None)}, {max(stamped, default=None)})")

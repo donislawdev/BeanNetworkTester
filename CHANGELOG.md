@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **Tools: more from the Sockets table.** "Show" lists only the sockets that are listening, the
+  connections, the ones that changed, or the ones since the mark: press "Mark now", then start
+  your program, to see what it opens and closes. The new "opened" column says when a program
+  opened its socket (Windows only), and svchost.exe shows the service it runs for, such as
+  `svchost.exe (Dnscache)`. "Save CSV" writes the rows on screen to a file, and the row menu
+  can reset a connection, as on the Connections page.
+
 - **Payload size targeting.** A new card on the Control page aims the impairments at packets
   by how many bytes of data they carry, with one field for UDP and one for TCP
   (`--payload-udp`, `--payload-tcp`). Both take the usual filter syntax: `64-1472` leaves a

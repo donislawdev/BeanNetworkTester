@@ -1,4 +1,5 @@
-"""The two CSV exports: the appended session stats and the connection snapshot.
+"""The CSV exports: the appended session stats, and the connection and socket
+snapshots.
 
 Carved out of ``gui/app.py`` when it sat at the size ceiling (convention 32b says
 split rather than raise the number). They still read the App - the engine snapshot,
@@ -15,7 +16,7 @@ import time
 
 from .. import crashlog
 from ..i18n import T
-from ..paths import CONNECTIONS_CSV_FILE, CSV_FILE, hand_back
+from ..paths import CONNECTIONS_CSV_FILE, CSV_FILE, SOCKETS_CSV_FILE, hand_back
 from ..views import (avg_packet_bytes, connection_proc, filter_sort_connections,
                      scoped_packets)
 
@@ -264,3 +265,68 @@ def _write_connections_now(app, payload):
         except OSError as _exc:
             crashlog.note(_exc, "gui.app")
         app.log(f"{T('log.csv_error')}: {e}")
+
+
+# The socket table (Tools > Sockets), its columns in the table's own words where
+# a spreadsheet can take them: times as "YYYY-MM-DD HH:MM:SS" in this computer's
+# time zone, `change` as the program's own "new" / "closed" (English, like the
+# connections export's yes/no). `opened` is when the socket was bound, as the
+# system says it - empty on Linux, which does not say.
+SOCKETS_CSV_HEADER = ["process", "service", "pid", "proto", "local_ip", "local_port",
+                      "remote_ip", "remote_port", "state", "opened", "change", "changed_at"]
+
+# One export of the socket table at a time - its own file, so its own lock.
+_SOCKETS_LOCK = threading.Lock()
+
+
+def export_sockets(app, rows):
+    """Write the socket table's rows - as the window shows them: its search, its
+    "Show" and its order - to their CSV, overwritten each time like the connections
+    snapshot, and on a worker for its reason. ``rows`` are the window's own
+    ``nettools.sockets.Socket`` values, which nothing changes once made, so they
+    are handed over as they are. Returns the worker, or None when an export was
+    already running."""
+    if not _SOCKETS_LOCK.acquire(blocking=False):
+        app.log(T("log.conns_export_busy"))
+        return None
+    try:
+        worker = threading.Thread(target=_write_sockets, args=(app, list(rows)),
+                                  name="sockets-csv", daemon=True)
+        worker.start()
+    except BaseException:
+        _SOCKETS_LOCK.release()
+        raise
+    return worker
+
+
+def _stamp(at):
+    return "" if at is None else time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(at))
+
+
+def _write_sockets(app, rows):
+    """Worker thread: the connections snapshot's way - a temporary file beside the
+    real one, then a rename, so a failure leaves the previous export whole."""
+    path = SOCKETS_CSV_FILE
+    tmp = path + ".tmp"
+    try:
+        with open(tmp, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(SOCKETS_CSV_HEADER)
+            for s in rows:
+                writer.writerow([formula_safe(v) for v in (
+                    s.proc, s.service, "" if s.pid is None else s.pid, s.proto,
+                    s.local_ip, s.local_port, s.remote_ip,
+                    "" if s.remote_port is None else s.remote_port, s.state,
+                    _stamp(s.created), s.change, _stamp(s.at))])
+        hand_back(tmp)
+        os.replace(tmp, path)
+        app.log(f"{T('log.sockets_saved_to')} {path} ({len(rows)})")
+    except Exception as e:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except OSError as _exc:
+            crashlog.note(_exc, "gui.csv_export")
+        app.log(f"{T('log.csv_error')}: {e}")
+    finally:
+        _SOCKETS_LOCK.release()

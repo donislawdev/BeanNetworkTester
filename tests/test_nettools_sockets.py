@@ -33,7 +33,7 @@ NAMES = {0: "[System Process]", 4: "System", 1234: "chrome.exe", 900: "svchost.e
 def machine(monkeypatch):
     read = []
 
-    def socket_rows():
+    def socket_rows(owners=False):
         read.append("table")
         return list(ROWS), ["udp/v6"]
 
@@ -61,7 +61,7 @@ def test_a_read_names_each_row_after_the_table_and_keeps_what_failed(machine):
 
 @pytest.mark.parametrize("reason", sorted(sk.UNREADABLE_KEYS))
 def test_a_table_nobody_may_read_becomes_a_reason_the_window_can_say(monkeypatch, reason):
-    def refused():
+    def refused(owners=False):
         raise portmap.SocketTableUnavailable(reason, "the program's own words")
 
     monkeypatch.setattr(portmap, "socket_rows", refused)
@@ -211,7 +211,8 @@ def world(monkeypatch):
         w.asked += 1
         return dict(w.names)
 
-    monkeypatch.setattr(portmap, "socket_rows", lambda: (list(w.rows), list(w.failed)))
+    monkeypatch.setattr(portmap, "socket_rows",
+                        lambda owners=False: (list(w.rows), list(w.failed)))
     monkeypatch.setattr(portmap, "process_names", process_names)
     monkeypatch.setattr(sk, "_clock", lambda: (w.wall, w.monotonic))
     return w
@@ -533,6 +534,234 @@ def test_the_change_column_sorts_by_time_with_unchanged_rows_last_both_ways(worl
               f"({[s.local_port for s in rows[:2]]})")
         check(f"the rows that did not change last (reverse={reverse})",
               all(s.at is None for s in rows[2:]))
+
+
+def test_the_opened_column_sorts_by_the_bind_time_with_unknown_last(world):
+    world.rows = [ROWS[0]._replace(created=30.0), ROWS[1]._replace(created=10.0), ROWS[3]]
+    snap = sk.read()
+    check("the bind time travels from the row", [s.created for s in snap.sockets]
+          == [30.0, 10.0, None], f"({[s.created for s in snap.sockets]})")
+    for reverse, expected in ((False, [50000, 445, 135]), (True, [445, 50000, 135])):
+        got = [s.local_port for s in sk.view(snap, "", "opened", reverse)]
+        check(f"oldest first, unknown last (reverse={reverse})", got == expected, f"({got})")
+
+
+# -- the "Show" box -------------------------------------------------------------------- #
+def ports(rows):
+    return sorted(s.local_port for s in rows)
+
+
+def test_listening_and_connected_are_told_by_the_far_end_not_by_the_state(world):
+    """A Windows build gave connected sockets as LISTEN and listeners as CLOSED on
+    most reads (``portmap._tcp4_row``); the far end is what stays true."""
+    world.rows += [SocketRow("TCP", 4, "10.0.0.2", 50003, "10.0.0.9", 443, "LISTEN", 1234),
+                   SocketRow("TCP", 4, "0.0.0.0", 7070, "", None, "CLOSED", 1234)]
+    snap = sk.read()
+    listening = ports(sk.view(snap, show=sk.LISTENING))
+    connected = ports(sk.view(snap, show=sk.CONNECTED))
+    check("no far end: listening, UDP included", listening == [135, 445, 546, 5353, 5353,
+                                                                7070, 8080], f"({listening})")
+    check("a far end: a connection, whatever the state says, TIME_WAIT included",
+          connected == [13882, 50000, 50003], f"({connected})")
+    check("all is all", ports(sk.view(snap, show=sk.ALL)) == ports(snap.sockets))
+    check("a show it does not know is all",
+          ports(sk.view(snap, show="nonsense")) == ports(snap.sockets))
+    view = sk.table(snap, "proto:udp", "local_port", False, show=sk.LISTENING)
+    check("and the search narrows what the show kept", ports(view.rows) == [546, 5353, 5353],
+          f"({ports(view.rows)})")
+    check("out of every socket", view.total == len(snap.sockets), f"({view.total})")
+    check("the view says what it shows", view.show == sk.LISTENING)
+
+
+def test_changed_keeps_the_rows_the_change_column_has_a_time_for(world):
+    first = sk.read()
+    check("nothing has changed in a window's first read",
+          sk.view(first, show=sk.CHANGED) == [])
+    world.rows.append(NEW_ROW)
+    world.drop(445)
+    world.later(2)
+    second = sk.read(first)
+    check("what appeared and what closed", ports(sk.view(second, show=sk.CHANGED)) == [445, 50007],
+          f"({ports(sk.view(second, show=sk.CHANGED))})")
+    world.later(sk.MARK_S)
+    third = sk.read(second)
+    check("an appearance keeps its time, a close goes with its row",
+          ports(sk.view(third, show=sk.CHANGED)) == [50007])
+
+
+# -- the mark ("Mark now") ----------------------------------------------------------- #
+LATER_ROW = SocketRow("TCP", 4, "10.0.0.2", 50008, "198.51.100.8", 443, "ESTABLISHED", 1234)
+
+
+def test_the_mark_is_set_on_the_read_that_asks_for_it(world):
+    """On a FRESH read: the window's last one may be minutes old, and a socket that
+    opened since then, before the click, is not "opened since the mark"."""
+    first = sk.read()
+    check("no mark, nothing since it", sk.view(first, show=sk.SINCE_MARK) == []
+          and first.carry.mark is None)
+    world.rows.append(NEW_ROW)              # opened after the last read, BEFORE the click
+    world.later(1)
+    marked = sk.read(first, mark=True)
+    mark = marked.carry.mark
+    check("set at the time of its read", mark.at == world.wall, f"({mark.at})")
+    check("on that read's sockets", sk.view(marked, show=sk.SINCE_MARK) == [],
+          f"({ports(sk.view(marked, show=sk.SINCE_MARK))})")
+    world.rows.append(LATER_ROW)
+    world.later(1)
+    after = sk.read(marked, fresh_names=False)
+    check("what opened after it", ports(sk.view(after, show=sk.SINCE_MARK)) == [50008],
+          f"({ports(sk.view(after, show=sk.SINCE_MARK))})")
+    check("the mark travels on, a read the table started included",
+          after.carry.mark.keys == mark.keys and after.carry.mark.at == mark.at)
+    check("and through a read somebody asked for", sk.read(after).carry.mark.at == mark.at)
+
+
+def test_what_closed_since_the_mark_stays_until_the_next_mark(world):
+    """The table lets a closed socket go after MARK_S; the mark keeps it, because
+    "what did my program open and close since I started it?" is what it is for."""
+    marked = sk.read(mark=True)
+    world.drop(50000)
+    world.later(1)
+    closed = sk.read(marked)
+    world.later(sk.MARK_S * 3)
+    much_later = sk.read(sk.read(closed))
+    check("the table itself let it go", at_port(much_later, 50000) == [])
+    since = sk.view(much_later, show=sk.SINCE_MARK)
+    check("the mark did not, with the time it was found closed",
+          [(s.local_port, s.change, s.at) for s in since] == [(50000, sk.CLOSED, 1_001.0)],
+          f"({since})")
+    view = sk.table(much_later, "", "local_port", False, show=sk.SINCE_MARK)
+    check("chosen out of the open sockets and the closed one, never more than all",
+          view.total == len(ROWS) - 1 + 1, f"({view.total})")
+    again = sk.read(much_later, mark=True)
+    check("a new mark starts empty", sk.view(again, show=sk.SINCE_MARK) == []
+          and again.carry.mark.closed == ())
+
+
+def test_a_socket_that_closed_since_the_mark_and_opens_again_is_one_row_opened_since(world):
+    """One key, one row - the table finds a row by its key. Open again, it was not
+    open the whole time since the mark, so it shows as opened since."""
+    marked = sk.read(mark=True)
+    world.drop(50000)
+    world.later(1)
+    closed = sk.read(marked)
+    world.rows = list(ROWS)
+    world.later(1)
+    back = sk.read(closed)
+    since = sk.view(back, show=sk.SINCE_MARK)
+    check("one row, open again", [(s.local_port, s.change) for s in since]
+          == [(50000, sk.NEW)], f"({since})")
+    world.later(1)
+    check("and still there once it is no longer new",
+          ports(sk.view(sk.read(back), show=sk.SINCE_MARK)) == [50000])
+
+
+def test_a_socket_that_got_its_far_end_since_the_mark_is_a_connection_not_a_close(world):
+    """Bound at the mark, connected after it: the same socket getting on with its
+    life (``_reshaped``) - the connection is new since the mark, nothing closed."""
+    bound = SocketRow("TCP", 4, "10.0.0.2", 50009, "", None, "CLOSED", 1234)
+    world.rows.append(bound)
+    marked = sk.read(mark=True)
+    world.rows[-1] = bound._replace(remote_ip="198.51.100.9", remote_port=443,
+                                    state="ESTABLISHED")
+    world.later(1)
+    since = sk.view(sk.read(marked), show=sk.SINCE_MARK)
+    check("the connection, and no close", [(s.local_port, s.remote_ip, s.change)
+                                           for s in since]
+          == [(50009, "198.51.100.9", sk.NEW)], f"({since})")
+
+
+def test_the_mark_keeps_the_newest_closed_and_counts_the_ones_let_go(world, monkeypatch):
+    monkeypatch.setattr(sk, "MAX_CLOSED", 2)
+    snap = sk.read(mark=True)
+    for port in (50000, 445, 135):
+        world.drop(port)
+        world.later(1)
+        snap = sk.read(snap)
+    mark = snap.carry.mark
+    check("the newest", [s.local_port for s in mark.closed] == [445, 135],
+          f"({[s.local_port for s in mark.closed]})")
+    check("the older one counted", mark.dropped == 1, f"({mark.dropped})")
+
+
+def test_a_table_that_did_not_answer_at_the_mark_brings_nothing_new_when_it_does(world):
+    first = sk.read()
+    udp4 = [row for row in ROWS if (row.proto, row.family) == ("UDP", 4)]
+    world.failed = ["udp/v4"]
+    world.rows = [row for row in ROWS if row not in udp4]
+    world.later(1)
+    marked = sk.read(first, mark=True)
+    world.failed, world.rows = [], list(ROWS)
+    world.later(1)
+    check("its sockets were there at the mark, only unread",
+          sk.view(sk.read(marked), show=sk.SINCE_MARK) == [])
+
+
+# -- a service host's sockets ---------------------------------------------------------- #
+def test_a_service_hosts_sockets_are_named_by_their_service_once_each(world, monkeypatch):
+    asked = []
+
+    def owner_module(row):
+        asked.append(row.local_port)
+        return {135: "RpcSs"}.get(row.local_port, "")
+
+    monkeypatch.setattr(portmap, "owner_module", owner_module)
+    world.rows.append(SocketRow("UDP", 4, "0.0.0.0", 1900, "", None, "", 900))
+    snap = sk.read()
+    (rpc,) = at_port(snap, 135)
+    check("svchost's socket, with its service", (rpc.proc, rpc.service)
+          == ("svchost.exe", "RpcSs"), f"({rpc})")
+    check("nobody else's socket asked about", asked == [135, 1900], f"({asked})")
+    check("nor given one", all(s.service == "" for s in snap.sockets if s.local_port != 135))
+    world.later(1)
+    again = sk.read(snap, fresh_names=False)
+    sk.read(sk.read(again))
+    check("a socket's owner never changes: each asked once, an empty answer too",
+          asked == [135, 1900], f"({asked})")
+    (still,) = at_port(again, 135)
+    check("and still named", still.service == "RpcSs")
+    check("the search finds the service", ports(sk.view(again, "rpcss")) == [135])
+    check("proc: is the process alone, so a whole-name pattern still finds svchost",
+          135 in ports(sk.view(again, "proc:*.exe")))
+    world.drop(135)
+    world.later(1)
+    gone = sk.read(again)
+    world.rows.append(ROWS[3])
+    world.later(1)
+    sk.read(gone)
+    check("a socket that went is forgotten, and asked about when it comes back",
+          asked == [135, 1900, 135], f"({asked})")
+
+
+def test_at_most_so_many_services_are_asked_a_read_and_the_rest_next_time(world, monkeypatch):
+    monkeypatch.setattr(sk, "SERVICES_PER_READ", 2)
+    world.rows = [SocketRow("UDP", 4, "0.0.0.0", 60000 + n, "", None, "", 900)
+                  for n in range(5)]
+    asked = []
+    monkeypatch.setattr(portmap, "owner_module",
+                        lambda row: asked.append(row.local_port) or "SSDPSRV")
+    first = sk.read()
+    check("two asked, the rest shown without one for now", len(asked) == 2
+          and sum(1 for s in first.sockets if s.service) == 2, f"({asked})")
+    second = sk.read(first)
+    check("the next read asks the next two", len(asked) == 4 and len(set(asked)) == 4,
+          f"({asked})")
+    third = sk.read(second)
+    check("and then the last, every socket named",
+          sorted(asked) == list(range(60000, 60005))
+          and all(s.service == "SSDPSRV" for s in third.sockets), f"({asked})")
+
+
+def test_the_process_column_keeps_a_service_hosts_sockets_together_by_service(world,
+                                                                            monkeypatch):
+    services = {135: "RpcSs", 1900: "SSDPSRV", 53: "Dnscache"}
+    monkeypatch.setattr(portmap, "owner_module", lambda row: services[row.local_port])
+    world.rows = [SocketRow("UDP", 4, "0.0.0.0", port, "", None, "", 900)
+                  for port in (135, 1900, 53)] + [ROWS[1]]
+    rows = sk.view(sk.read(), "", "proc")
+    check("by process, then by service", [(s.proc, s.service) for s in rows] == [
+        ("chrome.exe", ""), ("svchost.exe", "Dnscache"), ("svchost.exe", "RpcSs"),
+        ("svchost.exe", "SSDPSRV")], f"({[(s.proc, s.service) for s in rows]})")
 
 
 @pytest.mark.parametrize("chosen, last_ms, failures, expected", [

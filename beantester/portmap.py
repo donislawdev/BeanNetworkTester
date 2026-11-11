@@ -46,6 +46,13 @@ _AF_INET = 2
 _AF_INET6 = 23            # AF_INET6 on Windows (NOT the POSIX 10)
 _TCP_TABLE_OWNER_PID_ALL = 5
 _UDP_TABLE_OWNER_PID = 1
+# The same tables with each socket's bind time and owner data (``socket_rows``).
+_TCP_TABLE_OWNER_MODULE_ALL = 8
+_UDP_TABLE_OWNER_MODULE = 2
+_MODULE_SIZE = 16           # TCPIP_OWNING_MODULE_SIZE: OwningModuleInfo's ULONGLONGs
+_TCPIP_OWNER_MODULE_INFO_BASIC = 0
+# FILETIME counts 100 ns steps from 1601-01-01; Unix time starts this much later.
+_FILETIME_EPOCH_S = 11_644_473_600
 _ERROR_INSUFFICIENT_BUFFER = 122
 
 
@@ -85,6 +92,10 @@ class SocketRow(NamedTuple):
     remote_port: int | None
     state: str                  # a TCP_STATES name; "" for UDP
     pid: int | None             # 0: owned by no process (TIME_WAIT); None: the OS would not say
+    created: float | None = None    # time.time() of the bind; None where the system
+                                    # does not say (Linux: no such field) or says 0
+    owner: bytes | None = None  # the system's own row, for ``owner_module`` - only
+                                # when ``socket_rows(owners=True)`` asked for it
 
 
 def table_of(proto, version):
@@ -158,36 +169,64 @@ def _ipv6(raw, scope):
 #
 # The state column still says what the system said. Probes: ``internal_tools``
 # ``2026-11-10-sockets-monitor``.
-def _tcp4_row(row):
+def _created(filetime):
+    """``time.time()`` of a row's ``liCreateTimestamp`` (a FILETIME of the bind,
+    Learn: MIB_TCPROW_OWNER_MODULE); None for 0, which the system gives when it does
+    not say. MEASURED 2026-11-11: a listener read 0.2 ms from its bind, one row in
+    182 held 0 (``internal_tools`` probes ``2026-11-11-sockets-slice2``)."""
+    return filetime / 1e7 - _FILETIME_EPOCH_S if filetime > 0 else None
+
+
+def _tcp4_row(row, owners=False):
     idle = not (row.dwRemoteAddr or row.dwRemotePort & 0xFFFF)
     return SocketRow("TCP", 4, _ipv4(row.dwLocalAddr), _swap16(row.dwLocalPort & 0xFFFF),
                      "" if idle else _ipv4(row.dwRemoteAddr),
                      None if idle else _swap16(row.dwRemotePort & 0xFFFF),
-                     _tcp_state(row.dwState), int(row.dwOwningPid))
+                     _tcp_state(row.dwState), int(row.dwOwningPid),
+                     _created(row.liCreateTimestamp), bytes(row) if owners else None)
 
 
-def _tcp6_row(row):
+def _tcp6_row(row, owners=False):
     idle = not (any(row.ucRemoteAddr) or row.dwRemotePort & 0xFFFF)
     return SocketRow("TCP", 6, _ipv6(row.ucLocalAddr, row.dwLocalScopeId),
                      _swap16(row.dwLocalPort & 0xFFFF),
                      "" if idle else _ipv6(row.ucRemoteAddr, row.dwRemoteScopeId),
                      None if idle else _swap16(row.dwRemotePort & 0xFFFF),
-                     _tcp_state(row.dwState), int(row.dwOwningPid))
+                     _tcp_state(row.dwState), int(row.dwOwningPid),
+                     _created(row.liCreateTimestamp), bytes(row) if owners else None)
 
 
-def _udp4_row(row):
+def _udp4_row(row, owners=False):
     return SocketRow("UDP", 4, _ipv4(row.dwLocalAddr), _swap16(row.dwLocalPort & 0xFFFF),
-                     "", None, "", int(row.dwOwningPid))
+                     "", None, "", int(row.dwOwningPid),
+                     _created(row.liCreateTimestamp), bytes(row) if owners else None)
 
 
-def _udp6_row(row):
+def _udp6_row(row, owners=False):
     return SocketRow("UDP", 6, _ipv6(row.ucLocalAddr, row.dwLocalScopeId),
                      _swap16(row.dwLocalPort & 0xFFFF), "", None, "",
-                     int(row.dwOwningPid))
+                     int(row.dwOwningPid),
+                     _created(row.liCreateTimestamp), bytes(row) if owners else None)
 
 
 _ROW_CONVERTERS = {("tcp", _AF_INET): _tcp4_row, ("tcp", _AF_INET6): _tcp6_row,
                    ("udp", _AF_INET): _udp4_row, ("udp", _AF_INET6): _udp6_row}
+
+
+def _module_row(pid_row):
+    """The OWNER_MODULE row of a table, built from its OWNER_PID row (Learn,
+    ``MIB_TCPROW_OWNER_MODULE`` and its three siblings): the same fields, then the
+    bind time, for UDP a flags word, then the owner data ``owner_module`` hands
+    back to the system. Windows x64 sizes: 160, 192, 160 and 176 bytes."""
+    import ctypes
+
+    names = [name for name, _type in pid_row._fields_]
+    tail = [("liCreateTimestamp", ctypes.c_longlong)]
+    if "dwState" not in names:
+        tail.append(("dwFlags", ctypes.c_int))      # UDP: SpecificPortBind, unused here
+    tail.append(("OwningModuleInfo", ctypes.c_ulonglong * _MODULE_SIZE))
+    return type(pid_row.__name__.replace("_PID", "_MODULE"), (ctypes.Structure,),
+                {"_fields_": list(pid_row._fields_) + tail})
 
 
 # -- native (Windows) --------------------------------------------------------- #
@@ -242,7 +281,8 @@ class _Native:
             ("udp", _AF_INET): MIB_UDPROW_OWNER_PID,
             ("udp", _AF_INET6): MIB_UDP6ROW_OWNER_PID,
         }
-        self._sizes = {}            # (proto, family) -> bytes the table needed last time
+        self.module_rows = {key: _module_row(row) for key, row in self.rows.items()}
+        self._counts = {}           # (proto, family) -> rows the table held last time
 
     def _table(self, proto, family, out, owners=None):
         """Append ``(port, pid)`` pairs of one table to ``out``.
@@ -263,11 +303,15 @@ class _Native:
                 _put(out, owners, port, pid)
         return True
 
-    def _fetch(self, proto, family):
+    def _fetch(self, proto, family, module=False):
         """One table as ``(buffer, rows)``, or ``None`` when it would not answer.
 
         Shared by the capture-side map (``_table``) and the Tools tab's full table
-        (``socket_rows``): one buffer walk, so a fix to it reaches both.
+        (``socket_rows``): one buffer walk, so a fix to it reaches both. ``module``
+        asks for the OWNER_MODULE table (``socket_rows``): the same sockets, each
+        with its bind time and owner data, 160-192 bytes a row instead of 24-56.
+        MEASURED 2026-11-11: the same cost to read (0.36 against 0.33 ms for 94
+        rows, 30 against 27 ms for 10 091). The capture side keeps the small one.
 
         🔴 The BUFFER comes back with the rows, and a caller keeps it referenced for
         as long as it reads them. ``rows`` is a ctypes VIEW over the buffer's
@@ -280,11 +324,16 @@ class _Native:
         import ctypes
         from ctypes import wintypes
 
-        row_type = self.rows[(proto, family)]
+        row_type = (self.module_rows if module else self.rows)[(proto, family)]
         call = (self.iphlpapi.GetExtendedTcpTable if proto == "tcp"
                 else self.iphlpapi.GetExtendedUdpTable)
-        table_class = (_TCP_TABLE_OWNER_PID_ALL if proto == "tcp"
-                       else _UDP_TABLE_OWNER_PID)
+        if module:
+            table_class = (_TCP_TABLE_OWNER_MODULE_ALL if proto == "tcp"
+                           else _UDP_TABLE_OWNER_MODULE)
+        else:
+            table_class = (_TCP_TABLE_OWNER_PID_ALL if proto == "tcp"
+                           else _UDP_TABLE_OWNER_PID)
+        header = self._header(row_type)
 
         # Start from the size this table needed last time, with room to grow
         # (_roomy). The socket table is queried several times per second and its
@@ -297,7 +346,11 @@ class _Native:
         # reuse was considered and rejected: it saves four allocations a few times
         # a second and buys aliasing between calls in ctypes code, which is a poor
         # trade in the module the packet path leans on.
-        need = self._sizes.get((proto, family))
+        #
+        # Remembered as a COUNT of rows, not bytes: the two kinds of row differ
+        # sevenfold in size, and the same table is read with either.
+        count = self._counts.get((proto, family))
+        need = None if count is None else header + count * ctypes.sizeof(row_type)
         size = wintypes.DWORD(self._roomy(need, row_type) if need else 8192)
         for _ in range(6):                       # the table can grow between calls
             buffer = ctypes.create_string_buffer(size.value)
@@ -310,12 +363,11 @@ class _Native:
         else:
             return None
 
-        header = ctypes.sizeof(wintypes.DWORD)
         count = ctypes.cast(buffer, ctypes.POINTER(wintypes.DWORD))[0]
         # What the table NEEDED, from its rows. Not the buffer: its headroom would
         # be padded again on every call. Not ``size`` either: on success Windows
         # writes the table's own size there - measured, but not documented.
-        self._sizes[(proto, family)] = header + count * ctypes.sizeof(row_type)
+        self._counts[(proto, family)] = count
         if not count:
             return buffer, ()
         rows = ctypes.cast(
@@ -335,9 +387,17 @@ class _Native:
         """``size`` bytes plus a quarter and HEADROOM_ROWS rows more."""
         return size + size // 4 + self.HEADROOM_ROWS * self.ctypes.sizeof(row_type)
 
+    def _header(self, row_type):
+        """Where the rows start: after the DWORD count, padded to the row's own
+        alignment - 8 for the OWNER_MODULE rows, whose LARGE_INTEGER the compiler
+        aligns, so their first row is at 8 and not at 4 (C layout of
+        ``MIB_TCPTABLE_OWNER_MODULE``)."""
+        from ctypes import wintypes
+        return max(self.ctypes.sizeof(wintypes.DWORD), self.ctypes.alignment(row_type))
+
     FAMILY_NAMES = {_AF_INET: "v4", _AF_INET6: "v6"}
 
-    def socket_rows(self):
+    def socket_rows(self, owners=False):
         """Every row of the four tables as ``SocketRow``, and the tables that failed.
 
         Unlike ``port_pid_map`` nothing is dropped: the row with PID 0 is a socket
@@ -345,18 +405,48 @@ class _Native:
         connection closed a moment earlier), and a port several processes hold is
         several rows. The capture side skips those because it needs one owner per
         port; a person asking "who holds 8080?" needs all of them.
+
+        Read from the OWNER_MODULE tables, so each row says when it was bound.
+        ``owners`` keeps each row's own bytes too (``SocketRow.owner``), copied out
+        of the buffer - it is freed when this returns - for ``owner_module``.
         """
         rows, failed = [], []
         for proto in ("tcp", "udp"):
             for family in (_AF_INET, _AF_INET6):
-                fetched = self._fetch(proto, family)
+                fetched = self._fetch(proto, family, module=True)
                 if fetched is None:
                     failed.append(table_of(proto, _IP_VERSION[family]))
                     continue
                 _buffer, table = fetched        # held while the rows are read
                 convert = _ROW_CONVERTERS[(proto, family)]
-                rows.extend(convert(row) for row in table)
+                rows.extend(convert(row, owners) for row in table)
         return rows, failed
+
+    def owner_module(self, row):
+        """The module that bound ``row``'s socket, as the system names it (Learn,
+        ``GetOwnerModuleFromTcpEntry`` and its three siblings): a service's name
+        for a socket of svchost.exe, else mostly the program's own. "" when the
+        row carries no owner data or the system will not say - it answers an
+        empty name for a protected program to a process without administrator
+        rights, and ERROR_NOT_FOUND for PID 0."""
+        ctypes = self.ctypes
+        if not row.owner:
+            return ""
+        key = (row.proto.lower(), _AF_INET if row.family == 4 else _AF_INET6)
+        entry = self.module_rows[key].from_buffer_copy(row.owner)
+        call = getattr(self.iphlpapi, _OWNER_CALLS[key])
+        size = ctypes.c_uint32(_OWNER_BUFFER)
+        for _ in range(2):              # names are short: the first buffer fits
+            buffer = ctypes.create_string_buffer(size.value)
+            code = call(ctypes.byref(entry), _TCPIP_OWNER_MODULE_INFO_BASIC, buffer,
+                        ctypes.byref(size))
+            if code != _ERROR_INSUFFICIENT_BUFFER:
+                break
+        if code != 0:
+            return ""
+        # TCPIP_OWNER_MODULE_BASIC_INFO: two pointers to strings inside ``buffer``.
+        name = ctypes.cast(buffer, ctypes.POINTER(ctypes.c_wchar_p))[0]
+        return (name or "").strip()
 
     def port_pid_map(self, owners=None):
         """``{local port: pid}`` from all four socket tables, or ``None``.
@@ -420,6 +510,39 @@ def _make_native():
         return _Native()
     except Exception:                                    # pragma: no cover
         return None
+
+
+# The call that names a row's owner, per table (Learn), and the first buffer it is
+# given: the structure plus a name and a path, which for a service is its name too.
+_OWNER_CALLS = {("tcp", _AF_INET): "GetOwnerModuleFromTcpEntry",
+                ("tcp", _AF_INET6): "GetOwnerModuleFromTcp6Entry",
+                ("udp", _AF_INET): "GetOwnerModuleFromUdpEntry",
+                ("udp", _AF_INET6): "GetOwnerModuleFromUdp6Entry"}
+_OWNER_BUFFER = 1024
+# The one _Native that names owners, made when first asked (None off Windows).
+_OWNER_API: list[_Native | None] = []
+
+
+def owner_module(row):
+    """The module that bound ``row`` (a ``SocketRow`` read with ``owners=True``):
+    for a socket of svchost.exe, the service it belongs to ("Dnscache"). "" for a
+    row without owner data - any row off Windows - and when the system will not
+    say. Runs on a worker. Its own ``_Native``, never the capture side's.
+
+    A failure is the program's or the binding's, not the person's, and a missing
+    service name is not worth a failed read: it goes to the crash log, and the row
+    shows its process alone.
+    """
+    if not row.owner:
+        return ""
+    try:
+        if not _OWNER_API:
+            _OWNER_API.append(_make_native())
+        native = _OWNER_API[0]
+        return native.owner_module(row) if native is not None else ""
+    except Exception as exc:
+        crashlog.note(exc, "portmap.owner_module")
+        return ""
 
 
 # -- fallback (psutil) --------------------------------------------------------- #
@@ -492,8 +615,11 @@ def _psutil_socket_rows():
     return [_psutil_row(proto, conn) for proto, conn in found]
 
 
-def socket_rows():
+def socket_rows(owners=False):
     """``(rows, failed)``: every TCP and UDP socket on this machine, one row each.
+
+    ``owners``: each native row also carries its own bytes, for ``owner_module``
+    (the Sockets tool; TCP health and a reset do not ask). psutil has none.
 
     For the Tools tab, read on a click by a worker; the packet path never comes
     here (``tests/test_hot_path.py`` watches both routes). A NEW ``_Native`` per
@@ -508,7 +634,7 @@ def socket_rows():
     """
     native = _make_native()
     if native is not None:
-        rows, failed = native.socket_rows()
+        rows, failed = native.socket_rows(owners)
         if len(failed) < len(_ROW_CONVERTERS):
             return rows, failed
     return _psutil_socket_rows(), []

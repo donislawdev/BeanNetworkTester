@@ -423,11 +423,21 @@ monitor is gone it returns to the centre of the current screen.
     for a few seconds, greyed, and the **change** column gives the time of either, so
     sorting by it shows the latest changes first. A connection that opens and closes
     between two reads is never shown. When one read takes long (tens of thousands of
-    sockets) the table reads less often by itself and the status line says so. Search it the way you
-    search the connection table (`lport:8080`, `state:listen`, `proc:chrome`), and
-    right-click a row to target its program, leave it alone, limit to or block its
-    remote address, watch a TCP connection in **TCP health** or ping its far end in
-    **Ping**. Program names are shown without administrator rights.
+    sockets) the table reads less often by itself and the status line says so. **Show**
+    narrows the list to the sockets that are listening (no other end, every UDP socket
+    included), the connections (an address at the other end), the ones that changed, or
+    the ones since the mark: press **Mark now**, then start or use your program, and the
+    table lists what it opened after the click and what closed, keeping the closed ones
+    until you mark again. The **opened** column is when the program opened the socket, as
+    Windows records it (Linux does not record it, so the column stays empty there). For
+    `svchost.exe` the process column adds the Windows service the socket belongs to, such
+    as `svchost.exe (Dnscache)`, when the program runs as administrator. **Save CSV**
+    writes the rows on screen to a file (see "CSV exports" below). Search it the way you
+    search the connection table (`lport:8080`, `state:listen`, `proc:chrome`, and plain
+    text finds a service too), and right-click a row to target its program, leave it alone,
+    limit to or block its remote address, reset its connection (as on the Connections
+    page), watch a TCP connection in **TCP health** or ping its far end in **Ping**.
+    Program names are shown without administrator rights.
   - **TCP health** - what Windows measures for a TCP connection (on Linux, what the kernel
     keeps: see the Linux section): the round-trip time
     (smoothed, newest, lowest and highest, charted for the last minute), the bytes sent
@@ -1438,6 +1448,12 @@ variable.
 | columns change between versions | the old file is renamed with a timestamp and a new one started, so rows never misalign under a stale header | not applicable |
 | encoding | UTF-8 with no byte-order mark. Double-clicked, Excel reads such a file in the Windows code page and mangles letters outside it (process names in Polish or Chinese). Open it through **Data > Get Data > From File > From Text/CSV** and set **File Origin** to **65001: Unicode (UTF-8)** | same |
 
+**Save CSV** on **Tools > Sockets** writes `bean_network_tester_sockets.csv` to the same folder,
+the way the connections export does: overwritten each time, written atomically, UTF-8 with no
+byte-order mark, and the rows as the table shows them - its search, its **Show** choice and its
+order. Nothing is read again for it: the file holds the rows on screen. Its columns are listed in
+"Sockets CSV columns" below.
+
 The statistics CSV does not follow the "show only the targeted traffic" switch because it is an
 append log: a file whose columns mean one thing in some rows and another in the rest is worse than
 useless for the spreadsheet it exists for. It carries **both** totals instead
@@ -1503,6 +1519,20 @@ table shortens:
 | `duration_s`, `idle_s` | `time[s]`, `idle[s]` |
 | `ice` | `ICE` (`LAN`, `NAT`, `WAN`, `TURN`, `STUN` or empty) - after the columns above, so a reader that takes them by position is not moved by it |
 | `packets_in_scope` | how many of the connection's `packets` were in impairment scope - the number behind the share in `impaired?`. The **last** column, for the same reason |
+
+### Sockets CSV columns
+
+The rows of **Tools > Sockets**, one per socket. Times are written as `YYYY-MM-DD HH:MM:SS` in this
+computer's time zone.
+
+| CSV column | meaning |
+|---|---|
+| `process`, `pid` | the program that owns the socket and its id. `pid` is empty when the system would not say, `0` for a connection no program owns any more (TIME_WAIT) |
+| `service` | for `svchost.exe`, the Windows service the socket belongs to (needs administrator rights), empty otherwise |
+| `proto`, `local_ip`, `local_port`, `remote_ip`, `remote_port`, `state` | as in the table. The remote end is empty for a socket that is listening and for UDP, `state` for UDP |
+| `opened` | when the program opened the socket, as Windows records it. Empty on Linux, which does not record it |
+| `change` | `new` for a socket that appeared a few seconds ago, `closed` for one that closed, empty otherwise |
+| `changed_at` | when the socket appeared or closed, if that was after the first read of the table, empty otherwise |
 
 ## Scenario file format
 
