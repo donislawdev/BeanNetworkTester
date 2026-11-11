@@ -1,5 +1,5 @@
-"""The CSV exports: the appended session stats, and the connection and socket
-snapshots.
+"""The CSV exports: the appended session stats, and the connection, socket and port
+check snapshots.
 
 Carved out of ``gui/app.py`` when it sat at the size ceiling (convention 32b says
 split rather than raise the number). They still read the App - the engine snapshot,
@@ -17,7 +17,8 @@ import time
 from .. import crashlog
 from ..i18n import T
 from ..nettools.sockets import CLOSED
-from ..paths import CONNECTIONS_CSV_FILE, CSV_FILE, SOCKETS_CSV_FILE, hand_back, write_atomically
+from ..paths import (CONNECTIONS_CSV_FILE, CSV_FILE, PORTS_CSV_FILE, SOCKETS_CSV_FILE, hand_back,
+                     write_atomically)
 from ..views import (avg_packet_bytes, connection_proc, filter_sort_connections,
                      scoped_packets)
 
@@ -298,15 +299,21 @@ def export_sockets(app, rows):
     ``nettools.sockets.Socket`` values, which nothing changes once made, so they
     are handed over as they are. Returns the worker, or None when an export was
     already running."""
-    if not _SOCKETS_LOCK.acquire(blocking=False):
+    return _start(app, _SOCKETS_LOCK, _write_sockets, (app, list(rows)), "sockets-csv")
+
+
+def _start(app, lock, write, args, name):
+    """Run one Tools-tab export on a worker of its own, one at a time per file:
+    the worker, or None when one was already running (said in the log). ``write``
+    releases ``lock`` when it is done."""
+    if not lock.acquire(blocking=False):
         app.log(T("log.conns_export_busy"))
         return None
     try:
-        worker = threading.Thread(target=_write_sockets, args=(app, list(rows)),
-                                  name="sockets-csv", daemon=True)
+        worker = threading.Thread(target=write, args=args, name=name, daemon=True)
         worker.start()
     except BaseException:
-        _SOCKETS_LOCK.release()
+        lock.release()
         raise
     return worker
 
@@ -336,3 +343,48 @@ def _write_sockets(app, rows):
         app.log(f"{T('log.csv_error')}: {e}")
     finally:
         _SOCKETS_LOCK.release()
+
+
+# The port check (Tools > Port check), one row per row of its table: ports next to
+# each other that answered the same are one row, first_port to last_port. Words a
+# spreadsheet can filter on whatever the window's language: `verdict` is the
+# program's own word (in_use, reserved...), `code` what the system answered (0 when
+# the port could be had). `listens_on` is the addresses the holders wait on, as the
+# system lists them, "connection" when only connections hold the port.
+PORTS_CSV_HEADER = ["first_port", "last_port", "proto", "ip_version", "verdict", "code",
+                    "holders", "listens_on", "checked_at"]
+_PORTS_LOCK = threading.Lock()
+
+
+def export_ports(app, rows, checked_at):
+    """Write the port check's rows - as the window shows them: "Hide free ports" and
+    the order - to their CSV, overwritten each time. ``rows`` are the check's own
+    ``nettools.portcheck.Row`` values; ``checked_at`` the time of that check. Returns
+    the worker, or None when an export was already running."""
+    return _start(app, _PORTS_LOCK, _write_ports, (app, list(rows), checked_at), "ports-csv")
+
+
+def _holders_text(owners):
+    return "; ".join(f"{name} ({pid})" if name and pid is not None else
+                     (name or ("" if pid is None else str(pid))) for pid, name in owners)
+
+
+def _port_cells(row, checked_at):
+    """One row's cells, in ``PORTS_CSV_HEADER`` order."""
+    listens = " ".join(row.listens) if row.listens else ("connection" if row.owners else "")
+    return [formula_safe(v) for v in (
+        row.port, row.last, row.proto, row.family, row.verdict, row.code,
+        _holders_text(row.owners), listens, _stamp(checked_at))]
+
+
+def _write_ports(app, rows, checked_at):
+    """Worker thread: the same write as the sockets export, its own file and lock."""
+    path = PORTS_CSV_FILE
+    try:
+        _replace_csv(path, PORTS_CSV_HEADER, (_port_cells(r, checked_at) for r in rows))
+        app.log(f"{T('log.ports_saved_to')} {path} ({len(rows)})")
+    except Exception as e:
+        crashlog.note(e, "gui.csv_export")
+        app.log(f"{T('log.csv_error')}: {e}")
+    finally:
+        _PORTS_LOCK.release()

@@ -1956,20 +1956,28 @@ pc.WINDOWS = True
 HOLDER = sk.Socket("k", "TCP", 4, "0.0.0.0", 8080, "", None, "LISTEN", 1234, "node.exe")
 gate = threading.Event()
 gate.set()
+hold = threading.Event()     # cleared: the bind of port HOLD_AT waits for it
+hold.set()
+HOLD_AT = 100
 checks = []
 failed = []          # the socket tables the stand-in table says did not answer
 real_check = pc.check
 
 def reserved_9010(proto, family, port):
+    if port == HOLD_AT:
+        hold.wait(5)
     return 10013 if (proto, port) == ("TCP", 9010) else 0
 
-def fake_check(matcher, protocols, families):
+def fake_check(matcher, protocols, families, progress=None):
     checks.append((str(matcher), protocols, families))
     gate.wait(5)
     return real_check(matcher, protocols, families, bind=reserved_9010,
-                      read=lambda: sk.Snapshot((HOLDER,), tuple(failed), time.time(), 1))
+                      read=lambda: sk.Snapshot((HOLDER,), tuple(failed), time.time(), 1),
+                      progress=progress)
 
 pc.check = fake_check
+from beantester import winenv
+winenv.binds_audited = lambda query=None: None      # this machine's answer is not the test's
 
 def open_ports():
     app.select_page("tools")
@@ -1994,7 +2002,13 @@ def untick(panel, boxes, value, name):
 
 def row(panel, port, proto="TCP", family=4):
     return next(r for r in panel.table.items
-                if (r.port, r.proto, r.family) == (port, proto, family))
+                if r.port <= port <= r.last and (r.proto, r.family) == (proto, family))
+
+def worked_until(panel, made):
+    deadline = time.monotonic() + 5
+    while panel.job.progress["check"].made < made:
+        assert time.monotonic() < deadline, "the check never got there"
+        time.sleep(0.01)
 """
 
 
@@ -2020,7 +2034,9 @@ def test_the_port_check_waits_to_be_asked_and_answers_per_protocol_and_ip_versio
         cells = render(row(panel, 8080))
         assert cells == (8080, "TCP", T("tools.portcheck.ipv4"),
                          T("tools.portcheck.verdict.in_use"),
-                         T("tools.portcheck.holder", name="node.exe", pid=1234)), cells
+                         T("tools.portcheck.holder", name="node.exe", pid=1234),
+                         T("tools.portcheck.listens.any")), cells
+        assert render(row(panel, 8080, "UDP"))[4:] == ("", ""), "nobody holds it, nowhere"
         assert row(panel, 9010).verdict == row(panel, 9010, family=6).verdict == pc.RESERVED
         assert row(panel, 9010, "UDP").verdict == pc.FREE, "a reservation is per protocol"
         assert panel.count.cget("text") == T("tools.portcheck.count", taken=3, total=8)
@@ -2051,18 +2067,165 @@ def test_ports_the_parser_refuses_never_reach_the_worker():
     """))
 
 
-def test_too_many_ports_are_refused_with_their_numbers_in_the_windows_language():
+def test_ports_that_name_no_port_are_refused_by_the_worker_in_the_windows_language():
     run_gui(PORTS + textwrap.dedent("""
         panel = open_ports()
-        type_ports(panel, "1-1001")
+        type_ports(panel, "re:^$")
         panel.check()
         settle(panel)
         text = panel.status.label.cget("text")
-        want = T("tools.common.failed", error=T("tools.portcheck.error_too_many",
-                                                count=1001, limit=pc.MAX_PORTS))
-        assert text == want and "1001" in text, text
+        assert text == T("tools.common.failed", error=T("tools.portcheck.error_none")), text
         assert panel.table.items == [], "nothing was checked"
     """))       # and nothing for the crash log: the harness fails on any recorded fault
+
+
+def test_a_refusal_from_a_worker_is_said_with_its_numbers_in_the_windows_language():
+    """Every tool's worker hands a refusal of what was asked to the status line as a
+    sentence in the window's language, numbers and all - not as a fault."""
+    run_gui(textwrap.dedent("""
+        import time
+        from beantester.i18n import T
+        from beantester.nettools import Refused
+        from beantester.gui.toolbox.base import StatusLine, ToolJob
+
+        def refuse():
+            raise Refused("tools.ping.refused.size", typed="70000", most=65500)
+
+        worker = ToolJob("tool-test-refusal")
+        worker.run("ask", refuse)
+        deadline = time.monotonic() + 5
+        while (outcome := worker.collect()) is None:
+            assert time.monotonic() < deadline, "the worker never answered"
+            time.sleep(0.01)
+        line = StatusLine(app.root)
+        line.show(outcome)
+        want = T("tools.common.failed", error=T("tools.ping.refused.size", typed="70000",
+                                                most=65500))
+        text = line.label.cget("text")
+        assert text == want and "65500" in text, (text, want)
+        assert line.label.cget("style") == "Status.Bad.TLabel"
+    """))       # and nothing for the crash log: the harness fails on any recorded fault
+
+
+def test_all_ports_says_how_far_it_is_and_stop_keeps_what_was_checked():
+    run_gui(PORTS + textwrap.dedent("""
+        hold.clear()
+        panel = open_ports()
+        type_ports(panel, "8080")
+        panel.check_all()
+        assert panel.ports.get() == pc.ALL_PORTS and checks[-1][0] == pc.ALL_PORTS, checks
+        worked_until(panel, HOLD_AT - 1)
+        panel.refresh()
+        want = T("tools.portcheck.progress", proto=T("tools.portcheck.tcp"),
+                 family=T("tools.portcheck.ipv4"), port=HOLD_AT - 1, percent=0)
+        assert panel.status.label.cget("text") == want, panel.status.label.cget("text")
+        assert panel.check_btn.cget("text") == T("tools.portcheck.stop")
+        assert "disabled" not in panel.check_btn.state(), "Stop can be pressed"
+        assert "disabled" in panel.all_btn.state()
+        for callback in panel.entry.bindings["<Return>"]:
+            callback(None)
+        assert not panel.job.progress["check"].stopped and len(checks) == 1, \\
+            "Enter never stops a check, nor queues one"
+
+        panel._check_or_stop()                       # the button, now Stop
+        assert panel.status.label.cget("text") == T("tools.portcheck.stopping")
+        assert "disabled" in panel.check_btn.state(), "pressed once: the check is ending"
+        hold.set()
+        settle(panel)
+        answer = panel.job.value["check"]
+        assert answer.stopped and answer.made == HOLD_AT, (answer.made, answer.planned)
+        assert pc.checked(panel.table.items) == HOLD_AT, "only what was checked"
+        note = T("tools.portcheck.note_stopped", made=HOLD_AT, planned=4 * 65535,
+                 proto=T("tools.portcheck.tcp"), family=T("tools.portcheck.ipv4"), port=HOLD_AT)
+        assert note in panel.note.cget("text"), panel.note.cget("text")
+        assert len(panel.table.items) == 1 and row(panel, 1).last == HOLD_AT, \\
+            "ports 1-100, all free: one row"
+        assert render(row(panel, 1))[0] == "1-100"
+        assert panel.check_btn.cget("text") == T("tools.portcheck.check")
+        assert "disabled" not in panel.check_btn.state()
+    """))
+
+
+def test_hide_free_ports_leaves_the_rest_and_the_count_counts_every_port():
+    run_gui(PORTS + textwrap.dedent("""
+        panel = open_ports()
+        type_ports(panel, "8080, 9010")
+        panel.check()
+        settle(panel)
+        panel.hide_free.set(True)
+        panel._hide_free_ticked()
+        assert {r.verdict for r in panel.table.items} == {pc.IN_USE, pc.RESERVED}, \\
+            panel.table.items
+        assert panel.count.cget("text") == T("tools.portcheck.count", taken=3, total=8)
+        assert len(checks) == 1, "nothing checked again"
+        app._build_ui()
+        again = open_ports()
+        assert again.hide_free.get() and len(again.table.items) == 3, "kept across a rebuild"
+
+        type_ports(again, "7000")
+        again.check()
+        settle(again)
+        assert again.table.items == [] and \\
+            again.table._empty_text == "tools.portcheck.empty_all_free", again.table._empty_text
+    """))
+
+
+def test_save_csv_writes_the_port_check_as_it_is_on_screen():
+    run_gui(PORTS + textwrap.dedent("""
+        import csv, os, tempfile
+        import beantester.gui.csv_export as m
+        path = os.path.join(tempfile.mkdtemp(), "ports.csv")
+        m.PORTS_CSV_FILE = path
+        panel = open_ports()
+        assert "disabled" in panel.export_btn.state(), "nothing to save yet"
+        type_ports(panel, "8080-8082, 9010")
+        panel.check()
+        settle(panel)
+        assert "disabled" not in panel.export_btn.state()
+        panel.hide_free.set(True)
+        panel._hide_free_ticked()
+        panel._export().join(20)
+        app._logview.drain()
+        with open(path, newline="", encoding="utf-8") as f:
+            rows = list(csv.reader(f))
+        assert rows[0] == m.PORTS_CSV_HEADER, rows[0]
+        assert [r[:6] for r in rows[1:]] == [
+            ["8080", "8080", "TCP", "4", "in_use", "0"],
+            ["9010", "9010", "TCP", "4", "reserved", "10013"],
+            ["9010", "9010", "TCP", "6", "reserved", "10013"]], rows
+        assert rows[1][6:8] == ["node.exe (1234)", "0.0.0.0"], rows[1]
+        assert rows[2][6:8] == ["", ""] and rows[2][8].startswith("20"), rows[2]
+        assert any(path in line and "(3)" in line for line in app._log_lines), app._log_lines[-2:]
+        os.remove(path)
+    """))
+
+
+def test_a_big_check_asks_first_where_windows_logs_every_port():
+    run_gui(PORTS + textwrap.dedent("""
+        from beantester.gui import dialogs
+        asked = []
+        dialogs.ask_yes_no = lambda parent, title, body: (asked.append(body), False)[1]
+        winenv.binds_audited = lambda query=None: True
+        panel = open_ports()
+        type_ports(panel, "1-1000")
+        panel.check()
+        settle(panel)
+        assert asked == [] and len(checks) == 1, "4000 binds: no question"
+        type_ports(panel, "1-1001")
+        panel.check()
+        assert asked == [T("tools.portcheck.audit_body", count=4004)] and len(checks) == 1, \\
+            (asked, checks)
+        dialogs.ask_yes_no = lambda parent, title, body: True
+        panel.check()
+        settle(panel)
+        assert len(checks) == 2, "asked, and yes"
+        winenv.binds_audited = lambda query=None: None
+        dialogs.ask_yes_no = lambda *a: (_ for _ in ()).throw(AssertionError("asked"))
+        panel.check_all()
+        panel.stop()
+        settle(panel)
+        assert len(checks) == 3, "not known here (no administrator rights): no question"
+    """))
 
 
 def test_the_boxes_choose_what_is_checked_and_are_kept_across_a_rebuild():
@@ -2096,16 +2259,19 @@ def test_one_check_at_a_time_and_a_rebuild_mid_check_gets_the_answer():
         panel = open_ports()
         type_ports(panel, "8080")
         panel.check()
-        assert panel.job.busy() and "disabled" in panel.check_btn.state()
+        assert panel.job.busy() and panel.check_btn.cget("text") == T("tools.portcheck.stop")
         panel.check()
         assert len(checks) == 1, "nothing is queued behind a running check"
         app._build_ui()
         again = open_ports()
         assert again.status.label.cget("text") == T("tools.common.working")
+        assert again.check_btn.cget("text") == T("tools.portcheck.stop"), \\
+            "the rebuilt panel can stop the check it did not start"
         gate.set()
         settle(again)
         assert len(again.table.items) == 4 and len(checks) == 1, checks
         assert "disabled" not in again.check_btn.state()
+        assert again.check_btn.cget("text") == T("tools.portcheck.check")
     """))
 
 

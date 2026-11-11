@@ -238,8 +238,9 @@ para o centro da tela atual.
     linha para direcionar ao programa dela, deixá-lo em paz, ou limitar ao endereço remoto dela ou
     bloqueá-lo. Os nomes dos programas aparecem sem permissões de administrador.
   - **Port check** - o seu programa pode usar uma porta? Digite uma porta, uma lista ou uma faixa,
-    do jeito que você digita portas na página Control (`8080`, `80, 443`, `9000-9100`, até 1000 por
-    vez) e pressione **Check** (ou Enter). Cada porta é verificada para TCP e UDP, em IPv4 e IPv6,
+    do jeito que você digita portas na página Control (`8080`, `80, 443`, `9000-9100`) e pressione
+    **Check** (ou Enter), ou **All ports** para verificar todas as portas de 1 a 65535 (**Stop**
+    encerra antes do fim). Cada porta é verificada para TCP e UDP, em IPv4 e IPv6,
     e marcada como **Free**, **In use** (com o programa que a usa e o respectivo PID) ou
     **Reserved by Windows** - uma faixa que o Windows reservou, o motivo mais comum de um servidor
     não subir em uma porta que parece livre. As faixas valem por protocolo, então uma porta pode

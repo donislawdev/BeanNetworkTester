@@ -29,13 +29,14 @@ PROFILE_NAME = "bean_network_tester_profiles.json"
 STATS_CSV_NAME = "bean_network_tester_stats.csv"
 CONNECTIONS_CSV_NAME = "bean_network_tester_connections.csv"
 SOCKETS_CSV_NAME = "bean_network_tester_sockets.csv"
+PORTS_CSV_NAME = "bean_network_tester_ports.csv"
 UI_STATE_NAME = "bean_network_tester_ui.json"
 
 # What migration carries. Derived from the names above rather than repeated: a new
 # user file that is added below and forgotten here would simply never be adopted,
 # and nothing would say so.
 USER_FILE_NAMES = (PROFILE_NAME, STATS_CSV_NAME, CONNECTIONS_CSV_NAME, SOCKETS_CSV_NAME,
-                   UI_STATE_NAME)
+                   PORTS_CSV_NAME, UI_STATE_NAME)
 
 
 def is_frozen():
@@ -529,5 +530,7 @@ CSV_FILE = os.path.join(user_data_dir(), STATS_CSV_NAME)
 CONNECTIONS_CSV_FILE = os.path.join(user_data_dir(), CONNECTIONS_CSV_NAME)
 # The same for the Tools tab's socket table: the rows on screen, overwritten each time.
 SOCKETS_CSV_FILE = os.path.join(user_data_dir(), SOCKETS_CSV_NAME)
+# And for its port check: the rows on screen, overwritten each time.
+PORTS_CSV_FILE = os.path.join(user_data_dir(), PORTS_CSV_NAME)
 # Window geometry, active page, collapsed sections, table sorting, language...
 UI_STATE_FILE = os.path.join(user_data_dir(), UI_STATE_NAME)

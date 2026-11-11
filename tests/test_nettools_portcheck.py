@@ -29,9 +29,10 @@ def sock(port, proto="TCP", family=4, state="LISTEN", pid=1234, proc="server.exe
 
 
 def run(text, answers=None, rows=(), protocols=pc.PROTOCOLS, families=pc.FAMILIES,
-        calls=None, failed=()):
+        calls=None, failed=(), progress=None, clock=lambda: 0.0):
     """``check`` with a stand-in bind (``answers``: (proto, family, port) -> code, else 0)
-    and table (``failed``: the tables that did not answer)."""
+    and table (``failed``: the tables that did not answer). The clock stands still
+    unless a test passes one: the table is read once, at the end."""
     calls = [] if calls is None else calls
 
     def bind(proto, family, port):
@@ -42,11 +43,13 @@ def run(text, answers=None, rows=(), protocols=pc.PROTOCOLS, families=pc.FAMILIE
         calls.append(("read",))
         return sk.Snapshot(tuple(rows), tuple(failed), 0.0, 0)
 
-    return pc.check(pc.parse(text), protocols, families, bind=bind, read=read)
+    return pc.check(pc.parse(text), protocols, families, bind=bind, read=read,
+                    progress=progress, clock=clock)
 
 
 def verdicts(result):
-    return {(r.port, r.proto, r.family): r.verdict for r in result.rows}
+    """Per port, protocol and IP version - whatever rows the ports were folded into."""
+    return {(r.port, r.proto, r.family): r.verdict for r in pc.unfold(result.rows)}
 
 
 def test_a_held_port_names_its_holder_and_the_rest_are_free():
@@ -257,6 +260,9 @@ def test_a_machine_without_an_ip_version_is_said_once_not_per_port(code):
     check("it has no rows", all(r.family == 4 for r in result.rows), "")
     asked = [c for c in calls if c[0] == "bind" and c[2] == 6]
     check("the first answer ended it", len(asked) == 1, f"({len(asked)} binds on IPv6)")
+    check("and the check did not stop: what it set out to do shrank with it",
+          (result.made, result.planned, result.stopped) == (20, 20, False),
+          f"({result.made}, {result.planned})")
 
 
 def test_the_system_is_asked_first_and_the_table_read_after():
@@ -281,20 +287,137 @@ def test_the_ports_an_expression_names():
           f"({pc.ports(pc.parse('443, 80, 8000-8002'))})")
     wanted, zero = pc.ports(pc.parse("0, 80"))
     check("port 0 is left out and said", (wanted, zero) == ((80,), True), f"({wanted}, {zero})")
-    check("exactly the limit is taken", len(pc.ports(pc.parse("1-1000"))[0]) == pc.MAX_PORTS, "")
-    for text, key, args in (("0", "tools.portcheck.error_zero", {}),
-                            ("re:^$", "tools.portcheck.error_none", {}),
-                            ("1-1001", "tools.portcheck.error_too_many",
-                             {"count": 1001, "limit": pc.MAX_PORTS}),
-                            ("!80", "tools.portcheck.error_too_many",
-                             {"count": 65534, "limit": pc.MAX_PORTS})):
+    every, zero = pc.ports(pc.parse(pc.ALL_PORTS))
+    check("every port, as the All ports button types it",
+          (len(every), every[0], every[-1], zero) == (65535, 1, 65535, False), f"({len(every)})")
+    check("and everything but one", len(pc.ports(pc.parse("!80"))[0]) == 65534, "")
+    for text, key in (("0", "tools.portcheck.error_zero"), ("re:^$", "tools.portcheck.error_none")):
         with pytest.raises(pc.Refused) as caught:
             pc.ports(pc.parse(text))
-        check(f"{text!r} is refused with its reason",
-              (caught.value.user_key, caught.value.user_args) == (key, args),
-              f"({caught.value.user_key}, {caught.value.user_args})")
+        check(f"{text!r} is refused with its reason", caught.value.user_key == key,
+              f"({caught.value.user_key})")
     with pytest.raises(ValueError):
         pc.parse("9100-9000")          # the port language's own message, already translated
+    check("the binds a check would make", pc.planned(pc.parse("80, 443"), *ALL) == 8, "")
+    check("none for ports it refuses (the worker says why)",
+          pc.planned(pc.parse("0"), *ALL) == 0, "")
+
+
+def test_ports_next_to_each_other_with_the_same_answer_are_one_row():
+    """Every port of a machine is 262 140 binds and, MEASURED 2026-11-11, 105 rows that
+    are not free on the developer machine once the neighbours are folded together."""
+    answers = {("TCP", 4, 8003): 10013, ("TCP", 4, 8004): 10013}
+    rows = [sock(8006, proc="a.exe"), sock(8007, proc="a.exe"), sock(8008, proc="b.exe")]
+    result = run("8000-8008, 9000, 9002", answers, rows=rows, protocols=("TCP",), families=(4,))
+    got = sorted((r.port, r.last, r.verdict, r.owners) for r in result.rows)
+    check("a run is one row, broken by a new answer, a new holder or a gap", got == [
+        (8000, 8002, pc.FREE, ()), (8003, 8004, pc.RESERVED if pc.WINDOWS else pc.DENIED, ()),
+        (8005, 8005, pc.FREE, ()), (8006, 8007, pc.IN_USE, ((1234, "a.exe"),)),
+        (8008, 8008, pc.IN_USE, ((1234, "b.exe"),)), (9000, 9000, pc.FREE, ()),
+        (9002, 9002, pc.FREE, ())], f"({got})")
+    check("the counts count ports, not rows",
+          (pc.not_free(result.rows), pc.checked(result.rows)) == (5, 11),
+          f"({pc.not_free(result.rows)}, {pc.checked(result.rows)})")
+    wide = next(r for r in result.rows if r.port == 8000)
+    check("a row knows how many ports it stands for", wide.size() == 3, f"({wide})")
+    check("and unfolds into one row per port, keyed as one",
+          [(r.port, r.last, r.key) for r in pc.unfold([wide])]
+          == [(8000, 8000, "8000|TCP|4"), (8001, 8001, "8001|TCP|4"), (8002, 8002, "8002|TCP|4")])
+    other = run("8000-8001", rows=[sock(8001, family=6)], protocols=("TCP",)).rows
+    check("never across IP versions", {(r.port, r.last, r.family) for r in other}
+          == {(8000, 8001, 4), (8000, 8000, 6), (8001, 8001, 6)}, f"({other})")
+
+
+def test_a_long_check_reads_the_table_as_it_goes():
+    """A connection that held a port at its bind can be gone by the end of a 35 s check
+    (the Server VM, MEASURED 2026-11-11): read only then, its refused bind would name
+    nobody. So the table is read once the binds waiting for it are a second old."""
+    now = [0.0]
+
+    def clock():
+        now[0] += 0.4               # each bind takes 0.4 s by this clock
+        return now[0]
+
+    reads = []
+
+    def read():
+        reads.append(1)
+        # The holder of 7001 is in the table only at the first read: a short connection.
+        held = (sock(7001, state="ESTABLISHED", proc="short.exe"),) if len(reads) == 1 else ()
+        return sk.Snapshot(held, (), 0.0, 0)
+
+    calls = []
+
+    def bind(proto, family, port):
+        calls.append(port)
+        return 10048 if port == 7001 else 0
+
+    result = pc.check(pc.parse("7001-7006"), ("TCP",), (4,), bind=bind,
+                      read=lambda: (calls.append("read"), read())[1], clock=clock)
+    check("read once the oldest bind waiting is a second old, and once more at the end",
+          calls == [7001, 7002, 7003, 7004, "read", 7005, 7006, "read"], f"({calls})")
+    first = next(r for r in result.rows if r.port == 7001)
+    check("the short connection is named for the port it held", first.verdict == pc.IN_USE
+          and first.owners == ((1234, "short.exe"),), f"({first})")
+
+
+def test_a_socket_gone_since_the_last_read_holds_nothing():
+    """A read that follows another (``sockets.read`` with ``previous``, how a long check
+    reads the table) also lists the sockets that closed since, marked CLOSED."""
+    gone = sock(6100, proc="old.exe")._replace(change=sk.CLOSED)
+    seen = verdicts(run("6100", rows=[gone], protocols=("TCP",), families=(4,)))
+    check("a closed socket is not a holder", seen[(6100, "TCP", 4)] == pc.FREE, f"({seen})")
+    asked = []
+
+    def read(previous, fresh_names=True):
+        asked.append((previous, fresh_names))
+        return len(asked)
+    again = pc._table(read)
+    again(), again(), again()
+    check("the first read names every process, the next ones keep its names",
+          asked == [(None, True), (1, False), (2, False)], f"({asked})")
+
+
+def test_stop_ends_the_check_and_keeps_what_was_checked():
+    progress = pc.Progress()
+    calls = []
+
+    def bind(proto, family, port):
+        calls.append(("bind", port))
+        if port == 3:
+            progress.stop()          # Stop pressed while the third bind runs
+        return 10013 if port == 2 else 0
+
+    def read():
+        calls.append(("read",))
+        return sk.Snapshot((), (), 0.0, 0)
+
+    result = pc.check(pc.parse("1-10"), ("TCP", "UDP"), (4,), bind=bind, read=read,
+                      progress=progress)
+    check("no bind after Stop", [c for c in calls if c[0] == "bind"]
+          == [("bind", 1), ("bind", 2), ("bind", 3)], f"({calls})")
+    check("and the table read for the binds made", calls[-1] == ("read",), f"({calls})")
+    check("the rows are what was checked", pc.checked(result.rows) == 3
+          and {(r.port, r.last) for r in result.rows} == {(1, 1), (2, 2), (3, 3)},
+          f"({result.rows})")
+    check("it says it stopped, where, and how far it got",
+          (result.stopped, result.stopped_at, result.made, result.planned)
+          == (True, ("TCP", 4, 3), 3, 20),
+          f"({result.stopped}, {result.stopped_at}, {result.made}, {result.planned})")
+    check("its progress said so too", (progress.made, progress.planned, progress.percent())
+          == (3, 20, 15), f"({progress.made}, {progress.planned})")
+
+    early = pc.Progress()
+    early.stop()
+    calls.clear()
+    none = pc.check(pc.parse("1-10"), ("TCP",), (4,), bind=bind, read=read, progress=early)
+    check("Stop before the first bind: nothing bound, nothing read, nothing shown",
+          (calls, none.rows, none.stopped, none.stopped_at) == ([], (), True, None),
+          f"({calls}, {none})")
+    whole = run("1-3")
+    check("a check that ran to the end did not stop",
+          (whole.stopped, whole.stopped_at, whole.made, whole.planned) == (False, None, 12, 12),
+          f"({whole.stopped}, {whole.made}, {whole.planned})")
 
 
 def test_problems_come_first_then_the_port_order():
@@ -311,6 +434,134 @@ def test_problems_come_first_then_the_port_order():
     check("rows without a holder sort last", by_name[0].owners == ((1234, "b.exe"),),
           f"({by_name[0]})")
     check("counted", pc.not_free(rows) == 2, f"({pc.not_free(rows)})")
+
+
+def placed(found, names=None, port=6000, proto="TCP", family=4):
+    row = next(r for r in run(str(port), rows=found).rows
+               if (r.proto, r.family) == (proto, family))
+    return pc.listens_on(row, names)
+
+
+def connected(port, ip="127.0.0.1", proc="client.exe"):
+    return sk.Socket(f"c{port}{ip}", "TCP", 4, ip, port, "10.0.0.9", 443, "ESTABLISHED",
+                     55, proc)
+
+
+def test_listens_on_says_where_the_holder_waits():
+    """Where, not who can reach it: MEASURED 2026-11-11, port 445 here and 47001 on the
+    Server VM wait on every address while the firewall lets nobody from the network in -
+    so the column is named after the address, and says nothing it cannot know."""
+    names = {"192.168.1.5": (0, "Ethernet"), "172.20.0.1": (1, "vEthernet (WSL)")}
+    check("a wildcard address: every network, whatever else is there",
+          placed([sock(6000, ip="0.0.0.0"), sock(6000, ip="127.0.0.1", pid=2)])
+          == ((pc.ANYWHERE, ""),))
+    check("loopback alone: this computer",
+          placed([sock(6000, ip="127.0.0.1")]) == ((pc.THIS_COMPUTER, ""),))
+    check("adapters by name, in the Adapters tab's order, this computer last",
+          placed([sock(6000, ip="127.0.0.1", pid=3), sock(6000, ip="172.20.0.1", pid=2),
+                  sock(6000, ip="192.168.1.5")], names)
+          == ((pc.ADAPTER, "Ethernet"), (pc.ADAPTER, "vEthernet (WSL)"),
+              (pc.THIS_COMPUTER, "")), "")
+    check("an address no adapter has stays itself, after the named ones",
+          placed([sock(6000, ip="10.9.9.9"), sock(6000, ip="192.168.1.5", pid=2)], names)
+          == ((pc.ADAPTER, "Ethernet"), (pc.ADDRESS, "10.9.9.9")))
+    check("without names every address is itself",
+          placed([sock(6000, ip="192.168.1.5")]) == ((pc.ADDRESS, "192.168.1.5"),))
+    check("only connections hold it: a connection, not a server",
+          placed([connected(6000)]) == ((pc.CONNECTION, ""),))
+    check("a server with its connections: the server's address",
+          placed([sock(6000, ip="0.0.0.0"), connected(6000)]) == ((pc.ANYWHERE, ""),))
+    check("UDP has no far end: a UDP socket waits",
+          placed([sock(6000, proto="UDP", state="", ip="192.168.1.5")], names, proto="UDP")
+          == ((pc.ADAPTER, "Ethernet"),))
+    check("nobody holds it: nothing", placed([]) == ())
+    v6 = [sock(6000, family=6, ip="fe80::1%12"), sock(6000, family=6, ip="::1", pid=2)]
+    check("an IPv6 zone is not part of the adapter's address",
+          placed(v6, {"fe80::1": (0, "Wi-Fi")}, family=6)
+          == ((pc.ADAPTER, "Wi-Fi"), (pc.THIS_COMPUTER, "")))
+
+
+def test_listens_on_reads_linux_addresses_written_the_ipv6_way(monkeypatch):
+    monkeypatch.setattr(pc, "WINDOWS", False)
+    mapped = [sock(6000, family=6, ip="::ffff:192.168.1.5"),
+              sock(6001, family=6, ip="::ffff:127.0.0.1")]
+    rows = {r.port: r for r in run("6000, 6001", rows=mapped).rows
+            if (r.proto, r.family) == ("TCP", 4)}
+    check("an IPv4 address written the IPv6 way is the adapter's",
+          pc.listens_on(rows[6000], {"192.168.1.5": (0, "eth0")}) == ((pc.ADAPTER, "eth0"),))
+    check("and loopback is this computer",
+          pc.listens_on(rows[6001]) == ((pc.THIS_COMPUTER, ""),))
+    dual = run("3000", {("TCP", 4, 3000): errno.EADDRINUSE},
+               rows=[sock(3000, family=6, ip="::", proc="node")]).rows
+    v4 = next(r for r in dual if (r.proto, r.family) == ("TCP", 4))
+    check("a dual-stack server named for IPv4 waits on every network",
+          pc.listens_on(v4) == ((pc.ANYWHERE, ""),), f"({v4})")
+
+
+def test_the_addresses_rows_are_folded_by_where_the_holder_waits_too():
+    rows = [sock(5000, ip="0.0.0.0"), sock(5001, ip="127.0.0.1")]
+    result = run("5000-5001", rows=rows, protocols=("TCP",), families=(4,))
+    check("same holder, another address: two rows",
+          sorted((r.port, r.last, r.listens) for r in result.rows)
+          == [(5000, 5000, ("0.0.0.0",)), (5001, 5001, ("127.0.0.1",))], f"({result.rows})")
+    by = pc.sort(result.rows, "listens")
+    check("sorted by the address", [r.port for r in by] == [5000, 5001], "")
+
+
+class _Adapter:
+    def __init__(self, name, *ips):
+        self.row = type("R", (), {"name": name, "addresses": tuple(
+            type("A", (), {"ip": ip})() for ip in ips)})()
+
+
+def test_adapter_names_are_read_only_when_a_row_needs_one(monkeypatch):
+    snapshot = type("S", (), {"adapters": (_Adapter("Ethernet", "192.168.1.5", "fe80::1%9"),
+                                           _Adapter("Wi-Fi", "192.168.1.5"))})()
+    reads = []
+
+    def read():
+        reads.append(1)
+        return snapshot
+
+    names = pc.adapter_names(read)
+    check("each address to its first adapter, zones off",
+          names == {"192.168.1.5": (0, "Ethernet"), "fe80::1": (0, "Ethernet")}, f"({names})")
+    common = run("80, 81", rows=[sock(80, ip="0.0.0.0"), sock(81, ip="127.0.0.1")])
+    reads.clear()
+    check("every network or loopback alone: no adapter read",
+          pc.with_adapter_names(common, read).names == {} and reads == [], f"({reads})")
+    one = run("80", rows=[sock(80, ip="192.168.1.5")])
+    check("an adapter's own address: read", pc.with_adapter_names(one, read).names == names
+          and reads == [1], f"({reads})")
+
+    def unreadable():
+        raise pc.adapters.Unreadable("tools.adapters.error_not_ready", "not ready on purpose")
+    check("adapters that cannot be read: no names, the check stands",
+          pc.with_adapter_names(one, unreadable).names == {})
+    noted = []
+    monkeypatch.setattr(pc.crashlog, "note", lambda exc, area: noted.append((repr(exc), area)))
+
+    def broken():
+        raise KeyError("a fault of the reader")
+    check("a fault in the reader: no names, the check stands, the fault recorded",
+          pc.with_adapter_names(one, broken).names == {} and len(noted) == 1, f"({noted})")
+
+
+def test_whether_windows_logs_every_bind_is_true_false_or_unknown():
+    """``winenv.binds_audited``, the port check's question before a check of thousands
+    of ports. Its real reads were MEASURED 2026-11-11 on the Server VM (the policy
+    switched both ways with auditpol, internal_tools/sondy/2026-11-11-ports-full-scan/
+    vm_audit_query.py); here the system is stood in for, bit by bit."""
+    from beantester import winenv
+    for info, want in ((0, False), (1, True), (2, False), (3, True), (None, None)):
+        asked = []
+        got = winenv.binds_audited(lambda sub, info=info, asked=asked:
+                                   (asked.append(sub), info)[1])
+        check(f"AuditingInformation {info} -> {want}", got is want, f"({got})")
+        check("about the subcategory behind event 5158",
+              asked == [winenv.FILTERING_PLATFORM_CONNECTION], f"({asked})")
+    check("the real question answers without raising, here",
+          winenv.binds_audited() in (True, False, None))
 
 
 # -- the real system, loopback only ------------------------------------------------- #

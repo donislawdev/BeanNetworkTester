@@ -31,7 +31,7 @@ Get-Process -Id 4321</code></pre>
   <p><strong>{{app.app.tabs.tools}}</strong> 索引標籤不需要主控台就能回答同樣的問題：</p>
   <ul>
     <li><strong>{{app.tools.sockets.tab}}</strong>會列出這台電腦上每個 TCP 與 UDP 通訊端，類似 <code>netstat -ano</code>：誰在監聽、誰已連線、狀態如何、屬於哪個程式。它不需要工作階段。可以用 <code>lport:8080</code> 或 <code>state:listen</code> 搜尋。</li>
-    <li><strong>{{app.tools.portcheck.tab}}</strong>問的正是你的伺服器問過的問題：程式能不能使用這個連接埠？輸入 8080、一個清單（如 <code>80, 443</code>）或一個範圍（如 <code>9000-9100</code>，最多 1000 個連接埠），然後按下 <strong>{{app.tools.portcheck.check}}</strong>。每個連接埠都會針對 TCP 與 UDP、IPv4 與 IPv6 逐一嘗試，並標示為 <strong>{{app.tools.portcheck.verdict.free}}</strong>、<strong>{{app.tools.portcheck.verdict.in_use}}</strong>（附上程式及其 PID）或 <strong>{{app.tools.portcheck.verdict.reserved}}</strong>。</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong>問的正是你的伺服器問過的問題：程式能不能使用這個連接埠？輸入 8080、一個清單（如 <code>80, 443</code>）或一個範圍（如 <code>9000-9100</code>），然後按下 <strong>{{app.tools.portcheck.check}}</strong>。<strong>{{app.tools.portcheck.all}}</strong> 會檢查從 1 到 65535 的每個連接埠。每個連接埠都會針對 TCP 與 UDP、IPv4 與 IPv6 逐一嘗試，並標示為 <strong>{{app.tools.portcheck.verdict.free}}</strong>、<strong>{{app.tools.portcheck.verdict.in_use}}</strong>（附上程式及其 PID）或 <strong>{{app.tools.portcheck.verdict.reserved}}</strong>。</li>
   </ul>
   <p>所以結果是一張表，而不是簡單的「是」或「否」：Windows 依通訊協定分別保留範圍，監聽 IPv6 的程式可以佔著一個在 IPv4 上空閒的連接埠。</p>
   <p>不會透過網路傳送任何內容。對每個連接埠，工具都在本機的迴路位址上向 Windows 申請它，然後立刻歸還。</p>

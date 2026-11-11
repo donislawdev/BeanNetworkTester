@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **Tools: Port check can check every port.** "All ports" checks ports 1 to 65535 in a few
+  seconds to about a minute. The status line says how far it is, and "Stop" ends it early.
+  Ports next to each other with the same result are one row (`49152-49999`), "Hide free
+  ports" leaves the rest, and the new "listens on" column says where the program holding a
+  port waits: all networks, this computer only, or one network adapter. "Save CSV" saves the
+  rows on screen. Where Windows logs every permitted connection, the tool asks before
+  checking thousands of ports.
+
 - **Tools: more from the Sockets table.** "Show" lists only the sockets that are listening, the
   connections, or the ones that opened or closed since the tab was first read. Press "Mark
   now", then start your program, to see what it opens and closes. The new "opened" column
