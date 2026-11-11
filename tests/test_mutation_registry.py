@@ -11941,10 +11941,10 @@ MUTATIONS = [
     {
         "label": "csv: the connections export loses its ice column",
         "file": "beantester/gui/csv_export.py",
-        "old": "                    f\"{max(0.0, now - last):.1f}\",\n"
-               "                    c.get(\"ice\") or \"\", scoped_packets(c))])",
-        "new": "                    f\"{max(0.0, now - last):.1f}\",\n"
-               "                    \"\", scoped_packets(c))])",
+        "old": "        f\"{max(0.0, now - last):.1f}\",\n"
+               "        c.get(\"ice\") or \"\", scoped_packets(c))]",
+        "new": "        f\"{max(0.0, now - last):.1f}\",\n"
+               "        \"\", scoped_packets(c))]",
         "test": "test_export_connections_csv_writes_the_current_view",
     },
     {
@@ -13038,7 +13038,7 @@ MUTATIONS = [
         "test": "test_what_closed_since_the_mark_stays_until_the_next_mark",
     },
     {
-        "label": "sockets: a socket open again keeps its closed entry and the mark's key",
+        "label": "sockets: a socket open again keeps its closed entry",
         "file": "beantester/nettools/sockets.py",
         "old": "    reopened = {socket.key for socket in mark.closed if socket.key in current}\n",
         "new": "    reopened = set()\n",
@@ -13180,14 +13180,34 @@ MUTATIONS = [
     {
         "label": "sockets panel: the table reads while the reset still runs",
         "file": "beantester/gui/toolbox/sockets.py",
-        "old": "        if worker is not None and not worker.is_alive() and not self.job.busy():\n",
-        "new": "        if worker is not None and not self.job.busy():\n",
+        "old": ("        if pending and not any(w.is_alive() for w in pending)"
+                " and not self.job.busy():\n"),
+        "new": "        if pending and not self.job.busy():\n",
         "test": "test_the_row_menu_resets_an_open_connection_and_the_table_reads_once_it_ended",
     },
     {
+        "label": "sockets panel: after two resets the table reads once the later one ended",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": ("        if pending and not any(w.is_alive() for w in pending)"
+                " and not self.job.busy():\n"),
+        "new": "        if pending and not pending[-1].is_alive() and not self.job.busy():\n",
+        "test": "test_after_two_resets_the_table_reads_once_both_ended_a_rebuild_between_too",
+    },
+    {
+        "label": "sockets panel: a rebuild of the window forgets the resets that run",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "    return _RESETS.setdefault(app, [])\n",
+        "new": "    return []\n",
+        "test": "test_after_two_resets_the_table_reads_once_both_ended_a_rebuild_between_too",
+    },
+    {
+        # The press taken during the table's own read greys both buttons out, so a
+        # Refresh after Mark now is not taken and cannot turn the mark into a read.
+        # (The old guard, `MARK if MARK in (...) else READ`, could not differ from
+        # `kind`: an equivalent mutant, which survived on CI.)
         "label": "sockets panel: a Refresh after Mark now loses the mark",
         "file": "beantester/gui/toolbox/sockets.py",
-        "old": "            self._asked = MARK if MARK in (self._asked, kind) else READ\n",
+        "old": "            self._asked = kind\n            self._quiet = False\n",
         "new": "            self._asked = kind\n",
         "test": "test_mark_now_pressed_during_the_tables_own_read_is_a_mark_and_follows_it",
     },
@@ -13236,16 +13256,44 @@ MUTATIONS = [
     {
         "label": "csv: the sockets file writes raw clock numbers",
         "file": "beantester/gui/csv_export.py",
-        "old": "                    _stamp(s.created), s.change, _stamp(s.at))])\n",
-        "new": "                    s.created, s.change, s.at)])\n",
+        "old": "        _stamp(s.created), s.change, _stamp(s.at))]\n",
+        "new": "        s.created, s.change, s.at)]\n",
         "test": "test_save_csv_writes_the_rows_on_screen_as_they_are_and_reads_nothing",
     },
     {
         "label": "csv: the sockets file writes a formula as a formula",
         "file": "beantester/gui/csv_export.py",
-        "old": "                writer.writerow([formula_safe(v) for v in (\n                    s.proc, s.service,",
-        "new": "                writer.writerow([v for v in (\n                    s.proc, s.service,",
+        "old": "    return [formula_safe(v) for v in (\n        s.proc, s.service,",
+        "new": "    return [v for v in (\n        s.proc, s.service,",
         "test": "test_save_csv_writes_the_rows_on_screen_as_they_are_and_reads_nothing",
+    },
+    {
+        "label": "csv: a failed export leaves its half-written file beside the real one",
+        "file": "beantester/gui/csv_export.py",
+        "old": "        with crashlog.quiet(\"gui.csv_export\"):\n            os.remove(tmp)\n",
+        "new": "        pass\n",
+        "test": "test_a_csv_is_written_under_a_name_of_its_own_and_never_through_a_link",
+    },
+    {
+        "label": "sudo files: the CSV exports' file stays root's",
+        "file": "beantester/gui/csv_export.py",
+        "old": "        hand_back(tmp)\n        os.replace(tmp, path)\n",
+        "new": "        os.replace(tmp, path)\n",
+        "test": "test_every_place_that_makes_a_file_hands_it_back",
+    },
+    {
+        "label": "sockets: a socket open at the mark keeps its key when it closes",
+        "file": "beantester/nettools/sockets.py",
+        "old": "    gone = mark.keys.intersection(socket.key for socket in fresh)\n",
+        "new": "    gone = frozenset()\n",
+        "test": "test_the_mark_keeps_the_newest_closed_and_counts_the_ones_let_go",
+    },
+    {
+        "label": "sockets: a service host's own name is shown as its service",
+        "file": "beantester/nettools/sockets.py",
+        "old": "    return \"\" if answer.lower() == process.lower() else answer\n",
+        "new": "    return answer\n",
+        "test": "test_a_service_hosts_sockets_are_named_by_their_service_once_each",
     },
 ]
 

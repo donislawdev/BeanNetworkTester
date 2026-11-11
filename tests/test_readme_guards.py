@@ -157,7 +157,9 @@ def test_both_readmes_document_every_csv_column():
     names |= set(capture_backend.OVERLOAD_STATS)
     for readme in READMES:
         text = _read(readme)
-        missing = sorted(n for n in names if n not in text)
+        # Each as a whole name in backticks, as the column tables write them: as a
+        # bare substring `changed_at` alone would pass for `change` too.
+        missing = sorted(n for n in names if f"`{n}`" not in text)
         check(f"{readme} documents every CSV column", not missing,
               f"(missing: {missing})")
 

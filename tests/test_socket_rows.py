@@ -581,6 +581,9 @@ def test_the_real_socket_table_reads_as_sockets():
         import time
         now = time.time()
         stamped = [row.created for row in rows if row.created is not None]
+        if len(rows) < 4:
+            # Too few to say "most": an empty table or one unstamped row would pass.
+            pytest.skip(f"{len(rows)} sockets on this machine, too few to judge the stamps")
         check("most sockets say when they were bound", len(stamped) >= len(rows) // 2,
               f"({len(stamped)} of {len(rows)})")
         check("none in the future, none before this century",

@@ -108,6 +108,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Fixed
 
+- **Saving a CSV can no longer be redirected into another file.** The Connections export and
+  the Sockets table's "Save CSV" first wrote to a temporary file whose name was known in
+  advance, and followed a link someone had placed under that name. With the rights the program
+  runs with, that could overwrite another file. Each save now creates a temporary file of its
+  own.
+
 - **"Show only the targeted traffic" counts only the packets in scope.** After the target
   changed during a session, the downloaded and uploaded figures, the chart and the CSV kept
   counting the connections of the old target until the session ended. Now each packet counts

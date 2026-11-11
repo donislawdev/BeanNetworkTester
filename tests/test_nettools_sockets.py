@@ -682,6 +682,11 @@ def test_the_mark_keeps_the_newest_closed_and_counts_the_ones_let_go(world, monk
     check("the newest", [s.local_port for s in mark.closed] == [445, 135],
           f"({[s.local_port for s in mark.closed]})")
     check("the older one counted", mark.dropped == 1, f"({mark.dropped})")
+    world.rows.append(ROWS[1])              # 50000, whose closed entry was let go
+    world.later(1)
+    since = sk.view(sk.read(snap), show=sk.SINCE_MARK)
+    check("one let go and open again is opened since the mark, not there all along",
+          (50000, sk.NEW) in [(s.local_port, s.change) for s in since], f"({since})")
 
 
 def test_a_table_that_did_not_answer_at_the_mark_brings_nothing_new_when_it_does(world):
@@ -702,8 +707,10 @@ def test_a_service_hosts_sockets_are_named_by_their_service_once_each(world, mon
     asked = []
 
     def owner_module(row):
+        # 1900: the system names the process itself (Learn: the module may be a
+        # process, a service or a component), which is no service.
         asked.append(row.local_port)
-        return {135: "RpcSs"}.get(row.local_port, "")
+        return {135: "RpcSs", 1900: "SvcHost.exe"}.get(row.local_port, "")
 
     monkeypatch.setattr(portmap, "owner_module", owner_module)
     world.rows.append(SocketRow("UDP", 4, "0.0.0.0", 1900, "", None, "", 900))
@@ -716,7 +723,7 @@ def test_a_service_hosts_sockets_are_named_by_their_service_once_each(world, mon
     world.later(1)
     again = sk.read(snap, fresh_names=False)
     sk.read(sk.read(again))
-    check("a socket's owner never changes: each asked once, an empty answer too",
+    check("a socket's owner never changes: each asked once, the process's own name too",
           asked == [135, 1900], f"({asked})")
     (still,) = at_port(again, 135)
     check("and still named", still.service == "RpcSs")

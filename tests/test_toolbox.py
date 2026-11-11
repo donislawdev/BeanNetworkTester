@@ -1331,7 +1331,8 @@ def test_save_csv_writes_the_rows_on_screen_as_they_are_and_reads_nothing():
         worker = m.export_sockets(app, panel._latest().rows)
         worker.join(20)
         app._logview.drain()
-        rows = list(csv.reader(open(path, newline="", encoding="utf-8")))
+        with open(path, newline="", encoding="utf-8") as f:
+            rows = list(csv.reader(f))
         assert rows[0] == m.SOCKETS_CSV_HEADER, rows[0]
         assert [r[5] for r in rows[1:]] == ["5353", "8080"], ("the view's rows, in order", rows)
         listener = rows[2]
@@ -1342,8 +1343,9 @@ def test_save_csv_writes_the_rows_on_screen_as_they_are_and_reads_nothing():
         assert len(reads) == before, "nothing read again"
         os.remove(path)
         panel._export().join(20)                # the button: the same, from the window
-        assert os.path.exists(path) and not os.path.exists(path + ".tmp")
-        assert list(csv.reader(open(path, newline="", encoding="utf-8"))) == rows
+        assert os.listdir(os.path.dirname(path)) == ["sockets.csv"], "no temporary file left"
+        with open(path, newline="", encoding="utf-8") as f:
+            assert list(csv.reader(f)) == rows
         assert len(reads) == before, "nothing read again"
     """))
 
@@ -1630,6 +1632,48 @@ def test_the_row_menu_resets_an_open_connection_and_the_table_reads_once_it_ende
         select_port(panel, 50002)
         panel._show_menu(0, 0)
         assert panel.menu.entry_states[tool.RESET] == MENU_ENTRY_INERT, "nothing left to reset"
+    """))
+
+
+def test_after_two_resets_the_table_reads_once_both_ended_a_rebuild_between_too():
+    """The second reset done first: the read waits for BOTH - one between them would
+    show the first one's connection open, and none would follow it - and a rebuild
+    of the window in between (a language change) loses neither."""
+    run_gui(SOCK + textwrap.dedent("""
+        from beantester.gui.toolbox import sockets as tool
+        ROWS.append(SocketRow("TCP", 4, "10.0.0.2", 50003, "93.184.216.34", 443,
+                              "ESTABLISHED", 1234))
+        tool.can_reset = lambda row: True
+
+        class Worker:
+            alive = True
+            def is_alive(self):
+                return self.alive
+
+        first, second = Worker(), Worker()
+        workers = [first, second]
+        tool.reset_connection = lambda _app, row: workers.pop(0)
+        panel = open_sockets()
+        settle(panel)
+        for port in (50001, 50003):
+            select_port(panel, port)
+            panel._reset()
+        assert workers == [], "both resets started"
+        second.alive = False
+        before = len(reads)
+        panel.refresh()
+        settle(panel)
+        assert len(reads) == before, "no read while the first reset still runs"
+        app._build_ui()                         # a language change rebuilds the panel
+        panel = open_sockets()
+        settle(panel)
+        panel.refresh()
+        settle(panel)
+        assert len(reads) == before, "nor after the rebuild"
+        first.alive = False
+        panel.refresh()
+        settle(panel)
+        assert len(reads) == before + 1, "one read once both have ended"
     """))
 
 

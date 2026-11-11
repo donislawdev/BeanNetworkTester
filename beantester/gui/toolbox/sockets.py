@@ -30,7 +30,8 @@ from the machine: a choice and the file are views of the read the window has, an
 a mark is ONE read the person asked for, while looking. Only that read sets the
 mark - on what it found, not on the window's last read, which may be minutes old.
 A row's "Reset this connection" is the Connections page's (``field_actions``);
-when it has ended, the next tick on screen reads once, so the row says it closed.
+when every reset started has ended, the next tick on screen reads once, so the
+rows say they closed.
 
 One request at a time. The worker keeps only the LAST request that waits
 (``gui/model_worker.py``), and a search queued behind a read would have been
@@ -40,8 +41,10 @@ remembered, and each answer that lands is compared with them and asked again
 when they moved (``_on_outcome``). Refresh pressed during the table's own read is
 remembered the same way, and its read is asked for when that one lands.
 """
+import threading
 import time
 import tkinter as tk
+import weakref
 from tkinter import ttk
 
 from ...i18n import T
@@ -178,6 +181,18 @@ def reset_row(s):
             "remote_port": s.remote_port}
 
 
+_RESETS: "weakref.WeakKeyDictionary[object, list[threading.Thread]]" = \
+    weakref.WeakKeyDictionary()
+
+
+def resets(app):
+    """The resets started from this window's row menu that the table has not read
+    after yet. Kept for the window, like its job (``base.job``): a language change
+    rebuilds the panel while one runs, and the read that follows it must not go
+    with the old panel."""
+    return _RESETS.setdefault(app, [])
+
+
 def reset_offered(s):
     """"Reset this connection" for a row that IS one, and one this system resets
     (``field_actions.can_reset``, the Connections page's own rule). Not for a row
@@ -229,7 +244,7 @@ class SocketsPanel:
         self._took = []             # what the last two reads took, in ms
         self._quiet = False         # the read that is out was started by the table
         self._asked = None          # READ or MARK pressed while that read was out
-        self._resetting = None      # the worker of a reset from the row menu
+        self._resets = resets(app)  # the row menu's resets that have not been read after
         self.count = ttk.Label(bar, text="", style="Muted.TLabel")
         self.count.pack(side="right")
         self._build_which_row()
@@ -353,8 +368,10 @@ class SocketsPanel:
         elif self._quiet:
             # The table's own read is out, and the button did not say so (_ask). The
             # person's read follows it, naming every process again; until then the
-            # window shows it was taken. A mark asked for is never lost to a Refresh.
-            self._asked = MARK if MARK in (self._asked, kind) else READ
+            # window shows it was taken, both buttons greyed out - so a Refresh
+            # pressed after a Mark now (or the other way round) is not taken, and a
+            # mark asked for is never lost to it.
+            self._asked = kind
             self._quiet = False
             self.status.working()
             self._sync_buttons()
@@ -659,14 +676,17 @@ class SocketsPanel:
         so the row says it closed; with the tab out of sight, at the next look."""
         s = self._selected()
         if reset_offered(s):
-            self._resetting = reset_connection(self.app, reset_row(s))
+            worker = reset_connection(self.app, reset_row(s))
+            if worker is not None:
+                self._resets.append(worker)
 
     def _read_after_reset(self):
-        # Not while any read is out: it may have started before the reset ended,
-        # and would show the connection open. The next tick asks again.
-        worker = self._resetting
-        if worker is not None and not worker.is_alive() and not self.job.busy():
-            self._resetting = None
+        # Once EVERY reset has ended: a read between two would show the later one's
+        # connection open, and none would follow it. Not while any read is out
+        # either: it may have started before the reset ended. The next tick asks again.
+        pending = self._resets
+        if pending and not any(w.is_alive() for w in pending) and not self.job.busy():
+            pending.clear()
             self.read()
 
     def _health(self):

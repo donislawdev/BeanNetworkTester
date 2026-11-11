@@ -70,13 +70,14 @@ def test_export_connections_csv_writes_the_current_view():
         assert chrome[7] == "yes" and chrome[19] == "3", chrome
         assert svc[19] == "0", svc
         # atomic overwrite leaves no temp file behind
-        assert not os.path.exists(path + ".tmp")
+        left = os.listdir(os.path.dirname(path))
+        assert left == ["conns.csv"], left
     ''')
 
 
 def test_a_failed_connections_export_leaves_no_tmp_file_behind():
-    """The export writes `<file>.tmp` and renames it. When the write blew up, the
-    temp file stayed on disk next to the real one for the user to find and wonder
+    """The export writes a temp file beside the real one and renames it. When the
+    write blew up, the temp file stayed on disk for the user to find and wonder
     about - and the next export silently overwrote it, so the litter was not even
     stable. `jsonfile.write_json` has cleaned up after itself for a while; this is
     the same guarantee for the same reason.
@@ -102,11 +103,11 @@ def test_a_failed_connections_export_leaves_no_tmp_file_behind():
         app.export_connections_csv().join(20)   # the export runs off-thread now
         app._logview.drain()   # ...and a worker's log line lands on the next tick
 
-        assert not os.path.exists(path + ".tmp"), "a half-written .tmp was left behind"
-        assert not os.path.exists(path), "a failed export must not create the real file"
+        left = os.listdir(os.path.dirname(path))
+        assert left == [], ("no half-written temp file, and no real file either", left)
         assert any("csv" in line.lower() or "błąd" in line.lower()
                    for line in app._log_lines), app._log_lines[-3:]
-    ''')
+    ''', allow_faults=("unsupported operand type(s) for -",))
 
 
 def test_export_connections_csv_writes_a_portless_row_with_empty_port_cells():
@@ -384,3 +385,69 @@ def test_the_connection_export_does_not_run_on_the_ui_thread():
             "the export is back on the UI thread"
         assert os.path.exists(path), "and it still has to produce the file"
     ''')
+
+
+def test_a_csv_is_written_under_a_name_of_its_own_and_never_through_a_link(tmp_path):
+    """Both exports' one write (``csv_export._replace_csv``). The temp file was
+    ``<file>.tmp``, a name known in advance: a link put there sent the write -
+    root's, under sudo - wherever it pointed. Now the name is made by the call
+    (``mkstemp``) and written through its own descriptor. A failure keeps the
+    previous export whole and leaves nothing beside it."""
+    import os
+
+    import pytest
+
+    from beantester.gui import csv_export as m
+    path = tmp_path / "conns.csv"
+    victim = tmp_path / "victim.txt"
+    victim.write_text("keep", encoding="utf-8")
+    try:
+        os.symlink(victim, str(path) + ".tmp")
+    except (OSError, NotImplementedError):
+        planted = []                            # no right to make links here (Windows)
+    else:
+        planted = ["conns.csv.tmp"]
+    m._replace_csv(str(path), ["a", "b"], iter([["1", "2"]]))
+    assert path.read_bytes() == b"a,b\r\n1,2\r\n", path.read_bytes()
+    assert victim.read_text(encoding="utf-8") == "keep", "written through the link"
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted(
+        ["conns.csv", "victim.txt", *planted])
+
+    def broken():
+        yield ["3", "4"]
+        raise ValueError("a row that cannot be written")
+
+    with pytest.raises(ValueError):
+        m._replace_csv(str(path), ["a", "b"], broken())
+    assert path.read_bytes() == b"a,b\r\n1,2\r\n", "the previous export was touched"
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted(
+        ["conns.csv", "victim.txt", *planted]), "a half-written file was left"
+
+
+def test_a_second_sockets_export_is_refused_and_a_failed_one_frees_the_next(tmp_path,
+                                                                          monkeypatch):
+    """Save CSV twice: the second is refused out loud while the first writes, the
+    way the connections export refuses (two workers onto one file publish whichever
+    ends last). A write that fails says so and does not keep the lock."""
+    from types import SimpleNamespace
+
+    from beantester.gui import csv_export as m
+    from beantester.i18n import T
+    lines = []
+    app = SimpleNamespace(log=lambda text: lines.append(str(text)))
+    monkeypatch.setattr(m, "SOCKETS_CSV_FILE", str(tmp_path / "sockets.csv"))
+    assert m._SOCKETS_LOCK.acquire(blocking=False), "the lock must start free"
+    try:
+        refused = m.export_sockets(app, [])
+    finally:
+        m._SOCKETS_LOCK.release()
+    assert refused is None and lines == [T("log.conns_export_busy")], lines
+
+    monkeypatch.setattr(m, "SOCKETS_CSV_FILE", str(tmp_path / "no such folder" / "s.csv"))
+    m.export_sockets(app, []).join(20)
+    assert lines[-1].startswith(T("log.csv_error")), lines
+    monkeypatch.setattr(m, "SOCKETS_CSV_FILE", str(tmp_path / "sockets.csv"))
+    worker = m.export_sockets(app, [])
+    assert worker is not None, "a failed export kept the lock"
+    worker.join(20)
+    assert (tmp_path / "sockets.csv").read_text(encoding="utf-8").startswith("process,")

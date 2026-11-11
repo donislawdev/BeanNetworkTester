@@ -278,16 +278,19 @@ def _changes(live, carry, failed, now, mark=False):
 def _still_marked(mark, fresh, current):
     """``mark`` after a read in which ``fresh`` closed and ``current`` is open.
 
-    A socket that closed since the mark and is open again under the same key is a
-    new socket: its closed entry goes - one key, one row - and it leaves the
-    mark's keys, so the view shows it as opened since the mark, which it was.
+    A socket open at the mark leaves the mark's keys when it closes, so one open
+    again under the same key - a new socket - shows as opened since the mark, which
+    it was: also once its closed entry was let go (MAX_CLOSED), which left the key
+    behind when it was taken out only at the reopening. Open again, its closed
+    entry goes: one key, one row.
     """
     if mark is None:
         return None
     reopened = {socket.key for socket in mark.closed if socket.key in current}
     kept = [socket for socket in mark.closed if socket.key not in reopened] + fresh
     over = max(0, len(kept) - MAX_CLOSED)
-    return mark._replace(keys=mark.keys - reopened if reopened else mark.keys,
+    gone = mark.keys.intersection(socket.key for socket in fresh)
+    return mark._replace(keys=mark.keys - gone if gone else mark.keys,
                          closed=tuple(kept[over:]), dropped=mark.dropped + over)
 
 
@@ -377,12 +380,19 @@ def _sockets(rows, names, known=None, services=None, ask=None):
             service = known.get(key)
             if service is None and budget:
                 budget -= 1
-                service = ask(row)
+                service = _service(ask(row), name)
             if service is not None and services is not None:
                 services[key] = service
         yield Socket(key, row.proto, row.family, row.local_ip, row.local_port,
                      row.remote_ip, row.remote_port, row.state, row.pid, name,
                      created=row.created, service=service or "")
+
+
+def _service(answer, process):
+    """The system's answer for a service host's socket, as its service. The module
+    may be the process itself (Learn: a process, a service or a component name),
+    and that is no service."""
+    return "" if answer.lower() == process.lower() else answer
 
 
 NO_OWNER, NO_OWNER_LINUX, NO_OWNER_ROOT = ("tools.sockets.note_no_pid",
