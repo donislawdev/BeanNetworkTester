@@ -87,6 +87,16 @@ class SocketRow(NamedTuple):
     pid: int | None             # 0: owned by no process (TIME_WAIT); None: the OS would not say
 
 
+def table_of(proto, version):
+    """The name of the socket table a row is read from - "tcp/v4", "tcp/v6", "udp/v4"
+    or "udp/v6" - which is how ``socket_rows`` names a table that failed. ``proto`` in
+    either case ("TCP" is a ``SocketRow``'s), ``version`` 4 or 6."""
+    return f"{proto.lower()}/v{version}"
+
+
+_IP_VERSION = {_AF_INET: 4, _AF_INET6: 6}
+
+
 class SocketTableUnavailable(Exception):
     """No socket table could be read at all. ``reason``: "denied" or "missing"."""
 
@@ -341,7 +351,7 @@ class _Native:
             for family in (_AF_INET, _AF_INET6):
                 fetched = self._fetch(proto, family)
                 if fetched is None:
-                    failed.append(f"{proto}/{self.FAMILY_NAMES[family]}")
+                    failed.append(table_of(proto, _IP_VERSION[family]))
                     continue
                 _buffer, table = fetched        # held while the rows are read
                 convert = _ROW_CONVERTERS[(proto, family)]

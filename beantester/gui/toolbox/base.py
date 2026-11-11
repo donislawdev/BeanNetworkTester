@@ -67,16 +67,26 @@ def choice(parent, memory, label_key, values, name, default, tip_key, text):
     return (lambda: by_text.get(var.get(), default)), box
 
 
+def tab_chosen(app, tool_id):
+    """Is this tool's tab the one chosen, on the Tools page in front.
+
+    The page is None while a rebuild builds it - and builds the first tool inside
+    its constructor - when no page is current either: `None is None` took a tool
+    down on every language change (caught by the GUI tests).
+    """
+    page = app.pages.get("tools")
+    return bool(page is not None and app.current_page() is page
+                and page.current() == tool_id)
+
+
 def on_screen(app, tool_id):
-    """Is this tool what the person is looking at right now: the Tools page in
-    front, this tool's tab chosen on it, and the window not minimised.
+    """Is this tool what the person is looking at right now: its tab chosen
+    (``tab_chosen``) and the window not minimised.
 
     What a tool that works by itself asks before each piece of work. A tool nobody
     is looking at must cost nothing - no read, and no timer waiting to make one.
     """
-    page = app.pages.get("tools")
-    return bool(page is not None and app.current_page() is page
-                and page.current() == tool_id and app._visible())
+    return tab_chosen(app, tool_id) and bool(app._visible())
 
 
 class Debounce:

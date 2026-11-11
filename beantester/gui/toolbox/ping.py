@@ -36,7 +36,7 @@ from ..labels import wrapping_label
 from ..theme import CHARS, PAGE_WRAP_PAD, PING_COLORS, ROWS, size, space
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
-from .base import Poller, StatusLine, choice, job, remembered
+from .base import Poller, StatusLine, choice, job, remembered, tab_chosen
 from .details import say
 
 AREA = "gui.toolbox.ping"
@@ -477,12 +477,9 @@ class PingPanel:
             self._show(keep_status=problem is not None)
 
     def _on_screen(self):
-        # The page is None while a rebuild builds it - and builds this panel, the
-        # first tab, inside its constructor - when no page is current either: `None is
-        # None` took this tool down on every language change (caught by the GUI tests).
-        page = self.app.pages.get("tools")
-        return (page is not None and self.app.current_page() is page
-                and page.current() == self.ID)
+        # ``tab_chosen``, not ``on_screen``: a minimised window goes on drawing the
+        # run as it always did.
+        return tab_chosen(self.app, self.ID)
 
     def _signature(self):
         runner = self.runner

@@ -30,7 +30,8 @@ One request at a time. The worker keeps only the LAST request that waits
 computed on the table it was queued against - the old one - and shown after the
 new. So nothing is queued: while the worker is busy the inputs are only
 remembered, and each answer that lands is compared with them and asked again
-when they moved (``_on_outcome``).
+when they moved (``_on_outcome``). Refresh pressed during the table's own read is
+remembered the same way, and its read is asked for when that one lands.
 """
 import time
 import tkinter as tk
@@ -49,7 +50,7 @@ from ..tooltip import add_tooltip
 from ..widgets import SortableTree, make_room
 from .base import Debounce, Poller, StatusLine, choice, job, on_screen, remembered
 from .ping import offered as ping_offered, ping_from
-from .tcphealth import offered, watch_from
+from .tcphealth import offered, watch_from, watching
 from ... import crashlog
 
 AREA = "gui.toolbox.sockets"
@@ -69,6 +70,9 @@ NUMERIC = frozenset({"local_port", "remote_port", "pid"})
 # Centred for the connection table's reason: each follows a right-aligned number,
 # and left-aligned it touched it - the first render read "22 LISTEN" as one value.
 CENTERED = frozenset({"proto", "state"})
+# Sorted the latest first at the first click: the change column is read for what
+# changed just now, and from the other end that is below every older change.
+NEWEST_FIRST = frozenset({"change"})
 MIN_CHARS = {"proto": CHARS["proto"], "local_ip": CHARS["address"],
              "local_port": CHARS["port"], "remote_ip": CHARS["address"],
              "remote_port": CHARS["port"], "state": CHARS["tcp_state"],
@@ -117,6 +121,11 @@ def address(s):
     return s.remote_ip.split("%")[0]
 
 
+def connection_of(s):
+    """The row's four numbers, as TCP health names a connection."""
+    return Connection(s.local_ip, s.local_port, s.remote_ip, s.remote_port)
+
+
 class SocketsPanel:
     ID = "sockets"
     LABEL = "tools.sockets.tab"
@@ -157,6 +166,7 @@ class SocketsPanel:
         self._failures = 0          # reads that failed in a row
         self._took = []             # what the last two reads took, in ms
         self._quiet = False         # the read that is out was started by the table
+        self._asked = False         # Refresh was pressed while that read was out
         self.count = ttk.Label(bar, text="", style="Muted.TLabel")
         self.count.pack(side="right")
 
@@ -175,6 +185,7 @@ class SocketsPanel:
                                   horizontal=True, min_chars=MIN_CHARS, tips=TIPS,
                                   numeric=NUMERIC, centered=CENTERED, tags=SOCKET_COLORS,
                                   empty_text="tools.common.working")
+        self.table.start_reversed = NEWEST_FIRST
         make_room(self.table, {"change": [T(key, time=clock(0))
                                           for key in (APPEARED, CLOSED_AT)]})
         self._build_menu()
@@ -245,6 +256,13 @@ class SocketsPanel:
         """Read the machine again (the Refresh button)."""
         if not self.job.busy():
             self._ask(READ)
+        elif self._quiet:
+            # The table's own read is out, and the button did not say so (_ask). The
+            # person's read follows it, naming every process again; until then the
+            # window shows it was taken.
+            self._asked, self._quiet = True, False
+            self.status.working()
+            self._sync_buttons()
 
     def _read_if_never(self):
         # Not after a read that failed: that says so, and waits for Refresh rather
@@ -381,6 +399,12 @@ class SocketsPanel:
             self._show_failure()
         else:
             self._show(outcome.value, keep_view=outcome.kind == READ)
+        if self._asked and not self.job.busy():
+            # Refresh pressed during the table's own read (``read``). Taken with
+            # the inputs as they are now, so it answers a search typed meanwhile too.
+            self._asked = False
+            self._ask(READ)
+            return
         # Typed or sorted while the worker was busy: those inputs were remembered,
         # not sent (see the module docstring), so this answer may be for older ones.
         latest = self._latest()
@@ -395,10 +419,12 @@ class SocketsPanel:
         if read.error or not self.live.get():
             self.status.show(read)
             return
-        chosen, pace = self.every(), self._pace_ms()
-        slow = pace > chosen * 1000
+        # To a tenth of a second, and "slow" only when that shows: in whole seconds
+        # 2.4 s read "every 2 s, not every 2 s", and 2.02 s is not worth saying.
+        chosen, every = self.every(), round(self._pace_ms() / 1000, 1)
+        slow = every > chosen
         text = T("tools.sockets.status_live_slow" if slow else "tools.sockets.status_live",
-                 time=clock(read.finished), ms=read.elapsed_ms, every=round(pace / 1000),
+                 time=clock(read.finished), ms=read.elapsed_ms, every=f"{every:g}",
                  chosen=chosen)
         self.status.label.config(text=text, style="Muted.TLabel")
 
@@ -460,10 +486,18 @@ class SocketsPanel:
         keys = self.table.selected_keys()
         return self.table.item_for_key(keys[0]) if keys else None
 
+    def _health_offered(self, s):
+        """"Show TCP health" for a row with a connection behind it. One that has
+        closed only while it is on that tool's list, where its numbers are: a new
+        watch of it would be an empty entry saying it ended."""
+        if not (s and offered(s.proto, s.remote_ip, s.state)):
+            return False
+        return s.change != sockets.CLOSED or watching(self.app, connection_of(s))
+
     def _show_menu(self, x_root, y_root):
         s = self._selected()
         named, remote = bool(s and s.proc), bool(s and s.remote_ip)
-        health = bool(s and offered(s.proto, s.remote_ip, s.state))
+        health = self._health_offered(s)
         # A listening socket's remote side is 0.0.0.0 or ::, which is nobody.
         pingable = bool(s and ping_offered(s.remote_ip))
         for indexes, allowed in ((NEEDS_NAME, named), (NEEDS_REMOTE, remote),
@@ -496,9 +530,8 @@ class SocketsPanel:
         """The connection onto TCP health's list, that tool on screen. The row has
         all four numbers, so nothing is looked up."""
         s = self._selected()
-        if s and offered(s.proto, s.remote_ip, s.state):
-            watch_from(self.app, Request(s.proc, s.pid, connection=Connection(
-                s.local_ip, s.local_port, s.remote_ip, s.remote_port)))
+        if self._health_offered(s):
+            watch_from(self.app, Request(s.proc, s.pid, connection=connection_of(s)))
 
     def _ping(self):
         """Ping the row's remote address - with its IPv6 zone, which a link-local

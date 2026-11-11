@@ -4451,11 +4451,13 @@ MUTATIONS = [
         "test": "test_two_identical_sockets_are_two_rows_with_two_keys",
     },
     {
-        # A TIME_WAIT row is named "[System Process]", the snapshot's PID 0.
+        # A TIME_WAIT row is named "[System Process]", the snapshot's PID 0. Aimed
+        # at _names since PR #324's CI: the same test in _sockets as well left that
+        # copy dead, and its mutation SURVIVED.
         "label": "sockets: a socket no process owns is named after PID 0",
         "file": "beantester/nettools/sockets.py",
-        "old": "        name = names.get(row.pid, \"\") if row.pid else \"\"",
-        "new": "        name = names.get(row.pid, \"\")",
+        "old": "    pids = {row.pid for row in rows if row.pid}\n",
+        "new": "    pids = {row.pid for row in rows if row.pid is not None}\n",
         "test": "test_a_read_names_each_row_after_the_table_and_keeps_what_failed",
     },
     {
@@ -9218,8 +9220,8 @@ MUTATIONS = [
     {
         "label": "tcp health: the socket table offers it for a listener and TIME_WAIT",
         "file": "beantester/gui/toolbox/sockets.py",
-        "old": "        health = bool(s and offered(s.proto, s.remote_ip, s.state))\n",
-        "new": "        health = bool(s)\n",
+        "old": "        if not (s and offered(s.proto, s.remote_ip, s.state)):\n",
+        "new": "        if not s:\n",
         "test": "test_show_tcp_health_from_the_socket_table_watches_that_connection",
     },
     {
@@ -10455,15 +10457,31 @@ MUTATIONS = [
     {
         "label": "sockets: a table that did not answer closes its sockets",
         "file": "beantester/nettools/sockets.py",
-        "old": "    if not incomplete:\n        arrived = {}\n",
-        "new": "    if True:\n        arrived = {}\n",
+        "old": "    known = current.keys() | unread.keys()\n",
+        "new": "    known = current.keys()\n",
         "test": "test_a_table_that_did_not_answer_closes_nothing_and_its_return_is_not_news",
     },
     {
         "label": "sockets: a table that comes back is all news",
         "file": "beantester/nettools/sockets.py",
-        "old": "    last = {**carry.last, **current} if incomplete else current\n",
-        "new": "    last = current\n",
+        "old": "    return shown, Carry({}, monotonic, {**unread, **current}, seen, tuple(closed))\n",
+        "new": "    return shown, Carry({}, monotonic, current, seen, tuple(closed))\n",
+        "test": "test_a_table_that_did_not_answer_closes_nothing_and_its_return_is_not_news",
+    },
+    {
+        # CodeRabbit on PR #324: one failing table (IPv6 off) stopped every table
+        # from saying what closed, and each read remembered more than the last.
+        "label": "sockets: a table that did not answer keeps what closed in the others",
+        "file": "beantester/nettools/sockets.py",
+        "old": "              if key not in current and _table(socket) in failed}\n",
+        "new": "              if key not in current and failed}\n",
+        "test": "test_a_table_that_keeps_failing_lets_the_others_be_read_as_ever",
+    },
+    {
+        "label": "sockets: a socket's table is named unlike a table that failed",
+        "file": "beantester/portmap.py",
+        "old": "    return f\"{proto.lower()}/v{version}\"\n",
+        "new": "    return f\"{proto}/v{version}\"\n",
         "test": "test_a_table_that_did_not_answer_closes_nothing_and_its_return_is_not_news",
     },
     {
@@ -10476,16 +10494,25 @@ MUTATIONS = [
     {
         "label": "sockets: a socket that got its far end is called closed",
         "file": "beantester/nettools/sockets.py",
-        "old": "                   if key not in current and not _reshaped(socket, arrived)]\n",
-        "new": "                   if key not in current]\n",
+        "old": "               if key not in known and not _reshaped(socket, arrived)]\n",
+        "new": "               if key not in known]\n",
         "test": "test_a_socket_that_gets_its_far_end_did_not_close",
     },
     {
         "label": "sockets: a client that left is hidden by the one that arrived",
         "file": "beantester/nettools/sockets.py",
-        "old": "    return any(not gone.remote_ip or not new.remote_ip\n",
-        "new": "    return any(True\n",
+        "old": "    return bare is not None and (bare or not gone.remote_ip)\n",
+        "new": "    return bare is not None\n",
         "test": "test_one_client_leaving_and_another_arriving_are_told_as_that",
+    },
+    {
+        # The summary that made _reshaped one step (CodeRabbit on PR #324: it
+        # scanned every arrival at a port for every socket that went).
+        "label": "sockets: the arrivals at a place forget the one without a far end",
+        "file": "beantester/nettools/sockets.py",
+        "old": "        arrived[place] = arrived.get(place, False) or not socket.remote_ip\n",
+        "new": "        arrived[place] = arrived.get(place, False)\n",
+        "test": "test_a_socket_that_gets_its_far_end_did_not_close",
     },
     {
         "label": "sockets: another program's arrival hides a socket that closed",
@@ -10630,8 +10657,8 @@ MUTATIONS = [
     {
         "label": "toolbox: a minimised window counts as looked at",
         "file": "beantester/gui/toolbox/base.py",
-        "old": "                and page.current() == tool_id and app._visible())\n",
-        "new": "                and page.current() == tool_id)\n",
+        "old": "    return tab_chosen(app, tool_id) and bool(app._visible())\n",
+        "new": "    return tab_chosen(app, tool_id)\n",
         "test": "test_the_table_reads_by_itself_only_while_it_is_looked_at",
     },
     {
@@ -10661,6 +10688,69 @@ MUTATIONS = [
         "old": "            lines.append(T(sockets.no_owner_note(), count=unnamed))\n",
         "new": "            lines.append(T(sockets.NO_OWNER, count=unnamed))\n",
         "test": "test_the_table_says_why_it_is_empty_and_what_its_rows_are_missing",
+    },
+    {
+        # CodeRabbit on PR #324: the button stays live during the table's own read,
+        # and a press then did nothing at all.
+        "label": "sockets panel: Refresh pressed during the table's own read is dropped",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "        elif self._quiet:\n",
+        "new": "        elif False:\n",
+        "test": "test_refresh_pressed_during_the_tables_own_read_is_taken_and_follows_it",
+    },
+    {
+        "label": "sockets panel: the Refresh taken during a read is never made",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "        if self._asked and not self.job.busy():\n",
+        "new": "        if False:\n",
+        "test": "test_refresh_pressed_during_the_tables_own_read_is_taken_and_follows_it",
+    },
+    {
+        # CodeRabbit on PR #324: 2.4 s rounded read "every 2 s, not every 2 s".
+        "label": "sockets panel: a stretched pace is said in whole seconds",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "        chosen, every = self.every(), round(self._pace_ms() / 1000, 1)\n",
+        "new": "        chosen, every = self.every(), round(self._pace_ms() / 1000)\n",
+        "test": "test_a_slow_read_stretches_the_pace_and_the_status_line_says_so",
+    },
+    {
+        "label": "sockets panel: a stretch too small to show is called slow",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "        slow = every > chosen\n",
+        "new": "        slow = self._pace_ms() > chosen * 1000\n",
+        "test": "test_a_slow_read_stretches_the_pace_and_the_status_line_says_so",
+    },
+    {
+        # CodeRabbit on PR #324: a new watch of a closed connection is an empty
+        # entry saying it ended (Windows ERROR_NOT_FOUND, Linux ENOENT).
+        "label": "sockets: a closed row starts a new TCP health watch",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "        return s.change != sockets.CLOSED or watching(self.app, connection_of(s))\n",
+        "new": "        return True\n",
+        "test": "test_a_closed_row_offers_tcp_health_only_for_a_connection_already_watched",
+    },
+    {
+        "label": "sockets: a closed row hides the watch it has",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "        return s.change != sockets.CLOSED or watching(self.app, connection_of(s))\n",
+        "new": "        return s.change != sockets.CLOSED\n",
+        "test": "test_a_closed_row_offers_tcp_health_only_for_a_connection_already_watched",
+    },
+    {
+        # CodeRabbit on PR #324: the tip and the README say the latest changes come
+        # first, and the first click put the oldest there.
+        "label": "tables: a column that starts newest first starts oldest first",
+        "file": "beantester/gui/widgets/sortable_tree.py",
+        "old": "            reverse = col in self.start_reversed or self.sort.get(\"default_reverse\", False)\n",
+        "new": "            reverse = self.sort.get(\"default_reverse\", False)\n",
+        "test": "test_the_change_column_puts_the_latest_change_on_top_at_the_first_click",
+    },
+    {
+        "label": "sockets panel: the change column starts oldest first",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "        self.table.start_reversed = NEWEST_FIRST\n",
+        "new": "        self.table.start_reversed = frozenset()\n",
+        "test": "test_the_change_column_puts_the_latest_change_on_top_at_the_first_click",
     },
     {
         "label": "tcpestats: a Linux kernel without the socket list says the shared words",

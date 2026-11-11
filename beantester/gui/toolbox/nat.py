@@ -29,7 +29,7 @@ from ..theme import CHARS, NAT_COLORS, PAGE_WRAP_PAD, ROWS, space
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree
 from ..widgets.sortable_tree import make_room
-from .base import Poller, StatusLine, job, remembered
+from .base import Poller, StatusLine, job, remembered, tab_chosen
 
 AREA = "gui.toolbox.nat"
 ID = "nat"
@@ -299,9 +299,7 @@ class NatPanel:
             self._show()
 
     def _on_screen(self):
-        page = self.app.pages.get("tools")
-        return (page is not None and self.app.current_page() is page
-                and page.current() == self.ID)
+        return tab_chosen(self.app, self.ID)
 
     def _signature(self):
         runner = self.runner

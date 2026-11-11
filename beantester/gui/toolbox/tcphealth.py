@@ -37,7 +37,7 @@ from ..labels import wrapping_label
 from ..theme import CHARS, HEALTH_COLORS, PAGE_WRAP_PAD, ROWS, size, space
 from ..tooltip import add_tooltip
 from ..widgets import SortableTree, make_room
-from .base import Poller, StatusLine, job, remembered
+from .base import Poller, StatusLine, job, remembered, tab_chosen
 from .details import DetailsMenu, render_detail, say
 
 AREA = "gui.toolbox.tcphealth"
@@ -126,6 +126,12 @@ def watch_from(app, request):
 def offered(proto, remote_ip, state=""):
     """Whether a row menu offers "Show TCP health" for a row."""
     return capabilities.available("tcp_health") and tcphealth.watchable(proto, remote_ip, state)
+
+
+def watching(app, connection):
+    """Is ``connection`` on this window's list already - with numbers to show even
+    after it has closed."""
+    return tcphealth.key_of(connection) in watchlist(app).watches
 
 
 class TcpHealthPanel:
@@ -240,8 +246,7 @@ class TcpHealthPanel:
         self._read()
 
     def _on_screen(self):
-        page = self.app.pages.get("tools")
-        return self.app.current_page() is page and page.current() == self.ID
+        return tab_chosen(self.app, self.ID)
 
     def _read(self):
         """One worker run: what was asked, and everything still being read. Never

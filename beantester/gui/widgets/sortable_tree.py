@@ -238,6 +238,12 @@ class SortableTree:
         self._centered = frozenset(centered)
         self._visible = set(self.columns)       # see set_visible_columns
         self.sort = dict(sort or {"col": next(iter(self.columns)), "reverse": False})
+        # Columns whose first click sorts them in reverse, the largest or newest on
+        # top - for a column nobody reads from the smallest end. A page sets it after
+        # building the table (as the Connections page sets sort["default_reverse"]):
+        # the constructor is at the project's ceiling of arguments (pyproject), and
+        # this class at the one on methods (tests/test_code_shape.py).
+        self.start_reversed = frozenset()
         self.on_sort = on_sort
         self._min_chars = dict(min_chars or {})
         self.tips = dict(tips or {})            # column id -> i18n key of its tooltip
@@ -1182,7 +1188,8 @@ class SortableTree:
         if self.sort["col"] == col:
             self.sort["reverse"] = not self.sort["reverse"]
         else:
-            self.sort = {"col": col, "reverse": self.sort.get("default_reverse", False)}
+            reverse = col in self.start_reversed or self.sort.get("default_reverse", False)
+            self.sort = {"col": col, "reverse": reverse}
         self.refresh_headers()
         # a new order means the rows under the pointer are different anyway; go
         # back to the top, which is what the user looks at when sorting

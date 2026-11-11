@@ -157,7 +157,7 @@ def read(previous=None, fresh_names=True):
     # names it was given. A PID reused inside those few milliseconds is the one
     # case left: named after its new owner. Accepted; it cannot be told apart.
     names, named_at = _names(rows, None if fresh_names else carry, now[1])
-    shown, carry = _changes(list(_sockets(rows, names)), carry, bool(failed), now)
+    shown, carry = _changes(list(_sockets(rows, names)), carry, frozenset(failed), now)
     return Snapshot(tuple(shown), tuple(failed), now[0],
                     round((time.perf_counter() - started) * 1000),
                     carry._replace(names=names, named_at=named_at))
@@ -180,6 +180,10 @@ def _names(rows, carry, monotonic):
     it may be another program. A PID the snapshot does not know (its process
     exited while its socket lingers) is kept as "", or every read would take the
     snapshot again for it.
+
+    PID 0 owns nothing and is never named: the snapshot calls it "[System
+    Process]", and a row in TIME_WAIT is not that process's socket. So it is left
+    out here, the one place a row gets its name (``_sockets``).
     """
     pids = {row.pid for row in rows if row.pid}
     if (carry is not None and pids <= carry.names.keys()
@@ -193,45 +197,64 @@ def _names(rows, carry, monotonic):
     return {pid: table.get(pid, "") for pid in pids}, monotonic
 
 
-def _changes(live, carry, incomplete, now):
+def _changes(live, carry, failed, now):
     """``(shown, carry)``: ``live`` with what changed since ``carry`` marked, the
     sockets that just closed after them, and what the next read needs.
 
     ``now`` is the read's ``_clock()``.
 
-    ``incomplete``: a table did not answer, so its sockets are missing from
-    ``live`` without having closed. Such a read closes nothing and forgets
-    nothing: what the last read had stays known, so the table coming back does not
-    mark every socket of it as new.
+    ``failed`` names the tables that did not answer (``portmap.table_of``). Their
+    sockets are missing from ``live`` without having closed, so they are kept as
+    the last read had them: not called closed, and not marked new when their table
+    answers again. That is per table - one that keeps failing (IPv6 turned off)
+    must not stop the others from saying what closed, nor make every read remember
+    more than the one before.
     """
     wall, monotonic = now
     current = {socket.key: socket for socket in live}
     if carry is None:
         # The first read: everything was simply there.
         return live, Carry({}, monotonic, current, {}, ())
-    seen = {key: at for key, at in carry.seen.items() if key in current or incomplete}
+    unread = {key: socket for key, socket in carry.last.items()
+              if key not in current and _table(socket) in failed}
+    known = current.keys() | unread.keys()
+    seen = {key: at for key, at in carry.seen.items() if key in known}
     for key in current.keys() - carry.last.keys() - seen.keys():
         seen[key] = now
     closed = [(socket, at) for socket, at in carry.closed
               if monotonic - at < MARK_S and socket.key not in current]
-    if not incomplete:
-        arrived = {}
-        for key in current.keys() - carry.last.keys():
-            arrived.setdefault(_place(current[key]), []).append(current[key])
-        closed += [(socket._replace(change=CLOSED, at=wall), monotonic)
-                   for key, socket in carry.last.items()
-                   if key not in current and not _reshaped(socket, arrived)]
+    arrived = _arrivals(current, carry.last)
+    closed += [(socket._replace(change=CLOSED, at=wall), monotonic)
+               for key, socket in carry.last.items()
+               if key not in known and not _reshaped(socket, arrived)]
     closed = closed[-MAX_CLOSED:]
     shown = [_marked(socket, seen.get(socket.key), monotonic) for socket in live]
     shown += [socket for socket, _at in closed]
-    last = {**carry.last, **current} if incomplete else current
-    return shown, Carry({}, monotonic, last, seen, tuple(closed))
+    return shown, Carry({}, monotonic, {**unread, **current}, seen, tuple(closed))
+
+
+def _table(socket):
+    """The table ``socket`` was read from, named the way a failed one is."""
+    return portmap.table_of(socket.proto, socket.family)
 
 
 def _place(socket):
     """Where a socket sits on this machine, and whose it is: what stays the same
     while the rest of its row changes."""
     return socket.proto, socket.local_ip, socket.local_port, socket.pid
+
+
+def _arrivals(current, last):
+    """``{place: bare}`` for each place (``_place``) where a socket appeared since
+    ``last`` - ``bare`` when one of those has no far end. All ``_reshaped`` needs,
+    so a server's port that swaps ten thousand clients in one read costs ten
+    thousand steps, not ten thousand times ten thousand."""
+    arrived = {}
+    for key in current.keys() - last.keys():
+        socket = current[key]
+        place = _place(socket)
+        arrived[place] = arrived.get(place, False) or not socket.remote_ip
+    return arrived
 
 
 def _reshaped(gone, arrived):
@@ -248,8 +271,8 @@ def _reshaped(gone, arrived):
     two connections of a server's port - one client left, another came - and are
     told as that.
     """
-    return any(not gone.remote_ip or not new.remote_ip
-               for new in arrived.get(_place(gone), ()))
+    bare = arrived.get(_place(gone))
+    return bare is not None and (bare or not gone.remote_ip)
 
 
 def _marked(socket, appeared, monotonic):
@@ -280,9 +303,8 @@ def _sockets(rows, names):
                 f"{row.remote_port}|{row.pid}")
         repeat = seen.get(base, 0)
         seen[base] = repeat + 1
-        # PID 0 owns nothing: the snapshot calls it "[System Process]", and a row
-        # in TIME_WAIT is not that process's socket.
-        name = names.get(row.pid, "") if row.pid else ""
+        # No name for PID 0 or for an owner the system would not say: ``_names``.
+        name = names.get(row.pid, "")
         yield Socket(f"{base}|{repeat}", row.proto, row.family, row.local_ip,
                      row.local_port, row.remote_ip, row.remote_port, row.state,
                      row.pid, name)

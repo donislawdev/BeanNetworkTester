@@ -898,7 +898,7 @@ def fake_read(previous=None, fresh_names=True):
     gate.wait(5)
     # What changed since the read before is the logic's own (test_nettools_sockets.py).
     carry = previous.carry if previous is not None else None
-    shown, carry = sk._changes(list(sk._sockets(ROWS, NAMES)), carry, bool(failed_tables),
+    shown, carry = sk._changes(list(sk._sockets(ROWS, NAMES)), carry, frozenset(failed_tables),
                                (time.time(), time.monotonic()))
     return sk.Snapshot(tuple(shown), tuple(failed_tables), time.time(), 3, carry)
 
@@ -1195,6 +1195,32 @@ def test_a_read_the_table_starts_does_not_blink_the_status_line_or_the_button():
     """))
 
 
+def test_refresh_pressed_during_the_tables_own_read_is_taken_and_follows_it():
+    """The button stays live while the table reads by itself, so a press must not
+    vanish: the person sees it taken, and gets a read that names every process."""
+    run_gui(SOCK + textwrap.dedent("""
+        panel = open_sockets()
+        settle(panel)
+        by_itself(panel)
+        gate.clear()
+        panel._tick()
+        panel.pending()
+        assert panel.job.busy() and asked[-1] == (True, False), asked
+        panel.read()
+        assert panel.status.label.cget("text") == T("tools.common.working")
+        assert "disabled" in panel.refresh_btn.state(), "taken, and the button says so"
+        search(panel, "proto:udp")              # typed while both wait
+        gate.set()
+        settle(panel)
+        assert reads == [1, 1, 1], ("the person's read follows the table's", reads)
+        assert asked[-1] == (True, True), ("naming every process again", asked)
+        assert shown(panel) == [5353], ("and answering the search typed meanwhile",
+                                        shown(panel))
+        assert "disabled" not in panel.refresh_btn.state()
+        assert panel.status.label.cget("text") != T("tools.common.working")
+    """))
+
+
 def test_a_socket_that_appears_or_closes_is_marked_in_the_table():
     """Colour is never the only signal (WCAG 1.4.1): the change column says the same
     in words, with the time."""
@@ -1302,6 +1328,32 @@ def test_a_slow_read_stretches_the_pace_and_the_status_line_says_so():
         panel._timer = None
         panel._arm()
         assert 7800 <= waits[-1] <= 8000, waits
+
+        # To a tenth of a second: 2.4 s is said, 2.02 s is the pace chosen
+        panel._took = [120, 130]
+        panel._say(slow)
+        said = panel.status.label.cget("text")
+        assert said == T("tools.sockets.status_live_slow", time=at, ms=400, every="2.4",
+                         chosen=2), said
+        panel._took = [101, 101]
+        panel._say(slow)
+        said = panel.status.label.cget("text")
+        assert said == T("tools.sockets.status_live", time=at, ms=400, every=2), said
+    """))
+
+
+def test_the_change_column_puts_the_latest_change_on_top_at_the_first_click():
+    """What its tip and the README promise: sorted by it, the latest changes first."""
+    run_gui(SOCK + textwrap.dedent("""
+        panel = open_sockets()
+        settle(panel)
+        panel.table._clicked("change")
+        settle(panel)
+        assert panel.table.sort == {"col": "change", "reverse": True}, panel.table.sort
+        assert panel.memory.get("reverse") == "1", "and remembered that way"
+        panel.table._clicked("pid")
+        assert panel.table.sort == {"col": "pid", "reverse": False}, "the others as before"
+        settle(panel)
     """))
 
 
@@ -1438,6 +1490,42 @@ def test_show_tcp_health_from_the_socket_table_watches_that_connection():
         at = time.strftime("%H:%M:%S", time.localtime(panel.job.last["cycle"].finished))
         assert panel.status.label.cget("text") == T("tools.tcphealth.status", time=at)
         assert panel.admin_note is None, "an elevated window has nothing to explain"
+    """))
+
+
+def test_a_closed_row_offers_tcp_health_only_for_a_connection_already_watched():
+    """A connection that has closed cannot be watched any more: a new watch would be an
+    empty entry saying it ended. One already on the list has its numbers there."""
+    run_gui(TCPH + textwrap.dedent("""
+        from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
+        from beantester.gui.toolbox.sockets import HEALTH
+
+        def closed_menu(sockets_panel):
+            sockets_panel.read()
+            settle(sockets_panel)
+            select_port(sockets_panel, 50001)
+            assert sockets_panel._selected().change == sk.CLOSED
+            sockets_panel._show_menu(0, 0)
+            return sockets_panel.menu.entry_states[HEALTH]
+
+        sockets_panel = open_sockets()
+        settle(sockets_panel)
+        linked = ROWS.pop(1)                    # the connection on 50001 closes
+        assert closed_menu(sockets_panel) == MENU_ENTRY_INERT
+        sockets_panel._health()
+        assert watched == [] and app.pages["tools"].current() == "sockets", watched
+
+        ROWS.insert(1, linked)                  # open again, and watched this time
+        sockets_panel.read()
+        settle(sockets_panel)
+        watch_linked()
+        assert watched == [LINKED], watched
+        sockets_panel = open_sockets()
+        ROWS.pop(1)                             # and it closes
+        assert closed_menu(sockets_panel) == MENU_ENTRY_LIVE, "its numbers are there"
+        sockets_panel._health()
+        assert app.pages["tools"].current() == "tcphealth", "the tool is put on screen"
+        assert watched == [LINKED], ("and nothing is watched anew", watched)
     """))
 
 

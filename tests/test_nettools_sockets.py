@@ -294,26 +294,63 @@ def test_a_row_that_turns_up_in_time_wait_is_not_a_new_socket(world):
     check("but it has the time it turned up", remnant.at == 1_001.0, f"({remnant.at})")
 
 
+def udp4(row):
+    return (row.proto, row.family) == ("UDP", 4)
+
+
 def test_a_table_that_did_not_answer_closes_nothing_and_its_return_is_not_news(world):
     first = sk.read()
+    world.rows.append(SocketRow("UDP", 4, "0.0.0.0", 9999, "", None, "", 100))
+    world.later(1)
+    second = sk.read(first)               # 9999 appears before its table fails
+    check("9999 appeared", at_port(second, 9999)[0].at == 1_001.0)
     world.failed = ["udp/v4"]
-    world.rows = [row for row in world.rows if row.proto != "UDP"] + [NEW_ROW]
+    world.rows = [row for row in world.rows if not udp4(row)] + [NEW_ROW]
     world.drop(445)                       # this one really closed, in a table that answered
-    world.later(2)
-    second = sk.read(first)
-    check("nothing is called closed while a table is missing",
-          all(s.change != sk.CLOSED for s in second.sockets))
-    check("what appeared in a table that answered is still marked",
-          at_port(second, 50007)[0].change == sk.NEW)
-    world.failed = []
-    world.rows = [row for row in ROWS if row.local_port != 445] + [NEW_ROW]
-    world.later(2)
+    world.later(sk.MARK_S)                # longer than 9999 stays marked
     third = sk.read(second)
-    back = [s for s in third.sockets if s.proto == "UDP"]
+    closed_at = 1_001.0 + sk.MARK_S
+    check("what the missing table held is not called closed",
+          not [s for s in third.sockets if udp4(s)], f"({third.sockets})")
+    check("what closed in a table that answered is said at once",
+          [(s.change, s.at) for s in at_port(third, 445)] == [(sk.CLOSED, closed_at)])
+    check("what appeared in a table that answered is marked",
+          at_port(third, 50007)[0].change == sk.NEW)
+    world.failed = []
+    world.rows = [row for row in ROWS if row.local_port != 445] + [
+        NEW_ROW, SocketRow("UDP", 4, "0.0.0.0", 9999, "", None, "", 100)]
+    world.later(2)
+    fourth = sk.read(third)
+    back = {s.local_port: s.at for s in fourth.sockets if udp4(s)}
     check("the table that came back brings no news",
-          len(back) == 3 and all(s.change == "" and s.at is None for s in back), f"({back})")
-    check("and what closed meanwhile is said now",
-          [s.change for s in at_port(third, 445)] == [sk.CLOSED])
+          all(s.change == "" for s in fourth.sockets if udp4(s)), f"({back})")
+    check("and its sockets keep when they appeared", back == {5353: None, 9999: 1_001.0},
+          f"({back})")
+    check("445 was said once, and stays said", [s.at for s in at_port(fourth, 445)] == [closed_at])
+
+
+def test_a_table_that_keeps_failing_lets_the_others_be_read_as_ever(world):
+    """IPv6 turned off: the same table fails at every read, for hours. The others must
+    still say what closed, and the reads must not remember more and more."""
+    first = sk.read()
+    world.failed = ["udp/v6"]
+    stays = [row for row in ROWS if (row.proto, row.family) != ("UDP", 6)]
+    snap, told = first, []
+    for n in range(50):
+        world.rows = stays + [NEW_ROW._replace(local_port=40_000 + n)]
+        world.later(1)
+        snap = sk.read(snap)
+        told += [s.local_port for s in snap.sockets
+                 if s.change == sk.CLOSED and s.at == world.wall]
+    check("each connection that closed is said, at the read after it",
+          told == list(range(40_000, 40_049)), f"({told[:5]}...)")
+    check("the missing table's socket is remembered and not called closed",
+          546 in {s.local_port for s in snap.carry.last.values()}
+          and not at_port(snap, 546), f"({at_port(snap, 546)})")
+    check("what the reads remember: what is open now and that one, no more",
+          len(snap.carry.last) == len(stays) + 2, f"({len(snap.carry.last)})")
+    check("and appearance times only for those",
+          snap.carry.seen.keys() <= snap.carry.last.keys(), f"({len(snap.carry.seen)})")
 
 
 def test_a_socket_that_comes_back_is_one_row_and_new(world):

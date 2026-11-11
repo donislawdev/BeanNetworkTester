@@ -22,11 +22,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   many are waiting right now.
 
 - **Tools: the Sockets table can refresh itself.** Tick "Refresh automatically" and choose
-  1, 2 or 5 seconds. The table then reads itself while the tab is on screen: on another
-  tab, or with the window minimized, nothing is read. A socket that appeared is highlighted
-  for a few seconds, one that closed stays for a few seconds, greyed, and the new "change"
-  column gives the time of either. A connection that opens and closes between two reads is
-  never shown. With tens of thousands of sockets the table reads less often by itself.
+  1, 2 or 5 seconds. It then reads itself while the tab is on screen: on another tab, or
+  with the window minimized, nothing is read. A socket that appeared is highlighted for a
+  few seconds, one that closed stays for a few seconds, greyed, and the new "change" column
+  gives the time of either. Click its header for the latest changes first. A connection that
+  opens and closes between two reads is never shown. With tens of thousands of sockets it
+  reads less often.
 
 - **Tools: NAT and STUN, how this network's router treats a call.** Press **Start** and in a
   few seconds the table shows this computer's public address, whether the router keeps one
