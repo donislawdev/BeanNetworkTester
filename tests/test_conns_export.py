@@ -451,3 +451,25 @@ def test_a_second_sockets_export_is_refused_and_a_failed_one_frees_the_next(tmp_
     assert worker is not None, "a failed export kept the lock"
     worker.join(20)
     assert (tmp_path / "sockets.csv").read_text(encoding="utf-8").startswith("process,")
+
+
+def test_a_socket_row_says_when_it_was_first_seen_and_when_it_closed():
+    """The window's "new" is no column - it lasts seconds and a file is read later -
+    but when the socket was first seen and when it was found closed are."""
+    import time
+
+    import beantester.gui.csv_export as m
+    from beantester.nettools import sockets as sk
+
+    def stamp(at):
+        return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(at))
+
+    s = sk.Socket("k", "TCP", 4, "10.0.0.2", 50000, "93.184.216.34", 443, "ESTABLISHED",
+                  1234, "chrome.exe")
+    assert m.SOCKETS_CSV_HEADER[-2:] == ["first_seen", "closed_at"]
+    assert m._socket_cells(s)[-2:] == ["", ""], "there at the first read, still open"
+    seen, gone = 1_700_000_000.0, 1_700_000_100.0
+    new = m._socket_cells(s._replace(change=sk.NEW, at=seen, seen_at=seen))
+    assert new[-2:] == [stamp(seen), ""], new
+    closed = m._socket_cells(s._replace(change=sk.CLOSED, at=gone, seen_at=seen))
+    assert closed[-2:] == [stamp(seen), stamp(gone)], closed

@@ -10429,16 +10429,53 @@ MUTATIONS = [
     {
         "label": "sockets: a socket that appeared stays marked for ever",
         "file": "beantester/nettools/sockets.py",
-        "old": "    fresh = 0 <= monotonic - at < MARK_S and ",
-        "new": "    fresh = True and ",
+        "old": "    fresh = 0 <= monotonic - at < MARK_S\n",
+        "new": "    fresh = True\n",
         "test": "test_a_socket_that_appears_is_marked_with_its_time_and_only_for_a_while",
     },
     {
-        "label": "sockets: a TIME_WAIT row that turns up is marked new",
+        # The colour went after seconds and "appeared <time>" stayed for good.
+        "label": "sockets: the change's time outlives its word",
         "file": "beantester/nettools/sockets.py",
-        "old": " and socket.state != \"TIME_WAIT\"\n",
-        "new": "\n",
-        "test": "test_a_row_that_turns_up_in_time_wait_is_not_a_new_socket",
+        "old": "    return socket._replace(change=NEW if fresh else \"\", at=wall if fresh else None,\n",
+        "new": "    return socket._replace(change=NEW if fresh else \"\", at=wall,\n",
+        "test": "test_a_socket_that_appears_is_marked_with_its_time_and_only_for_a_while",
+    },
+    {
+        # One close read as three changes on real Tk.
+        "label": "sockets: a TIME_WAIT row opens and closes like a socket",
+        "file": "beantester/nettools/sockets.py",
+        "old": "    return socket.proto == \"TCP\" and (socket.pid == 0 or socket.state == \"TIME_WAIT\")\n",
+        "new": "    return False\n",
+        "test": "test_one_close_is_one_change_and_its_time_wait_row_tells_nothing",
+    },
+    {
+        "label": "sockets: a TIME_WAIT row counts as opened since the mark",
+        "file": "beantester/nettools/sockets.py",
+        "old": "        kept = [s for s in open_now if s.key not in mark.keys and not _tail(s)]\n",
+        "new": "        kept = [s for s in open_now if s.key not in mark.keys]\n",
+        "test": "test_one_close_is_one_change_and_its_time_wait_row_tells_nothing",
+    },
+    {
+        "label": "sockets: the first read sets no mark",
+        "file": "beantester/nettools/sockets.py",
+        "old": "                           Mark(wall, frozenset(current), asked=mark))\n",
+        "new": "                           Mark(wall, frozenset(current), asked=mark) if mark else None)\n",
+        "test": "test_the_first_read_sets_a_mark_nobody_asked_for",
+    },
+    {
+        "label": "sockets: a closed row forgets when it was first seen",
+        "file": "beantester/nettools/sockets.py",
+        "old": "    return socket._replace(change=CLOSED, at=wall, seen_at=seen[0] if seen else None)\n",
+        "new": "    return socket._replace(change=CLOSED, at=wall)\n",
+        "test": "test_a_socket_seen_arriving_keeps_that_time_once_it_has_closed",
+    },
+    {
+        "label": "sockets: opened sorts by the bind time only, not as it is shown",
+        "file": "beantester/nettools/sockets.py",
+        "old": "    \"opened\": lambda s, c: s.created if s.created is not None else s.seen_at,\n",
+        "new": "    \"opened\": lambda s, c: s.created,\n",
+        "test": "test_the_opened_column_falls_back_to_the_read_that_first_saw_a_socket",
     },
     {
         "label": "sockets: a closed socket stays listed for ever",
@@ -10494,8 +10531,8 @@ MUTATIONS = [
     {
         "label": "sockets: a socket that got its far end is called closed",
         "file": "beantester/nettools/sockets.py",
-        "old": "             if key not in known and not _reshaped(socket, arrived)]\n",
-        "new": "             if key not in known]\n",
+        "old": "             if key not in known and not _tail(socket) and not _reshaped(socket, arrived)]\n",
+        "new": "             if key not in known and not _tail(socket)]\n",
         "test": "test_a_socket_that_gets_its_far_end_did_not_close",
     },
     {
@@ -13048,17 +13085,10 @@ MUTATIONS = [
         "test": "test_listening_and_connected_are_told_by_the_far_end_not_by_the_state",
     },
     {
-        "label": "sockets: changed keeps only the rows still marked",
-        "file": "beantester/nettools/sockets.py",
-        "old": "          CHANGED: lambda s: s.at is not None}\n",
-        "new": "          CHANGED: lambda s: bool(s.change)}\n",
-        "test": "test_changed_keeps_the_rows_the_change_column_has_a_time_for",
-    },
-    {
         "label": "sockets: the mark shows nothing that closed",
         "file": "beantester/nettools/sockets.py",
-        "old": "        kept = [s for s in open_now if s.key not in mark.keys] + list(mark.closed)\n",
-        "new": "        kept = [s for s in open_now if s.key not in mark.keys]\n",
+        "old": "        kept += mark.closed\n",
+        "new": "",
         "test": "test_what_closed_since_the_mark_stays_until_the_next_mark",
     },
     {
@@ -13071,8 +13101,8 @@ MUTATIONS = [
     {
         "label": "sockets: the mark forgets the sockets of a table that did not answer",
         "file": "beantester/nettools/sockets.py",
-        "old": "    marked = (Mark(wall, frozenset(last)) if mark\n",
-        "new": "    marked = (Mark(wall, frozenset(current)) if mark\n",
+        "old": "    marked = (Mark(wall, frozenset(last), asked=True) if mark\n",
+        "new": "    marked = (Mark(wall, frozenset(current), asked=True) if mark\n",
         "test": "test_a_table_that_did_not_answer_at_the_mark_brings_nothing_new_when_it_does",
     },
     {
@@ -13155,9 +13185,45 @@ MUTATIONS = [
     {
         "label": "sockets: the opened column sorts by something else",
         "file": "beantester/nettools/sockets.py",
-        "old": "    \"opened\": lambda s, c: s.created,\n",
+        "old": "    \"opened\": lambda s, c: s.created if s.created is not None else s.seen_at,\n",
         "new": "    \"opened\": lambda s, c: s.at,\n",
         "test": "test_the_opened_column_sorts_by_the_bind_time_with_unknown_last",
+    },
+    {
+        "label": "sockets panel: a new row has no word beside its colour",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "    if s.change == sockets.NEW:\n        return T(NEW_WORD)\n",
+        "new": "",
+        "test": "test_a_socket_that_appears_or_closes_is_marked_in_the_table",
+    },
+    {
+        "label": "sockets panel: Linux shows no opened time for a socket seen arriving",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "        return \"\" if seen is None else T(OPENED_SEEN, time=_day_or_time(seen, now))\n",
+        "new": "        return \"\"\n",
+        "test": "test_a_service_hosts_socket_shows_its_service_and_a_socket_says_when_it_opened",
+    },
+    {
+        "label": "sockets panel: the status line says Done, not Read",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "        if not self.live.get():\n            self.status.label.config(",
+        "new": "        if not self.live.get():\n            self.status.show(read)\n"
+               "            return\n            self.status.label.config(",
+        "test": "test_the_table_reads_by_itself_only_while_it_is_looked_at",
+    },
+    {
+        "label": "sockets panel: the first read's mark reads as a click",
+        "file": "beantester/gui/toolbox/sockets.py",
+        "old": "            key = \"tools.sockets.note_mark\" if mark.asked else \"tools.sockets.note_since_first\"\n",
+        "new": "            key = \"tools.sockets.note_mark\"\n",
+        "test": "test_mark_now_reads_marks_and_shows_what_opened_and_closed_since",
+    },
+    {
+        "label": "sockets csv: closed_at is written for a socket still open",
+        "file": "beantester/gui/csv_export.py",
+        "old": "_stamp(s.at if s.change == CLOSED else None))]\n",
+        "new": "_stamp(s.at))]\n",
+        "test": "test_a_socket_row_says_when_it_was_first_seen_and_when_it_closed",
     },
     {
         "label": "portmap: a bind time of 0 reads as 1601",
@@ -13264,10 +13330,10 @@ MUTATIONS = [
         "test": "test_mark_now_reads_marks_and_shows_what_opened_and_closed_since",
     },
     {
-        "label": "sockets panel: no word on what to press when nothing is marked",
+        "label": "sockets panel: nothing opened or closed reads as a search that found nothing",
         "file": "beantester/gui/toolbox/sockets.py",
-        "old": "        if view.show == sockets.SINCE_MARK and mark is None:\n",
-        "new": "        if False:\n",
+        "old": "        elif view.show == sockets.SINCE_MARK and not view.query:\n",
+        "new": "        elif False:\n",
         "test": "test_mark_now_reads_marks_and_shows_what_opened_and_closed_since",
     },
     {
@@ -13301,8 +13367,8 @@ MUTATIONS = [
     {
         "label": "csv: the sockets file writes raw clock numbers",
         "file": "beantester/gui/csv_export.py",
-        "old": "        _stamp(s.created), s.change, _stamp(s.at))]\n",
-        "new": "        s.created, s.change, s.at)]\n",
+        "old": "        _stamp(s.created), _stamp(s.seen_at), _stamp(s.at if s.change == CLOSED else None))]\n",
+        "new": "        s.created, s.seen_at, s.at)]\n",
         "test": "test_save_csv_writes_the_rows_on_screen_as_they_are_and_reads_nothing",
     },
     {

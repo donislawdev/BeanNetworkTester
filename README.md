@@ -421,17 +421,19 @@ monitor is gone it returns to the centre of the current screen.
     is read when you open the tab and when you press **Refresh**. Tick **Refresh
     automatically** and it reads itself every 1, 2 or 5 seconds, but only while the tab is on
     screen: on another tab, or with the window minimized, nothing is read. A socket that
-    appeared since the read before is highlighted for a few seconds, one that closed stays
-    for a few seconds, greyed, and the **change** column gives the time of either, so
-    sorting by it shows the latest changes first. A connection that opens and closes
-    between two reads is never shown. When one read takes long (tens of thousands of
-    sockets) the table reads less often by itself and the status line says so. **Show**
-    narrows the list to the sockets that are listening (no other end, every UDP socket
-    included), the connections (an address at the other end), the ones that changed, or
-    the ones since the mark: press **Mark now**, then start or use your program, and the
-    table lists what it opened after the click and what closed, keeping the closed ones
-    until you mark again. The **opened** column is when the program opened the socket, as
-    Windows records it (Linux does not record it, so the column stays empty there). For
+    appeared since the read before is green for a few seconds, with `new` in the **change**
+    column, and one that closed stays for a few seconds, grey, with `closed` and the time,
+    so sorting by that column shows the latest changes first. A TIME_WAIT row is what a
+    closed connection leaves behind, so it is never new or closed: the connection closed in
+    its program's row. A connection that opens and closes between two reads is never shown.
+    When one read takes long (tens of thousands of sockets) the table reads less often by
+    itself and the status line says so. **Show** narrows the list to the sockets that are
+    listening (no other end, every UDP socket included), the connections (an address at the
+    other end), or the ones that **opened or closed** since the tab was first read, keeping
+    the closed ones. Press **Mark now**, then start or use your program, and that list
+    starts again from the click. The **opened** column is when the program opened the
+    socket, as Windows records it. Linux does not record it, so there it shows `~` and the
+    time of the read that first saw the socket. For
     `svchost.exe` the process column adds the Windows service the socket belongs to, such
     as `svchost.exe (Dnscache)`, when the program runs as administrator. **Save CSV**
     writes the rows on screen to a file (see "CSV exports" below). Search it the way you
@@ -1535,8 +1537,8 @@ computer's time zone.
 | `service` | for `svchost.exe`, the Windows service the socket belongs to (needs administrator rights), empty otherwise |
 | `proto`, `local_ip`, `local_port`, `remote_ip`, `remote_port`, `state` | as in the table. The remote end is empty for a socket that is listening and for UDP, `state` for UDP |
 | `opened` | when the program opened the socket, as Windows records it. Empty on Linux, which does not record it |
-| `change` | `new` for a socket that appeared a few seconds ago, `closed` for one that closed, empty otherwise |
-| `changed_at` | when the socket appeared or closed, if that was after the first read of the table, empty otherwise |
+| `first_seen` | when the program first read the socket, if that was after the first read of the table, empty otherwise. On Linux this is the only time of opening there is |
+| `closed_at` | when the program found the socket closed, empty for one that is open |
 
 ## Scenario file format
 

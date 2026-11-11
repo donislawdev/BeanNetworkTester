@@ -8,9 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 ### Added
 
 - **Tools: more from the Sockets table.** "Show" lists only the sockets that are listening, the
-  connections, the ones that changed, or the ones since the mark: press "Mark now", then start
-  your program, to see what it opens and closes. The new "opened" column says when a program
-  opened its socket (Windows only), and svchost.exe shows the service it runs for, such as
+  connections, or the ones that opened or closed since the tab was first read. Press "Mark
+  now", then start your program, to see what it opens and closes. The new "opened" column
+  says when a program opened its socket (on Linux, when the table first saw it), and
+  svchost.exe shows the service it runs for, such as
   `svchost.exe (Dnscache)`. "Save CSV" writes the rows on screen to a file, and the row menu
   can reset a connection, as on the Connections page.
 
@@ -30,11 +31,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 - **Tools: the Sockets table can refresh itself.** Tick "Refresh automatically" and choose
   1, 2 or 5 seconds. It then reads itself while the tab is on screen: on another tab, or
-  with the window minimized, nothing is read. A socket that appeared is highlighted for a
-  few seconds, one that closed stays for a few seconds, greyed, and the new "change" column
-  gives the time of either. Click its header for the latest changes first. A connection that
-  opens and closes between two reads is never shown. With tens of thousands of sockets it
-  reads less often.
+  with the window minimized, nothing is read. A socket that appeared is green for a few
+  seconds, "new" in the new "change" column, and one that closed stays a few seconds,
+  grey, "closed" and the time. A TIME_WAIT row, what a closed connection
+  leaves behind, is neither. A connection open only between two reads is never shown.
+  With tens of thousands of sockets it reads less often.
 
 - **Tools: NAT and STUN, how this network's router treats a call.** Press **Start** and in a
   few seconds the table shows this computer's public address, whether the router keeps one

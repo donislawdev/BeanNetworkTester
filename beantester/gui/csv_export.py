@@ -17,6 +17,7 @@ import time
 
 from .. import crashlog
 from ..i18n import T
+from ..nettools.sockets import CLOSED
 from ..paths import CONNECTIONS_CSV_FILE, CSV_FILE, SOCKETS_CSV_FILE, hand_back
 from ..views import (avg_packet_bytes, connection_proc, filter_sort_connections,
                      scoped_packets)
@@ -288,12 +289,14 @@ def _replace_csv(path, header, rows):
 
 
 # The socket table (Tools > Sockets), its columns in the table's own words where
-# a spreadsheet can take them: times as "YYYY-MM-DD HH:MM:SS" in this computer's
-# time zone, `change` as the program's own "new" / "closed" (English, like the
-# connections export's yes/no). `opened` is when the socket was bound, as the
-# system says it - empty on Linux, which does not say.
+# a spreadsheet can take them, times as "YYYY-MM-DD HH:MM:SS" in this computer's
+# time zone. `opened` is when the socket was bound, as the system says it - empty on
+# Linux, which does not say. `first_seen` is the read that first saw it (empty for
+# one there at the window's first read), and `closed_at` the read that found it
+# gone. The window's "new" is not a column: it lasts seconds, and a file is read later.
 SOCKETS_CSV_HEADER = ["process", "service", "pid", "proto", "local_ip", "local_port",
-                      "remote_ip", "remote_port", "state", "opened", "change", "changed_at"]
+                      "remote_ip", "remote_port", "state", "opened", "first_seen",
+                      "closed_at"]
 
 # One export of the socket table at a time - its own file, so its own lock.
 _SOCKETS_LOCK = threading.Lock()
@@ -329,7 +332,7 @@ def _socket_cells(s):
         s.proc, s.service, "" if s.pid is None else s.pid, s.proto,
         s.local_ip, s.local_port, s.remote_ip,
         "" if s.remote_port is None else s.remote_port, s.state,
-        _stamp(s.created), s.change, _stamp(s.at))]
+        _stamp(s.created), _stamp(s.seen_at), _stamp(s.at if s.change == CLOSED else None))]
 
 
 def _write_sockets(app, rows):

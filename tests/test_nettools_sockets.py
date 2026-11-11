@@ -238,6 +238,7 @@ def test_a_socket_that_appears_is_marked_with_its_time_and_only_for_a_while(worl
     (new,) = at_port(second, 50007)
     check("marked", new.change == sk.NEW, f"({new.change!r})")
     check("with the time of the read that found it", new.at == 1_002.0, f"({new.at})")
+    check("which is when it was first seen", new.seen_at == 1_002.0, f"({new.seen_at})")
     check("and nothing else is", all(s.change == "" and s.at is None
                                      for s in second.sockets if s is not new))
     world.later(sk.MARK_S - 0.5)
@@ -247,7 +248,10 @@ def test_a_socket_that_appears_is_marked_with_its_time_and_only_for_a_while(worl
     third = sk.read(sk.read(second))
     (old,) = at_port(third, 50007)
     check("no longer marked at the time", old.change == "", f"({old.change!r})")
-    check("but it keeps the time it appeared", old.at == 1_002.0, f"({old.at})")
+    check("and the change's time goes with the word, as the colour does", old.at is None,
+          f"({old.at})")
+    check("but it is still known when it was first seen", old.seen_at == 1_002.0,
+          f"({old.seen_at})")
 
 
 def test_a_socket_that_closes_stays_listed_for_a_while_marked_closed(world):
@@ -261,6 +265,7 @@ def test_a_socket_that_closes_stays_listed_for_a_while_marked_closed(world):
     check("with the time of the read that missed it", gone.at == 1_002.0, f"({gone.at})")
     check("and what it was: its program and its last state",
           (gone.proc, gone.state) == ("chrome.exe", "ESTABLISHED"))
+    check("there at the first read: never seen arriving", gone.seen_at is None)
     check("every open socket is still there, unmarked",
           len(second.sockets) == len(ROWS)
           and all(s.change == "" for s in second.sockets[:-1]))
@@ -273,6 +278,19 @@ def test_a_socket_that_closes_stays_listed_for_a_while_marked_closed(world):
     check("gone at the time", at_port(sk.read(third), 50000) == [])
 
 
+def test_a_socket_seen_arriving_keeps_that_time_once_it_has_closed(world):
+    """On Linux it is the only "opened" there is: the row must not lose it at its close."""
+    first = sk.read()
+    world.rows.append(NEW_ROW)
+    world.later(2)
+    second = sk.read(first)
+    world.rows = [row for row in world.rows if row is not NEW_ROW]
+    world.later(sk.MARK_S)
+    (gone,) = at_port(sk.read(sk.read(second)), 50007)
+    check("closed, and when", (gone.change, gone.at) == (sk.CLOSED, world.wall), f"({gone})")
+    check("still known when it was first seen", gone.seen_at == 1_002.0, f"({gone.seen_at})")
+
+
 def test_a_closed_socket_without_a_program_is_not_counted_as_one_without(world):
     first = sk.read()
     check("one socket without a program", sk.without_owner(first) == 1)
@@ -283,16 +301,33 @@ def test_a_closed_socket_without_a_program_is_not_counted_as_one_without(world):
     check("and the note counts open sockets only", sk.without_owner(second) == 0)
 
 
-def test_a_row_that_turns_up_in_time_wait_is_not_a_new_socket(world):
+def test_one_close_is_one_change_and_its_time_wait_row_tells_nothing(world):
     """A connection that closes leaves a TIME_WAIT row under PID 0 - another key, so
-    another row. Marked new, a closed connection would read as an opened one."""
-    first = sk.read()
-    world.rows.append(SocketRow("TCP", 4, "10.0.0.2", 50009, "198.51.100.7", 443,
-                                "TIME_WAIT", 0))
+    another row. SEEN on real Tk: one close read as three changes - "closed" on the
+    program's row, "appeared" on the TIME_WAIT row (an opened connection, to the
+    eye), and "closed" again when that row went."""
+    first = sk.read(mark=True)
+    connection = ROWS[1]                  # chrome.exe, 50000 -> 93.184.216.34:443
+    world.rows = [row for row in world.rows if row is not connection] + [
+        connection._replace(state="TIME_WAIT", pid=0)]
     world.later(1)
-    (remnant,) = at_port(sk.read(first), 50009)
-    check("not marked", remnant.change == "", f"({remnant.change!r})")
-    check("but it has the time it turned up", remnant.at == 1_001.0, f"({remnant.at})")
+    closed = sk.read(first)
+    rows = at_port(closed, 50000)
+    check("the program's row closed, the TIME_WAIT row is there",
+          sorted((s.pid, s.change) for s in rows) == [(0, ""), (1234, sk.CLOSED)], f"({rows})")
+    (remnant,) = [s for s in rows if s.pid == 0]
+    check("which is not new and has no time", (remnant.at, remnant.seen_at) == (None, None),
+          f"({remnant})")
+    since = sk.view(closed, show=sk.SINCE_MARK)
+    check("since the mark: the one close, not an opened connection beside it",
+          [(s.pid, s.change) for s in since] == [(1234, sk.CLOSED)], f"({since})")
+    world.rows = [row for row in world.rows if row.local_port != 50000]
+    world.later(1)
+    gone = sk.read(closed)
+    check("the TIME_WAIT row going is no second close",
+          [s for s in gone.sockets if s.pid == 0 and s.local_port == 50000] == [])
+    check("nor in the mark's closed ones",
+          [s.pid for s in sk.view(gone, show=sk.SINCE_MARK)] == [1234])
 
 
 def udp4(row):
@@ -322,10 +357,10 @@ def test_a_table_that_did_not_answer_closes_nothing_and_its_return_is_not_news(w
         NEW_ROW, SocketRow("UDP", 4, "0.0.0.0", 9999, "", None, "", 100)]
     world.later(2)
     fourth = sk.read(third)
-    back = {s.local_port: s.at for s in fourth.sockets if udp4(s)}
+    back = {s.local_port: s.seen_at for s in fourth.sockets if udp4(s)}
     check("the table that came back brings no news",
           all(s.change == "" for s in fourth.sockets if udp4(s)), f"({back})")
-    check("and its sockets keep when they appeared", back == {5353: None, 9999: 1_001.0},
+    check("and its sockets keep when they were first seen", back == {5353: None, 9999: 1_001.0},
           f"({back})")
     check("445 was said once, and stays said", [s.at for s in at_port(fourth, 445)] == [closed_at])
 
@@ -546,6 +581,19 @@ def test_the_opened_column_sorts_by_the_bind_time_with_unknown_last(world):
         check(f"oldest first, unknown last (reverse={reverse})", got == expected, f"({got})")
 
 
+def test_the_opened_column_falls_back_to_the_read_that_first_saw_a_socket(world):
+    """Linux keeps no bind time. A socket seen arriving sorts by the time of the read
+    that saw it, as the column shows it; one there at the first read is unknown, last."""
+    first = sk.read()
+    world.rows.append(NEW_ROW)
+    world.later(2)
+    second = sk.read(first)
+    got = [s.local_port for s in sk.view(second, "", "opened", False)]
+    check("the one seen arriving, then the unknown ones", got[0] == 50007
+          and all(s.created is None and s.seen_at is None
+                  for s in second.sockets if s.local_port != 50007), f"({got})")
+
+
 # -- the "Show" box -------------------------------------------------------------------- #
 def ports(rows):
     return sorted(s.local_port for s in rows)
@@ -573,20 +621,29 @@ def test_listening_and_connected_are_told_by_the_far_end_not_by_the_state(world)
     check("the view says what it shows", view.show == sk.LISTENING)
 
 
-def test_changed_keeps_the_rows_the_change_column_has_a_time_for(world):
+def test_the_first_read_sets_a_mark_nobody_asked_for(world):
+    """What opened and closed since the window first looked is there from the start
+    - "Changed" answered that, and let the closed ones go after MARK_S."""
     first = sk.read()
-    check("nothing has changed in a window's first read",
-          sk.view(first, show=sk.CHANGED) == [])
+    mark = first.carry.mark
+    check("a mark, at the first read, not asked for",
+          mark is not None and mark.at == world.wall and not mark.asked, f"({mark})")
+    check("nothing has opened or closed in a window's first read",
+          sk.view(first, show=sk.SINCE_MARK) == [])
     world.rows.append(NEW_ROW)
     world.drop(445)
     world.later(2)
     second = sk.read(first)
-    check("what appeared and what closed", ports(sk.view(second, show=sk.CHANGED)) == [445, 50007],
-          f"({ports(sk.view(second, show=sk.CHANGED))})")
+    check("what opened and what closed",
+          ports(sk.view(second, show=sk.SINCE_MARK)) == [445, 50007],
+          f"({ports(sk.view(second, show=sk.SINCE_MARK))})")
     world.later(sk.MARK_S)
     third = sk.read(second)
-    check("an appearance keeps its time, a close goes with its row",
-          ports(sk.view(third, show=sk.CHANGED)) == [50007])
+    check("both still there after the table let the close go",
+          ports(sk.view(third, show=sk.SINCE_MARK)) == [445, 50007]
+          and at_port(third, 445) == [])
+    check("a show that is gone reads as all",
+          ports(sk.view(third, show="changed")) == ports(third.sockets))
 
 
 # -- the mark ("Mark now") ----------------------------------------------------------- #
@@ -597,13 +654,14 @@ def test_the_mark_is_set_on_the_read_that_asks_for_it(world):
     """On a FRESH read: the window's last one may be minutes old, and a socket that
     opened since then, before the click, is not "opened since the mark"."""
     first = sk.read()
-    check("no mark, nothing since it", sk.view(first, show=sk.SINCE_MARK) == []
-          and first.carry.mark is None)
+    check("the first read's own mark, nothing since it",
+          sk.view(first, show=sk.SINCE_MARK) == [] and not first.carry.mark.asked)
     world.rows.append(NEW_ROW)              # opened after the last read, BEFORE the click
     world.later(1)
     marked = sk.read(first, mark=True)
     mark = marked.carry.mark
     check("set at the time of its read", mark.at == world.wall, f"({mark.at})")
+    check("and asked for", mark.asked)
     check("on that read's sockets", sk.view(marked, show=sk.SINCE_MARK) == [],
           f"({ports(sk.view(marked, show=sk.SINCE_MARK))})")
     world.rows.append(LATER_ROW)
