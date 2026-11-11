@@ -427,6 +427,40 @@ def test_a_socket_that_gets_its_far_end_did_not_close(world):
           f"({at_port(third, 51000)})")
 
 
+def test_a_socket_that_gets_its_far_end_keeps_the_time_it_was_first_seen(world):
+    """Its new row is NEW - the connection is - but the socket was seen before, and
+    on Linux "opened" shows that time (``seen_at``); it stays with the row once it
+    has closed too."""
+    first = sk.read()
+    world.rows.append(BOUND)
+    world.later(2)
+    second = sk.read(first)                     # seen arriving, bound
+    world.rows[-1] = CONNECTED
+    world.later(sk.MARK_S)
+    third = sk.read(second)
+    (connected,) = at_port(third, 51000)
+    check("new, from the read that saw it connect",
+          (connected.change, connected.at) == (sk.NEW, world.wall), f"({connected})")
+    check("first seen when it was bound", connected.seen_at == 1_002.0,
+          f"({connected.seen_at})")
+    world.rows.pop()
+    world.later(1)
+    (gone,) = at_port(sk.read(third), 51000)
+    check("and still once it has closed", (gone.change, gone.seen_at) == (sk.CLOSED, 1_002.0),
+          f"({gone})")
+
+
+def test_a_socket_there_at_the_first_read_that_gets_its_far_end_has_no_first_seen(world):
+    """Like every socket the first read found: when it opened is not known."""
+    world.rows.append(BOUND)
+    first = sk.read()
+    world.rows[-1] = CONNECTED
+    world.later(1)
+    (connected,) = at_port(sk.read(first), 51000)
+    check("new, and no first-seen time", (connected.change, connected.seen_at) == (sk.NEW, None),
+          f"({connected})")
+
+
 def test_one_client_leaving_and_another_arriving_are_told_as_that(world):
     """Two rows that both have a far end are two connections of a server's port."""
     world.rows.append(CONNECTED)

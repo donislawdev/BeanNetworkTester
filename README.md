@@ -1415,9 +1415,9 @@ so a call can show four or five rows with an `ICE` label. A call that was alread
 session started gets its labels a few seconds later, at the next check it sends to keep the
 connection, and so does its relay. Once a second the program looks at the labelled connections
 that carried media and at how much each delivered over the last three seconds (1500 bytes or more
-counts as data, and the checks that keep a call alive are far less). A path is the address at
-the other end: a call that sends and receives on two connections through one relay, or shares its
-screen on a connection of its own, still takes one path. A path is named once it leads for two
+counts as data, and the checks that keep a call alive are far less). A path is the address and
+port at the other end: a call that sends and receives on two connections to one relay's address
+and port, or shares its screen on a connection of its own to it, still takes one path. A path is named once it leads for two
 seconds in a row, and the named one keeps its place for as long as it carries data. Each change
 puts a `PATH` entry in the event log, such as
 `ICE path: LAN 192.168.0.20:50000 -> TURN 203.0.113.10:3478`, and in the reproduction report.

@@ -192,19 +192,59 @@ def test_a_link_planted_after_the_hand_back_is_never_written_through(tmp_path, s
     victim = tmp_path / "root-only"
     victim.write_text("root's own", encoding="utf-8")
     real_hand_back = paths.hand_back
+    swapped = []
 
     def then_swap_in_a_link(path):
         handed = real_hand_back(path)
         os.remove(path)
         os.symlink(victim, path)
+        swapped.append(path)
         return handed
 
     monkeypatch.setattr(paths, "hand_back", then_swap_in_a_link)
     target = tmp_path / "bean_network_tester_ui.json"
-    jsonfile.write_json(str(target), {"a": 1})
+    written = jsonfile.write_json(str(target), {"a": 1})
+    # Without these the check below would pass for a save that never got as far
+    # as the hand-back, and so proved nothing about it.
+    check("the save went through", written is None, f"({written})")
+    check("the link was swapped in after the hand-back", len(swapped) == 1, f"({swapped})")
     check("the file the link points at is untouched",
           victim.read_text(encoding="utf-8") == "root's own",
           f"({victim.read_text(encoding='utf-8')!r})")
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows opens no descriptor on a folder")
+def test_a_temp_file_its_file_object_refused_leaves_no_descriptor_open(tmp_path, monkeypatch):
+    """Until a file object owns the temp file's descriptor, nothing else closes it.
+    ``os.fdopen`` closed it when its text layer failed, but not when the file object
+    itself did (MEASURED on 3.15) - and on a descriptor of a folder it does. Each
+    such save would have kept one open for as long as the program ran."""
+    real_mkstemp = paths.tempfile.mkstemp
+    handles = []
+
+    def onto_a_folder(**kw):
+        handle, tmp = real_mkstemp(**kw)
+        os.close(handle)
+        handles.append(os.open(tmp_path, os.O_RDONLY))
+        return handles[-1], tmp
+
+    monkeypatch.setattr(paths.tempfile, "mkstemp", onto_a_folder)
+    target = tmp_path / "bean_network_tester_ui.json"
+    with pytest.raises(OSError):
+        paths.write_atomically(str(target), lambda f: f.write("{}"))
+    check("the temp file was made", len(handles) == 1, f"({handles})")
+    folder = os.stat(tmp_path)
+    try:
+        held = os.fstat(handles[0])
+    except OSError:
+        held = None
+    open_on_the_folder = held is not None and (held.st_dev, held.st_ino) == (
+        folder.st_dev, folder.st_ino)
+    if open_on_the_folder:
+        os.close(handles[0])
+    check("its descriptor is closed", not open_on_the_folder)
+    check("and the temp file is gone", sorted(os.listdir(tmp_path)) == [],
+          f"({sorted(os.listdir(tmp_path))})")
 
 
 def test_the_page_buttons_start_no_browser_as_root(monkeypatch):
@@ -238,6 +278,8 @@ CREATES_WITHOUT_HANDING_BACK = {
     ("beantester/paths.py", "directory_is_writable"): "a probe file, removed at once",
     ("beantester/winenv.py", "detach_console"): "os.devnull",
     ("beantester/paths.py", "make_dirs"): "the helper itself (hands back each level)",
+    ("beantester/paths.py", "make_temp"): "write_atomically's opener: write_atomically "
+                                          "hands the temp file back once it is written",
 }
 HANDS_BACK = {"hand_back", "make_dirs"}
 _WRITE_MODES = set("wax+")

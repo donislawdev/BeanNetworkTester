@@ -213,10 +213,10 @@ MUTATIONS = [
         # file are two writers of one temp file. This is not an invented break.
         "label": "jsonfile: the temp file gets a predictable name again",
         "file": "beantester/paths.py",
-        "old": ("    handle, tmp = tempfile.mkstemp(dir=directory or \".\", prefix=name + \".\", "
+        "old": ("        handle, tmp = tempfile.mkstemp(dir=directory, prefix=name + \".\", "
                 "suffix=\".tmp\")\n"),
-        "new": ("    tmp = path + \".tmp\"\n"
-                "    handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)\n"),
+        "new": ("        tmp = path + \".tmp\"\n"
+                "        handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)\n"),
         "test": "test_two_writers_do_not_share_one_temp_file",
     },
     {
@@ -231,10 +231,10 @@ MUTATIONS = [
     {
         "label": "paths: two copies migrate through one temp file again",
         "file": "beantester/paths.py",
-        "old": ("    handle, tmp = tempfile.mkstemp(dir=directory or \".\", prefix=name + \".\", "
+        "old": ("        handle, tmp = tempfile.mkstemp(dir=directory, prefix=name + \".\", "
                 "suffix=\".tmp\")\n"),
-        "new": ("    tmp = path + \".tmp\"\n"
-                "    handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)\n"),
+        "new": ("        tmp = path + \".tmp\"\n"
+                "        handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)\n"),
         "test": "test_two_copies_migrating_at_once_do_not_share_one_temp_file",
     },
     {
@@ -2609,10 +2609,10 @@ MUTATIONS = [
         # for as long as two windows are open.
         "label": "crashlog: the breadcrumb temp file gets a predictable name again",
         "file": "beantester/paths.py",
-        "old": ("    handle, tmp = tempfile.mkstemp(dir=directory or \".\", prefix=name + \".\", "
+        "old": ("        handle, tmp = tempfile.mkstemp(dir=directory, prefix=name + \".\", "
                 "suffix=\".tmp\")\n"),
-        "new": ("    tmp = path + \".tmp\"\n"
-                "    handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)\n"),
+        "new": ("        tmp = path + \".tmp\"\n"
+                "        handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)\n"),
         "test": "test_two_breadcrumb_writers_do_not_share_one_temp_file",
     },
     {
@@ -5151,8 +5151,8 @@ MUTATIONS = [
         # as corrupt by their next start.
         "label": "sudo files: an atomic write publishes root's temp file",
         "file": "beantester/paths.py",
-        "old": "        hand_back(tmp)\n        os.replace(tmp, path)\n",
-        "new": "        os.replace(tmp, path)\n",
+        "old": "        hand_back(made[0])\n        os.replace(made[0], path)\n",
+        "new": "        os.replace(made[0], path)\n",
         "test": "test_every_atomic_write_publishes_a_file_that_is_theirs",
     },
     {
@@ -10472,7 +10472,7 @@ MUTATIONS = [
     {
         "label": "sockets: a closed row forgets when it was first seen",
         "file": "beantester/nettools/sockets.py",
-        "old": "    return socket._replace(change=CLOSED, at=wall, seen_at=seen[0] if seen else None)\n",
+        "old": "    return socket._replace(change=CLOSED, at=wall, seen_at=_first(seen))\n",
         "new": "    return socket._replace(change=CLOSED, at=wall)\n",
         "test": "test_a_socket_seen_arriving_keeps_that_time_once_it_has_closed",
     },
@@ -10537,8 +10537,8 @@ MUTATIONS = [
     {
         "label": "sockets: a socket that got its far end is called closed",
         "file": "beantester/nettools/sockets.py",
-        "old": "             if key not in known and not _tail(socket) and not _reshaped(socket, arrived)]\n",
-        "new": "             if key not in known and not _tail(socket)]\n",
+        "old": "        if _reshaped(socket, arrived):\n",
+        "new": "        if False:\n",
         "test": "test_a_socket_that_gets_its_far_end_did_not_close",
     },
     {
@@ -11291,17 +11291,18 @@ MUTATIONS = [
     {
         "label": "menu entry: two installs share one temporary file",
         "file": "beantester/paths.py",
-        "old": ("    handle, tmp = tempfile.mkstemp(dir=directory or \".\", prefix=name + \".\", "
+        "old": ("        handle, tmp = tempfile.mkstemp(dir=directory, prefix=name + \".\", "
                 "suffix=\".tmp\")\n"),
-        "new": ("    tmp = path + \".tmp\"\n"
-                "    handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)\n"),
+        "new": ("        tmp = path + \".tmp\"\n"
+                "        handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)\n"),
         "test": "test_a_failed_write_takes_away_its_own_temporary_file_only",
     },
     {
         "label": "menu entry: a failed write leaves its temporary file",
         "file": "beantester/paths.py",
-        "old": "        with crashlog.quiet(\"paths.write_atomically\"):\n            os.remove(tmp)\n",
-        "new": "        pass\n",
+        "old": ("            with crashlog.quiet(\"paths.write_atomically\"):\n"
+                "                os.remove(made[0])\n"),
+        "new": "            pass\n",
         "test": "test_a_failed_write_takes_away_its_own_temporary_file_only",
     },
     {
@@ -13389,15 +13390,16 @@ MUTATIONS = [
     {
         "label": "csv: a failed export leaves its half-written file beside the real one",
         "file": "beantester/paths.py",
-        "old": "        with crashlog.quiet(\"paths.write_atomically\"):\n            os.remove(tmp)\n",
-        "new": "        pass\n",
+        "old": ("            with crashlog.quiet(\"paths.write_atomically\"):\n"
+                "                os.remove(made[0])\n"),
+        "new": "            pass\n",
         "test": "test_a_csv_is_written_under_a_name_of_its_own_and_never_through_a_link",
     },
     {
         "label": "sudo files: every atomic write's file stays root's",
         "file": "beantester/paths.py",
-        "old": "        hand_back(tmp)\n        os.replace(tmp, path)\n",
-        "new": "        os.replace(tmp, path)\n",
+        "old": "        hand_back(made[0])\n        os.replace(made[0], path)\n",
+        "new": "        os.replace(made[0], path)\n",
         "test": "test_every_place_that_makes_a_file_hands_it_back",
     },
     {
@@ -13405,15 +13407,15 @@ MUTATIONS = [
         # opened again BY NAME - the person behind sudo could swap in a link first.
         "label": "sudo files: the temp file is reopened by name after its hand-back",
         "file": "beantester/paths.py",
-        "old": ("        opened = (os.fdopen(handle, \"wb\") if binary\n"
-                "                  else os.fdopen(handle, \"w\", encoding=\"utf-8\", newline=newline))\n"
-                "        with opened as f:\n"
+        "old": ("        with (open(directory, \"wb\", opener=make_temp) if binary\n"
+                "              else open(directory, \"w\", encoding=\"utf-8\", newline=newline,\n"
+                "                        opener=make_temp)) as f:\n"
                 "            write(f)\n"
-                "        hand_back(tmp)\n"),
-        "new": ("        os.close(handle)\n"
-                "        hand_back(tmp)\n"
-                "        with open(tmp, \"wb\" if binary else \"w\", encoding=None if binary else "
-                "\"utf-8\", newline=None if binary else newline) as f:\n"
+                "        hand_back(made[0])\n"),
+        "new": ("        os.close(make_temp(None, None))\n"
+                "        hand_back(made[0])\n"
+                "        with open(made[0], \"wb\" if binary else \"w\", encoding=None if binary "
+                "else \"utf-8\", newline=None if binary else newline) as f:\n"
                 "            write(f)\n"),
         "test": "test_a_link_planted_after_the_hand_back_is_never_written_through",
     },

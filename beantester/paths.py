@@ -357,19 +357,34 @@ def write_atomically(path, write, newline=None, binary=False):
     would buy nothing and add a failure path to a function that must not have one.
     """
     directory, name = os.path.split(path)
-    handle, tmp = tempfile.mkstemp(dir=directory or ".", prefix=name + ".", suffix=".tmp")
+    directory = directory or "."
+    made: list[str] = []
+
+    def make_temp(_name, _flags):
+        handle, tmp = tempfile.mkstemp(dir=directory, prefix=name + ".", suffix=".tmp")
+        made.append(tmp)
+        return handle
+
     try:
-        opened = (os.fdopen(handle, "wb") if binary
-                  else os.fdopen(handle, "w", encoding="utf-8", newline=newline))
-        with opened as f:
+        # The descriptor reaches ``open`` through ``opener``, as in the standard
+        # library's own NamedTemporaryFile, so the file object owns it from the
+        # start and closes it whatever fails. ``os.fdopen`` closed it on some
+        # failures and not on others (MEASURED on 3.15: a wrapper that failed
+        # closed it, a FileIO that failed did not) - and on Windows a descriptor
+        # left open keeps the temp file from being removed below.
+        # (The name ``open`` is given only reaches ``make_temp``, which ignores it.)
+        with (open(directory, "wb", opener=make_temp) if binary
+              else open(directory, "w", encoding="utf-8", newline=newline,
+                        opener=make_temp)) as f:
             write(f)
-        hand_back(tmp)
-        os.replace(tmp, path)
+        hand_back(made[0])
+        os.replace(made[0], path)
     except BaseException:
-        # Imported here, not at the top: crashlog imports this module.
-        from . import crashlog
-        with crashlog.quiet("paths.write_atomically"):
-            os.remove(tmp)
+        if made:
+            # Imported here, not at the top: crashlog imports this module.
+            from . import crashlog
+            with crashlog.quiet("paths.write_atomically"):
+                os.remove(made[0])
         raise
 
 

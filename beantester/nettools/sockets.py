@@ -118,7 +118,9 @@ class Carry(NamedTuple):
     names: dict                 # pid -> name, for the PIDs of that read's table
     named_at: float             # time.monotonic() of the process snapshot behind them
     last: dict                  # key -> Socket, the open sockets of that read
-    seen: dict                  # key -> (time.time(), time.monotonic()) it appeared
+    seen: dict                  # key -> (time.time(), time.monotonic()) its row appeared,
+                                # time.time() its socket was first seen (None: at the
+                                # first read; another row's, ``_reshaped``)
     closed: tuple               # ((Socket, time.monotonic() it closed), ...)
     mark: Mark | None = None    # set by "Mark now", kept until the next one
     services: dict | None = None    # key -> service, for the service hosts' sockets
@@ -265,14 +267,21 @@ def _changes(live, carry, failed, now, mark=False):
     unread = {key: socket for key, socket in carry.last.items()
               if key not in current and _table(socket) in failed}
     known = current.keys() | unread.keys()
+    arrived = _arrivals(current, carry.last)
+    fresh, firsts = [], {}
+    for key, socket in carry.last.items():
+        if key in known or _tail(socket):
+            continue
+        if _reshaped(socket, arrived):
+            # The same socket under another row: it keeps the time it was first seen
+            firsts[_place(socket)] = _first(carry.seen.get(key))
+        else:
+            fresh.append(_closed(socket, wall, carry.seen.get(key)))
     seen = {key: at for key, at in carry.seen.items() if key in known}
     for key in current.keys() - carry.last.keys() - seen.keys():
-        seen[key] = now
+        seen[key] = (wall, monotonic, firsts.get(_place(current[key]), wall))
     closed = [(socket, at) for socket, at in carry.closed
               if monotonic - at < MARK_S and socket.key not in current]
-    arrived = _arrivals(current, carry.last)
-    fresh = [_closed(socket, wall, carry.seen.get(key)) for key, socket in carry.last.items()
-             if key not in known and not _tail(socket) and not _reshaped(socket, arrived)]
     closed = (closed + [(socket, monotonic) for socket in fresh])[-MAX_CLOSED:]
     shown = [_marked(socket, seen.get(socket.key), monotonic) for socket in live]
     shown += [socket for socket, _at in closed]
@@ -296,10 +305,16 @@ def _tail(socket):
     return socket.proto == "TCP" and (socket.pid == 0 or socket.state == "TIME_WAIT")
 
 
+def _first(seen):
+    """The time a socket was first seen, from its ``Carry.seen`` entry (None: there
+    at the first read, which has no entries)."""
+    return seen[2] if seen else None
+
+
 def _closed(socket, wall, seen):
     """``socket`` marked closed at ``wall``, with the time it was first seen
     (``seen`` is its ``Carry.seen`` entry, or None)."""
-    return socket._replace(change=CLOSED, at=wall, seen_at=seen[0] if seen else None)
+    return socket._replace(change=CLOSED, at=wall, seen_at=_first(seen))
 
 
 def _still_marked(mark, fresh, current):
@@ -364,18 +379,22 @@ def _reshaped(gone, arrived):
 
 
 def _marked(socket, appeared, monotonic):
-    """``socket`` with the time it was first seen, and NEW for MARK_S after it - the
-    word and its time go together, as the colour does.
+    """``socket`` with the time it was first seen, and NEW for MARK_S after its row
+    appeared - the word and its time go together, as the colour does.
+
+    A socket that got or lost its far end (``_reshaped``) is NEW - the connection
+    is - but was first seen when its earlier row was, or not at all if that was
+    there at the first read: on Linux that time is what "opened" shows.
 
     A TIME_WAIT row is left as it is (``_tail``): marked, a closed connection would
     read as an opened one.
     """
     if appeared is None or _tail(socket):
         return socket
-    wall, at = appeared
+    wall, at, first = appeared
     fresh = 0 <= monotonic - at < MARK_S
     return socket._replace(change=NEW if fresh else "", at=wall if fresh else None,
-                           seen_at=wall)
+                           seen_at=first)
 
 
 def _sockets(rows, names, known=None, services=None, ask=None):

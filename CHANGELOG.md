@@ -61,10 +61,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 - **The event log says when a call moves to another path.** A PATH entry, for example
   `ICE path: LAN 192.168.0.20:50000 -> TURN 203.0.113.10:3478`, names the path that now
-  carries the call's data, also in the reproduction report. A path is the address at the
-  other end, so two connections through one relay are one path. The entry also says when
-  data stops and when it comes back. A path the session blocks delivers nothing, so it is
-  never named. A call already going when the session started gets its labels a few seconds
+  carries the call's data, also in the reproduction report. A path is the address and port
+  at the other end, so two connections to one relay port are one path. The entry also says
+  when data stops and comes back. A path the session blocks is never named: it delivers
+  nothing. A call already going when the session started gets its labels a few seconds
   later, through a relay too.
 
 - **The ICE column in the CSV, in `--log-conns` and in a saved column layout.** The
@@ -118,7 +118,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   own.
 
 - **Linux: under sudo, saving settings can no longer be redirected into another file.** The
-  window state, profiles, saved configurations, reproduction reports and the menu entry were
+  window state, profiles, saved configurations and reproduction reports were
   written through a temporary file that was handed to you and then opened again by its name.
   Any program running under your account could swap it for a link in between, and this
   program, running as root, wrote through that link. Each save now writes the file first and

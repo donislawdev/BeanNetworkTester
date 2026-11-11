@@ -214,22 +214,50 @@ def test_copy_results_is_the_english_report():
 
 
 def test_the_row_menu_copies_the_public_address_without_logging_it():
+    """The menu the way a person reaches it: a right click on a row, through the
+    table's own binding, and each entry by its place in the menu - so a menu never
+    bound, or built in another order than COPY_ADDRESS and COPY_ROW say, fails here."""
     run_gui(NAT + textwrap.dedent("""
-        copied, logged, offered = [], [], []
-        panel_mod.copy_confirmed = lambda app, text, said, area: (copied.append(text),
-                                                                   logged.append(said))
-        panel_mod.popup = lambda menu, entries, x, y, area: offered.append(dict(entries))
+        from beantester.gui.theme import MENU_ENTRY_INERT, MENU_ENTRY_LIVE
+
+        class Click:
+            x_root = y_root = y = 10
+
         panel = open_nat()
-        panel._show_menu(0, 0)
-        assert offered[-1][panel_mod.COPY_ADDRESS] is False, "nothing to copy before a run"
-        panel.copy_address()
-        assert copied == []
+        menu, tree = panel.menu, panel.table.tree
+        right_click = tree.bindings["<<ContextMenu>>"][-1]
+        entry = lambda index: menu.commands[index]["command"]
+        copied = lambda: [line for line in app._log_lines if T("log.copied") in line]
+
+        def on_a_row():
+            tree.row_at = panel.table._slots[0]
+            menu.posted = 0
+            assert right_click(Click()) == "break" and menu.posted == 1, "the menu opened"
+
+        assert right_click(Click()) == "break" and menu.posted == 0, "no row, no menu"
+        app.copy_to_clipboard("before")
+        entry(panel_mod.COPY_ADDRESS)()
+        assert root.clipboard_get() == "before", "nothing to copy before a run"
+
+        NET.silent = {("stun", port) for port in (3478, 443, 53)}
+        start(panel)
+        finish(panel.runner)
+        NET.silent = set()
+        assert panel.runner.rows and nat.public_address(panel.runner.rows) is None
+        on_a_row()
+        assert menu.entry_states[panel_mod.COPY_ADDRESS] == MENU_ENTRY_INERT, "no address"
+        assert menu.entry_states[panel_mod.COPY_ROW] == MENU_ENTRY_LIVE
+
         start(panel)
         finish(panel.runner, until=lambda: nat.public_address(panel.runner.rows))
-        panel._show_menu(0, 0)
-        assert offered[-1][panel_mod.COPY_ADDRESS] is True, "as soon as the run has it"
-        panel.copy_address()
-        assert copied == ["203.0.113.7"], copied
-        assert "203.0.113.7" not in logged[-1], logged
+        on_a_row()
+        assert menu.entry_states[panel_mod.COPY_ADDRESS] == MENU_ENTRY_LIVE, "as soon as the run has it"
+        entry(panel_mod.COPY_ADDRESS)()
+        assert root.clipboard_get() == "203.0.113.7", root.clipboard_get()
+        assert T("tools.nat.address_logged") in copied()[-1], copied()
+        assert "203.0.113.7" not in copied()[-1], "the log line does not carry it"
+        entry(panel_mod.COPY_ROW)()
+        row = panel.table.copy_text()
+        assert row and root.clipboard_get() == row, (row, root.clipboard_get())
         finish(panel.runner)
     """))
