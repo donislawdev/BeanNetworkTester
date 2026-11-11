@@ -1411,13 +1411,15 @@ so a call can show four or five rows with an `ICE` label. A call that was alread
 session started gets its labels a few seconds later, at the next check it sends to keep the
 connection, and so does its relay. Once a second the program looks at the labelled connections
 that carried media and at how much each delivered over the last three seconds (1500 bytes or more
-counts as data, and the checks that keep a call alive are far less). A connection is named once
-it leads for two seconds in a row, and the named one keeps its place while it still carries data,
-unless another carries more than twice as much. Each change puts a `PATH` entry in the event log,
-such as `ICE path: LAN 192.168.0.20:50000 -> TURN 203.0.113.10:3478`, and in the reproduction
-report. When no path has carried data for five seconds, the entry reads
-`ICE path: no data (was ...)`. A path this session blocks delivers nothing, so it is never the
-one named. Search with `ice:turn` (or `ice:lan`, `ice:nat`...) to see one kind of path only.
+counts as data, and the checks that keep a call alive are far less). A path is the address at
+the other end: a call that sends and receives on two connections through one relay, or shares its
+screen on a connection of its own, still takes one path. A path is named once it leads for two
+seconds in a row, and the named one keeps its place for as long as it carries data. Each change
+puts a `PATH` entry in the event log, such as
+`ICE path: LAN 192.168.0.20:50000 -> TURN 203.0.113.10:3478`, and in the reproduction report.
+When no path has carried data for five seconds, the entry reads `ICE path: no data (was ...)`,
+and when data comes back on the same path, `ICE path: data again on ...`. A path this session
+blocks delivers nothing, so it is never the one named. Search with `ice:turn` (or `ice:lan`, `ice:nat`...) to see one kind of path only.
 
 ## CSV exports
 

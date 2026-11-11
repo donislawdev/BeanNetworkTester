@@ -11786,11 +11786,33 @@ MUTATIONS = [
         "test": "test_a_path_has_to_lead_twice_in_a_row",
     },
     {
-        "label": "ice: the active path flips on any lead, however small",
+        "label": "ice: the named path gives way while it still carries data",
         "file": "beantester/ice.py",
-        "old": "        holds = active_bytes >= ACTIVE_BYTES and best_bytes <= 2 * active_bytes\n",
-        "new": "        holds = False\n",
-        "test": "test_two_paths_with_data_do_not_flip_on_a_lead_under_twice",
+        "old": "        if best == self._active or active_bytes >= ACTIVE_BYTES:\n",
+        "new": "        if best == self._active:\n",
+        "test": "test_the_named_path_keeps_its_place_while_it_carries_data",
+    },
+    {
+        # "TURN a -> TURN a" at every burst of a call's second connection to one relay.
+        "label": "ice: each flow is a path of its own, not each far end",
+        "file": "beantester/ice.py",
+        "old": "        end = endpoint(row[\"remote_ip\"], row[\"remote_port\"])\n",
+        "new": "        end = (endpoint(row[\"remote_ip\"], row[\"remote_port\"]), id(flow))\n",
+        "test": "test_two_flows_to_one_relay_are_one_path",
+    },
+    {
+        "label": "ice: the flows to one far end are not summed",
+        "file": "beantester/ice.py",
+        "old": "        ends[end] = (total + carried, label, most)\n",
+        "new": "        ends[end] = (max(total, carried), label, most)\n",
+        "test": "test_two_flows_to_one_far_end_are_summed",
+    },
+    {
+        "label": "ice: data back on the same path reads as a new choice",
+        "file": "beantester/ice.py",
+        "old": "        self._was = self._active\n",
+        "new": "",
+        "test": "test_data_again_on_the_same_path_says_so",
     },
     {
         "label": "ice: the timeline counts offered bytes instead of delivered ones",
@@ -11803,6 +11825,7 @@ MUTATIONS = [
         "label": "ice: data that stops is never said to have stopped",
         "file": "beantester/ice.py",
         "old": "        text = f\"ICE path: no data (was {self._shown})\"\n"
+               "        self._was = self._active\n"
                "        self._active, self._shown, self._quiet_since = None, \"\", None\n"
                "        return text\n",
         "new": "        return None\n",

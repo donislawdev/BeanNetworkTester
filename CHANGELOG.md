@@ -59,10 +59,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   `ice:turn` to see the relays only. A TURN relay over TCP or TLS is not recognised.
 
 - **The event log says when a call moves to another path.** A PATH entry, for example
-  `ICE path: LAN 192.168.0.20:50000 -> TURN 203.0.113.10:3478`, names the connection that
-  now carries the call's data, and the reproduction report has it too. A path the session
-  blocks delivers nothing, so it is never the one named. A call that was already going when
-  the session started gets its labels a few seconds later, through a relay too.
+  `ICE path: LAN 192.168.0.20:50000 -> TURN 203.0.113.10:3478`, names the path that now
+  carries the call's data, also in the reproduction report. A path is the address at the
+  other end, so two connections through one relay are one path. The entry also says when
+  data stops and when it comes back. A path the session blocks delivers nothing, so it is
+  never named. A call already going when the session started gets its labels a few seconds
+  later, through a relay too.
 
 - **The ICE column in the CSV, in `--log-conns` and in a saved column layout.** The
   connections CSV has a new last column, `ice`, and `--log-conns` ends the line of such a
