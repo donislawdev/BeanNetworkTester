@@ -416,7 +416,14 @@ monitor is gone it returns to the centre of the current screen.
     session is needed: what is listening, what is connected, its state (LISTEN,
     ESTABLISHED, TIME_WAIT...) and the program that owns it. Use it to see which port your
     application listens on before you impair it, or which program holds a port. The table
-    is read when you open the tab and when you press **Refresh**. Search it the way you
+    is read when you open the tab and when you press **Refresh**. Tick **Refresh
+    automatically** and it reads itself every 1, 2 or 5 seconds, but only while the tab is on
+    screen: on another tab, or with the window minimized, nothing is read. A socket that
+    appeared since the read before is highlighted for a few seconds, one that closed stays
+    for a few seconds, greyed, and the **change** column gives the time of either, so
+    sorting by it shows the latest changes first. A connection that opens and closes
+    between two reads is never shown. When one read takes long (tens of thousands of
+    sockets) the table reads less often by itself and the status line says so. Search it the way you
     search the connection table (`lport:8080`, `state:listen`, `proc:chrome`), and
     right-click a row to target its program, leave it alone, limit to or block its
     remote address, watch a TCP connection in **TCP health** or ping its far end in

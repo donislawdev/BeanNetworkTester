@@ -5,16 +5,33 @@ closing - with its state and its process, without a session: the question "which
 port does my application listen on?" comes BEFORE anything is impaired, and the
 connection table only knows traffic that crossed the driver.
 
-A snapshot, read when the tab is first looked at and then when asked (the owner's
-decision, 2026-09-23): a table that re-read itself every tick would move under the
-pointer, and at a hundred thousand sockets each read is a second of work.
+Read when the tab is first looked at and then when asked - or by itself, when the
+box beside Refresh is ticked (the owner, 2026-11-10; off until then). In 2026-09-23
+a table that read itself was turned down for two reasons, and both are answered
+here rather than waved away:
+
+* "it would move under the pointer": the row at the top of the view stays there
+  across a read (``SortableTree.set_model(keep_view=True)``), the selection is
+  kept by key as it always was, and a socket that closes does not vanish - it
+  stays for a few seconds, marked (``nettools/sockets.py::_changes``).
+* "at a hundred thousand sockets each read is a second of work": the time between
+  two reads is never less than twenty times what the last one took
+  (``sockets.read_every_ms``), and the status line says when that stretched it.
+
+🔴 It reads ONLY WHILE LOOKED AT (the owner's condition, 2026-11-10): the Tools
+page in front, this tab chosen, the window not minimised (``base.on_screen``).
+Asked twice - when a wait is started and when it runs out - so with the tab out of
+sight there is no read and no timer either: ``refresh`` (the page's tick, which
+only the tool on screen gets) is what starts the waiting again. The next wait
+starts when an answer lands, never while a read is out.
 
 One request at a time. The worker keeps only the LAST request that waits
 (``gui/model_worker.py``), and a search queued behind a read would have been
 computed on the table it was queued against - the old one - and shown after the
 new. So nothing is queued: while the worker is busy the inputs are only
 remembered, and each answer that lands is compared with them and asked again
-when they moved (``_on_outcome``).
+when they moved (``_on_outcome``). Refresh pressed during the table's own read is
+remembered the same way, and its read is asked for when that one lands.
 """
 import time
 import tkinter as tk
@@ -27,12 +44,13 @@ from ...tcprow import Connection
 from .. import dialogs
 from ..field_actions import block_ip_address, leave_process_alone
 from ..labels import wrapping_label
-from ..theme import CHARS, PAGE_WRAP_PAD, ROWS, set_menu_entry_available, space, style_menu
+from ..theme import (CHARS, PAGE_WRAP_PAD, ROWS, SOCKET_COLORS, set_menu_entry_available,
+                     space, style_menu)
 from ..tooltip import add_tooltip
-from ..widgets import SortableTree
-from .base import Debounce, Poller, StatusLine, job, remembered
+from ..widgets import SortableTree, make_room
+from .base import Debounce, Poller, StatusLine, choice, job, on_screen, remembered
 from .ping import offered as ping_offered, ping_from
-from .tcphealth import offered, watch_from
+from .tcphealth import offered, watch_from, watching
 from ... import crashlog
 
 AREA = "gui.toolbox.sockets"
@@ -45,19 +63,28 @@ AREA = "gui.toolbox.sockets"
 # goes last.
 COLUMNS = {"proc": "conns.process", "pid": "conns.pid", "proto": "conns.proto",
            "local_ip": "tools.sockets.col.local_ip", "local_port": "conns.local_port",
-           "state": "tools.sockets.col.state", "remote_ip": "conns.remote_ip",
-           "remote_port": "conns.remote_port"}
+           "state": "tools.sockets.col.state", "change": "tools.sockets.col.change",
+           "remote_ip": "conns.remote_ip", "remote_port": "conns.remote_port"}
 TIPS = {column: f"tips.tools_sockets_col_{column}" for column in COLUMNS}
 NUMERIC = frozenset({"local_port", "remote_port", "pid"})
 # Centred for the connection table's reason: each follows a right-aligned number,
 # and left-aligned it touched it - the first render read "22 LISTEN" as one value.
 CENTERED = frozenset({"proto", "state"})
+# Sorted the latest first at the first click: the change column is read for what
+# changed just now, and from the other end that is below every older change.
+NEWEST_FIRST = frozenset({"change"})
 MIN_CHARS = {"proto": CHARS["proto"], "local_ip": CHARS["address"],
              "local_port": CHARS["port"], "remote_ip": CHARS["address"],
              "remote_port": CHARS["port"], "state": CHARS["tcp_state"],
-             "pid": CHARS["pid"], "proc": CHARS["process"]}
+             "pid": CHARS["pid"], "proc": CHARS["process"], "change": CHARS["tcp_state"]}
+# What the change column says, by ``Socket.change``; any other row that has a time
+# appeared earlier and is no longer pointed at.
+APPEARED, CLOSED_AT = "tools.sockets.appeared_at", "tools.sockets.closed_at"
 
 READ, VIEW = "read", "view"
+# The shortest wait before a read the table starts by itself: a tick's worth of
+# room for the window to draw the answer it has just been given.
+MIN_WAIT_MS = 50
 
 # Menu entries a row may be refused, by position (0 is "Copy", 1 the separator).
 NEEDS_NAME = (2, 3)         # target / leave alone: the process's name
@@ -66,15 +93,37 @@ HEALTH = 6                  # "Show TCP health": a TCP connection (tcphealth.off
 PING = 7                    # "Ping this address": one address on the other end
 
 
+def clock(at):
+    return time.strftime("%H:%M:%S", time.localtime(at))
+
+
+def change_text(s):
+    """The change column: when the socket appeared or closed, "" for one that was
+    there at the window's first read."""
+    if s.at is None:
+        return ""
+    return T(CLOSED_AT if s.change == sockets.CLOSED else APPEARED, time=clock(s.at))
+
+
+def seconds_text(seconds):
+    return T("tools.sockets.seconds", n=seconds)
+
+
 def render(s):
     """One row's cells, in ``COLUMNS`` order. Called only for the rows on screen."""
     return (s.proc, "" if s.pid is None else s.pid, s.proto, s.local_ip, s.local_port,
-            s.state, s.remote_ip, "" if s.remote_port is None else s.remote_port)
+            s.state, change_text(s), s.remote_ip,
+            "" if s.remote_port is None else s.remote_port)
 
 
 def address(s):
     """The remote address as a Control field takes it: without an IPv6 zone."""
     return s.remote_ip.split("%")[0]
+
+
+def connection_of(s):
+    """The row's four numbers, as TCP health names a connection."""
+    return Connection(s.local_ip, s.local_port, s.remote_ip, s.remote_port)
 
 
 class SocketsPanel:
@@ -104,6 +153,20 @@ class SocketsPanel:
         self.refresh_btn = ttk.Button(bar, text=T("tools.sockets.refresh"), command=self.read)
         self.refresh_btn.pack(side="left")
         add_tooltip(self.refresh_btn, "tips.tools_sockets_refresh")
+        self.live = tk.BooleanVar(value=self.memory.get("live") == "1")
+        box = ttk.Checkbutton(bar, text=T("tools.sockets.live"), variable=self.live,
+                              command=self._live_ticked)
+        box.pack(side="left", padx=space("inline"))
+        add_tooltip(box, "tips.tools_sockets_live")
+        self.every, self.every_box = choice(
+            bar, self.memory, "tools.sockets.every", sockets.EVERY_S, "every",
+            sockets.DEFAULT_EVERY_S, "tips.tools_sockets_every", seconds_text)
+        self._timer = None          # the wait before the next read the table starts
+        self._read_at = None        # time.monotonic() the last read's answer landed
+        self._failures = 0          # reads that failed in a row
+        self._took = []             # what the last two reads took, in ms
+        self._quiet = False         # the read that is out was started by the table
+        self._asked = False         # Refresh was pressed while that read was out
         self.count = ttk.Label(bar, text="", style="Muted.TLabel")
         self.count.pack(side="right")
 
@@ -120,8 +183,11 @@ class SocketsPanel:
         self.table = SortableTree(holder, COLUMNS, sort={"col": column, "reverse": reverse},
                                   on_sort=self._on_sort, height=ROWS["table"],
                                   horizontal=True, min_chars=MIN_CHARS, tips=TIPS,
-                                  numeric=NUMERIC, centered=CENTERED,
+                                  numeric=NUMERIC, centered=CENTERED, tags=SOCKET_COLORS,
                                   empty_text="tools.common.working")
+        self.table.start_reversed = NEWEST_FIRST
+        make_room(self.table, {"change": [T(key, time=clock(0))
+                                          for key in (APPEARED, CLOSED_AT)]})
         self._build_menu()
 
         self.poller = Poller(self.frame, self.job, self._on_outcome)
@@ -158,8 +224,10 @@ class SocketsPanel:
 
     # -- the page calls ------------------------------------------------------ #
     def refresh(self):
-        """The tick, while this tab is on screen: the first look reads."""
+        """The tick, while this tab is on screen: the first look reads, and a table
+        that reads itself goes back to waiting for its next read."""
         self._read_if_never()
+        self._arm()
         self._sync_buttons()
 
     def pending(self):
@@ -174,6 +242,7 @@ class SocketsPanel:
     def teardown(self):
         self.poller.cancel()
         self.debounce.cancel()
+        self._disarm()
 
     def focus_search(self):
         """Ctrl+F while this tool is on screen: its own search box."""
@@ -187,6 +256,13 @@ class SocketsPanel:
         """Read the machine again (the Refresh button)."""
         if not self.job.busy():
             self._ask(READ)
+        elif self._quiet:
+            # The table's own read is out, and the button did not say so (_ask). The
+            # person's read follows it, naming every process again; until then the
+            # window shows it was taken.
+            self._asked, self._quiet = True, False
+            self.status.working()
+            self._sync_buttons()
 
     def _read_if_never(self):
         # Not after a read that failed: that says so, and waits for Refresh rather
@@ -194,21 +270,81 @@ class SocketsPanel:
         if READ not in self.job.last and not self.job.busy():
             self._ask(READ)
 
-    def _ask(self, kind):
+    def _ask(self, kind, by_itself=False):
         query, (column, reverse) = self.query.get(), self._sort()
+        # Taken HERE, on the UI thread: the worker does not reach back into the
+        # window (convention 26), and nothing reads while this runs.
+        latest = self._latest()
+        snapshot = latest.snapshot if latest is not None else None
         if kind == READ:
-            self.job.run(READ, lambda: sockets.table(None, query, column, reverse))
-            self.status.working()
+            # The read before this one goes with it, so the answer says what
+            # changed. A read the table starts keeps the names it has; one the
+            # person asked for names every process again.
+            self.job.run(READ, lambda: sockets.table(None, query, column, reverse,
+                                                     snapshot, not by_itself))
+            self._quiet = by_itself
+            if not by_itself:
+                # Not for the table's own reads: "Working..." would blink in the
+                # status line at every one of them, and so would the button.
+                self.status.working()
+        elif snapshot is None:
+            return
         else:
-            # Taken HERE, on the UI thread: the worker does not reach back into the
-            # window (convention 26), and nothing reads while this runs.
-            latest = self._latest()
-            if latest is None:
-                return
-            snapshot = latest.snapshot
             self.job.run(VIEW, lambda: sockets.table(snapshot, query, column, reverse))
         self._sync_buttons()
         self.poller.start()
+
+    # -- reading by itself ----------------------------------------------------- #
+    def _watching(self):
+        """Ticked, and looked at: see the module docstring."""
+        return bool(self.live.get()) and on_screen(self.app, self.ID)
+
+    def _pace_ms(self):
+        # The quicker of the last two reads: one read is slow whenever a new program
+        # turns up (it takes the process snapshot, 71 ms measured), and that alone
+        # must not stretch the pace and have the status line say so. A table that is
+        # slow to read is slow twice running.
+        return sockets.read_every_ms(self.every(), min(self._took, default=0),
+                                     self._failures)
+
+    def _arm(self):
+        """Start the wait for the next read, unless one is waiting or out."""
+        if self._timer is not None or self.job.busy() or not self._watching():
+            return
+        wait = 0.0
+        if self._read_at is not None:
+            wait = self._pace_ms() - (time.monotonic() - self._read_at) * 1000
+        with crashlog.quiet(AREA):
+            self._timer = self.frame.after(max(MIN_WAIT_MS, int(wait)), self._tick)
+
+    def _disarm(self):
+        if self._timer is not None:
+            with crashlog.quiet(AREA):
+                self.frame.after_cancel(self._timer)
+            self._timer = None
+
+    def _tick(self):
+        """The wait ran out. Asked again whether anyone is looking: the tab may
+        have been left, or the window minimised, while it ran."""
+        self._timer = None
+        if self._watching() and not self.job.busy():
+            self._ask(READ, by_itself=True)
+
+    def _live_ticked(self):
+        self.memory["live"] = "1" if self.live.get() else ""
+        self.memory.pop("stopped", None)
+        self._failures = 0
+        self._disarm()
+        if self.live.get():
+            self._read_at = None        # ticked: the first read is now
+            self._arm()
+        read = self.job.last.get(READ)
+        if read is not None:
+            self._say(read)
+        latest = self._latest()
+        if latest is not None:
+            self.note.config(text="\n".join(
+                self._notes(latest.snapshot, stale=self._read_failed())))
 
     def _asked_again(self):
         """A view for the inputs as they are now, unless one is on its way."""
@@ -249,29 +385,63 @@ class SocketsPanel:
 
     def _on_outcome(self, outcome):
         if outcome.kind == READ:
-            self.status.show(outcome)
+            self._quiet = False
+            self._read_at = time.monotonic()
+            self._took = [*self._took[-1:], outcome.elapsed_ms]
+            self._failures = self._failures + 1 if outcome.error else 0
+            if self._failures >= sockets.FAILURES_TO_STOP and self.live.get():
+                # Whatever is wrong is not passing: stop asking, and say so.
+                self.live.set(False)
+                self.memory["live"] = ""
+                self.memory["stopped"] = "1"
+            self._say(outcome)
         if outcome.error:
             self._show_failure()
         else:
-            self._show(outcome.value)
+            self._show(outcome.value, keep_view=outcome.kind == READ)
+        if self._asked and not self.job.busy():
+            # Refresh pressed during the table's own read (``read``). Taken with
+            # the inputs as they are now, so it answers a search typed meanwhile too.
+            self._asked = False
+            self._ask(READ)
+            return
         # Typed or sorted while the worker was busy: those inputs were remembered,
         # not sent (see the module docstring), so this answer may be for older ones.
         latest = self._latest()
         if latest is not None and not self._answers_the_inputs(latest):
             self._asked_again()
+        self._arm()
         self._sync_buttons()
+
+    def _say(self, read):
+        """The status line for a read: when it was, and when the next one comes if
+        the table reads itself."""
+        if read.error or not self.live.get():
+            self.status.show(read)
+            return
+        # To a tenth of a second, and "slow" only when that shows: in whole seconds
+        # 2.4 s read "every 2 s, not every 2 s", and 2.02 s is not worth saying.
+        chosen, every = self.every(), round(self._pace_ms() / 1000, 1)
+        slow = every > chosen
+        text = T("tools.sockets.status_live_slow" if slow else "tools.sockets.status_live",
+                 time=clock(read.finished), ms=read.elapsed_ms, every=f"{every:g}",
+                 chosen=chosen)
+        self.status.label.config(text=text, style="Muted.TLabel")
 
     def _answers_the_inputs(self, view):
         return (view.query, view.sort) == (self.query.get(), self._sort())
 
-    def _show(self, view):
+    def _show(self, view, keep_view=False):
         snapshot = view.snapshot
         if not snapshot.sockets:
             empty = "tools.sockets.empty"
         else:
             empty = "tools.sockets.empty_match"
         self.table.set_empty_text(empty)
-        self.table.set_model(view.rows, render=render, key_of=lambda s: s.key)
+        # Across a read the row at the top of the view stays there. A new search or
+        # order is a view of the same read, and starts where the table stood, as before.
+        self.table.set_model(view.rows, render=render, key_of=lambda s: s.key,
+                             tag_of=lambda s: s.change, keep_view=keep_view)
         self.count.config(text=T("conns.shown_of", shown=len(view.rows),
                                  total=len(snapshot.sockets)))
         # Asked of the job, not remembered by the panel: a search or a sort after a
@@ -285,9 +455,10 @@ class SocketsPanel:
 
     def _notes(self, snapshot, stale=False):
         lines = []
+        if self.memory.get("stopped"):
+            lines.append(T("tools.sockets.note_live_stopped", n=sockets.FAILURES_TO_STOP))
         if stale:
-            at = time.strftime("%H:%M:%S", time.localtime(snapshot.read_at))
-            lines.append(T("tools.sockets.note_stale", time=at))
+            lines.append(T("tools.sockets.note_stale", time=clock(snapshot.read_at)))
         if snapshot.failed:
             lines.append(T("tools.sockets.note_failed", tables=", ".join(snapshot.failed)))
         unnamed = sockets.without_owner(snapshot)
@@ -306,17 +477,27 @@ class SocketsPanel:
         self.note.config(text="\n".join(self._notes(latest.snapshot, stale=True)))
 
     def _sync_buttons(self):
-        self.refresh_btn.state(["disabled"] if self.job.busy() else ["!disabled"])
+        # A read the table started leaves the button as it is: see _ask.
+        busy = self.job.busy() and not self._quiet
+        self.refresh_btn.state(["disabled"] if busy else ["!disabled"])
 
     # -- the menu on a row ---------------------------------------------------- #
     def _selected(self):
         keys = self.table.selected_keys()
         return self.table.item_for_key(keys[0]) if keys else None
 
+    def _health_offered(self, s):
+        """"Show TCP health" for a row with a connection behind it. One that has
+        closed only while it is on that tool's list, where its numbers are: a new
+        watch of it would be an empty entry saying it ended."""
+        if not (s and offered(s.proto, s.remote_ip, s.state)):
+            return False
+        return s.change != sockets.CLOSED or watching(self.app, connection_of(s))
+
     def _show_menu(self, x_root, y_root):
         s = self._selected()
         named, remote = bool(s and s.proc), bool(s and s.remote_ip)
-        health = bool(s and offered(s.proto, s.remote_ip, s.state))
+        health = self._health_offered(s)
         # A listening socket's remote side is 0.0.0.0 or ::, which is nobody.
         pingable = bool(s and ping_offered(s.remote_ip))
         for indexes, allowed in ((NEEDS_NAME, named), (NEEDS_REMOTE, remote),
@@ -349,9 +530,8 @@ class SocketsPanel:
         """The connection onto TCP health's list, that tool on screen. The row has
         all four numbers, so nothing is looked up."""
         s = self._selected()
-        if s and offered(s.proto, s.remote_ip, s.state):
-            watch_from(self.app, Request(s.proc, s.pid, connection=Connection(
-                s.local_ip, s.local_port, s.remote_ip, s.remote_port)))
+        if self._health_offered(s):
+            watch_from(self.app, Request(s.proc, s.pid, connection=connection_of(s)))
 
     def _ping(self):
         """Ping the row's remote address - with its IPv6 zone, which a link-local

@@ -802,6 +802,35 @@ def test_sorting_returns_the_viewport_to_the_top():
     """)
 
 
+def test_a_refresh_can_keep_the_row_at_the_top_of_the_view_where_it_is():
+    """For a table that refreshes itself (the socket table): a row appearing above
+    the view would otherwise slide every row under the pointer down by one."""
+    run_gui("""
+        table = app.pages["connections"].table
+        rows = [(str(i), ("p%d" % i, "TCP", "1.2.3.4", "443", "5000",
+                          "7", "0.5", "1.0", "0.1")) for i in range(400)]
+        new = ("new", ("new", "TCP", "1.2.3.4", "443", "5000", "7", "0.5", "1.0", "0.1"))
+        model = dict(render=lambda r: r[1], key_of=lambda r: r[0])
+        table.set_model(rows, **model)
+        table.set_offset(120)
+        assert table._slot_keys[0] == "120"
+
+        table.set_model([new] + rows, keep_view=True, **model)
+        assert (table.offset, table._slot_keys[0]) == (121, "120"), table.offset
+
+        table.set_model(rows, **model)
+        assert (table.offset, table._slot_keys[0]) == (121, "121"), "not asked: as before"
+
+        table.set_model([r for r in rows if r[0] != "121"], keep_view=True, **model)
+        assert table.offset == 121, "the row at the top went: the view stays in place"
+
+        table.set_offset(0)
+        table.set_model([new] + rows, keep_view=True, **model)
+        assert (table.offset, table._slot_keys[0]) == (0, "new"), \\
+            "at the top a row that sorts first is seen arriving"
+    """)
+
+
 def test_copying_with_headers_puts_the_column_names_on_the_first_line():
     run_gui("""
         table = app.pages["connections"].table
