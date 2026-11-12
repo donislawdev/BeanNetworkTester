@@ -652,12 +652,14 @@ class _Pacer:
         self.count += 1
 
 
-def _round(net, proto, ports, pace, progress, clock):
+def _round(net, proto, ports, pace, progress, clock, before=()):
     """``(answers, how)``: an Answer per port asked, and "done", "stopped" or
-    "gave_up". A port Stop caught waiting has no answer: it was not checked."""
+    "gave_up". A port Stop caught waiting has no answer: it was not checked.
+    ``before``: the states an earlier round of this protocol heard, which count
+    towards ``_not_there`` with this round's."""
     queue = collections.deque(ports)
     waiting = {}                # port -> when it was asked
-    heard = _Heard()
+    heard = _Heard(before)
     pacer = _Pacer(pace.per_second, clock())
     while queue or waiting:
         if progress.stopped:
@@ -678,7 +680,9 @@ def _round(net, proto, ports, pace, progress, clock):
             if now - asked >= pace.wait_s:
                 del waiting[port]
                 _got(heard, progress, port, net.give_up(proto, port))
-    return heard.by_port, "done"
+    # The round's last answers can be the ones that make it: nothing is left to start
+    # or wait for then, and the next protocol would go to a computer that is not there.
+    return heard.by_port, "gave_up" if _not_there(heard) else "done"
 
 
 def _start_some(net, state, pace, progress, timing):
@@ -715,11 +719,13 @@ def _timeout(waiting, queue, pace, pacer, clock):
 
 class _Heard:
     """One round's answers by port, and how many of each state - counted as they come,
-    because ``_not_there`` asks after every wait and a round can hold 65 535 ports."""
+    because ``_not_there`` asks after every wait and a round can hold 65 535 ports.
+    The states start from ``before``: the computer is "not there" for the whole
+    protocol, and a port that answered in the first round shows it was there."""
 
-    def __init__(self):
+    def __init__(self, before=()):
         self.by_port = {}
-        self.states = collections.Counter()
+        self.states = collections.Counter(before)
 
     def add(self, port, answer):
         self.by_port[port] = answer
@@ -767,7 +773,11 @@ def _one_protocol(net, proto, scan_plan, progress, clock):
         progress.planned += len(silent)
         progress.again = len(silent)
         pace = scan_plan.pace._replace(at_once=min(AGAIN_AT_ONCE, scan_plan.pace.at_once))
-        second, how = _round(net, proto, silent, pace, progress, clock)
+        # Only the answers that are not silence carry over (the silent ports are asked
+        # again): when a port answered in the first round, a computer gone by the second
+        # reads "unreachable" port by port, and the protocol is not given up on.
+        answered = collections.Counter(a.state for a in answers.values() if a.state != SILENT)
+        second, how = _round(net, proto, silent, pace, progress, clock, answered)
         progress.again = 0
         changed = {port: answer for port, answer in second.items() if answer.state != SILENT}
         answers.update(changed)
@@ -887,7 +897,9 @@ def conclusions(result):
     if result.plan.own:
         said.append(("tools.portscan.say.own", {}))
     for proto in result.gave_up:
-        said.append(("tools.portscan.say.unreachable", {"proto": proto, "count": GIVE_UP_AFTER}))
+        # The ports the table shows: a wave of answers can bring more than the count.
+        said.append(("tools.portscan.say.unreachable",
+                     {"proto": proto, "count": total[(proto, UNREACHABLE)]}))
     for proto in result.skipped:
         said.append(("tools.portscan.say.skipped", {"proto": proto, "by": result.gave_up[0]}))
     if asked.get(TCP) and total[(TCP, SILENT)] == asked[TCP] and TCP not in result.gave_up:

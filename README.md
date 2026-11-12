@@ -431,6 +431,8 @@ monitor is gone it returns to the centre of the current screen.
     with 1 s for each. One behind a router is asked 32 at a time, at most 20 new a second,
     with 3 s for each, so the router's table of connections does not fill up. A scan that can
     take more than five minutes asks first, and **Stop** ends it early with the ports it asked.
+    When 64 ports read **Cannot be reached** and no other port answered, the computer is not
+    there: the scan stops asking it, UDP included, and a line above the table says so.
     When only a few ports gave no answer and the rest did, those few are asked once more,
     slower, with a second connection or datagram.
     On Windows a closed UDP port reads **Closed** only when the program runs as

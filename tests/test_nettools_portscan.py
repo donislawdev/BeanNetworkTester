@@ -261,8 +261,9 @@ def test_an_unreachable_computer_is_given_up_on():
           and all(proto == ps.TCP for _t, proto, _port in net.started),
           f"({result.gave_up}, {result.skipped})")
     said = ps.conclusions(result)
+    # The count is the table's: the first wave's answers came together, all 256 of them.
     check("the conclusions name both",
-          ("tools.portscan.say.unreachable", {"proto": ps.TCP, "count": ps.GIVE_UP_AFTER}) in said
+          ("tools.portscan.say.unreachable", {"proto": ps.TCP, "count": ps.NEAR.at_once}) in said
           and ("tools.portscan.say.skipped", {"proto": ps.UDP, "by": ps.TCP}) in said, f"({said})")
     check("and so does the report",
           "UDP: not asked, the computer could not be reached" in ps.report(result), "")
@@ -296,6 +297,48 @@ def test_a_computer_not_there_is_given_up_on_after_the_first_silence():
     check("a neighbour failed already: refused at once, and it stops at the count",
           result.gave_up == (ps.TCP,) and len(net.started) == ps.GIVE_UP_AFTER,
           f"({result.gave_up}, {len(net.started)})")
+
+
+def test_the_last_answers_of_a_round_can_give_up():
+    """A range no bigger than one wave: every port waits, the answers come together and
+    nothing is left to start - the round ends there, and it must still give up."""
+    script = {port: (ps.Answer(ps.UNREACHABLE, 113), 0.5) for port in range(1, ps.GIVE_UP_AFTER + 1)}
+    result, net, _clock = run(range(1, ps.GIVE_UP_AFTER + 1), script, ps.NEAR,
+                              protocols=(ps.TCP, ps.UDP))
+    check("TCP given up on, UDP not asked", (result.gave_up, result.skipped)
+          == ((ps.TCP,), (ps.UDP,)) and all(proto == ps.TCP for _t, proto, _port in net.started),
+          f"({result.gave_up}, {result.skipped}, {len(net.started)} started)")
+
+
+def test_a_second_round_does_not_give_up_on_a_computer_that_answered():
+    """"Not there" is about the whole protocol: when ports answered in the first round,
+    a second round that hears "unreachable" (the computer went away in between) asks
+    every port it was given, and the next protocol is still asked."""
+    script = {port: (ps.Answer(ps.CLOSED, 111), 0) for port in range(1, 1001)}
+    again = range(901, 1001)                    # 10 %: just few enough to be asked again
+    script.update({(ps.TCP, port): (None, 0) for port in again})
+    clock = Clock()
+    net = FakeNet(clock, script)
+    original_start = net.start
+    asked = set()
+
+    def start(proto, port, wait_s):
+        if (proto, port) in asked and port in again:
+            script[(proto, port)] = (ps.Answer(ps.UNREACHABLE, 113), 0)
+        asked.add((proto, port))
+        return original_start(proto, port, wait_s)
+
+    net.start = start
+    result = ps.scan(a_plan(range(1, 1001), protocols=(ps.TCP, ps.UDP)), net=net, clock=clock)
+    check("every silent port asked again, and every one changed",
+          result.again == (ps.Again(ps.TCP, 100, 100),), f"({result.again})")
+    check("not given up on, and UDP asked", (result.gave_up, result.skipped) == ((), ())
+          and sum(1 for _t, proto, _port in net.started if proto == ps.UDP) == 1000,
+          f"({result.gave_up}, {result.skipped})")
+    check("the second round's answers are in the table",
+          states(result)[(950, ps.TCP)] == ps.UNREACHABLE, "")
+    check("and no sentence says the computer is not there", not any(
+        key == "tools.portscan.say.unreachable" for key, _args in ps.conclusions(result)), "")
 
 
 def test_a_protocol_given_up_on_leaves_no_socket_waiting():
