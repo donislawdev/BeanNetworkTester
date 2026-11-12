@@ -11355,7 +11355,7 @@ MUTATIONS = [
     {
         "label": "package smoke: any window class passes",
         "file": "tools/ci_linux_package_smoke.py",
-        "old": "        failures = [] if found and found.group(2) == WINDOW_CLASS else [\n",
+        "old": "        failures = [] if _class_of(line) == WINDOW_CLASS else [\n",
         "new": "        failures = [] if True else [\n",
         "test": "test_a_window_that_did_not_open_or_spoke_is_named",
     },

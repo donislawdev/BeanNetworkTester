@@ -2,6 +2,7 @@
 and names each way a bad one was measured to go wrong (a smoke that cannot fail
 proves nothing)."""
 import os
+import subprocess
 import sys
 
 from beantester import desktop
@@ -14,6 +15,11 @@ import ci_linux_package_smoke as smoke                       # noqa: E402
 # xwininfo -root -tree lines of the window: ours, and Tk's default class (measured).
 WINDOW = '     0x2004b0 "Bean Network Tester": ("beannetworktester" "Beannetworktester")  1000x810+140+30'
 TK_DEFAULT = '     0x2004b0 "Bean Network Tester": ("tk" "Tk")  1000x810+140+30  +140+30'
+# A tooltip is a top-level window of the program's title too. Xvfb's pointer starts in the
+# middle of the screen and rested on a field with one: the tooltip was listed before the
+# main window (WSL Ubuntu, 3 starts of 3, 2026-11-12).
+TOOLTIP = '     0x200665 "Bean Network Tester": ("!toplevel" "Toplevel")  366x140+493+427  +493+427'
+OTHER_TITLE = '     0x300010 "Settings": ("beannetworktester" "Beannetworktester")  400x300+0+0  +0+0'
 PROGRAM = "/t/BeanNetworkTester/BeanNetworkTester"
 ENTRY = f'[Desktop Entry]\nExec="{PROGRAM}"\nStartupWMClass=Beannetworktester\n'
 GOOD_REPRO ="[bean] Reproduce: ~/work/BeanNetworkTester/BeanNetworkTester --duration 2 --seed 42 --simulate\n"
@@ -60,6 +66,28 @@ def test_a_window_that_did_not_open_or_spoke_is_named():
                  "No tkinter. Use CLI mode", "Traceback (most recent call last):"):
         found = smoke.judge_window(WINDOW, line + "\n")
         check(f"{line[:30]!r} is caught", len(found) == 1 and "printed 1 line" in found[0], f"({found})")
+
+
+def _window_among(monkeypatch, *lines):
+    """``window_line`` over an ``xwininfo -root -tree`` listing of these lines."""
+    listing = "xwininfo: Window id: 0x5ba (the root window) (has no name)\n\n" + "\n".join(lines) + "\n"
+    monkeypatch.setattr(smoke.subprocess, "run",
+                        lambda args, **_kw: subprocess.CompletedProcess(args, 0, listing, ""))
+    return smoke.window_line()
+
+
+def test_the_main_window_is_judged_behind_a_tooltip(monkeypatch):
+    """A tooltip of the same title listed first must not stand in for the main window,
+    and a main window of the wrong class is still named."""
+    found = _window_among(monkeypatch, TOOLTIP, WINDOW)
+    check("the main window, not the tooltip", found == WINDOW, f"({found!r})")
+    check("so the judge passes it", smoke.judge_window(found, "") == [])
+    for lines, why in (((TOOLTIP, TK_DEFAULT), "a tooltip and Tk's default class"),
+                       ((TK_DEFAULT,), "only Tk's default class"),
+                       ((TOOLTIP, OTHER_TITLE), "the program's class under another title")):
+        named = smoke.judge_window(_window_among(monkeypatch, *lines), "")
+        check(f"{why}: the class is named", any("class" in f for f in named), f"({named})")
+    check("no window of that title", _window_among(monkeypatch, OTHER_TITLE) is None)
 
 
 def test_every_wrong_menu_entry_is_named():
