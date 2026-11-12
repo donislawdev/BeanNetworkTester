@@ -151,6 +151,8 @@ ALLOWED_IMPORTS = {
     ("beantester/nettools/nat.py", "ssl"):
         "the NAT and STUN tool's TURN over TLS: the default context, below, imported in "
         "the one function that makes the TLS connection",
+    ("beantester/nettools/portscan.py", "socket"):
+        "the Port scan's sockets (below) and the address family constants",
     ("beantester/legal.py", "ssl"):
         "the version of the OpenSSL the Windows zip ships, for --license, the About "
         "window and the SBOM: ssl.OPENSSL_VERSION_INFO, read when asked. No call, no "
@@ -218,6 +220,12 @@ ALLOWED_CALLS = {
         "answer gave), a TCP connection for one Allocate per TCP or TLS transport, and the "
         "route probe - a connected UDP socket that asks the routing table and sends "
         "nothing. tests/test_nettools_nat.py runs every job against a router held in memory",
+    ("beantester/nettools/portscan.py", "socket", "socket"):
+        "the Tools tab's Port scan, only after Scan: a TCP connection or a UDP datagram "
+        "to each port the person chose, on the ONE address they typed (a name looked up "
+        "by Ping's resolve), closed at once - a TCP one with a reset, nothing sent on it. "
+        "tests/test_nettools_portscan.py::test_a_scan_connects_only_to_the_address_typed "
+        "runs a scan under an audit hook",
     ("beantester/nettools/nat.py", "ssl", "create_default_context"):
         "the Tools tab's NAT and STUN, its TLS transports only: the TLS context every TURN "
         "over TLS row is made with - the server's certificate checked against this "
@@ -266,6 +274,21 @@ ALLOWED_CALLS = {
 ALLOWED_LIBRARIES = {
     "advapi32", "dwmapi", "iphlpapi", "kernel32", "ntdll", "shcore", "shell32",
     "user32", "uxtheme", "winhttp", "winmm",
+}
+
+# A library that IS a network library, allowed in ONE module and nowhere else:
+# library -> (the module, why). `ws2_32` is Winsock itself (2026-11-12, the Port scan):
+# Python's own sockets go through it already, and the scan reaches it by ctypes for one
+# call Python's `socket.ioctl` does not know, WSAIoctl(SIO_TCP_INITIAL_RTO) - how a
+# connection attempt is retried, which sends nothing itself. Its sending exports with
+# a name of their own are in WIRE_FUNCTIONS below; its plain `send`, `sendto` and
+# `connect` share their names with every Python socket's methods and cannot be
+# matched that way - so the library is held to the one module, which is already a
+# tool the Tools tab's promise names as sending.
+PLACED_LIBRARIES = {
+    "ws2_32": ("beantester/nettools/portscan.py",
+               "WSAIoctl(SIO_TCP_INITIAL_RTO) for the Port scan: a refused port answers at "
+               "once instead of after Windows tries again"),
 }
 
 # Exports of an ALLOWED library that send something. Each name with what it puts
@@ -324,6 +347,17 @@ WIRE_FUNCTIONS = {
     "WinHttpDetectAutoProxyConfigUrl": "proxy discovery over DHCP and DNS",
     "SetTcpEntry": "a TCP reset to the far end of the connection it deletes",
     "SOCK_DESTROY": "on Linux, a TCP reset to the far end of the connection whose socket it destroys",
+    # ws2_32's, from Microsoft Learn (read 2026-11-12): the sending calls with names of
+    # their own. The library is held to one module (PLACED_LIBRARIES above).
+    "WSASend": "data on a connected socket",
+    "WSASendTo": "a datagram to an address",
+    "WSASendMsg": "data or a datagram, with control information",
+    "WSAConnect": "a connection to an address",
+    "WSAConnectByNameW": "a name looked up and connected to",
+    "WSAConnectByNameA": "the same, ANSI form",
+    "WSAConnectByList": "a connection to one of a list of addresses",
+    "TransmitFile": "a file over a connected socket",
+    "TransmitPackets": "data or files over a connected socket",
 }
 
 # The one place each sending function may be named, with why that is the product
@@ -719,10 +753,32 @@ def test_ctypes_opens_only_local_windows_libraries():
     This is the check a module-name scan cannot do: ``windll.wininet`` needs no
     import statement, so nothing about its spelling looks like networking.
     """
-    seen = {detail for _rel, detail, _line in _scan().get("library", [])}
-    bad = sorted(seen - ALLOWED_LIBRARIES)
+    seen = {(rel, detail) for rel, detail, _line in _scan().get("library", [])}
+    bad = sorted(placed_or_unallowed(seen))
     check("ctypes opens only local Windows libraries", not bad,
           f"(a library that can speak a protocol has no business here: {bad})")
+    stale = sorted(library for library, (rel, _why) in PLACED_LIBRARIES.items()
+                   if (rel, library) not in seen)
+    check("every placed library is still loaded where it is placed", not stale, f"({stale})")
+
+
+def placed_or_unallowed(seen):
+    """The ``(module, library)`` pairs that are neither allowed everywhere nor loaded
+    in the one module their PLACED_LIBRARIES entry names."""
+    return [(rel, library) for rel, library in seen if library not in ALLOWED_LIBRARIES
+            and PLACED_LIBRARIES.get(library, ("",))[0] != rel]
+
+
+def test_a_placed_library_is_allowed_in_its_module_only():
+    """The canary for PLACED_LIBRARIES: Winsock in the scan's module passes, the same
+    load anywhere else is caught, and a library with no entry is caught everywhere."""
+    check("ws2_32 where it is placed", not placed_or_unallowed(
+        {("beantester/nettools/portscan.py", "ws2_32")}))
+    check("ws2_32 anywhere else", placed_or_unallowed(
+        {("beantester/nettools/ping.py", "ws2_32")}) == [("beantester/nettools/ping.py",
+                                                          "ws2_32")])
+    check("a library with no entry", placed_or_unallowed(
+        {("beantester/nettools/portscan.py", "wininet")}) != [])
 
 
 def unallowed_wire(wire):
@@ -1007,14 +1063,18 @@ def test_the_only_connection_goes_to_the_documented_route_probe():
 # 2026-10-19, the owner's decision: Ping, the first tool that sends (basket B), and
 # the promise reworded with it - before it the sentence was "Nothing on this tab
 # sends anything over the network." 2026-11-09, the owner's decision: NAT and STUN,
-# the second, named beside Ping.
+# the second, named beside Ping. 2026-11-12, the owner's decision (2026-11-11): Port
+# scan, the third. Its UDP half on Windows may also open a WinDivert handle with SNIFF |
+# RECV_ONLY for the ICMP the scanned address sends back - a copy of what arrives, which
+# cannot send, drop or change anything (the shape of socketwatch's handle).
 TOOLS_TAB_FILES = ("beantester/nettools/", "beantester/gui/toolbox/",
                    "beantester/gui/pages/toolbox.py")
-TOOLS_TAB_PROMISE = ("Only **Ping** and **NAT and STUN** on this tab send anything over the "
-                     "network: Ping sends echo requests to the address you type, from Start "
-                     "to Stop, and NAT and STUN sends a few requests to the two servers you "
-                     "type and small test packets to this network's own public address, "
-                     "when you press Start.")
+TOOLS_TAB_PROMISE = ("Only **Ping**, **NAT and STUN** and **Port scan** on this tab send "
+                     "anything over the network: Ping sends echo requests to the address you "
+                     "type, from Start to Stop, NAT and STUN sends a few requests to the two "
+                     "servers you type and small test packets to this network's own public "
+                     "address, when you press Start, and Port scan connects to the ports you "
+                     "choose on the address you type, from Scan to the end or Stop.")
 
 # What the tools named in the promise send, keyed exactly as TOOLS_TAB_QUIET_EXCEPTIONS:
 # finding -> (the tool's id, where it goes). Exact in both directions.
@@ -1042,6 +1102,14 @@ TOOLS_TAB_SENDING = {
         ("nat", "import for the TLS context below"),
     ("beantester/nettools/nat.py", "ssl", "create_default_context"):
         ("nat", "the TLS of the TURN server's TLS transports, after Start"),
+    ("beantester/nettools/portscan.py", "socket"):
+        ("portscan", "import for the sockets below"),
+    ("beantester/nettools/portscan.py", "socket", "socket"):
+        ("portscan", "a TCP connection or a UDP datagram to each chosen port of the typed "
+                     "address, from Scan to the end or Stop"),
+    ("beantester/nettools/portscan.py", "library", "ws2_32"):
+        ("portscan", "WSAIoctl(SIO_TCP_INITIAL_RTO) on the scan's own TCP sockets: how a "
+                     "refused connection is retried; it sends nothing itself"),
 }
 
 # Findings in a Tools-tab file that were checked NOT to send, each with how - keyed
@@ -1226,20 +1294,32 @@ def _languages():
             for name in sorted(os.listdir(folder)) if name.endswith(".json")}
 
 
-def _readme_parts(lines):
-    """The README's two sentences about what goes out: the feature bullet that names
-    Ping (with its wrapped lines) and the section just above the SmartScreen one."""
+def _bullet(lines, index, nested=True):
+    """The bullet starting at ``index``, with its wrapped lines, and the bullets nested
+    in it unless ``nested`` is False."""
+    end = index + 1
+    while (end < len(lines) and lines[end].startswith("  ")
+           and (nested or not lines[end].lstrip().startswith("- "))):
+        end += 1
+    return "\n".join(lines[index:end])
+
+
+def _readme_parts(lines, tools_name):
+    """The README's three places that say what goes out: the feature bullet that names
+    Ping (with its wrapped lines), the Tools tab's entry (``tools_name``, the tab as
+    that README names it) and the section just above the SmartScreen one. The Tools
+    entry joined on 2026-11-12: seven translations went on saying only Ping and NAT
+    and STUN send after Port scan came, and nothing read that entry."""
     parts = []
     for index, line in enumerate(lines):
-        if not line.startswith("- **"):
-            continue
-        end = index + 1
-        while end < len(lines) and lines[end].startswith("  "):
-            end += 1
-        bullet = "\n".join(lines[index:end])
-        if "Ping" in bullet:
-            parts.append(("feature list", bullet))
+        if line.startswith("- **") and "Ping" in _bullet(lines, index):
+            parts.append(("feature list", _bullet(lines, index)))
             break
+    tools = next((i for i, line in enumerate(lines)
+                  if line.startswith(f"- **{tools_name}**")), None)
+    if tools is not None:
+        # its own sentences only: a nested bullet about one tool names that tool anyway
+        parts.append(("Tools entry", _bullet(lines, tools, nested=False)))
     smart = next((i for i, line in enumerate(lines)
                   if line.startswith("## ") and "SmartScreen" in line), None)
     if smart is not None:
@@ -1251,6 +1331,7 @@ def _readme_parts(lines):
 def what_goes_out():
     """``(where, text, language)`` of every sentence that lists what leaves the computer."""
     from beantester import legal
+    languages = _languages()
     found = []
     for name in sorted(os.listdir(ROOT)):
         if name.startswith("README") and name.endswith(".md"):
@@ -1258,7 +1339,8 @@ def what_goes_out():
                 lines = handle.read().splitlines()
             language = README_NAME_LANGUAGE.get(name, "en")
             found += [(f"{name}, {part}", text, language)
-                      for part, text in _readme_parts(lines)]
+                      for part, text in _readme_parts(lines,
+                                                      languages[language]["app.tabs.tools"])]
     with open(os.path.join(ROOT, "THIRD-PARTY-NOTICES.md"), encoding="utf-8") as handle:
         notices = handle.read()
     at = notices.find("## Telemetry")
@@ -1268,7 +1350,7 @@ def what_goes_out():
                       notices[at:end if end > 0 else None], "en"))
     report = legal.cli_report()
     found.append(("--license", report[report.find("Telemetry:"):], "en"))
-    for code, strings in _languages().items():
+    for code, strings in languages.items():
         found.append((f"lang/{code}.json, about.no_telemetry",
                       strings.get("about.no_telemetry", ""), code))
     return found
@@ -1288,10 +1370,10 @@ def test_every_sentence_about_what_goes_out_names_every_tool_that_sends():
     found = what_goes_out()
     readmes = [name for name in os.listdir(ROOT)
                if name.startswith("README") and name.endswith(".md")]
-    # Two per README, the notices, --license and one per window language: fewer means
+    # Three per README, the notices, --license and one per window language: fewer means
     # a sentence was not found, and a check over nothing passes everything.
     check("every sentence about what goes out was found",
-          len(found) == 2 * len(readmes) + 2 + len(languages) and all(t for _w, t, _l in found),
+          len(found) == 3 * len(readmes) + 2 + len(languages) and all(t for _w, t, _l in found),
           f"({[(where, len(text)) for where, text, _l in found]})")
     missing = {}
     for where, text, language in found:
@@ -1309,6 +1391,16 @@ def test_a_sentence_that_leaves_a_sending_tool_out_is_caught():
           unnamed("Its Ping tool pings only the address you type.", names) == ["nat"])
     check("a name wrapped across two lines still counts",
           unnamed("Ping, and the NAT and\n  STUN tool", names) == [])
+    readme = ["- **No telemetry** - Ping and NAT and STUN send.",
+              "- **Tools** - helpers. Only **Ping** sends",
+              "  anything. Today:",
+              "  - **NAT and STUN** - its own entry.",
+              "## Privacy", "Ping and NAT and STUN.", "## SmartScreen"]
+    parts = dict(_readme_parts(readme, "Tools"))
+    check("a README's Tools entry is read, without the bullets nested in it",
+          parts.get("Tools entry") == "\n".join(readme[1:3]), f"({parts})")
+    check("and a Tools entry that names Ping alone is caught",
+          unnamed(parts.get("Tools entry", ""), names) == ["nat"])
 
 
 def test_the_tools_tab_check_sees_each_way_out():

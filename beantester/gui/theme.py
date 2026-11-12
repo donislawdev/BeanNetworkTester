@@ -137,6 +137,15 @@ SOCKET_COLORS = {
     "closed": {"foreground": MUT},
 }
 
+# Port scan rows, by what the port answered. An open port is what a scan is read for:
+# the "all is well" green, something answers there. A port that could not be asked -
+# unreachable, refused by this computer, an error - is amber. Closed and no answer
+# keep the table's own colour. The state column says the same in words (WCAG 1.4.1).
+SCAN_COLORS = {
+    "open": {"foreground": OK},
+    "problem": {"foreground": CAUTION},
+}
+
 GRID_C = "#333845"        # chart grid lines
 TIP_BG, TIP_FG = "#0f1116", "#e4e6eb"
 LINE_C = "#2f3542"        # separators
@@ -267,6 +276,10 @@ CHARS = {
     # width goes mostly to it (``widgets.sortable_tree.fitted_widths`` shares it in
     # proportion). The longest sentence scrolls sideways and is whole in the copy.
     "nat_details": 56,
+    # Port scan: a port's usual service ("Node.js, Grafana" the longest) and what it
+    # answered beside its state (a reply's size, an error number).
+    "service": 16,
+    "scan_detail": 20,
 }
 
 # How many rows a table shows before it scrolls: the connection table's 18. The

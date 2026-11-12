@@ -67,7 +67,9 @@ tester que lo necesite.
 - **Modo de línea de comandos** - automatizable para CI, con códigos de salida y salida JSON.
 - **Sin telemetría, no envía nada por su cuenta** - la herramienta Ping solo hace ping a la
   dirección que se escribe, y NAT and STUN envía unas pocas solicitudes a los dos servidores que se
-  escriben y pequeños paquetes de prueba a la propia dirección pública de esta red, al pulsar Start.
+  escriben y pequeños paquetes de prueba a la propia dirección pública de esta red, al pulsar Start,
+  y Port scan se conecta a los puertos que se eligen en la dirección que se escribe, de Scan
+  hasta el final o Stop.
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester adding lag and packet loss to a live ping" width="820">
@@ -228,12 +230,14 @@ está, vuelve al centro de la pantalla actual.
   límite fijo de 400 filas ha desaparecido: cuántas se muestran se define en el campo **"Row limit"**
   (sección *Tables*, 0 = sin límite, 50 000 por defecto).
 - **Tools** - pequeñas utilidades para las preguntas que surgen antes o durante una prueba, en
-  tres grupos de subpestañas: **Network** (Ping, NAT and STUN), **This computer** (Sockets, TCP
-  health, Port check, Adapters) y **This program** (Filter tester, Diagnostics). Solo **Ping** y
-  **NAT and STUN** envían algo por la red en esta pestaña: Ping envía solicitudes de eco a la
-  dirección que se escribe, de Start a Stop, y NAT and STUN envía unas pocas solicitudes a los
-  dos servidores que se escriben y pequeños paquetes de prueba a la propia dirección pública de
-  esta red, al pulsar Start. Hoy:
+  tres grupos de subpestañas: **Network** (Ping, NAT and STUN, Port scan), **This computer**
+  (Sockets, TCP health, Port check, Adapters) y **This program** (Filter tester, Diagnostics).
+  Solo **Ping**, **NAT and STUN** y **Port scan** envían algo por la red en esta pestaña: Ping
+  envía solicitudes de eco a la dirección que se escribe, de Start a Stop, NAT and STUN envía
+  unas pocas solicitudes a los dos servidores que se escriben y pequeños paquetes de prueba a la
+  propia dirección pública de esta red, al pulsar Start, y Port scan se conecta a los puertos que
+  se eligen en la dirección que se escribe, de Scan hasta el final o Stop. Solo se deben escanear
+  equipos que se tenga permiso para probar. Hoy:
   - **Sockets** - todos los sockets TCP y UDP de este equipo, como `netstat -ano`, sin necesidad de
     sesión: qué está escuchando, qué está conectado, su estado (LISTEN, ESTABLISHED, TIME_WAIT...) y
     el programa que lo posee. Sirve para ver en qué puerto escucha la aplicación antes de
@@ -1875,14 +1879,16 @@ la licencia del proyecto restringe los derechos que se derivan de ellas.
 
 Bean Network Tester **no envía nada por su cuenta**. No tiene telemetría, ni comprobación de
 actualizaciones, ni servicios externos. La herramienta captura tráfico de red en su equipo, y esos
-datos **nunca salen de él**. Solo salen tres cosas, y solo cuando se piden. Una es una página
+datos **nunca salen de él**. Solo salen cuatro cosas, y solo cuando se piden. Una es una página
 abierta en el navegador (la página de apoyo o la página del proyecto en GitHub), cuando se hace clic
 por cuenta propia en el botón correspondiente. Otra son las solicitudes de eco de la herramienta
 **Ping** de la pestaña Tools, que van solo a la dirección que se escribe, de Start a Stop. La tercera
 es lo que envía la herramienta **NAT and STUN** de la misma pestaña al pulsar Start: unas pocas
 solicitudes a los dos servidores que se escriben y pequeños paquetes de prueba a la propia dirección
-pública de esta red. Si se escribe un nombre
-en lugar de una dirección, Windows lo busca primero, como para cualquier programa.
+pública de esta red. La cuarta es la herramienta **Port scan** de la misma pestaña: una conexión
+TCP o un datagrama UDP a cada puerto que se elige, y otra vez a un puerto que no respondió y se
+vuelve a preguntar, en la dirección que se escribe, de Scan hasta el final o Stop. Si se escribe un
+nombre en lugar de una dirección, Windows lo busca primero, como para cualquier programa.
 
 ## Una nota sobre SmartScreen y el antivirus
 

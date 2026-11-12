@@ -566,9 +566,8 @@ def test_adapter_names_are_read_only_when_a_row_needs_one(monkeypatch):
 
 def test_whether_windows_logs_every_bind_is_true_false_or_unknown():
     """``winenv.binds_audited``, the port check's question before a check of thousands
-    of ports. Its real reads were MEASURED 2026-11-11 on the Server VM (the policy
-    switched both ways with auditpol, internal_tools/sondy/2026-11-11-ports-full-scan/
-    vm_audit_query.py); here the system is stood in for, bit by bit."""
+    of ports. Its real reads were MEASURED 2026-11-11 on a Windows Server VM, with the
+    policy switched both ways by auditpol; here the system is stood in for, bit by bit."""
     from beantester import winenv
     for info, want in ((0, False), (1, True), (2, False), (3, True), (None, None)):
         asked = []

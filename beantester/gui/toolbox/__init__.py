@@ -45,6 +45,7 @@ from .exprtest import ExprTestPanel
 from .nat import NatPanel
 from .ping import PingPanel
 from .portcheck import PortCheckPanel
+from .portscan import PortScanPanel
 from .sockets import SocketsPanel
 from .tcphealth import TcpHealthPanel
 
@@ -83,6 +84,10 @@ TOOLS = (
     Tool(PingPanel.ID, PingPanel.LABEL, PingPanel, NETWORK, sends=True, needs="ping"),
     # Plain UDP and TCP sockets, which every system gives without rights: needs nothing.
     Tool(NatPanel.ID, NatPanel.LABEL, NatPanel, NETWORK, sends=True),
+    # Plain TCP and UDP sockets too (2026-11-12): needs nothing. With administrator
+    # rights on Windows its UDP half also reads a sniff-only WinDivert handle, and does
+    # without it otherwise - so that is not a need either.
+    Tool(PortScanPanel.ID, PortScanPanel.LABEL, PortScanPanel, NETWORK, sends=True),
     Tool(SocketsPanel.ID, SocketsPanel.LABEL, SocketsPanel, COMPUTER),
     Tool(TcpHealthPanel.ID, TcpHealthPanel.LABEL, TcpHealthPanel, COMPUTER,
          needs="tcp_health"),

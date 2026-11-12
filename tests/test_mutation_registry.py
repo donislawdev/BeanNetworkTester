@@ -3592,8 +3592,8 @@ MUTATIONS = [
         # guard below it would go quiet while the reworded promise stood unchecked.
         "label": "toolbox promise: the README sentence is reworded behind the check",
         "file": "README.md",
-        "old": "  requests to the two servers you type and small test packets to this network's own public\n",
-        "new": "  requests to any servers you type and small test packets to this network's own public\n",
+        "old": "  own public address, when you press Start, and Port scan connects to the ports you choose on\n",
+        "new": "  own public address, when you press Start, and Port scan connects to any ports it likes on\n",
         "test": "test_the_tools_tab_promise_holds_for_everything_its_code_can_send",
     },
     {
@@ -4753,6 +4753,31 @@ MUTATIONS = [
         "old": "        if s.change == sockets.CLOSED:\n            continue",
         "new": "        if False:\n            continue",
         "test": "test_a_socket_gone_since_the_last_read_holds_nothing",
+    },
+    {
+        # The Tools tab's promise for the Port scan: the typed address and no other.
+        "label": "portscan: the scan connects somewhere other than the typed address",
+        "file": "beantester/nettools/portscan.py",
+        "old": "                code = sock.connect_ex(sockaddr(self.address, port))",
+        "new": "                code = sock.connect_ex(sockaddr(\"127.0.0.2\", port))",
+        "test": "test_a_scan_connects_only_to_the_address_typed",
+    },
+    {
+        # Behind a router every silent port holds an entry in its connection table:
+        # the owner's pace (2026-11-11) is at most 20 new a second.
+        "label": "portscan: a scan behind a router is not held to its rate",
+        "file": "beantester/nettools/portscan.py",
+        "old": "        return not self.per_second or now >= self.next_at()",
+        "new": "        return True",
+        "test": "test_behind_a_router_no_more_than_the_pace_allows",
+    },
+    {
+        # A scan's worker outlives the window: closing it must stop the sending.
+        "label": "portscan: closing the window leaves the scan running",
+        "file": "beantester/gui/toolbox/portscan.py",
+        "old": "    if progress is not None:\n        progress.stop()",
+        "new": "    if False:\n        progress.stop()",
+        "test": "test_closing_the_window_stops_a_running_scan",
     },
     {
         # MEASURED 2026-11-03: Linux lists a dual-stack server once, under IPv6.

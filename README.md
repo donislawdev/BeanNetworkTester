@@ -61,8 +61,10 @@ exists.
 - **Export to CSV** - session statistics and a snapshot of the connections table.
 - **Command-line mode** - scriptable for CI, with exit codes and JSON output.
 - **No telemetry, nothing sent on its own** - the Ping tool pings only the address you type,
-  from Start to Stop, and the NAT and STUN tool sends a few requests to the two servers you type
-  and small test packets to this network's own public address, when you press Start.
+  from Start to Stop, the NAT and STUN tool sends a few requests to the two servers you type
+  and small test packets to this network's own public address, when you press Start, and the
+  Port scan tool connects to the ports you choose on the address you type, from Scan to the end
+  or Stop.
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester adding lag and packet loss to a live ping" width="820">
@@ -352,12 +354,13 @@ monitor is gone it returns to the centre of the current screen.
   many to show is set with the **"Row limit"** field (*Tables* section, 0 = no limit, default
   50 000).
 - **Tools** - small helpers for questions you have before or during a test, in three groups of
-  sub-tabs: **Network** (Ping, NAT and STUN), **This computer** (Sockets, TCP health, Port
-  check, Adapters) and **This program** (Filter tester, Diagnostics).
-  Only **Ping** and **NAT and STUN** on this tab send anything over the network: Ping sends
-  echo requests to the address you type, from Start to Stop, and NAT and STUN sends a few
-  requests to the two servers you type and small test packets to this network's own public
-  address, when you press Start. Today:
+  sub-tabs: **Network** (Ping, NAT and STUN, Port scan), **This computer** (Sockets, TCP
+  health, Port check, Adapters) and **This program** (Filter tester, Diagnostics).
+  Only **Ping**, **NAT and STUN** and **Port scan** on this tab send anything over the
+  network: Ping sends echo requests to the address you type, from Start to Stop, NAT and STUN
+  sends a few requests to the two servers you type and small test packets to this network's
+  own public address, when you press Start, and Port scan connects to the ports you choose on
+  the address you type, from Scan to the end or Stop. Today:
   - **Ping** - does the session's latency and loss really reach the traffic? Type an IP
     address or a host name, choose how often to ping, how long to wait for a reply, how
     many bytes of data each ping carries (**Size**, 32 like ping.exe, up to 65 500) and how
@@ -414,6 +417,27 @@ monitor is gone it returns to the centre of the current screen.
     **"Copy results"** copies the table in English - with this network's public address in it.
     Right-click a row for **"Copy public address"**, which copies the address alone (without
     the port, which belonged to a socket of the test), and **"Copy row"**.
+  - **Port scan** - which ports of another computer answer? Type its address or name and the
+    ports, the way you type ports on the Control page, or fill them in with **Common ports**
+    (common services and development servers), **Ports 1-1024** or **All ports**. Tick
+    **TCP**, **UDP** or both and press **Scan**. Each port is marked **Open**, **Closed**, **No
+    answer** (on TCP usually a firewall), **Cannot be reached** or **Not allowed here**, with
+    the service the port usually carries. Ports next to each other with the same answer are
+    one row, and a line above the table says what the result means. For each port the tool
+    makes a TCP connection that it closes at once with nothing sent on it, or sends a UDP
+    datagram: a real request for DNS, NTP, NetBIOS, mDNS and SSDP, an empty one for any other
+    port. On UDP, **Open** means a service replied, and no answer can mean open, closed or
+    blocked. A computer in a network this one is attached to is asked 256 ports at a time,
+    with 1 s for each. One behind a router is asked 32 at a time, at most 20 new a second,
+    with 3 s for each, so the router's table of connections does not fill up. A scan that can
+    take more than five minutes asks first, and **Stop** ends it early with the ports it asked.
+    When only a few ports gave no answer and the rest did, those few are asked once more,
+    slower, with a second connection or datagram.
+    On Windows a closed UDP port reads **Closed** only when the program runs as
+    administrator: the firewall keeps that message from programs, and the tool then reads it
+    from a copy of the network traffic. Scan only computers you are allowed to test.
+    **Copy results** copies the table in English, and **Save CSV** writes the rows to a file
+    (see "CSV exports" below).
   - **Sockets** - every TCP and UDP socket on this computer, like `netstat -ano`, and no
     session is needed: what is listening, what is connected, its state (LISTEN,
     ESTABLISHED, TIME_WAIT...) and the program that owns it. Use it to see which port your
@@ -482,8 +506,9 @@ monitor is gone it returns to the centre of the current screen.
     comes from the same table as **Sockets**. On a Windows that writes every permitted
     connection to its Security log (an audit setting some organisations turn on), the check
     adds an entry there for each port, protocol and IP version it checks, so the tool asks
-    before a check that would add thousands of entries when it runs as administrator and
-    can see that setting. Right-click a row to
+    before a check that would add thousands of entries: as administrator when it sees that
+    setting on, and without administrator rights always, because it cannot see the setting
+    then. Right-click a row to
     target the program that holds the port or leave it alone. **Save CSV** writes the
     rows on screen to a file (see "CSV exports" below).
   - **Adapters** - every network adapter on this computer and the settings a test depends
@@ -1472,7 +1497,9 @@ byte-order mark, and the rows as the table shows them - its search, its **Show**
 order. Nothing is read again for it: the file holds the rows on screen. Its columns are listed in
 "Sockets CSV columns" below. **Save CSV** on **Tools > Port check** writes
 `bean_network_tester_ports.csv` the same way, with the rows as the table shows them - **Hide free
-ports** and the order included. Its columns are in "Port check CSV columns" below.
+ports** and the order included. Its columns are in "Port check CSV columns" below. **Save CSV**
+on **Tools > Port scan** writes `bean_network_tester_port_scan.csv` the same way, the rows in the
+table's order. Its columns are in "Port scan CSV columns" below.
 
 The statistics CSV does not follow the "show only the targeted traffic" switch because it is an
 append log: a file whose columns mean one thing in some rows and another in the rest is worse than
@@ -1568,6 +1595,22 @@ same result are one row. Words are the program's own, the same in every language
 | `holders` | the programs that hold the port, as `name (pid)`, separated by `;` |
 | `listens_on` | the addresses the holders wait for connections on, as the system lists them (`0.0.0.0` and `::` are every network). `connection` when only connections hold the port, empty when nothing does |
 | `checked_at` | when the check ran, `YYYY-MM-DD HH:MM:SS` in this computer's time zone |
+
+### Port scan CSV columns
+
+The rows of **Tools > Port scan**, one per row of the table: ports next to each other with the
+same answer are one row. Words are the program's own, the same in every language of the window.
+
+| CSV column | meaning |
+|---|---|
+| `address` | the address that was scanned |
+| `first_port`, `last_port` | the ports the row stands for: the same number for a single port |
+| `proto` | `TCP` or `UDP` |
+| `state` | `open`, `closed`, `silent` (no answer), `unreachable` (cannot be reached), `denied` (not allowed here) or `failed` (error) |
+| `code` | the system's error number for the answer (`10061`, `111`, `10013`...), `0` for a connection, a reply, no answer, or a closed UDP port seen in the network traffic |
+| `service` | the service the port usually carries, from the tool's own list - a name, not something the scan checked |
+| `reply_bytes` | UDP: the size of the reply, `0` otherwise |
+| `scanned_at` | when the scan started, `YYYY-MM-DD HH:MM:SS` in this computer's time zone |
 
 ## Scenario file format
 
@@ -2200,13 +2243,15 @@ rights arising from them.
 
 Bean Network Tester **sends nothing on its own**. It has no telemetry, no update checks and no
 external services. The tool captures network traffic on your computer - and that data **never leaves
-it**. Three things go out, and only when you ask for them. One is a page opened in your browser - the
+it**. Four things go out, and only when you ask for them. One is a page opened in your browser - the
 support page or the project's page on GitHub - when you click the button for it yourself. Another is
 the echo requests of the **Ping** tool on the Tools tab, which go only to the address you type, from
 Start to Stop. The third is what the **NAT and STUN** tool on the same tab sends when you press Start:
 a few requests to the two servers you type and small test packets to this network's own public
-address. When you type a name instead of an address, Windows looks it up first, the way it does for
-any program.
+address. The fourth is the **Port scan** tool on the same tab: a TCP connection or a UDP datagram
+to each port you choose, and once more to a port that gave no answer and is asked again, on the
+address you type, from Scan to the end or Stop. When you type a name instead of an address, Windows
+looks it up first, the way it does for any program.
 
 ## A note on SmartScreen and antivirus
 

@@ -103,21 +103,27 @@ REPORT_PARTS = {"none": "no session", "start": "session running", "change": "cha
                 "scenario": "scenario step", "stop": "session stopped"}
 
 
+# Where the reading of an address says why it refuses one: ``<prefix>empty``,
+# ``bad_address``, ``bad_name``, ``not_one`` and ``not_found``. Ping's by default;
+# the Port scan reads an address the same way and refuses it in its own words.
+REFUSALS = "tools.ping.refused."
+
+
 class Target(NamedTuple):
     typed: str              # what the person typed, without the spaces around it
     name: str               # the name to look up (IDNA, ASCII); "" for an address
     address: str = ""       # what is pinged: given, or what the lookup answered
 
 
-def _one_address(address, typed):
+def _one_address(address, typed, refusals=REFUSALS):
     if address.is_unspecified or address.is_multicast or (
             address.version == 4 and address == ipaddress.IPv4Address("255.255.255.255")):
-        raise Refused("tools.ping.refused.not_one", typed=typed)
+        raise Refused(f"{refusals}not_one", typed=typed)
     scope = getattr(address, "scope_id", None)
     if scope is not None and not scope.isdigit() and not _interface(scope):
         # Windows numbers its zones (fe80::1%12); a name there would be pinged nowhere.
         # Linux names them too (fe80::1%eth0) - taken when an interface has that name.
-        raise Refused("tools.ping.refused.bad_address", typed=typed)
+        raise Refused(f"{refusals}bad_address", typed=typed)
 
 
 def _interface(name):
@@ -125,29 +131,29 @@ def _interface(name):
     return sys.platform.startswith("linux") and icmpsock.zone_index(name) is not None
 
 
-def parse(text):
+def parse(text, refusals=REFUSALS):
     """What was typed, as a Target - or ``Refused`` saying why it is not one. UI thread:
     nothing here is slow and nothing is sent."""
     typed = (text or "").strip()
     if not typed:
-        raise Refused("tools.ping.refused.empty")
+        raise Refused(f"{refusals}empty")
     try:
         address = ipaddress.ip_address(typed)
     except ValueError:
         address = None
     if address is not None:
-        _one_address(address, typed)
+        _one_address(address, typed, refusals)
         return Target(typed, "", str(address))
     name = typed[:-1] if typed.endswith(".") else typed
     if ":" in name or "%" in name or _NUMERIC.match(name.rsplit(".", 1)[-1]):
-        raise Refused("tools.ping.refused.bad_address", typed=typed)
+        raise Refused(f"{refusals}bad_address", typed=typed)
     try:
         ascii_name = name.encode("idna").decode("ascii").lower()
     except UnicodeError:
-        raise Refused("tools.ping.refused.bad_name", typed=typed) from None
+        raise Refused(f"{refusals}bad_name", typed=typed) from None
     if len(ascii_name) > MAX_NAME or not all(_LABEL.match(label)
                                              for label in ascii_name.split(".")):
-        raise Refused("tools.ping.refused.bad_name", typed=typed)
+        raise Refused(f"{refusals}bad_name", typed=typed)
     return Target(typed, ascii_name)
 
 
@@ -164,7 +170,7 @@ def _lookup(name):
     return socket.getaddrinfo(name, None)
 
 
-def resolve(target, lookup=None):
+def resolve(target, lookup=None, refusals=REFUSALS):
     """The Target with the address to ping: the name looked up, the first answer in
     the order the system gives. On a worker - a lookup can take seconds."""
     if target.address:
@@ -172,7 +178,7 @@ def resolve(target, lookup=None):
     try:
         answers = (lookup or _lookup)(target.name)
     except (OSError, UnicodeError):
-        raise Refused("tools.ping.refused.not_found", name=target.typed) from None
+        raise Refused(f"{refusals}not_found", name=target.typed) from None
     for family, _kind, _proto, _canonical, where in answers:
         if family == socket.AF_INET:
             return target._replace(address=str(ipaddress.IPv4Address(where[0])))
@@ -182,7 +188,7 @@ def resolve(target, lookup=None):
             if scope and address.scope_id is None:
                 address = ipaddress.IPv6Address(f"{address}%{scope}")
             return target._replace(address=str(address))
-    raise Refused("tools.ping.refused.not_found", name=target.typed)
+    raise Refused(f"{refusals}not_found", name=target.typed)
 
 
 def send(target, wait_s, system=None, size=DEFAULT_SIZE):

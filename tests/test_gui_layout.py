@@ -654,11 +654,12 @@ def test_every_question_mark_opens_its_own_sheet():
         from beantester.gui.toolbox import adapters as adapters_panel
         from beantester.gui.toolbox import diagnostics as diagnostics_panel, ping as ping_panel
         from beantester.gui.toolbox import nat as nat_panel, tcphealth as tcphealth_panel
+        from beantester.gui.toolbox import portscan as portscan_panel
         # The tools with one whole sheet per system: Linux has its own.
         per_system = {"adapters": adapters_panel, "tcphealth": tcphealth_panel}
         # The sheets composed of paragraphs (some with one about this system).
         composed = {"diagnostics": diagnostics_panel.help_keys, "ping": ping_panel.help_keys,
-                    "nat": nat_panel.help_keys}
+                    "nat": nat_panel.help_keys, "portscan": portscan_panel.help_keys}
         for tool in TOOLS:               # every panel carries one "?" (the skeleton)
             [button] = helps_in(tools.panels[tool.id].frame)
             body = f"tools.{tool.id}.help_body"

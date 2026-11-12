@@ -17,8 +17,8 @@ import time
 from .. import crashlog
 from ..i18n import T
 from ..nettools.sockets import CLOSED
-from ..paths import (CONNECTIONS_CSV_FILE, CSV_FILE, PORTS_CSV_FILE, SOCKETS_CSV_FILE, hand_back,
-                     write_atomically)
+from ..paths import (CONNECTIONS_CSV_FILE, CSV_FILE, PORT_SCAN_CSV_FILE, PORTS_CSV_FILE,
+                     SOCKETS_CSV_FILE, hand_back, write_atomically)
 from ..views import (avg_packet_bytes, connection_proc, filter_sort_connections,
                      scoped_packets)
 
@@ -388,3 +388,42 @@ def _write_ports(app, rows, checked_at):
         app.log(f"{T('log.csv_error')}: {e}")
     finally:
         _PORTS_LOCK.release()
+
+
+# The port scan (Tools > Port scan), one row per row of its table, folded the same
+# way. `state` is the program's own word (open, closed, silent, unreachable, denied,
+# failed), `code` the system's error number (0 for an answer, or for silence),
+# `reply_bytes` the size of a UDP reply, `service` the port's usual service from the
+# tool's own table - a name, not something the scan checked.
+PORT_SCAN_CSV_HEADER = ["address", "first_port", "last_port", "proto", "state", "code",
+                        "service", "reply_bytes", "scanned_at"]
+_SCAN_LOCK = threading.Lock()
+
+
+def export_scan(app, rows, address, scanned_at):
+    """Write the port scan's rows - as the window shows them, in its order - to their
+    CSV, overwritten each time. ``address`` is the one the scan asked. Returns the
+    worker, or None when an export was already running."""
+    return _start(app, _SCAN_LOCK, _write_scan, (app, list(rows), address, scanned_at),
+                  "port-scan-csv")
+
+
+def _scan_cells(row, address, scanned_at):
+    """One row's cells, in ``PORT_SCAN_CSV_HEADER`` order."""
+    return [formula_safe(v) for v in (
+        address, row.port, row.last, row.proto, row.state, row.code, row.service, row.reply,
+        _stamp(scanned_at))]
+
+
+def _write_scan(app, rows, address, scanned_at):
+    """Worker thread: the same write as the other exports, its own file and lock."""
+    path = PORT_SCAN_CSV_FILE
+    try:
+        _replace_csv(path, PORT_SCAN_CSV_HEADER,
+                     (_scan_cells(r, address, scanned_at) for r in rows))
+        app.log(f"{T('log.port_scan_saved_to')} {path} ({len(rows)})")
+    except Exception as e:
+        crashlog.note(e, "gui.csv_export")
+        app.log(f"{T('log.csv_error')}: {e}")
+    finally:
+        _SCAN_LOCK.release()

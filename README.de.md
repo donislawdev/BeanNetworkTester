@@ -67,7 +67,9 @@ der es braucht, dass es existiert.
 - **Befehlszeilenmodus** - skriptfähig für CI, mit Exit-Codes und JSON-Ausgabe.
 - **Keine Telemetrie, sendet nichts von sich aus** - das Werkzeug Ping pingt nur die Adresse, die
   Sie eingeben, und NAT and STUN sendet einige Anfragen an die beiden Server, die Sie eingeben, und
-  kleine Testpakete an die eigene öffentliche Adresse dieses Netzwerks, wenn Sie Start drücken.
+  kleine Testpakete an die eigene öffentliche Adresse dieses Netzwerks, wenn Sie Start drücken,
+  und Port scan verbindet sich mit den Ports, die Sie wählen, unter der Adresse, die Sie
+  eingeben, von Scan bis zum Ende oder Stop.
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester fügt einem laufenden Ping Verzögerung und Paketverlust hinzu" width="820">
@@ -231,12 +233,14 @@ zurück.
   Grenze von 400 Zeilen ist weg - wie viele angezeigt werden, legt das Feld **"Row limit"** fest
   (Bereich *Tables*, 0 = keine Grenze, Standard 50 000).
 - **Tools** - kleine Helfer für Fragen, die Sie vor oder während eines Tests haben, in drei
-  Gruppen von Untertabs: **Network** (Ping, NAT and STUN), **This computer** (Sockets, TCP
-  health, Port check, Adapters) und **This program** (Filter tester, Diagnostics).
-  Nur **Ping** und **NAT and STUN** auf diesem Tab senden etwas über das Netzwerk: Ping sendet
-  Echo-Anfragen an die Adresse, die Sie eingeben, von Start bis Stop, und NAT and STUN sendet
-  einige Anfragen an die beiden Server, die Sie eingeben, und kleine Testpakete an die eigene
-  öffentliche Adresse dieses Netzwerks, wenn Sie Start drücken. Derzeit:
+  Gruppen von Untertabs: **Network** (Ping, NAT and STUN, Port scan), **This computer**
+  (Sockets, TCP health, Port check, Adapters) und **This program** (Filter tester,
+  Diagnostics). Nur **Ping**, **NAT and STUN** und **Port scan** auf diesem Tab senden etwas
+  über das Netzwerk: Ping sendet Echo-Anfragen an die Adresse, die Sie eingeben, von Start bis
+  Stop, NAT and STUN sendet einige Anfragen an die beiden Server, die Sie eingeben, und kleine
+  Testpakete an die eigene öffentliche Adresse dieses Netzwerks, wenn Sie Start drücken, und
+  Port scan verbindet sich mit den Ports, die Sie wählen, unter der Adresse, die Sie eingeben,
+  von Scan bis zum Ende oder Stop. Scannen Sie nur Computer, die Sie testen dürfen. Derzeit:
   - **Sockets** - jeder TCP- und UDP-Socket auf diesem Computer, wie `netstat -ano`, und es ist
     keine Sitzung nötig: was lauscht, was verbunden ist, sein Zustand (LISTEN,
     ESTABLISHED, TIME_WAIT ...) und das Programm, dem er gehört. Damit sehen Sie, auf welchem Port
@@ -1925,14 +1929,17 @@ Projekts schränkt die Rechte ein, die sich aus ihnen ergeben.
 
 Bean Network Tester **sendet nichts von sich aus**. Es hat keine Telemetrie, keine Update-Prüfungen
 und keine externen Dienste. Das Werkzeug erfasst Netzwerkverkehr auf Ihrem Computer - und diese
-Daten **verlassen ihn nie**. Drei Dinge gehen nur hinaus, wenn Sie darum bitten. Das eine ist eine
+Daten **verlassen ihn nie**. Vier Dinge gehen nur hinaus, wenn Sie darum bitten. Das eine ist eine
 Seite, die in Ihrem Browser geöffnet wird - die Unterstützungsseite oder die Seite des Projekts auf
 GitHub -, wenn Sie selbst auf die entsprechende Schaltfläche klicken. Das zweite sind die
 Echo-Anfragen des Werkzeugs **Ping** auf dem Tab Tools, die nur an die Adresse gehen, die Sie
 eingeben, von Start bis Stop. Das dritte ist, was das Werkzeug **NAT and STUN** auf demselben Tab
 sendet, wenn Sie Start drücken: einige Anfragen an die beiden Server, die Sie eingeben, und kleine
-Testpakete an die eigene öffentliche Adresse dieses Netzwerks. Wenn Sie statt
-einer Adresse einen Namen eingeben, schlägt Windows ihn zuerst nach, wie für jedes Programm.
+Testpakete an die eigene öffentliche Adresse dieses Netzwerks. Das vierte ist das Werkzeug
+**Port scan** auf demselben Tab: eine TCP-Verbindung oder ein UDP-Datagramm an jeden Port, den
+Sie wählen, und noch einmal an einen Port, der keine Antwort gab und erneut gefragt wird, unter
+der Adresse, die Sie eingeben, von Scan bis zum Ende oder Stop. Wenn Sie statt einer Adresse einen
+Namen eingeben, schlägt Windows ihn zuerst nach, wie für jedes Programm.
 
 ## Ein Hinweis zu SmartScreen und Antivirenprogrammen
 

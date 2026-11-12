@@ -63,7 +63,9 @@ dele fica sabendo que existe.
 - **Modo de linha de comando** - automatizável em CI, com códigos de saída e saída em JSON.
 - **Sem telemetria, não envia nada por conta própria** - a ferramenta Ping só faz ping no
   endereço que você digita, e o NAT and STUN envia algumas solicitações aos dois servidores que você
-  digita e pequenos pacotes de teste para o próprio endereço público desta rede, ao apertar Start.
+  digita e pequenos pacotes de teste para o próprio endereço público desta rede, ao apertar Start,
+  e o Port scan se conecta às portas que você escolhe no endereço que você digita, de Scan até o
+  fim ou Stop.
 
 <p align="center">
   <img src="docs/demo.gif" alt="O Bean Network Tester adicionando lag e perda de pacotes a um ping ao vivo" width="820">
@@ -223,12 +225,14 @@ para o centro da tela atual.
   linhas acabou - quantas mostrar é definido no campo **"Row limit"** (seção *Tables*, 0 = sem
   limite, padrão 50 000).
 - **Tools** - pequenos auxiliares para dúvidas que surgem antes ou durante um teste, em três grupos
-  de subabas: **Network** (Ping, NAT and STUN), **This computer** (Sockets, TCP health, Port
-  check, Adapters) e **This program** (Filter tester, Diagnostics). Só o **Ping** e o
-  **NAT and STUN** enviam algo pela rede nesta aba: o Ping envia solicitações de eco para o
-  endereço que você digita, de Start a Stop, e o NAT and STUN envia algumas solicitações aos dois
-  servidores que você digita e pequenos pacotes de teste para o próprio endereço público desta
-  rede, ao apertar Start. Hoje:
+  de subabas: **Network** (Ping, NAT and STUN, Port scan), **This computer** (Sockets, TCP health,
+  Port check, Adapters) e **This program** (Filter tester, Diagnostics). Só o **Ping**, o
+  **NAT and STUN** e o **Port scan** enviam algo pela rede nesta aba: o Ping envia solicitações
+  de eco para o endereço que você digita, de Start a Stop, o NAT and STUN envia algumas
+  solicitações aos dois servidores que você digita e pequenos pacotes de teste para o próprio
+  endereço público desta rede, ao apertar Start, e o Port scan se conecta às portas que você
+  escolhe no endereço que você digita, de Scan até o fim ou Stop. Escaneie só computadores que
+  você tem permissão para testar. Hoje:
   - **Sockets** - todos os sockets TCP e UDP deste computador, como o `netstat -ano`, e sem
     precisar de sessão: o que está escutando, o que está conectado, o estado (LISTEN,
     ESTABLISHED, TIME_WAIT...) e o programa dono. Use para ver em qual porta o seu aplicativo
@@ -1848,13 +1852,16 @@ direitos que decorrem delas.
 
 O Bean Network Tester **não envia nada por conta própria**. Não tem telemetria, nem verificação de
 atualizações, nem serviços externos. A ferramenta captura o tráfego de rede no seu computador - e
-esses dados **nunca saem dele**. Só três coisas saem, e só quando você pede. Uma é uma página
+esses dados **nunca saem dele**. Só quatro coisas saem, e só quando você pede. Uma é uma página
 aberta no seu navegador - a página de apoio ou a página do projeto no GitHub - quando você mesmo
 clica no botão correspondente. Outra são as solicitações de eco da ferramenta **Ping** da aba Tools,
 que vão só para o endereço que você digita, de Start a Stop. A terceira é o que a ferramenta
 **NAT and STUN** da mesma aba envia ao apertar Start: algumas solicitações aos dois servidores que
-você digita e pequenos pacotes de teste para o próprio endereço público desta rede. Se você digitar um nome em vez de um endereço, o Windows
-o consulta primeiro, como para qualquer programa.
+você digita e pequenos pacotes de teste para o próprio endereço público desta rede. A quarta é a ferramenta **Port scan** da mesma aba: uma
+conexão TCP ou um datagrama UDP para cada porta que você escolhe, e uma segunda vez para uma porta
+sem resposta que é consultada de novo, no endereço que você digita, de Scan até o fim ou Stop. Se
+você digitar um nome em vez de um endereço, o Windows o consulta primeiro, como para qualquer
+programa.
 
 ## Uma observação sobre o SmartScreen e o antivírus
 

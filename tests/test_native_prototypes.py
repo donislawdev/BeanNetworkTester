@@ -35,6 +35,7 @@ import os
 import re
 
 from beantester import adapters, driver, icmp, proxy, tcpestats, tcpreset, winenv
+from beantester.nettools import portscan
 from fakes import ROOT, check
 
 # Factories that hand out a prepared binding. `driver._advapi` is here as well as
@@ -45,11 +46,13 @@ from fakes import ROOT, check
 # (2026-10-14): two reads that fill a structure of pointers, and GlobalFree.
 # `tcpreset._iphlpapi` is "Reset this connection" (2026-10-14): one call, a pointer
 # to MIB_TCPROW. `tcpestats._iphlpapi` is TCP health (2026-10-19): four calls, each
-# a pointer to a row and pointers to the buffers they fill.
+# a pointer to a row and pointers to the buffers they fill. `portscan._ws2_32` is the
+# Port scan (2026-11-12): WSAIoctl, a SOCKET (pointer-sized) and pointers.
 FACTORIES = dict(winenv.NATIVE_FACTORIES, advapi32=driver._advapi,
                  iphlpapi=adapters._iphlpapi, winhttp=proxy._winhttp,
                  proxy_kernel32=proxy._kernel32, reset_iphlpapi=tcpreset._iphlpapi,
-                 estats_iphlpapi=tcpestats._iphlpapi, icmp_iphlpapi=icmp._iphlpapi)
+                 estats_iphlpapi=tcpestats._iphlpapi, icmp_iphlpapi=icmp._iphlpapi,
+                 scan_ws2_32=portscan._ws2_32)
 
 # The three do NOT fail the same way off Windows, and assuming they did is what
 # made the first version of this file red on the Linux runner and green here:
@@ -61,7 +64,7 @@ FACTORIES = dict(winenv.NATIVE_FACTORIES, advapi32=driver._advapi,
 # one property for all three.
 SELF_GUARDING = tuple(winenv.NATIVE_FACTORIES) + ("iphlpapi", "winhttp", "proxy_kernel32",
                                                   "reset_iphlpapi", "estats_iphlpapi",
-                                                  "icmp_iphlpapi")
+                                                  "icmp_iphlpapi", "scan_ws2_32")
 
 # Direct `ctypes.windll.<lib>.<Func>` uses that predate this guard, with the
 # reason each is harmless. Adding a line here is a decision, not a formality:
