@@ -31,7 +31,7 @@ Get-Process -Id 4321</code></pre>
   <p><strong>{{app.app.tabs.tools}}</strong> 탭은 콘솔 없이 같은 질문에 답합니다.</p>
   <ul>
     <li><strong>{{app.tools.sockets.tab}}</strong>은 컴퓨터의 모든 TCP·UDP 소켓을 <code>netstat -ano</code>처럼 보여 줍니다. 무엇이 듣고 있는지, 무엇이 연결되어 있는지, 상태와 소유 프로그램까지 알 수 있습니다. 세션은 필요 없습니다. <code>lport:8080</code>이나 <code>state:listen</code>으로 검색하세요.</li>
-    <li><strong>{{app.tools.portcheck.tab}}</strong>은 서버가 물었던 것을 그대로 묻습니다. 프로그램이 이 포트를 쓸 수 있는가? 8080, <code>80, 443</code> 같은 목록, 또는 <code>9000-9100</code> 같은 범위(최대 1000개)를 입력하고 <strong>{{app.tools.portcheck.check}}</strong>를 누르세요. 각 포트를 TCP와 UDP, IPv4와 IPv6로 시험해 <strong>{{app.tools.portcheck.verdict.free}}</strong>, <strong>{{app.tools.portcheck.verdict.in_use}}</strong>(프로그램과 PID 포함), <strong>{{app.tools.portcheck.verdict.reserved}}</strong> 중 하나로 표시합니다.</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong>은 서버가 물었던 것을 그대로 묻습니다. 프로그램이 이 포트를 쓸 수 있는가? 8080, <code>80, 443</code> 같은 목록, 또는 <code>9000-9100</code> 같은 범위를 입력하고 <strong>{{app.tools.portcheck.check}}</strong>를 누르세요. <strong>{{app.tools.portcheck.all}}</strong>은(는) 1부터 65535까지 모든 포트를 검사합니다. 각 포트를 TCP와 UDP, IPv4와 IPv6로 시험해 <strong>{{app.tools.portcheck.verdict.free}}</strong>, <strong>{{app.tools.portcheck.verdict.in_use}}</strong>(프로그램과 PID 포함), <strong>{{app.tools.portcheck.verdict.reserved}}</strong> 중 하나로 표시합니다.</li>
   </ul>
   <p>그래서 답이 예 아니면 아니요가 아니라 표로 나옵니다. Windows는 프로토콜별로 범위를 예약하고, IPv6에서 듣는 프로그램은 IPv4에서는 비어 있는 포트를 잡고 있을 수 있습니다.</p>
   <p>네트워크로는 아무것도 보내지 않습니다. 각 포트마다 컴퓨터 자신의 루프백 주소에서 Windows에 포트를 요청하고 곧바로 돌려줍니다.</p>

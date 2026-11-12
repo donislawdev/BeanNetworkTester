@@ -31,7 +31,7 @@ Get-Process -Id 4321</code></pre>
   <p><strong>{{app.app.tabs.tools}}</strong>タブなら、コンソールなしで同じことを調べられます。</p>
   <ul>
     <li><strong>{{app.tools.sockets.tab}}</strong>は、このコンピューター上のすべてのTCP・UDPソケットを <code>netstat -ano</code> のように一覧にします。待ち受け中のもの、接続中のもの、その状態、所有するプログラムが分かります。セッションは不要です。<code>lport:8080</code> や <code>state:listen</code> で検索できます。</li>
-    <li><strong>{{app.tools.portcheck.tab}}</strong>は、あなたのサーバーが尋ねたことをそのまま調べます。このポートをプログラムは使えるか。8080、<code>80, 443</code> のような一覧、<code>9000-9100</code> のような範囲（最大1000ポート）を入力して <strong>{{app.tools.portcheck.check}}</strong> を押します。各ポートをTCPとUDP、IPv4とIPv6で試し、<strong>{{app.tools.portcheck.verdict.free}}</strong>、<strong>{{app.tools.portcheck.verdict.in_use}}</strong>（プログラムとそのPID付き）、<strong>{{app.tools.portcheck.verdict.reserved}}</strong>のいずれかで示します。</li>
+    <li><strong>{{app.tools.portcheck.tab}}</strong>は、あなたのサーバーが尋ねたことをそのまま調べます。このポートをプログラムは使えるか。8080、<code>80, 443</code> のような一覧、<code>9000-9100</code> のような範囲を入力して <strong>{{app.tools.portcheck.check}}</strong> を押します。<strong>{{app.tools.portcheck.all}}</strong> は 1 から 65535 までのすべてのポートを調べます。各ポートをTCPとUDP、IPv4とIPv6で試し、<strong>{{app.tools.portcheck.verdict.free}}</strong>、<strong>{{app.tools.portcheck.verdict.in_use}}</strong>（プログラムとそのPID付き）、<strong>{{app.tools.portcheck.verdict.reserved}}</strong>のいずれかで示します。</li>
   </ul>
   <p>答えが「はい・いいえ」ではなく表になるのはそのためです。Windowsはプロトコルごとに範囲を予約しますし、IPv6で待ち受けるプログラムは、IPv4では空いているポートを握っていることがあります。</p>
   <p>ネットワークには何も送りません。各ポートについて、このコンピューター自身のループバックアドレスでWindowsにポートを求め、すぐに返します。</p>

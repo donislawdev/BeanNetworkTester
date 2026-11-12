@@ -248,8 +248,9 @@ zurück.
     Administratorrechte angezeigt.
   - **Port check** - kann Ihr Programm einen Port verwenden? Geben Sie einen Port, eine Liste oder
     einen Bereich ein, so wie Sie Ports auf der Seite Control eingeben (`8080`, `80, 443`,
-    `9000-9100`, bis zu 1000 auf einmal), und drücken Sie **Check** (oder Enter). Jeder Port wird
-    für TCP und UDP geprüft, unter IPv4 und IPv6, und als **Free**, **In use** (mit dem Programm,
+    `9000-9100`), und drücken Sie **Check** (oder Enter) - oder **All ports**, um jeden Port von 1
+    bis 65535 zu prüfen (**Stop** beendet das vorzeitig). Jeder Port wird
+    für die angehakten Protokolle und IP-Versionen geprüft (TCP und UDP, IPv4 und IPv6) und als **Free**, **In use** (mit dem Programm,
     das ihn belegt, und seiner PID) oder **Reserved by Windows** markiert - ein Bereich, den
     Windows beiseitegelegt hat, der übliche Grund, warum ein Server auf einem Port nicht startet,
     den scheinbar niemand nutzt. Die Bereiche gelten pro Protokoll, ein Port kann also für UDP

@@ -465,15 +465,27 @@ monitor is gone it returns to the centre of the current screen.
     receives has no measurements and one under a millisecond shows **< 1 ms**.
     **"Copy report"** copies every watched connection in English.
   - **Port check** - can your program use a port? Type one port, a list or a range, the
-    way you type ports on the Control page (`8080`, `80, 443`, `9000-9100`, up to 1000 at a
-    time), and press **Check** (or Enter). Each port is checked for TCP and UDP, on IPv4 and
-    IPv6, and marked **Free**, **In use** (with the program that holds it and its PID) or
-    **Reserved by Windows** - a range Windows set aside, the usual reason a server will not
-    start on a port nothing seems to use. The ranges are per protocol, so a port can be
-    free for UDP and not for TCP. For each port the tool asks the system on this
+    way you type ports on the Control page (`8080`, `80, 443`, `9000-9100`), and press
+    **Check** (or Enter), or press **All ports** to check every port from 1 to 65535. That
+    takes from a few seconds to about a minute. The status line says how far it is, and
+    **Stop** ends it early with the ports it reached. Each port is checked for the
+    protocols and IP versions ticked (TCP and UDP, IPv4 and IPv6), and marked **Free**,
+    **In use** (with the program that holds it and its PID) or **Reserved by Windows** - a
+    range Windows set aside, the usual reason a server will not start on a port nothing
+    seems to use. The ranges are per protocol, so a port can be free for UDP and not for
+    TCP. Ports next to each other with the same result are one row (`49152-49999`), and
+    **Hide free ports** hides the rows marked **Free** and keeps every other result,
+    **Unknown** included. **Listens on** says where the program that holds a port waits for
+    connections: all networks, this computer only, or one network adapter by name - not
+    whether a firewall lets anyone in. For each port the tool asks the system on this
     computer's own loopback address and gives the port back at once. Who holds a port
-    comes from the same table as **Sockets**. Right-click a row to target the program that
-    holds the port or leave it alone.
+    comes from the same table as **Sockets**. On a Windows that writes every permitted
+    connection to its Security log (an audit setting some organisations turn on), the check
+    adds an entry there for each port, protocol and IP version it checks, so the tool asks
+    before a check that would add thousands of entries when it runs as administrator and
+    can see that setting. Right-click a row to
+    target the program that holds the port or leave it alone. **Save CSV** writes the
+    rows on screen to a file (see "CSV exports" below).
   - **Adapters** - every network adapter on this computer and the settings a test depends
     on, the kind `ipconfig /all` prints (on Linux, `ip addr` and `ip route`). The adapter
     your internet traffic leaves through is at the top, then the ones that are up. Choose
@@ -1458,7 +1470,9 @@ variable.
 the way the connections export does: overwritten each time, written atomically, UTF-8 with no
 byte-order mark, and the rows as the table shows them - its search, its **Show** choice and its
 order. Nothing is read again for it: the file holds the rows on screen. Its columns are listed in
-"Sockets CSV columns" below.
+"Sockets CSV columns" below. **Save CSV** on **Tools > Port check** writes
+`bean_network_tester_ports.csv` the same way, with the rows as the table shows them - **Hide free
+ports** and the order included. Its columns are in "Port check CSV columns" below.
 
 The statistics CSV does not follow the "show only the targeted traffic" switch because it is an
 append log: a file whose columns mean one thing in some rows and another in the rest is worse than
@@ -1539,6 +1553,21 @@ computer's time zone.
 | `opened` | when the program opened the socket, as Windows records it. Empty on Linux, which does not record it |
 | `first_seen` | when the program first read the socket, if that was after the first read of the table, empty otherwise. On Linux this is the only time of opening there is |
 | `closed_at` | when the program found the socket closed, empty for one that is open |
+
+### Port check CSV columns
+
+The rows of **Tools > Port check**, one per row of the table: ports next to each other with the
+same result are one row. Words are the program's own, the same in every language of the window.
+
+| CSV column | meaning |
+|---|---|
+| `first_port`, `last_port` | the ports the row stands for: the same number for a single port |
+| `proto`, `ip_version` | `TCP` or `UDP`, `4` or `6` |
+| `verdict` | `free`, `in_use`, `unseen` (in use, owner not shown), `reserved` (by Windows), `denied` (not allowed for this account), `closing`, `failed` (not checked) or `unread` (unknown: the system did not list who holds ports there) |
+| `code` | what the system answered when the tool asked for the port: `0` when it could have it, otherwise the error number (`10013`, `10048`, `98`...) |
+| `holders` | the programs that hold the port, as `name (pid)`, separated by `;` |
+| `listens_on` | the addresses the holders wait for connections on, as the system lists them (`0.0.0.0` and `::` are every network). `connection` when only connections hold the port, empty when nothing does |
+| `checked_at` | when the check ran, `YYYY-MM-DD HH:MM:SS` in this computer's time zone |
 
 ## Scenario file format
 
@@ -1936,7 +1965,7 @@ beantester/              the implementation package
     rates.py             throughput averaging and the peak of each view (pure, testable)
     scope.py             what the numbers on screen cover (one pure verdict)
     crash.py             what the GUI tells the crash logger: report context, breadcrumb
-    csv_export.py        the two CSV exports and the column names they write
+    csv_export.py        the CSV exports and the column names they write
     session_repro.py     what the session ran with: the repro report and "Copy CLI command"
     applied.py           what "Apply changes" compares the form with (a pure helper)
     theme.py  chart.py  tooltip.py  profiles.py  icon.py  labels.py

@@ -220,6 +220,81 @@ def console():
     return _CONSOLE[0] or None  # pragma: no cover - Windows only (see above)
 
 
+_AUDIT = [None]
+# "Filtering Platform Connection", the audit subcategory behind Security event 5158,
+# "The Windows Filtering Platform has permitted a bind to a local port" (Learn,
+# "Audit Filtering Platform Connection"): {0CCE9226-69AE-11D9-BED3-505054503030}.
+FILTERING_PLATFORM_CONNECTION = (0x0CCE9226, 0x69AE, 0x11D9,
+                                 (0xBE, 0xD3, 0x50, 0x50, 0x54, 0x50, 0x30, 0x30))
+POLICY_AUDIT_EVENT_SUCCESS = 0x1
+
+
+def audit():
+    """advapi32's audit-policy query with full prototypes, or None off Windows. Cached."""
+    if _AUDIT[0] is not None:
+        return _AUDIT[0] or None
+    _AUDIT[0] = False
+    if not is_windows():
+        return None
+    with crashlog.quiet("winenv.audit"):  # pragma: no cover - Windows only (ctypes.wintypes)
+        import ctypes
+        from ctypes import wintypes
+
+        lib = ctypes.WinDLL("advapi32", use_last_error=True)
+        # BOOLEAN AuditQuerySystemPolicy(const GUID*, ULONG, PAUDIT_POLICY_INFORMATION*):
+        # the system allocates the answer and AuditFree gives it back.
+        lib.AuditQuerySystemPolicy.argtypes = [ctypes.c_void_p, wintypes.ULONG,
+                                               ctypes.POINTER(ctypes.c_void_p)]
+        lib.AuditQuerySystemPolicy.restype = wintypes.BOOLEAN
+        lib.AuditFree.argtypes = [ctypes.c_void_p]
+        lib.AuditFree.restype = None
+        _AUDIT[0] = lib
+    return _AUDIT[0] or None  # pragma: no cover - Windows only (see above)
+
+
+def binds_audited(query=None):
+    """Whether Windows writes a Security-log event for every port a program binds:
+    True, False, or None when it cannot be known here.
+
+    ``query(subcategory) -> AuditingInformation or None`` stands in for the system
+    in tests. MEASURED 2026-11-11: elevated, the answer is read (on the Server VM
+    it followed ``auditpol /set`` both ways: 1 with success auditing, 2 with
+    failure only, 0 with none); NOT elevated, Windows refuses it with
+    ERROR_PRIVILEGE_NOT_HELD - the answer is then None, not False.
+    """
+    info = (query or _audit_information)(FILTERING_PLATFORM_CONNECTION)
+    return None if info is None else bool(info & POLICY_AUDIT_EVENT_SUCCESS)
+
+
+def _audit_information(subcategory):  # pragma: no cover - Windows only
+    lib = audit()
+    if lib is None:
+        return None
+    import ctypes
+    from ctypes import wintypes
+
+    class GUID(ctypes.Structure):
+        _fields_ = [("Data1", wintypes.DWORD), ("Data2", wintypes.WORD),
+                    ("Data3", wintypes.WORD), ("Data4", ctypes.c_ubyte * 8)]
+
+    class AUDIT_POLICY_INFORMATION(ctypes.Structure):
+        _fields_ = [("AuditSubCategoryGuid", GUID), ("AuditingInformation", wintypes.ULONG),
+                    ("AuditCategoryGuid", GUID)]
+
+    data1, data2, data3, data4 = subcategory
+    wanted = GUID(data1, data2, data3, (ctypes.c_ubyte * 8)(*data4))
+    answer = ctypes.c_void_p()
+    with crashlog.quiet("winenv.audit"):
+        if not lib.AuditQuerySystemPolicy(ctypes.byref(wanted), 1, ctypes.byref(answer)):
+            return None
+        try:
+            return int(ctypes.cast(answer, ctypes.POINTER(AUDIT_POLICY_INFORMATION))[0]
+                       .AuditingInformation)
+        finally:
+            lib.AuditFree(answer)
+    return None
+
+
 def add_console_ctrl_handler(handler):
     """Put ``handler(ctrl_type) -> bool`` FIRST in this process's list of console
     control handlers, for good. Returns a token (kept alive here), or None: off
@@ -269,7 +344,7 @@ def _last_error():
 # What the prototype guard walks. A factory added here without an entry is a
 # factory nothing checks, so the list is the registry and the test reads it -
 # rather than the test naming six function names that drift the day one moves.
-NATIVE_FACTORIES = {"user32": user32, "dwmapi": dwmapi, "console": console}
+NATIVE_FACTORIES = {"user32": user32, "dwmapi": dwmapi, "console": console, "audit": audit}
 
 
 def monitor_work_area(x, y):

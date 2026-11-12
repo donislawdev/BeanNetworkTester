@@ -1071,6 +1071,13 @@ TOOLS_TAB_QUIET_EXCEPTIONS: dict = {
         "import for the loopback probe below",
     ("beantester/nettools/portcheck.py", "socket", "socket"):
         "bind on 127.0.0.1 or ::1 and close - checked three ways, see the comment above",
+    # The port check asks winenv whether Windows logs every bind (`binds_audited`:
+    # advapi32's AuditQuerySystemPolicy, a read of this machine's audit policy).
+    # winenv's one `subprocess` import is in `_relaunch_params`, for
+    # `subprocess.list2cmdline` - read in the stdlib: it quotes arguments into one
+    # string and starts nothing.
+    ("beantester/winenv.py", "subprocess"):
+        "import for list2cmdline, a string function that starts nothing - see the comment above",
     # Ping on Linux takes an IPv6 zone typed as a name (fe80::1%eth0): if_nametoindex
     # asks this machine's own interface list for its number (an ioctl, SIOCGIFINDEX,
     # read in glibc and the kernel) - nothing goes on the wire.

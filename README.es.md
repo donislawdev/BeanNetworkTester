@@ -243,8 +243,9 @@ está, vuelve al centro de la pantalla actual.
     paz, o limitar o bloquear su dirección remota. Los nombres de programa se muestran sin derechos
     de administrador.
   - **Port check** - ¿puede su programa usar un puerto? Escriba un puerto, una lista o un rango,
-    como se escriben los puertos en la página Control (`8080`, `80, 443`, `9000-9100`, hasta 1000 a
-    la vez), y pulse **Check** (o Enter). Cada puerto se comprueba para TCP y UDP, en IPv4 e IPv6, y
+    como se escriben los puertos en la página Control (`8080`, `80, 443`, `9000-9100`), y pulse
+    **Check** (o Enter), o **All ports** para comprobar todos los puertos del 1 al 65535 (**Stop**
+    lo termina antes). Cada puerto se comprueba para los protocolos y versiones de IP marcados (TCP y UDP, IPv4 e IPv6), y
     se marca como **Free**, **In use** (con el programa que lo ocupa y su PID) o **Reserved by
     Windows**: un rango que Windows apartó, la razón habitual por la que un servidor no arranca en un
     puerto que parece no usar nadie. Los rangos son por protocolo, así que un puerto puede estar

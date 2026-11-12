@@ -4714,13 +4714,6 @@ MUTATIONS = [
         "test": "test_access_denied_is_a_reservation_on_windows_only",
     },
     {
-        "label": "portcheck: any number of ports is checked",
-        "file": "beantester/nettools/portcheck.py",
-        "old": "    if len(wanted) > MAX_PORTS:",
-        "new": "    if False:",
-        "test": "test_the_ports_an_expression_names",
-    },
-    {
         # bind(0) is "any free port" - checking it answers a question nobody asked.
         "label": "portcheck: port 0 is checked like a port",
         "file": "beantester/nettools/portcheck.py",
@@ -4745,27 +4738,21 @@ MUTATIONS = [
         "test": "test_a_machine_without_an_ip_version_is_said_once_not_per_port",
     },
     {
-        # The table read BEFORE the binds: a holder starting in between is missed
-        # and its port called free.
-        "label": "portcheck: the table is read before the system is asked",
+        # Read only at the end of a 35 s check, a short connection that held a port
+        # at its bind is gone: its refused bind names nobody.
+        "label": "portcheck: a long check reads the table only at its end",
         "file": "beantester/nettools/portcheck.py",
-        "old": ("    codes, unavailable = {}, []\n"
-                "    for family in families:\n"
-                "        answers = _ask_family(bind, family, protocols, wanted)\n"
-                "        if answers is None:\n"
-                "            unavailable.append(family)\n"
-                "        else:\n"
-                "            codes.update(answers)\n"
-                "    snapshot = read()\n"),
-        "new": ("    snapshot = read()\n"
-                "    codes, unavailable = {}, []\n"
-                "    for family in families:\n"
-                "        answers = _ask_family(bind, family, protocols, wanted)\n"
-                "        if answers is None:\n"
-                "            unavailable.append(family)\n"
-                "        else:\n"
-                "            codes.update(answers)\n"),
-        "test": "test_the_system_is_asked_first_and_the_table_read_after",
+        "old": "        if now - self._since >= READ_EVERY_S:\n            self.resolve()",
+        "new": "        if False:\n            self.resolve()",
+        "test": "test_a_long_check_reads_the_table_as_it_goes",
+    },
+    {
+        # A read after another lists the sockets that closed since: not holders.
+        "label": "portcheck: a socket that closed since the last read holds its port",
+        "file": "beantester/nettools/portcheck.py",
+        "old": "        if s.change == sockets.CLOSED:\n            continue",
+        "new": "        if False:\n            continue",
+        "test": "test_a_socket_gone_since_the_last_read_holds_nothing",
     },
     {
         # MEASURED 2026-11-03: Linux lists a dual-stack server once, under IPv6.
@@ -4850,22 +4837,22 @@ MUTATIONS = [
         # "Not free" is what a program could not take; an unknown row may be either.
         "label": "portcheck: an unknown port is counted as not free",
         "file": "beantester/nettools/portcheck.py",
-        "old": "    return sum(1 for row in rows if row.verdict not in (FREE, UNREAD))\n",
-        "new": "    return sum(1 for row in rows if row.verdict != FREE)\n",
+        "old": "    return sum(row.size() for row in rows if row.verdict not in (FREE, UNREAD))\n",
+        "new": "    return sum(row.size() for row in rows if row.verdict != FREE)\n",
         "test": "test_a_table_that_did_not_answer_cannot_say_free_or_reserved",
     },
     {
         "label": "portcheck: every port that is not free is counted as unknown",
         "file": "beantester/nettools/portcheck.py",
-        "old": "    return sum(1 for row in rows if row.verdict == UNREAD)\n",
-        "new": "    return sum(1 for row in rows if row.verdict != FREE)\n",
+        "old": "    return sum(row.size() for row in rows if row.verdict == UNREAD)\n",
+        "new": "    return sum(row.size() for row in rows if row.verdict != FREE)\n",
         "test": "test_a_table_that_did_not_answer_cannot_say_free_or_reserved",
     },
     {
         "label": "portcheck: a failed table is named although it was not checked",
         "file": "beantester/nettools/portcheck.py",
-        "old": "                 tuple(t for t in sorted(unread) if t[0] in protocols and t[1] in checked))\n",
-        "new": "                 tuple(sorted(unread)))\n",
+        "old": "                self.unread.add((proto, family))\n",
+        "new": "                self.unread.update(failed)\n",
         "test": "test_only_the_tables_that_were_checked_are_named_as_unread",
     },
     {
@@ -4881,21 +4868,21 @@ MUTATIONS = [
         "file": "beantester/gui/toolbox/base.py",
         "old": "        if not isinstance(exc, Refused):",
         "new": "        if True:",
-        "test": "test_too_many_ports_are_refused_with_their_numbers_in_the_windows_language",
+        "test": "test_a_refusal_from_a_worker_is_said_with_its_numbers_in_the_windows_language",
     },
     {
         "label": "toolbox: a known failure loses its numbers on the worker",
         "file": "beantester/gui/toolbox/base.py",
         "old": "        error_args = tuple(sorted((getattr(exc, \"user_args\", None) or {}).items()))",
         "new": "        error_args = ()",
-        "test": "test_too_many_ports_are_refused_with_their_numbers_in_the_windows_language",
+        "test": "test_a_refusal_from_a_worker_is_said_with_its_numbers_in_the_windows_language",
     },
     {
         "label": "toolbox: a known failure is said without its numbers",
         "file": "beantester/gui/toolbox/base.py",
         "old": "            error = (T(outcome.error_key, **dict(outcome.error_args)) if outcome.error_key",
         "new": "            error = (T(outcome.error_key) if outcome.error_key",
-        "test": "test_too_many_ports_are_refused_with_their_numbers_in_the_windows_language",
+        "test": "test_a_refusal_from_a_worker_is_said_with_its_numbers_in_the_windows_language",
     },
     {
         # A second check queued behind a running one would land on stale inputs.
@@ -4922,8 +4909,8 @@ MUTATIONS = [
     {
         "label": "portcheck panel: the count does not say how many ports are unknown",
         "file": "beantester/gui/toolbox/portcheck.py",
-        "old": "                                 total=len(rows)) if unknown\n",
-        "new": "                                 total=len(rows)) if False\n",
+        "old": "                                 total=total) if unknown\n",
+        "new": "                                 total=total) if False\n",
         "test": "test_a_socket_table_that_did_not_answer_is_named_and_its_rows_read_unknown",
     },
     {

@@ -203,9 +203,14 @@ class ToolJob:
         self._model = AsyncModel(_guarded, name=name)
         self.last = {}          # kind -> Outcome
         self.value = {}         # kind -> the latest successful Outcome.value
+        # kind -> what the latest run of that kind says while it works (how far it
+        # is, and its Stop), for whichever panel exists then: kept here for the
+        # reason the answer is, a rebuild mid-run. None for work that says nothing.
+        self.progress = {}
 
-    def run(self, kind, work):
+    def run(self, kind, work, progress=None):
         """Start ``work()`` on the worker (UI thread; never blocks)."""
+        self.progress[kind] = progress
         self._model.request((kind, work))
 
     def busy(self):
@@ -289,8 +294,9 @@ class StatusLine:
         # Every tool packs it on the page margin, so it wraps inside that margin.
         self.label = wrapping_label(parent, "", pad=PAGE_WRAP_PAD)
 
-    def working(self):
-        self.label.config(text=T("tools.common.working"), style="Muted.TLabel")
+    def working(self, text=None):
+        """Work is running; ``text`` says how far it is, when the tool knows."""
+        self.label.config(text=text or T("tools.common.working"), style="Muted.TLabel")
 
     def refused(self, text):
         """An input the tool will not run with, in a sentence already made for the

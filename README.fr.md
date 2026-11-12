@@ -249,9 +249,10 @@ revient au centre de l'écran actuel.
     sur une ligne pour cibler son programme, le laisser tranquille, ou limiter ou bloquer son
     adresse distante. Les noms de programmes s'affichent sans droits d'administrateur.
   - **Port check** - votre programme peut-il utiliser un port ? Saisissez un port, une liste ou une
-    plage, comme vous saisissez les ports sur la page Control (`8080`, `80, 443`, `9000-9100`,
-    jusqu'à 1000 à la fois), puis appuyez sur **Check** (ou sur Entrée). Chaque port est vérifié
-    pour TCP et UDP, en IPv4 et en IPv6, et marqué **Free**, **In use** (avec le programme qui
+    plage, comme vous saisissez les ports sur la page Control (`8080`, `80, 443`, `9000-9100`),
+    puis appuyez sur **Check** (ou sur Entrée), ou sur **All ports** pour vérifier tous les ports
+    de 1 à 65535 (**Stop** l'arrête avant la fin). Chaque port est vérifié
+    pour les protocoles et versions d'IP cochés (TCP et UDP, IPv4 et IPv6), et marqué **Free**, **In use** (avec le programme qui
     l'occupe et son PID) ou **Reserved by Windows** - une plage que Windows a mise de côté, la raison
     habituelle pour laquelle un serveur ne démarre pas sur un port que rien ne semble utiliser. Les
     plages sont propres à chaque protocole, un port peut donc être libre pour UDP et pas pour TCP.
