@@ -3097,3 +3097,253 @@ def test_ping_this_address_from_the_socket_table_pings_its_far_end_with_its_zone
         answered(pp.window_run(app))
         assert sent == [("fe80::5%12", 4)], ("the far end, with the zone it needs", sent)
     """))
+
+
+# -- Port scan ---------------------------------------------------------------------- #
+# The real plan and the real scan, with the system replaced at its two edges: the name
+# lookup and the adapter list (``plan``), and the sockets (``scan`` gets a stand-in
+# ``_Net``). 192.0.2.10 is in the stand-in adapter's prefix, so the pace is the near
+# one and a scan of a hundred ports takes no time.
+SCAN = """
+import threading, time
+from beantester.adapters import AddressRow
+from beantester.i18n import T
+from beantester.nettools import adapters as na
+from beantester.nettools import portscan as ps
+from beantester.gui.toolbox import portscan as scan_panel
+from beantester.gui.toolbox.portscan import render
+
+plans, scans = [], []
+hold = threading.Event()     # cleared: asking port HOLD_AT waits for it
+hold.set()
+HOLD_AT = 30
+real_plan, real_scan = ps.plan, ps.scan
+
+class Row:
+    addresses = (AddressRow("192.0.2.1", 4, 24, 0, 0, 0),)
+
+class Adapter:
+    row = Row()
+
+def adapters_here():
+    return na.Snapshot((Adapter(),), 0.0, 0, 1)
+
+class Net:
+    flows = ((50000, "192.0.2.10", 22),)
+    sniffer = None
+    def start(self, proto, port, wait_s):
+        if port == HOLD_AT:
+            hold.wait(5)
+        if (proto, port) == ("TCP", 22):
+            return ps.Answer(ps.OPEN)
+        if port == 23:
+            return ps.Answer(ps.DENIED, 10013)
+        if (proto, port) == ("UDP", 53):
+            return ps.Answer(ps.OPEN, 0, 48)
+        return ps.Answer(ps.CLOSED, 10061)
+    def answers(self, proto, timeout):
+        return []
+    def give_up(self, proto, port):
+        return ps.Answer(ps.SILENT)
+    def close(self):
+        pass
+
+def fake_plan(target, matcher, protocols, lookup=None, read=None):
+    plans.append((target.typed, str(matcher), protocols))
+    return real_plan(target, matcher, protocols,
+                     lookup=lambda name: [(2, 1, 6, "", ("192.0.2.10", 0))], read=adapters_here)
+
+def fake_scan(scan_plan, progress=None, net=None, clock=time.monotonic):
+    scans.append(scan_plan)
+    return real_scan(scan_plan, progress, net=Net(), clock=clock)
+
+ps.plan, ps.scan = fake_plan, fake_scan
+
+def open_scan():
+    app.select_page("tools")
+    page = app.pages["tools"]
+    page.select("portscan")
+    page._on_subpage()
+    return page.panels["portscan"]
+
+def settle(panel):
+    deadline = time.monotonic() + 10
+    while panel.pending():
+        assert time.monotonic() < deadline, "the worker never answered"
+        time.sleep(0.01)
+
+def type_in(panel, address, ports):
+    panel.address.set(address)
+    panel.ports.set(ports)
+    panel._typed()
+
+def row(panel, port, proto="TCP"):
+    return next(r for r in panel.table.items if r.port <= port <= r.last and r.proto == proto)
+
+def worked_until(panel, made):
+    # The scan starts when the panel takes the plan's answer: the poll does that.
+    deadline = time.monotonic() + 5
+    while panel.job.progress.get("scan") is None or panel.job.progress["scan"].made < made:
+        assert time.monotonic() < deadline, "the scan never got there"
+        panel.pending()
+        time.sleep(0.01)
+"""
+
+
+def test_the_port_scan_plans_then_scans_and_says_what_it_found():
+    run_gui(SCAN + textwrap.dedent("""
+        panel = open_scan()
+        assert panel.ports.get() == ps.COMMON_TEXT, "the common ports until something is typed"
+        assert panel.protocols["TCP"].get() and not panel.protocols["UDP"].get()
+        assert "disabled" in panel.scan_btn.state(), "no address yet"
+        assert scans == []
+
+        type_in(panel, "printer.local", "20-25")
+        panel.scan()
+        settle(panel)
+        assert plans == [("printer.local", "20-25", ("TCP",))], plans
+        assert [p.target.address for p in scans] == ["192.0.2.10"], "the address the name gave"
+        assert render(row(panel, 22)) == ("22", "TCP", T("tools.portscan.state.open"), "SSH", "")
+        assert render(row(panel, 23)) == ("23", "TCP", T("tools.portscan.state.denied"),
+                                          "Telnet", T("tools.portscan.detail.code", code=10013))
+        assert panel.table.items[0].port == 22, "open ports first"
+        tags = {r.state: panel.table._tag_of(r) for r in panel.table.items}
+        assert tags == {ps.OPEN: "open", ps.DENIED: "problem", ps.CLOSED: ""}, tags
+        assert panel.count.cget("text") == T("tools.portscan.count", open=1, silent=0, total=6)
+        note = panel.note.cget("text")
+        assert T("tools.portscan.note_scanned", address="192.0.2.10", ports=6,
+                 protocols="TCP") in note, note
+        assert T("tools.portscan.note_name", name="printer.local") in note, note
+        assert T("tools.portscan.note_near", at_once=256, rate=0, s="1") in note, note
+        assert panel.session.cget("text") == T("tools.portscan.session.none")
+        assert panel.status.label.cget("text").startswith(
+            T("tools.portscan.status_done", time="", s="")[:4]), panel.status.label.cget("text")
+        assert "disabled" not in panel.copy_btn.state() and "disabled" not in panel.export_btn.state()
+
+        for callback in panel.address_entry.bindings["<Return>"]:
+            callback(None)
+        settle(panel)
+        assert len(scans) == 2, "Enter scans too"
+    """))
+
+
+def test_what_cannot_be_scanned_is_refused_and_nothing_is_sent():
+    run_gui(SCAN + textwrap.dedent("""
+        panel = open_scan()
+        type_in(panel, "224.0.0.1", "80")
+        panel.scan()
+        assert panel.status.label.cget("text") == T("tools.portscan.refused.not_one",
+                                                    typed="224.0.0.1")
+        assert plans == [] and not panel.job.busy(), "refused on the UI thread"
+        type_in(panel, "192.0.2.10", "9100-9000")
+        panel.scan()
+        assert plans == [] and panel.status.label.cget("style") == "Status.Bad.TLabel"
+        type_in(panel, "192.0.2.10", "0")
+        panel.scan()
+        settle(panel)
+        assert len(plans) == 1 and scans == [], "port 0 alone: the plan refuses, no scan"
+        assert T("tools.portscan.refused.error_zero") in panel.status.label.cget("text")
+        app._build_ui()
+        again = open_scan()
+        assert T("tools.portscan.refused.error_zero") in again.status.label.cget("text"), \\
+            "a rebuilt panel says the newest answer"
+    """))
+
+
+def test_a_long_scan_asks_first_and_no_sends_nothing():
+    run_gui(SCAN + textwrap.dedent("""
+        from beantester.gui import dialogs
+        asked = []
+        answer = [False]
+        dialogs.ask_yes_no = lambda parent, title, body: (asked.append(body), answer[0])[1]
+        scan_panel.ASK_OVER_S = 0                 # every scan is "long" here
+        panel = open_scan()
+        type_in(panel, "192.0.2.10", "20-25")
+        panel.scan()
+        settle(panel)
+        assert len(asked) == 1 and scans == [], "asked, and No sent nothing"
+        assert T("tools.portscan.time.s", s=1) in asked[0], asked[0]
+        assert panel.status.label.cget("text") == T("tools.portscan.not_started")
+        answer[0] = True
+        panel.scan()
+        settle(panel)
+        assert len(asked) == 2 and len(scans) == 1, "Yes scans"
+    """))
+
+
+def test_stop_ends_the_scan_and_a_rebuild_mid_scan_keeps_it():
+    run_gui(SCAN + textwrap.dedent("""
+        hold.clear()
+        panel = open_scan()
+        type_in(panel, "192.0.2.10", "1-100")
+        panel.scan()
+        worked_until(panel, HOLD_AT - 1)
+        panel.refresh()
+        text = panel.status.label.cget("text")
+        assert text.startswith(T("tools.portscan.progress", proto="TCP", port=HOLD_AT,
+                                 percent=HOLD_AT - 1, opened=1)), text
+        assert panel.scan_btn.cget("text") == T("tools.portscan.stop")
+        assert "disabled" not in panel.scan_btn.state(), "Stop can be pressed"
+        assert "disabled" in panel.address_entry.state(), "nothing to change mid-scan"
+
+        app._build_ui()                            # a language change, say
+        rebuilt = open_scan()
+        assert rebuilt.scan_btn.cget("text") == T("tools.portscan.stop"), "still scanning"
+        rebuilt._scan_or_stop()                    # the button, now Stop
+        assert rebuilt.status.label.cget("text") == T("tools.portscan.stopping")
+        hold.set()
+        settle(rebuilt)
+        answer = rebuilt.job.value["scan"]
+        assert answer.stopped and answer.made == HOLD_AT, (answer.made, answer.planned)
+        assert T("tools.portscan.note_stopped", made=HOLD_AT, planned=100) in \\
+            rebuilt.note.cget("text"), rebuilt.note.cget("text")
+        assert len(scans) == 1, "one scan, not one per panel"
+    """))
+
+
+def test_closing_the_window_stops_a_running_scan():
+    run_gui(SCAN + textwrap.dedent("""
+        from beantester.gui import toolbox
+        hold.clear()
+        panel = open_scan()
+        type_in(panel, "192.0.2.10", "1-100")
+        panel.scan()
+        worked_until(panel, HOLD_AT - 1)
+        toolbox.stop_sending(app)
+        assert panel.job.progress["scan"].stopped, "the scan sends nothing more"
+        hold.set()
+        settle(panel)
+    """))
+
+
+def test_the_buttons_fill_the_ports_and_save_and_copy_what_is_on_screen():
+    run_gui(SCAN + textwrap.dedent("""
+        import csv, os, tempfile
+        import beantester.gui.csv_export as m
+        path = os.path.join(tempfile.mkdtemp(), "scan.csv")
+        m.PORT_SCAN_CSV_FILE = path
+        panel = open_scan()
+        presets = [w for w in panel.inputs if w.cget("text") == T("tools.portscan.all")]
+        presets[0].invoke()
+        assert panel.ports.get() == ps.ALL_PORTS and scans == [], "filled in, not scanned"
+        type_in(panel, "192.0.2.10", "21-23, 53")
+        panel.protocols["UDP"].set(True)
+        panel._ticked("UDP", panel.protocols["UDP"])
+        panel.scan()
+        settle(panel)
+        assert render(row(panel, 53, "UDP"))[4] == T("tools.portscan.detail.reply", bytes=48)
+        panel._export().join(20)
+        app._logview.drain()
+        with open(path, newline="", encoding="utf-8") as f:
+            rows = list(csv.reader(f))
+        assert rows[0] == m.PORT_SCAN_CSV_HEADER, rows[0]
+        assert rows[1][:8] == ["192.0.2.10", "22", "22", "TCP", "open", "0", "SSH", "0"], rows[1]
+        assert ["192.0.2.10", "53", "53", "UDP", "open", "0", "DNS", "48"] in \\
+            [r[:8] for r in rows], rows
+        assert any(path in line for line in app._log_lines), app._log_lines[-2:]
+        panel.copy_report()
+        copied = root.clipboard_get()
+        assert copied.startswith("Port scan of 192.0.2.10") and "TCP 22 open (SSH)" in copied, \\
+            copied
+        os.remove(path)
+    """))

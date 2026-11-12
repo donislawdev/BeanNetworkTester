@@ -39,6 +39,7 @@ GATED_ITSELF = {
     "beantester/crashlog.py": "the native crash hook; armed only on a real Windows capture",
     "beantester/gui/theme.py": "the dark title bar; sys.platform checked before uxtheme",
     "beantester/capture_backend.py": "IsUserAnAdmin in the Windows backend, after is_windows()",
+    "beantester/nettools/portscan.py": "ws2_32 for the scan's TCP sockets, only on Windows (WIN)",
 }
 
 

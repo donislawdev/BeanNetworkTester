@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **Tools: Port scan.** A new tool in the Network group shows which ports of another
+  computer answer. Type an address or a name and the ports, or fill in the common ports,
+  1-1024 or every port, tick TCP or UDP, and press "Scan". Each port reads open, closed or no
+  answer, with its usual service, and a line above the table explains the result. A computer
+  behind a router is scanned slowly so its router is not flooded, and a long scan asks first.
+  It sends only to the address you type.
+
 - **Tools: Port check can check every port.** "All ports" checks ports 1 to 65535 in a few
   seconds to about a minute. The status line says how far it is, and "Stop" ends it early.
   Ports next to each other with the same result are one row (`49152-49999`), "Hide free

@@ -180,17 +180,19 @@ def parse(text):
     return parse_matcher(text, KIND_INT, FIELD, PORT_BOUNDS)
 
 
-def ports(matcher):
+def ports(matcher, refusals="tools.portcheck."):
     """``(ports, skipped_zero)``: the ports from 1 to 65535 the matcher names, in order.
 
     Port 0 is never checked: a program that binds it is handed any free port, so
     "is 0 free" has no answer. The bounds of the port language allow 0, so it is
-    left out here and said.
+    left out here and said. ``refusals`` is the prefix of the two keys that say why
+    nothing is left (``error_zero``, ``error_none``): the Port scan lists its ports
+    here too, and says it in its own words.
     """
     wanted = tuple(port for port in range(1, 65536) if matcher.matches(port))
     zero = matcher.matches(0)
     if not wanted:
-        raise Refused("tools.portcheck.error_zero" if zero else "tools.portcheck.error_none")
+        raise Refused(f"{refusals}error_zero" if zero else f"{refusals}error_none")
     return wanted, zero
 
 
