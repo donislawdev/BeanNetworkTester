@@ -254,12 +254,19 @@ def test_stop_ends_the_scan_and_keeps_what_was_answered():
 def test_an_unreachable_computer_is_given_up_on():
     script = {port: (ps.Answer(ps.UNREACHABLE, 113), 0.5) for port in range(1, 65536)}
     result, net, _clock = run(range(1, 65536), script, ps.NEAR, protocols=(ps.TCP, ps.UDP))
-    check("each protocol stops asking after its first answers", len(net.started) < 2 * 600,
+    check("it stops asking after its first answers", len(net.started) == ps.NEAR.at_once,
           f"({len(net.started)})")
-    check("and says so", result.gave_up == (ps.TCP, ps.UDP), f"({result.gave_up})")
-    check("the conclusion names it",
-          ("tools.portscan.say.unreachable", {"proto": ps.TCP, "count": ps.GIVE_UP_AFTER})
-          in ps.conclusions(result), f"({ps.conclusions(result)})")
+    check("and asks no UDP port of a computer that is not there",
+          (result.gave_up, result.skipped) == ((ps.TCP,), (ps.UDP,))
+          and all(proto == ps.TCP for _t, proto, _port in net.started),
+          f"({result.gave_up}, {result.skipped})")
+    said = ps.conclusions(result)
+    # The count is the table's: the first wave's answers came together, all 256 of them.
+    check("the conclusions name both",
+          ("tools.portscan.say.unreachable", {"proto": ps.TCP, "count": ps.NEAR.at_once}) in said
+          and ("tools.portscan.say.skipped", {"proto": ps.UDP, "by": ps.TCP}) in said, f"({said})")
+    check("and so does the report",
+          "UDP: not asked, the computer could not be reached" in ps.report(result), "")
     mixed = dict(script)
     mixed[3] = (ps.Answer(ps.OPEN), 0)
     result, net, _clock = run(range(1, 200), mixed, ps.NEAR)
@@ -267,19 +274,82 @@ def test_an_unreachable_computer_is_given_up_on():
           and len(net.started) == 199, f"({result.gave_up}, {len(net.started)})")
 
 
-def test_a_protocol_given_up_on_leaves_no_socket_for_the_next():
-    """TCP gives up while some of its ports still wait: their sockets are closed then,
-    so none of them answers in UDP's round under its port number."""
-    script = {(ps.TCP, port): (ps.Answer(ps.UNREACHABLE, 113), 0) for port in range(1, 65)}
-    script.update({(ps.TCP, port): (ps.Answer(ps.OPEN), 0.5) for port in range(65, 81)})
-    script.update({(ps.UDP, port): (None, 0) for port in range(1, 81)})
-    result, _net, _clock = run(range(1, 81), script, ps.NEAR, protocols=(ps.TCP, ps.UDP))
-    check("TCP gave up with 16 ports still waiting", result.gave_up == (ps.TCP,),
-          f"({result.gave_up})")
-    seen = states(result)
-    udp = {port: seen[(port, ps.UDP)] for port in range(1, 81)}
-    check("no UDP port reads an answer that came for TCP",
-          set(udp.values()) == {ps.SILENT}, f"({ {p: s for p, s in udp.items() if s != ps.SILENT} })")
+def test_a_computer_not_there_is_given_up_on_after_the_first_silence():
+    """Linux gives up on the neighbour of an address nobody holds about 3 s after the
+    first try, and the near pace waits 1 s a port: the first two waves read "no answer",
+    the third hears "unreachable" at its last moment, and later tries fail at once.
+    Silence must not keep the scan from stopping (measured 2026-11-12: it never stopped,
+    3000 ports in 12.6 s)."""
+    at_once = ps.NEAR.at_once
+    after = {0: 3.0, 1: 2.0, 2: 1.0}            # until the neighbour fails, by wave
+    script = {port: (ps.Answer(ps.UNREACHABLE, 113), after.get((port - 1) // at_once, 0))
+              for port in range(1, 3001)}
+    result, net, clock = run(range(1, 3001), script, ps.NEAR)
+    check("it gives up", result.gave_up == (ps.TCP,), f"({result.gave_up})")
+    check("once the third wave heard it, and not a port more",
+          len(net.started) == 3 * at_once, f"({len(net.started)})")
+    check("about when the neighbour failed", clock.now - 100.0 <= 3.0 + ps.POLL_S,
+          f"({clock.now - 100.0:.2f} s)")
+    seen = set(states(result).values())
+    check("the ports read before it stay silent", seen == {ps.SILENT, ps.UNREACHABLE}, f"({seen})")
+    instant = {port: (ps.Answer(ps.UNREACHABLE, 113), 0) for port in range(1, 3001)}
+    result, net, _clock = run(range(1, 3001), instant, ps.NEAR)
+    check("a neighbour failed already: refused at once, and it stops at the count",
+          result.gave_up == (ps.TCP,) and len(net.started) == ps.GIVE_UP_AFTER,
+          f"({result.gave_up}, {len(net.started)})")
+
+
+def test_the_last_answers_of_a_round_can_give_up():
+    """A range no bigger than one wave: every port waits, the answers come together and
+    nothing is left to start - the round ends there, and it must still give up."""
+    script = {port: (ps.Answer(ps.UNREACHABLE, 113), 0.5) for port in range(1, ps.GIVE_UP_AFTER + 1)}
+    result, net, _clock = run(range(1, ps.GIVE_UP_AFTER + 1), script, ps.NEAR,
+                              protocols=(ps.TCP, ps.UDP))
+    check("TCP given up on, UDP not asked", (result.gave_up, result.skipped)
+          == ((ps.TCP,), (ps.UDP,)) and all(proto == ps.TCP for _t, proto, _port in net.started),
+          f"({result.gave_up}, {result.skipped}, {len(net.started)} started)")
+
+
+def test_a_second_round_does_not_give_up_on_a_computer_that_answered():
+    """"Not there" is about the whole protocol: when ports answered in the first round,
+    a second round that hears "unreachable" (the computer went away in between) asks
+    every port it was given, and the next protocol is still asked."""
+    script = {port: (ps.Answer(ps.CLOSED, 111), 0) for port in range(1, 1001)}
+    again = range(901, 1001)                    # 10 %: just few enough to be asked again
+    script.update({(ps.TCP, port): (None, 0) for port in again})
+    clock = Clock()
+    net = FakeNet(clock, script)
+    original_start = net.start
+    asked = set()
+
+    def start(proto, port, wait_s):
+        if (proto, port) in asked and port in again:
+            script[(proto, port)] = (ps.Answer(ps.UNREACHABLE, 113), 0)
+        asked.add((proto, port))
+        return original_start(proto, port, wait_s)
+
+    net.start = start
+    result = ps.scan(a_plan(range(1, 1001), protocols=(ps.TCP, ps.UDP)), net=net, clock=clock)
+    check("every silent port asked again, and every one changed",
+          result.again == (ps.Again(ps.TCP, 100, 100),), f"({result.again})")
+    check("not given up on, and UDP asked", (result.gave_up, result.skipped) == ((), ())
+          and sum(1 for _t, proto, _port in net.started if proto == ps.UDP) == 1000,
+          f"({result.gave_up}, {result.skipped})")
+    check("the second round's answers are in the table",
+          states(result)[(950, ps.TCP)] == ps.UNREACHABLE, "")
+    check("and no sentence says the computer is not there", not any(
+        key == "tools.portscan.say.unreachable" for key, _args in ps.conclusions(result)), "")
+
+
+def test_a_protocol_given_up_on_leaves_no_socket_waiting():
+    """TCP gives up while some of its ports still wait: their sockets are given up then,
+    in the round, not left for whatever comes after it."""
+    script = {(ps.TCP, port): (ps.Answer(ps.OPEN), 0.5) for port in range(1, 17)}
+    script.update({(ps.TCP, port): (ps.Answer(ps.UNREACHABLE, 113), 0) for port in range(17, 81)})
+    result, net, _clock = run(range(1, 81), script, ps.NEAR, protocols=(ps.TCP, ps.UDP))
+    check("TCP gave up with 16 ports still waiting", result.gave_up == (ps.TCP,)
+          and len(net.started) == 80, f"({result.gave_up}, {len(net.started)})")
+    check("none of them left waiting", net.waiting == {}, f"({sorted(net.waiting)})")
 
 
 def test_a_few_silent_ports_are_asked_again_slower():
@@ -338,6 +408,18 @@ def test_ports_next_to_each_other_with_the_same_answer_are_one_row():
         (23, 23, ps.CLOSED, "Telnet"), (24, 24, ps.CLOSED, ""), (25, 25, ps.CLOSED, "SMTP"),
         (26, 29, ps.CLOSED, ""), (30, 31, ps.SILENT, ""), (32, 39, ps.CLOSED, "")], f"({shape})")
     check("counted in ports", ps.counts(result)[(ps.TCP, ps.CLOSED)] == 17, "")
+
+
+def test_silence_reads_the_same_whoever_gave_up_first():
+    """On Windows the system ends a silent try at the scan's own wait, so a silent
+    port's answer is the system's time-out (10060) or the scan giving up - by chance.
+    Both read "no answer", so next ports with either are one row (measured 2026-11-12:
+    one scan of 300 silent ports split into dozens of rows that read the same)."""
+    script = {port: (ps.classify(10060), ps.NEAR.wait_s) for port in range(30, 40, 2)}
+    script.update({port: (None, 0) for port in range(31, 40, 2)})
+    result, _net, _clock = run(range(30, 40), script)
+    shape = [(r.port, r.last, r.state, r.code) for r in result.rows]
+    check("one row of silence", shape == [(30, 39, ps.SILENT, 0)], f"({shape})")
 
 
 def test_what_an_error_number_means():
