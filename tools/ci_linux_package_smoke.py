@@ -75,13 +75,19 @@ def judge_doctor(output, config_home):
     return []
 
 
+def _class_of(line):
+    """The class in a line of ``xwininfo -root -tree`` (``("instance" "Class")``
+    after the title), or None."""
+    found = re.search(r'\("([^"]*)" "([^"]*)"\)', line)
+    return found.group(2) if found else None
+
+
 def judge_window(line, stderr):
     """``line``: the window's line in ``xwininfo -root -tree``, or None."""
     if line is None:
         failures = [f"no window named {WINDOW_TITLE!r} in {WINDOW_WAIT_S} s"]
     else:
-        found = re.search(r'\("([^"]*)" "([^"]*)"\)', line)
-        failures = [] if found and found.group(2) == WINDOW_CLASS else [
+        failures = [] if _class_of(line) == WINDOW_CLASS else [
             f"the window's class is not {WINDOW_CLASS!r}: {line.strip()!r}"]
     noisy = [l for l in stderr.splitlines() if any(word in l for word in NOISE)]
     if noisy:
@@ -122,11 +128,17 @@ def _run(program, *args, env=None, timeout=60):
 
 
 def window_line(title=WINDOW_TITLE):
-    """The line ``xwininfo -root -tree`` gives the top-level window of that title
-    (it carries the window's class), or None."""
+    """The line ``xwininfo -root -tree`` gives the program's main window (it carries
+    the window's class): of the windows of that title, the one of the program's
+    class, else the first, so that ``judge_window`` names a wrong class; None
+    without one. A tooltip is a top-level window of the same title, and Xvfb's
+    pointer starts in the middle of the screen, where it can rest on a field that
+    has one - the tooltip is then listed before the main window."""
     tree = subprocess.run(["xwininfo", "-root", "-tree"], capture_output=True,
                           text=True, timeout=10, check=False).stdout
-    return next((l for l in tree.splitlines() if f'"{title}": (' in l), None)
+    titled = [line for line in tree.splitlines() if f'"{title}": (' in line]
+    ours = [line for line in titled if _class_of(line) == WINDOW_CLASS]
+    return (ours or titled or [None])[0]
 
 
 def _window_phase(program, env):
