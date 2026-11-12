@@ -83,7 +83,7 @@ NEAR = Pace(256, 0, 1.0, True)
 FAR = Pace(32, 20, 3.0, False)
 AGAIN_AT_ONCE = 32          # the second round asks fewer at once: it is for a busy host
 AGAIN_SHARE = 10            # percent: a second round only when at most this share was silent
-GIVE_UP_AFTER = 64          # unreachable answers with nothing else: the computer is not there
+GIVE_UP_AFTER = 64          # unreachable answers and none but silence: the computer is not there
 POLL_S = 0.25               # the longest a Stop waits for the scan to notice it
 
 # The service a port usually carries, by protocol: "T" TCP, "U" UDP. Names only - the
@@ -291,7 +291,10 @@ def classify(code):
     if code in _UNREACHABLE:
         return Answer(UNREACHABLE, code)
     if code in _TIMED_OUT:
-        return Answer(SILENT, code)
+        # No code: on Windows the system ends a silent try at the scan's own wait
+        # (SIO_TCP_INITIAL_RTO's Rtt), so which of the two came first is chance - and
+        # a code would split next ports that read the same into rows (measured 2026-11-12).
+        return Answer(SILENT)
     if code in _DENIED:
         return Answer(DENIED, code)
     return Answer(FAILED, code)
@@ -611,6 +614,9 @@ class Scan(NamedTuple):
     started: float              # time.time()
     elapsed_s: float
     flows: tuple                # (local port, address, port) of the latest few
+    # Protocols not asked: the computer could not be reached on one asked before them,
+    # and every protocol goes to the same computer.
+    skipped: tuple = ()
 
     @property
     def stopped(self):
@@ -651,36 +657,39 @@ def _round(net, proto, ports, pace, progress, clock):
     "gave_up". A port Stop caught waiting has no answer: it was not checked."""
     queue = collections.deque(ports)
     waiting = {}                # port -> when it was asked
-    answers = {}
+    heard = _Heard()
     pacer = _Pacer(pace.per_second, clock())
     while queue or waiting:
         if progress.stopped:
-            return answers, "stopped"
-        _start_some(net, (proto, queue, waiting, answers), pace, progress, (clock, pacer))
-        if _not_there(answers):
+            return heard.by_port, "stopped"
+        _start_some(net, (proto, queue, waiting, heard), pace, progress, (clock, pacer))
+        if _not_there(heard):
             # Closed now, unanswered: a socket left waiting would answer in the next
             # protocol's round, under its port number.
             for port in waiting:
                 net.give_up(proto, port)
-            return answers, "gave_up"
+            return heard.by_port, "gave_up"
         timeout = _timeout(waiting, queue, pace, pacer, clock)
         for port, answer in net.answers(proto, timeout):
             if waiting.pop(port, None) is not None:
-                _got(answers, progress, port, answer)
+                _got(heard, progress, port, answer)
         now = clock()
         for port, asked in list(waiting.items()):
             if now - asked >= pace.wait_s:
                 del waiting[port]
-                _got(answers, progress, port, net.give_up(proto, port))
-    return answers, "done"
+                _got(heard, progress, port, net.give_up(proto, port))
+    return heard.by_port, "done"
 
 
 def _start_some(net, state, pace, progress, timing):
-    """Ask as many ports as the pace allows now."""
-    proto, queue, waiting, answers = state
+    """Ask as many ports as the pace allows now - and none once the computer is not
+    there: a try the system refuses at once (its neighbour already failed) leaves no
+    socket waiting, so nothing else would stop this loop before the queue is empty."""
+    proto, queue, waiting, heard = state
     clock, pacer = timing
     now = clock()
-    while queue and len(waiting) < pace.at_once and pacer.ready(now) and not progress.stopped:
+    while (queue and len(waiting) < pace.at_once and pacer.ready(now) and not progress.stopped
+           and not _not_there(heard)):
         port = queue.popleft()
         progress.at = (proto, port)
         pacer.started(now)
@@ -688,7 +697,7 @@ def _start_some(net, state, pace, progress, timing):
         if answer is None:
             waiting[port] = now
         else:
-            _got(answers, progress, port, answer)
+            _got(heard, progress, port, answer)
         now = clock()
 
 
@@ -704,19 +713,39 @@ def _timeout(waiting, queue, pace, pacer, clock):
     return max(0.0, soonest - now)
 
 
-def _got(answers, progress, port, answer):
-    answers[port] = answer
+class _Heard:
+    """One round's answers by port, and how many of each state - counted as they come,
+    because ``_not_there`` asks after every wait and a round can hold 65 535 ports."""
+
+    def __init__(self):
+        self.by_port = {}
+        self.states = collections.Counter()
+
+    def add(self, port, answer):
+        self.by_port[port] = answer
+        self.states[answer.state] += 1
+
+
+def _got(heard, progress, port, answer):
+    heard.add(port, answer)
     progress.made += 1
     if answer.state == OPEN:
         progress.opened += 1
 
 
-def _not_there(answers):
-    """The system said "unreachable" for the first ``GIVE_UP_AFTER`` ports and nothing
-    else: the computer is not there, and asking the rest says it again."""
-    if len(answers) < GIVE_UP_AFTER:
-        return False
-    return all(answer.state == UNREACHABLE for answer in answers.values())
+def _not_there(heard):
+    """The system said "unreachable" for ``GIVE_UP_AFTER`` ports and no port answered
+    otherwise: the computer is not there, and asking the rest says it again.
+
+    Silence does not count against it. On Linux the system gives up on the neighbour
+    of an address nobody holds after about 3 s, and the near pace waits 1 s a port, so
+    the first ports of such a scan read "no answer" before the first "unreachable" -
+    with silence counted, the scan never stopped early (measured 2026-11-12: 3000
+    ports in 12.6 s, every port of a computer that is not there in over four minutes).
+    """
+    states = heard.states
+    return (states[UNREACHABLE] >= GIVE_UP_AFTER
+            and states[UNREACHABLE] + states[SILENT] == sum(states.values()))
 
 
 def _ask_again(answers):
@@ -769,14 +798,21 @@ def scan(scan_plan, progress=None, net=None, clock=time.monotonic):
     if net is None:
         net, sniffer = _open_net(scan_plan)
     rows, gave_up, again = [], [], []
+    asked = []
     try:
         for proto in scan_plan.protocols:
+            asked.append(proto)
             answers, how, second = _one_protocol(net, proto, scan_plan, progress, clock)
             rows.extend(_rows(proto, answers))
             if second is not None:
                 again.append(second)
             if how == "gave_up":
+                # "Unreachable" is about the computer, not a port: the next protocol
+                # would only wait for it. On Linux it cannot even hear it - the system
+                # gives up on a missing neighbour ~3 s after a datagram and a UDP port
+                # waits 1 s, so a whole UDP range read "no answer" (measured 2026-11-12).
                 gave_up.append(proto)
+                break
             if progress.stopped:
                 break
     finally:
@@ -784,11 +820,12 @@ def scan(scan_plan, progress=None, net=None, clock=time.monotonic):
         if sniffer is not None:
             sniffer.close()
     closed_seen = not WIN or scan_plan.own or getattr(net, "sniffer", None) is not None
+    skipped = tuple(p for p in scan_plan.protocols if p not in asked) if gave_up else ()
     return Scan(tuple(rows), scan_plan, progress.made, progress.planned,
                 (progress.at or ()) if progress.stopped else None, tuple(gave_up),
                 tuple(again),
                 bool(closed_seen), started, clock() - progress.started,
-                tuple(getattr(net, "flows", ())))
+                tuple(getattr(net, "flows", ())), skipped)
 
 
 def _rows(proto, answers):
@@ -851,6 +888,8 @@ def conclusions(result):
         said.append(("tools.portscan.say.own", {}))
     for proto in result.gave_up:
         said.append(("tools.portscan.say.unreachable", {"proto": proto, "count": GIVE_UP_AFTER}))
+    for proto in result.skipped:
+        said.append(("tools.portscan.say.skipped", {"proto": proto, "by": result.gave_up[0]}))
     if asked.get(TCP) and total[(TCP, SILENT)] == asked[TCP] and TCP not in result.gave_up:
         said.append(("tools.portscan.say.all_silent", {}))
     elif total[(TCP, SILENT)]:
@@ -899,6 +938,8 @@ def report(result):
                      f"{again.asked} asked, {again.answered} answered")
     for proto in result.gave_up:
         lines.append(f"{proto}: unreachable, the scan stopped asking")
+    for proto in result.skipped:
+        lines.append(f"{proto}: not asked, the computer could not be reached")
     lines.append("")
     for row in result.rows:
         state = REPORT_STATES[row.state]
