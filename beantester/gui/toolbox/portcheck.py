@@ -189,7 +189,7 @@ class PortCheckPanel:
             self._show(answer)
         last = self.job.last.get(CHECK)
         if last is not None:
-            self.status.show(last)
+            self._show_status(last)
             if last.error:
                 self._show_failure()
         if self.job.busy():
@@ -279,14 +279,22 @@ class PortCheckPanel:
     def _audit_allows(self, matcher, protocols, families):
         """True to go on. On a Windows that writes every bind to its Security log, a
         check of more than ``portcheck.AUDIT_ASK_BINDS`` asks first: each port it
-        checks is an entry there, and older entries make room for them."""
-        if winenv.binds_audited() is not True:
+        checks is an entry there, and older entries make room for them. A Windows
+        that will not say (no administrator rights) asks too, in words that say it
+        may: the computers that log every connection by policy are the ones whose
+        users have no administrator rights."""
+        if not portcheck.WINDOWS:
+            return True
+        audited = winenv.binds_audited()
+        if audited is False:
             return True
         binds = portcheck.planned(matcher, protocols, families)
         if binds <= portcheck.AUDIT_ASK_BINDS:
             return True
-        return bool(dialogs.ask_yes_no(self.app.root, T("tools.portcheck.audit_title"),
-                                       T("tools.portcheck.audit_body", count=binds)))
+        title, body = (("tools.portcheck.audit_title", "tools.portcheck.audit_body")
+                       if audited else ("tools.portcheck.audit_title_unknown",
+                                        "tools.portcheck.audit_body_unknown"))
+        return bool(dialogs.ask_yes_no(self.app.root, T(title), T(body, count=binds)))
 
     def _chosen(self):
         protocols = tuple(p for p, var in self.protocols.items() if var.get())
@@ -333,12 +341,22 @@ class PortCheckPanel:
 
     # -- answers ------------------------------------------------------------- #
     def _on_outcome(self, outcome):
-        self.status.show(outcome)
+        self._show_status(outcome)
         if outcome.error:
             self._show_failure()
         else:
             self._show(outcome.value)
         self._sync_buttons()
+
+    def _show_status(self, outcome):
+        """Done, failed, or stopped: a stopped check is not "done", its table holds
+        only the ports it checked."""
+        if outcome.error or not outcome.value.stopped:
+            self.status.show(outcome)
+            return
+        at = time.strftime("%H:%M:%S", time.localtime(outcome.finished))
+        self.status.label.config(text=T("tools.portcheck.status_stopped", time=at),
+                                 style="Muted.TLabel")
 
     def _show(self, answer):
         column, reverse = self._sort()

@@ -233,12 +233,14 @@ zurück.
   Grenze von 400 Zeilen ist weg - wie viele angezeigt werden, legt das Feld **"Row limit"** fest
   (Bereich *Tables*, 0 = keine Grenze, Standard 50 000).
 - **Tools** - kleine Helfer für Fragen, die Sie vor oder während eines Tests haben, in drei
-  Gruppen von Untertabs: **Network** (Ping, NAT and STUN), **This computer** (Sockets, TCP
-  health, Port check, Adapters) und **This program** (Filter tester, Diagnostics).
-  Nur **Ping** und **NAT and STUN** auf diesem Tab senden etwas über das Netzwerk: Ping sendet
-  Echo-Anfragen an die Adresse, die Sie eingeben, von Start bis Stop, und NAT and STUN sendet
-  einige Anfragen an die beiden Server, die Sie eingeben, und kleine Testpakete an die eigene
-  öffentliche Adresse dieses Netzwerks, wenn Sie Start drücken. Derzeit:
+  Gruppen von Untertabs: **Network** (Ping, NAT and STUN, Port scan), **This computer**
+  (Sockets, TCP health, Port check, Adapters) und **This program** (Filter tester,
+  Diagnostics). Nur **Ping**, **NAT and STUN** und **Port scan** auf diesem Tab senden etwas
+  über das Netzwerk: Ping sendet Echo-Anfragen an die Adresse, die Sie eingeben, von Start bis
+  Stop, NAT and STUN sendet einige Anfragen an die beiden Server, die Sie eingeben, und kleine
+  Testpakete an die eigene öffentliche Adresse dieses Netzwerks, wenn Sie Start drücken, und
+  Port scan verbindet sich mit den Ports, die Sie wählen, unter der Adresse, die Sie eingeben,
+  von Scan bis zum Ende oder Stop. Scannen Sie nur Computer, die Sie testen dürfen. Derzeit:
   - **Sockets** - jeder TCP- und UDP-Socket auf diesem Computer, wie `netstat -ano`, und es ist
     keine Sitzung nötig: was lauscht, was verbunden ist, sein Zustand (LISTEN,
     ESTABLISHED, TIME_WAIT ...) und das Programm, dem er gehört. Damit sehen Sie, auf welchem Port
@@ -1935,8 +1937,9 @@ eingeben, von Start bis Stop. Das dritte ist, was das Werkzeug **NAT and STUN** 
 sendet, wenn Sie Start drücken: einige Anfragen an die beiden Server, die Sie eingeben, und kleine
 Testpakete an die eigene öffentliche Adresse dieses Netzwerks. Das vierte ist das Werkzeug
 **Port scan** auf demselben Tab: eine TCP-Verbindung oder ein UDP-Datagramm an jeden Port, den
-Sie wählen, unter der Adresse, die Sie eingeben, von Scan bis zum Ende oder Stop. Wenn Sie statt
-einer Adresse einen Namen eingeben, schlägt Windows ihn zuerst nach, wie für jedes Programm.
+Sie wählen, und noch einmal an einen Port, der keine Antwort gab und erneut gefragt wird, unter
+der Adresse, die Sie eingeben, von Scan bis zum Ende oder Stop. Wenn Sie statt einer Adresse einen
+Namen eingeben, schlägt Windows ihn zuerst nach, wie für jedes Programm.
 
 ## Ein Hinweis zu SmartScreen und Antivirenprogrammen
 

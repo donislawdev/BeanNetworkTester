@@ -424,14 +424,15 @@ monitor is gone it returns to the centre of the current screen.
     answer** (on TCP usually a firewall), **Cannot be reached** or **Not allowed here**, with
     the service the port usually carries. Ports next to each other with the same answer are
     one row, and a line above the table says what the result means. For each port the tool
-    makes a TCP connection that it closes at once with nothing sent on it, or sends one UDP
+    makes a TCP connection that it closes at once with nothing sent on it, or sends a UDP
     datagram: a real request for DNS, NTP, NetBIOS, mDNS and SSDP, an empty one for any other
-    port. On UDP, **Open** means a service replied, and no answer can mean open or blocked. A
-    computer in a network this one is attached to is asked 256 ports at a time, with 1 s for
-    each. One behind a router is asked 32 at a time, at most 20 new a second, with 3 s for
-    each, so the router's table of connections does not fill up. A scan that can take more
-    than five minutes asks first, and **Stop** ends it early with the ports it asked. When
-    only a few ports gave no answer and the rest did, those few are asked once more, slower.
+    port. On UDP, **Open** means a service replied, and no answer can mean open, closed or
+    blocked. A computer in a network this one is attached to is asked 256 ports at a time,
+    with 1 s for each. One behind a router is asked 32 at a time, at most 20 new a second,
+    with 3 s for each, so the router's table of connections does not fill up. A scan that can
+    take more than five minutes asks first, and **Stop** ends it early with the ports it asked.
+    When only a few ports gave no answer and the rest did, those few are asked once more,
+    slower, with a second connection or datagram.
     On Windows a closed UDP port reads **Closed** only when the program runs as
     administrator: the firewall keeps that message from programs, and the tool then reads it
     from a copy of the network traffic. Scan only computers you are allowed to test.
@@ -505,8 +506,9 @@ monitor is gone it returns to the centre of the current screen.
     comes from the same table as **Sockets**. On a Windows that writes every permitted
     connection to its Security log (an audit setting some organisations turn on), the check
     adds an entry there for each port, protocol and IP version it checks, so the tool asks
-    before a check that would add thousands of entries when it runs as administrator and
-    can see that setting. Right-click a row to
+    before a check that would add thousands of entries: as administrator when it sees that
+    setting on, and without administrator rights always, because it cannot see the setting
+    then. Right-click a row to
     target the program that holds the port or leave it alone. **Save CSV** writes the
     rows on screen to a file (see "CSV exports" below).
   - **Adapters** - every network adapter on this computer and the settings a test depends
@@ -2246,9 +2248,10 @@ support page or the project's page on GitHub - when you click the button for it 
 the echo requests of the **Ping** tool on the Tools tab, which go only to the address you type, from
 Start to Stop. The third is what the **NAT and STUN** tool on the same tab sends when you press Start:
 a few requests to the two servers you type and small test packets to this network's own public
-address. The fourth is the **Port scan** tool on the same tab: a TCP connection or one UDP datagram
-to each port you choose, on the address you type, from Scan to the end or Stop. When you type a name
-instead of an address, Windows looks it up first, the way it does for any program.
+address. The fourth is the **Port scan** tool on the same tab: a TCP connection or a UDP datagram
+to each port you choose, and once more to a port that gave no answer and is asked again, on the
+address you type, from Scan to the end or Stop. When you type a name instead of an address, Windows
+looks it up first, the way it does for any program.
 
 ## A note on SmartScreen and antivirus
 

@@ -1294,20 +1294,32 @@ def _languages():
             for name in sorted(os.listdir(folder)) if name.endswith(".json")}
 
 
-def _readme_parts(lines):
-    """The README's two sentences about what goes out: the feature bullet that names
-    Ping (with its wrapped lines) and the section just above the SmartScreen one."""
+def _bullet(lines, index, nested=True):
+    """The bullet starting at ``index``, with its wrapped lines, and the bullets nested
+    in it unless ``nested`` is False."""
+    end = index + 1
+    while (end < len(lines) and lines[end].startswith("  ")
+           and (nested or not lines[end].lstrip().startswith("- "))):
+        end += 1
+    return "\n".join(lines[index:end])
+
+
+def _readme_parts(lines, tools_name):
+    """The README's three places that say what goes out: the feature bullet that names
+    Ping (with its wrapped lines), the Tools tab's entry (``tools_name``, the tab as
+    that README names it) and the section just above the SmartScreen one. The Tools
+    entry joined on 2026-11-12: seven translations went on saying only Ping and NAT
+    and STUN send after Port scan came, and nothing read that entry."""
     parts = []
     for index, line in enumerate(lines):
-        if not line.startswith("- **"):
-            continue
-        end = index + 1
-        while end < len(lines) and lines[end].startswith("  "):
-            end += 1
-        bullet = "\n".join(lines[index:end])
-        if "Ping" in bullet:
-            parts.append(("feature list", bullet))
+        if line.startswith("- **") and "Ping" in _bullet(lines, index):
+            parts.append(("feature list", _bullet(lines, index)))
             break
+    tools = next((i for i, line in enumerate(lines)
+                  if line.startswith(f"- **{tools_name}**")), None)
+    if tools is not None:
+        # its own sentences only: a nested bullet about one tool names that tool anyway
+        parts.append(("Tools entry", _bullet(lines, tools, nested=False)))
     smart = next((i for i, line in enumerate(lines)
                   if line.startswith("## ") and "SmartScreen" in line), None)
     if smart is not None:
@@ -1319,6 +1331,7 @@ def _readme_parts(lines):
 def what_goes_out():
     """``(where, text, language)`` of every sentence that lists what leaves the computer."""
     from beantester import legal
+    languages = _languages()
     found = []
     for name in sorted(os.listdir(ROOT)):
         if name.startswith("README") and name.endswith(".md"):
@@ -1326,7 +1339,8 @@ def what_goes_out():
                 lines = handle.read().splitlines()
             language = README_NAME_LANGUAGE.get(name, "en")
             found += [(f"{name}, {part}", text, language)
-                      for part, text in _readme_parts(lines)]
+                      for part, text in _readme_parts(lines,
+                                                      languages[language]["app.tabs.tools"])]
     with open(os.path.join(ROOT, "THIRD-PARTY-NOTICES.md"), encoding="utf-8") as handle:
         notices = handle.read()
     at = notices.find("## Telemetry")
@@ -1336,7 +1350,7 @@ def what_goes_out():
                       notices[at:end if end > 0 else None], "en"))
     report = legal.cli_report()
     found.append(("--license", report[report.find("Telemetry:"):], "en"))
-    for code, strings in _languages().items():
+    for code, strings in languages.items():
         found.append((f"lang/{code}.json, about.no_telemetry",
                       strings.get("about.no_telemetry", ""), code))
     return found
@@ -1356,10 +1370,10 @@ def test_every_sentence_about_what_goes_out_names_every_tool_that_sends():
     found = what_goes_out()
     readmes = [name for name in os.listdir(ROOT)
                if name.startswith("README") and name.endswith(".md")]
-    # Two per README, the notices, --license and one per window language: fewer means
+    # Three per README, the notices, --license and one per window language: fewer means
     # a sentence was not found, and a check over nothing passes everything.
     check("every sentence about what goes out was found",
-          len(found) == 2 * len(readmes) + 2 + len(languages) and all(t for _w, t, _l in found),
+          len(found) == 3 * len(readmes) + 2 + len(languages) and all(t for _w, t, _l in found),
           f"({[(where, len(text)) for where, text, _l in found]})")
     missing = {}
     for where, text, language in found:
@@ -1377,6 +1391,16 @@ def test_a_sentence_that_leaves_a_sending_tool_out_is_caught():
           unnamed("Its Ping tool pings only the address you type.", names) == ["nat"])
     check("a name wrapped across two lines still counts",
           unnamed("Ping, and the NAT and\n  STUN tool", names) == [])
+    readme = ["- **No telemetry** - Ping and NAT and STUN send.",
+              "- **Tools** - helpers. Only **Ping** sends",
+              "  anything. Today:",
+              "  - **NAT and STUN** - its own entry.",
+              "## Privacy", "Ping and NAT and STUN.", "## SmartScreen"]
+    parts = dict(_readme_parts(readme, "Tools"))
+    check("a README's Tools entry is read, without the bullets nested in it",
+          parts.get("Tools entry") == "\n".join(readme[1:3]), f"({parts})")
+    check("and a Tools entry that names Ping alone is caught",
+          unnamed(parts.get("Tools entry", ""), names) == ["nat"])
 
 
 def test_the_tools_tab_check_sees_each_way_out():

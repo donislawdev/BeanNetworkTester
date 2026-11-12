@@ -330,6 +330,7 @@ it yourself. The second is the **Ping** tool on the Tools tab: ICMP echo request
 the address you type, from Start to Stop. The third is the **NAT and STUN** tool on
 the same tab: when you press Start, a few STUN and TURN requests to the two servers
 you type and small test packets to this network's own public address. The fourth is
-the **Port scan** tool on the same tab: a TCP connection or one UDP datagram to each
-port you choose, on the address you type, from Scan to the end or Stop. A name you
-type is looked up first, as for any program.
+the **Port scan** tool on the same tab: a TCP connection or a UDP datagram to each
+port you choose, and once more to a port that gave no answer and is asked again, on
+the address you type, from Scan to the end or Stop. A name you type is looked up
+first, as for any program.

@@ -38,9 +38,8 @@ How, and why this way - measured 2026-09-24 on Windows 11 and on a Windows Serve
   rest on exactly that, so a row of that table reads Unknown instead, and the check
   names the tables.
 * **Every port of the machine** is 65535 ports x TCP and UDP x IPv4 and IPv6 =
-  262 140 binds. MEASURED 2026-11-11 (``internal_tools/sondy/2026-11-11-ports-full-
-  scan``): 12.2 s on Windows 11, 3.6 s on Linux (WSL), 35.5 s on a Windows Server
-  2025 VM. So a check says how far it is and stops when asked (``Progress``), and
+  262 140 binds. MEASURED 2026-11-11: 12.2 s on Windows 11, 3.6 s on Linux (WSL),
+  35.5 s on a Windows Server 2025 VM. So a check says how far it is and stops when asked (``Progress``), and
   ports next to each other that answered the same come back as one row
   (``Row.last``): the developer machine's 3323 ports that were not free are 105 rows.
 

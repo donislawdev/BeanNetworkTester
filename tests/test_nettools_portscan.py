@@ -32,8 +32,10 @@ class Clock:
 
 
 class FakeNet:
-    """Answers per port: ``script[port] = (Answer or None, after_s)``. None is silence;
-    ``after_s`` 0 answers at once (a refusal the system knows straight away)."""
+    """Answers per port: ``script[(proto, port)]`` or ``script[port]`` = (Answer or None,
+    after_s). None is silence; ``after_s`` 0 answers at once (a refusal the system knows
+    straight away). Like the real selector, ``answers`` reports every socket still
+    waiting, whatever protocol it was asked on."""
 
     REFUSED = (ps.Answer(ps.CLOSED, 10061), 0)
 
@@ -41,7 +43,7 @@ class FakeNet:
         self.clock = clock
         self.script = script or {}
         self.default = self.REFUSED
-        self.waiting = {}           # port -> (due, answer)
+        self.waiting = {}           # (proto, port) -> (due, answer)
         self.started = []           # (time, proto, port)
         self.most_waiting = 0
         self.closed = False
@@ -49,10 +51,10 @@ class FakeNet:
 
     def start(self, proto, port, wait_s):
         self.started.append((self.clock.now, proto, port))
-        answer, after = self.script.get(port, self.default)
+        answer, after = self.script.get((proto, port), self.script.get(port, self.default))
         if answer is not None and after == 0:
             return answer
-        self.waiting[port] = (self.clock.now + after, answer)
+        self.waiting[(proto, port)] = (self.clock.now + after, answer)
         self.most_waiting = max(self.most_waiting, len(self.waiting))
         return None
 
@@ -60,13 +62,13 @@ class FakeNet:
         due = [d for d, a in self.waiting.values() if a is not None and d <= self.clock.now + timeout]
         self.clock.now = min(due) if due and min(due) > self.clock.now else (
             self.clock.now if due else self.clock.now + timeout)
-        out = [(p, a) for p, (d, a) in self.waiting.items() if a is not None and d <= self.clock.now]
-        for port, _answer in out:
-            del self.waiting[port]
-        return out
+        out = [(k, a) for k, (d, a) in self.waiting.items() if a is not None and d <= self.clock.now]
+        for key, _answer in out:
+            del self.waiting[key]
+        return [(port, answer) for (_proto, port), answer in out]
 
     def give_up(self, proto, port):
-        self.waiting.pop(port, None)
+        self.waiting.pop((proto, port), None)
         return ps.Answer(ps.SILENT)
 
     def close(self):
@@ -265,6 +267,21 @@ def test_an_unreachable_computer_is_given_up_on():
           and len(net.started) == 199, f"({result.gave_up}, {len(net.started)})")
 
 
+def test_a_protocol_given_up_on_leaves_no_socket_for_the_next():
+    """TCP gives up while some of its ports still wait: their sockets are closed then,
+    so none of them answers in UDP's round under its port number."""
+    script = {(ps.TCP, port): (ps.Answer(ps.UNREACHABLE, 113), 0) for port in range(1, 65)}
+    script.update({(ps.TCP, port): (ps.Answer(ps.OPEN), 0.5) for port in range(65, 81)})
+    script.update({(ps.UDP, port): (None, 0) for port in range(1, 81)})
+    result, _net, _clock = run(range(1, 81), script, ps.NEAR, protocols=(ps.TCP, ps.UDP))
+    check("TCP gave up with 16 ports still waiting", result.gave_up == (ps.TCP,),
+          f"({result.gave_up})")
+    seen = states(result)
+    udp = {port: seen[(port, ps.UDP)] for port in range(1, 81)}
+    check("no UDP port reads an answer that came for TCP",
+          set(udp.values()) == {ps.SILENT}, f"({ {p: s for p, s in udp.items() if s != ps.SILENT} })")
+
+
 def test_a_few_silent_ports_are_asked_again_slower():
     """A busy host (macOS limits its RSTs): the silent minority gets a second round, at
     most 32 at once, and an answer there replaces the silence."""
@@ -275,20 +292,26 @@ def test_a_few_silent_ports_are_asked_again_slower():
     net = FakeNet(clock, script)
     original_start = net.start
     asked = []
+    second_round = []           # how many wait, after each start of the second round
 
     def start(proto, port, wait_s):
         asked.append(port)
-        if asked.count(port) == 2 and port <= 40:
-            return ps.Answer(ps.CLOSED, 61)        # it answers the second time
-        return original_start(proto, port, wait_s)
+        again = asked.count(port) == 2
+        if again and port <= 40:
+            script[port] = (ps.Answer(ps.CLOSED, 61), 0.5)     # it answers the second time
+        answer = original_start(proto, port, wait_s)
+        if again:
+            second_round.append(len(net.waiting))
+        return answer
 
     net.start = start
     progress = ps.Progress()
     result = ps.scan(a_plan(range(1, 1001)), progress, net=net, clock=clock)
     check("the 50 silent ones asked again", result.again == (ps.Again(ps.TCP, 50, 40),),
           f"({result.again})")
-    check("at most 32 at once then", net.most_waiting <= ps.AGAIN_AT_ONCE or
-          net.most_waiting <= ps.NEAR.at_once, "")
+    # The first round had 256 at once (a near computer); every one of the 50 waits in
+    # the second, so 32 is that round's own limit, reached.
+    check("32 at once then", max(second_round) == 32, f"({max(second_round)})")
     seen = states(result)
     check("the recovered ones read closed, the rest still silent",
           [seen[(p, ps.TCP)] for p in (1, 40, 41, 50)] == [ps.CLOSED, ps.CLOSED, ps.SILENT,
@@ -393,6 +416,63 @@ def test_the_sniffer_is_opened_only_where_it_can_help(monkeypatch):
     check("opened once, for the scanned address", opened == ["192.0.2.10"], f"({opened})")
 
 
+def test_a_sniffer_whose_sockets_cannot_be_made_is_closed_again(monkeypatch):
+    """The sniffer holds a driver handle: when the scan's sockets cannot be made after
+    it opened, the scan closes it before it fails."""
+    closed = []
+
+    class Sniffer:
+        def close(self):
+            closed.append(True)
+
+    def no_sockets(address, sniffer):
+        raise OSError(errno.EMFILE, "too many open files")
+
+    monkeypatch.setattr(ps, "open_sniffer", lambda scan_plan: Sniffer())
+    monkeypatch.setattr(ps, "_Net", no_sockets)
+    with pytest.raises(OSError):
+        ps.scan(a_plan((53,), protocols=(ps.UDP,)))
+    check("the sniffer is closed", closed == [True], f"({closed})")
+
+
+def test_the_ports_seen_refused_are_kept_in_place_and_asked_by_port():
+    """What the sniffer's thread saw, read by the scan's thread: one set, added to in
+    place (not copied whole for each message), asked only about the ports waiting."""
+    seen = ps._Seen()
+    kept = seen._ports
+    for port in range(1, 1001):
+        seen.add(port)
+    check("the same set, grown in place", seen._ports is kept and len(kept) == 1000, "")
+    check("only the ports asked about", seen.among({5, 999, 2000}) == {5, 999},
+          f"({seen.among({5, 999, 2000})})")
+
+
+def test_a_udp_port_the_sniffer_saw_refused_reads_closed():
+    """With the sniffer, a UDP port whose ICMP "port unreachable" it copied is Closed,
+    whether the message comes while the port waits or by the time it is given up on."""
+    quiet = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    quiet.bind(("127.0.0.1", 0))        # takes the datagram and never answers
+    port = quiet.getsockname()[1]
+
+    class Sniffer:
+        def closed_among(self, ports):
+            return {p for p in ports if p == port}
+
+    net = ps._Net("127.0.0.1", Sniffer())
+    try:
+        check("asked, and waiting", net.start(ps.UDP, port, 1.0) is None, "")
+        got = net.answers(ps.UDP, 0)
+        check("the sniffer's word is the answer", got == [(port, ps.Answer(ps.CLOSED))],
+              f"({got})")
+        check("and nothing waits for it any more", net.waiting == {}, f"({net.waiting})")
+        net.start(ps.UDP, port, 1.0)
+        check("given up on, it reads closed too",
+              net.give_up(ps.UDP, port) == ps.Answer(ps.CLOSED), "")
+    finally:
+        net.close()
+        quiet.close()
+
+
 # -- the real system, loopback only ------------------------------------------------ #
 def _servers():
     tcp = socket.socket()
@@ -460,8 +540,12 @@ sys.path.insert(0, {root!r})
 from beantester.nettools import portscan as ps
 seen = []
 def hook(event, args):
-    if event.startswith("socket."):
-        seen.append((event, repr(args)))
+    if event == "socket.connect":
+        sock, address = args
+        kind = "TCP" if sock.type == socket.SOCK_STREAM else "UDP"
+        seen.append((event, kind, list(address)[:2]))
+    elif event.startswith("socket."):
+        seen.append((event, None, None))
 sys.addaudithook(hook)
 held = socket.socket(); held.bind(("127.0.0.1", 0)); held.listen(4)
 port = held.getsockname()[1]
@@ -473,7 +557,7 @@ run = seen[start:]
 canary = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 canary.connect(("192.0.2.1", 9))
 canary.close()
-print("BEGIN_JSON" + json.dumps({{"run": run, "all": seen}}))
+print("BEGIN_JSON" + json.dumps({{"run": run, "all": seen, "port": port}}))
 """
 
 
@@ -487,13 +571,19 @@ def test_a_scan_connects_only_to_the_address_typed():
     out = proc.stdout
     assert "BEGIN_JSON" in out, (out[-800:], proc.stderr[-800:])
     seen = json.loads(out.split("BEGIN_JSON", 1)[1])
-    kinds = sorted({event for event, _args in seen["run"]})
+    kinds = sorted({event for event, _kind, _address in seen["run"]})
     check("only sockets made and connected", kinds == ["socket.__new__", "socket.connect"],
           f"({kinds})")
-    connects = [args for event, args in seen["run"] if event == "socket.connect"]
-    check("four connects: two ports, two protocols", len(connects) == 4, f"({connects})")
-    check("every one to the typed address", all("'127.0.0.1'" in args for args in connects),
+    connects = [(kind, address) for event, kind, address in seen["run"]
+                if event == "socket.connect"]
+    port = seen["port"]
+    check("one connect per port and protocol, to the ports typed",
+          sorted((kind, address[1]) for kind, address in connects)
+          == [("TCP", port), ("TCP", port + 1), ("UDP", port), ("UDP", port + 1)],
           f"({connects})")
+    check("every one to the typed address",
+          all(address[0] == "127.0.0.1" for _kind, address in connects), f"({connects})")
     check("the hook reports a connect elsewhere when shown one",
-          any("'192.0.2.1'" in args for event, args in seen["all"] if event == "socket.connect"),
+          ["UDP", ["192.0.2.1", 9]] in [[kind, address] for event, kind, address in seen["all"]
+                                         if event == "socket.connect"],
           f"({seen['all'][-2:]})")

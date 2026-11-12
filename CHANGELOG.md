@@ -19,7 +19,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   Ports next to each other with the same result are one row (`49152-49999`), "Hide free
   ports" leaves the rest, and the new "listens on" column says where the program holding a
   port waits: all networks, this computer only, or one network adapter. "Save CSV" saves the
-  rows on screen. Where Windows logs every permitted connection, the tool asks before
+  rows on screen. Where Windows may log every permitted connection, the tool asks before
   checking thousands of ports.
 
 - **Tools: more from the Sockets table.** "Show" lists only the sockets that are listening, the

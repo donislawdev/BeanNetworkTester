@@ -236,12 +236,15 @@ revient au centre de l'écran actuel.
   L'ancienne limite stricte de 400 lignes a disparu - le nombre de lignes à afficher se règle avec
   le champ **"Row limit"** (section *Tables*, 0 = aucune limite, 50 000 par défaut).
 - **Tools** - de petits utilitaires pour les questions qu'on se pose avant ou pendant un test, en
-  trois groupes de sous-onglets : **Network** (Ping, NAT and STUN), **This computer** (Sockets,
-  TCP health, Port check, Adapters) et **This program** (Filter tester, Diagnostics). Seuls
-  **Ping** et **NAT and STUN** envoient quelque chose sur le réseau dans cet onglet : Ping envoie
-  des requêtes d'écho à l'adresse que vous saisissez, de Start à Stop, et NAT and STUN envoie
-  quelques requêtes aux deux serveurs que vous saisissez et de petits paquets de test à la propre
-  adresse publique de ce réseau, quand vous appuyez sur Start. Aujourd'hui :
+  trois groupes de sous-onglets : **Network** (Ping, NAT and STUN, Port scan), **This computer**
+  (Sockets, TCP health, Port check, Adapters) et **This program** (Filter tester, Diagnostics).
+  Seuls **Ping**, **NAT and STUN** et **Port scan** envoient quelque chose sur le réseau dans cet
+  onglet : Ping envoie des requêtes d'écho à l'adresse que vous saisissez, de Start à Stop,
+  NAT and STUN envoie quelques requêtes aux deux serveurs que vous saisissez et de petits
+  paquets de test à la propre adresse publique de ce réseau, quand vous appuyez sur Start, et
+  Port scan se connecte aux ports que vous choisissez à l'adresse que vous saisissez, de Scan
+  jusqu'à la fin ou à Stop. Ne scannez que des ordinateurs que vous avez le droit de tester.
+  Aujourd'hui :
   - **Sockets** - tous les sockets TCP et UDP de cet ordinateur, comme `netstat -ano`, sans qu'aucune
     session soit nécessaire : ce qui écoute, ce qui est connecté, son état (LISTEN,
     ESTABLISHED, TIME_WAIT...) et le programme qui le possède. Servez-vous-en pour voir sur quel
@@ -1929,9 +1932,10 @@ de l'outil **Ping** de l'onglet Tools, qui ne vont qu'à l'adresse que vous sais
 Stop. La troisième est ce que l'outil **NAT and STUN** du même onglet envoie quand vous appuyez sur
 Start : quelques requêtes aux deux serveurs que vous saisissez et de petits paquets de test à la
 propre adresse publique de ce réseau. La quatrième est l'outil **Port scan** du même onglet : une
-connexion TCP ou un datagramme UDP vers chaque port que vous choisissez, à l'adresse que vous
-saisissez, de Scan jusqu'à la fin ou à Stop. Si vous saisissez un
-nom au lieu d'une adresse, Windows le résout d'abord, comme pour n'importe quel programme.
+connexion TCP ou un datagramme UDP vers chaque port que vous choisissez, et une de plus vers un
+port resté sans réponse et interrogé à nouveau, à l'adresse que vous saisissez, de Scan jusqu'à la
+fin ou à Stop. Si vous saisissez un nom au lieu d'une adresse, Windows le résout d'abord, comme pour
+n'importe quel programme.
 
 ## À propos de SmartScreen et des antivirus
 

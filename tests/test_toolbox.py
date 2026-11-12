@@ -1977,7 +1977,7 @@ def fake_check(matcher, protocols, families, progress=None):
 
 pc.check = fake_check
 from beantester import winenv
-winenv.binds_audited = lambda query=None: None      # this machine's answer is not the test's
+winenv.binds_audited = lambda query=None: False     # this machine's answer is not the test's
 
 def open_ports():
     app.select_page("tools")
@@ -2143,6 +2143,11 @@ def test_all_ports_says_how_far_it_is_and_stop_keeps_what_was_checked():
         assert render(row(panel, 1))[0] == "1-100"
         assert panel.check_btn.cget("text") == T("tools.portcheck.check")
         assert "disabled" not in panel.check_btn.state()
+        stopped = T("tools.portcheck.status_stopped", time="@@").split("@@")[0]
+        assert panel.status.label.cget("text").startswith(stopped), \\
+            ("stopped, not done", panel.status.label.cget("text"))
+        app._build_ui()
+        assert open_ports().status.label.cget("text").startswith(stopped), "and after a rebuild"
     """))
 
 
@@ -2206,6 +2211,7 @@ def test_a_big_check_asks_first_where_windows_logs_every_port():
         asked = []
         dialogs.ask_yes_no = lambda parent, title, body: (asked.append(body), False)[1]
         winenv.binds_audited = lambda query=None: True
+        pc.WINDOWS = True                       # the setting is Windows' own, on any runner
         panel = open_ports()
         type_ports(panel, "1-1000")
         panel.check()
@@ -2219,12 +2225,26 @@ def test_a_big_check_asks_first_where_windows_logs_every_port():
         panel.check()
         settle(panel)
         assert len(checks) == 2, "asked, and yes"
-        winenv.binds_audited = lambda query=None: None
+
+        pc.WINDOWS = True
+        winenv.binds_audited = lambda query=None: None   # no administrator rights
+        asked.clear()
+        dialogs.ask_yes_no = lambda parent, title, body: (asked.append((title, body)), False)[1]
+        panel.check()
+        assert asked == [(T("tools.portcheck.audit_title_unknown"),
+                          T("tools.portcheck.audit_body_unknown", count=4004))] \\
+            and len(checks) == 2, ("not known on Windows: asked, in words that say may", asked)
+        winenv.binds_audited = lambda query=None: False
         dialogs.ask_yes_no = lambda *a: (_ for _ in ()).throw(AssertionError("asked"))
+        panel.check()
+        settle(panel)
+        assert len(checks) == 3, "known not to log: no question"
+        pc.WINDOWS = False
+        winenv.binds_audited = lambda query=None: None
         panel.check_all()
         panel.stop()
         settle(panel)
-        assert len(checks) == 3, "not known here (no administrator rights): no question"
+        assert len(checks) == 4, "not Windows: no question"
     """))
 
 

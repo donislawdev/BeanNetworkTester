@@ -4,22 +4,22 @@
 question Port check cannot answer, because Port check asks THIS computer. This tool
 asks the computer at the address the person typed, port by port, the way any program
 that connects would: a TCP connection (closed again at once, nothing sent on it) or
-one UDP datagram per port. No raw packets and no administrator rights for the scan
-itself.
+a UDP datagram per port, and once more for a port the second round asks again. No raw
+packets and no administrator rights for the scan itself.
 
 What is sent, and where, is the promise this tool is held to (README, "Tools"): to the
 ONE address typed (a name is looked up once, at Start, by Ping's reading of a name),
 on the ports typed, from Start to the end or Stop. Any address may be scanned (the
 owner's decision, 2026-11-11); the help says to scan only machines you may test.
 
-Measured 2026-11-11 (``internal_tools/sondy/2026-11-11-ports-full-scan``, the
-PROJEKT file's section 1), and the reasons the code is the way it is:
+Measured 2026-11-11 on Windows, Linux, macOS and LAN devices, and the reasons the code
+is the way it is:
 
 * **Windows tries a refused connection again**: a closed port costs 2 s, not 0.2 ms.
   ``SIO_TCP_INITIAL_RTO`` with no SYN retransmissions turns that off, with no
   administrator rights, and its ``Rtt`` is when Windows gives up on a silent port -
   so it is set to this scan's wait. ``TCP_MAXRT`` is NOT a substitute: a refused port
-  then reads as a time-out (10060 after 500 ms, measured 2026-11-12, ``probe_maxrt.py``).
+  then reads as a time-out (10060 after 500 ms, measured 2026-11-12).
 * **Pace.** A computer in a network this one is attached to (an adapter's prefix)
   answers within milliseconds: 256 at once, 1 s each. Anything behind a router goes
   through its connection table, and every silent port holds an entry there for up to
@@ -60,7 +60,8 @@ TCP, UDP = "TCP", "UDP"
 PROTOCOLS = (TCP, UDP)
 
 # What a port answered. On UDP, OPEN means a reply came back and SILENT that nothing
-# did - open and quiet, or blocked: UDP cannot tell those apart.
+# did - open and quiet, closed without saying so, or blocked: UDP cannot tell those
+# apart.
 OPEN, CLOSED, SILENT, UNREACHABLE, DENIED, FAILED = (
     "open", "closed", "silent", "unreachable", "denied", "failed")
 STATES = (OPEN, CLOSED, SILENT, UNREACHABLE, DENIED, FAILED)
@@ -422,7 +423,7 @@ class _Net:
         elif timeout > 0:
             time.sleep(timeout)
         if proto == UDP and self.sniffer is not None:
-            for port in self.sniffer.closed & set(self.waiting):
+            for port in self.sniffer.closed_among(self.waiting):
                 out.append((port, Answer(CLOSED)))
         for port, answer in out:
             self._drop(port, reset=proto == TCP and answer.state == OPEN)
@@ -439,7 +440,7 @@ class _Net:
     def give_up(self, proto, port):
         """The wait for ``port`` is over: silent, unless the sniffer saw it refused."""
         self._drop(port)
-        if proto == UDP and self.sniffer is not None and port in self.sniffer.closed:
+        if proto == UDP and self.sniffer is not None and self.sniffer.closed_among((port,)):
             return Answer(CLOSED)
         return Answer(SILENT)
 
@@ -487,6 +488,25 @@ def _closed_port(raw, target, v6):
         return None
 
 
+class _Seen:
+    """The ports the sniffer's thread saw refused, asked by the scan's thread. Added
+    to in place under a lock: a set copied whole for every message would copy up to
+    65 535 ports 65 535 times in a UDP scan of a computer that refuses every port."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._ports = set()
+
+    def add(self, port):
+        with self._lock:
+            self._ports.add(port)
+
+    def among(self, ports):
+        """The ones of ``ports`` seen refused."""
+        with self._lock:
+            return {port for port in ports if port in self._ports}
+
+
 class _Sniffer:  # pragma: no cover - Windows only (pydivert, a real driver, elevated)
     """Copies of the ICMP "port unreachable" messages the scanned computer sends back,
     which the Windows firewall keeps from the socket.
@@ -507,20 +527,29 @@ class _Sniffer:  # pragma: no cover - Windows only (pydivert, a real driver, ele
             filt = f"inbound and icmpv6.Type == 1 and icmpv6.Code == 4 and ipv6.SrcAddr == {bare}"
         else:
             filt = f"inbound and icmp.Type == 3 and icmp.Code == 3 and ip.SrcAddr == {bare}"
-        self.closed = set()
+        self.closed = _Seen()
         self._closing = False
         self._handle = pydivert.WinDivert(filt, layer=Layer.NETWORK,
                                           flags=Flag.SNIFF | Flag.RECV_ONLY)
         self._handle.open()
-        self._thread = threading.Thread(target=self._read, name="portscan-sniff", daemon=True)
-        self._thread.start()
+        try:
+            self._thread = threading.Thread(target=self._read, name="portscan-sniff",
+                                            daemon=True)
+            self._thread.start()
+        except BaseException:
+            # no reader, so nobody would ever close the handle the driver holds
+            self._handle.close()
+            raise
+
+    def closed_among(self, ports):
+        return self.closed.among(ports)
 
     def _read(self):
         try:
             for packet in self._handle:
                 port = _closed_port(bytes(packet.raw), self._target, self._v6)
                 if port:
-                    self.closed = self.closed | {port}      # whole, for the reader
+                    self.closed.add(port)
         except Exception as exc:
             if not self._closing:
                 crashlog.note(exc, AREA)
@@ -629,6 +658,10 @@ def _round(net, proto, ports, pace, progress, clock):
             return answers, "stopped"
         _start_some(net, (proto, queue, waiting, answers), pace, progress, (clock, pacer))
         if _not_there(answers):
+            # Closed now, unanswered: a socket left waiting would answer in the next
+            # protocol's round, under its port number.
+            for port in waiting:
+                net.give_up(proto, port)
             return answers, "gave_up"
         timeout = _timeout(waiting, queue, pace, pacer, clock)
         for port, answer in net.answers(proto, timeout):
@@ -713,6 +746,18 @@ def _one_protocol(net, proto, scan_plan, progress, clock):
     return answers, how, again
 
 
+def _open_net(scan_plan):
+    """``(net, sniffer)``: the real sockets, and the sniffer they read closed UDP ports
+    from (or None). A sniffer whose sockets could not be made is closed again."""
+    sniffer = open_sniffer(scan_plan)
+    try:
+        return _Net(scan_plan.target.address, sniffer), sniffer
+    except BaseException:
+        if sniffer is not None:
+            sniffer.close()
+        raise
+
+
 def scan(scan_plan, progress=None, net=None, clock=time.monotonic):
     """Ask every port of the plan, protocol by protocol, and fold what came back into
     rows. On a worker. ``progress`` carries Stop and how far it is."""
@@ -722,8 +767,7 @@ def scan(scan_plan, progress=None, net=None, clock=time.monotonic):
     started = time.time()
     sniffer = None
     if net is None:
-        sniffer = open_sniffer(scan_plan)
-        net = _Net(scan_plan.target.address, sniffer)
+        net, sniffer = _open_net(scan_plan)
     rows, gave_up, again = [], [], []
     try:
         for proto in scan_plan.protocols:
