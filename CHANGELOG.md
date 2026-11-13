@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-13
+
 ### Added
 
 - **"All traffic except loopback".** A new choice under "Traffic to modify"
