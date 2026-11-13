@@ -67,7 +67,7 @@ en a besoin apprendra qu'il existe.
 - **Mode ligne de commande** - scriptable pour la CI, avec des codes de sortie et une sortie JSON.
 - **Aucune télémétrie, n'envoie rien de lui-même** - l'outil Ping ne pingue que l'adresse que
   vous saisissez, et NAT and STUN envoie quelques requêtes aux deux serveurs que vous saisissez et
-  de petits paquets de test à la propre adresse publique de ce réseau, quand vous appuyez sur Start,
+  de petits paquets de test à la propre adresse publique de ce réseau, quand vous appuyez sur Check,
   et Port scan se connecte aux ports que vous choisissez à l'adresse que vous saisissez, de Scan
   jusqu'à la fin ou à Stop.
 
@@ -239,9 +239,9 @@ revient au centre de l'écran actuel.
   trois groupes de sous-onglets : **Network** (Ping, NAT and STUN, Port scan), **This computer**
   (Sockets, TCP health, Port check, Adapters) et **This program** (Filter tester, Diagnostics).
   Seuls **Ping**, **NAT and STUN** et **Port scan** envoient quelque chose sur le réseau dans cet
-  onglet : Ping envoie des requêtes d'écho à l'adresse que vous saisissez, de Start à Stop,
+  onglet : Ping envoie des requêtes d'écho à l'adresse que vous saisissez, de Ping à Stop,
   NAT and STUN envoie quelques requêtes aux deux serveurs que vous saisissez et de petits
-  paquets de test à la propre adresse publique de ce réseau, quand vous appuyez sur Start, et
+  paquets de test à la propre adresse publique de ce réseau, quand vous appuyez sur Check, et
   Port scan se connecte aux ports que vous choisissez à l'adresse que vous saisissez, de Scan
   jusqu'à la fin ou à Stop. Ne scannez que des ordinateurs que vous avez le droit de tester.
   Aujourd'hui :
@@ -311,9 +311,9 @@ le moteur fait réellement. La barre sous le titre vous indique ce que vous rega
 
 | Préfixe | Signification |
 |---|---|
-| `Preview:` | l'application est arrêtée - cela décrit ce qui se passera après START |
+| `Preview:` | l'application est arrêtée - cela décrit ce qui se passera après START. Un champ en erreur est laissé de côté, et la barre le dit |
 | `Active:` | c'est exactement ce qui est appliqué au trafic en ce moment |
-| `Unapplied changes:` | le formulaire a été modifié - cliquez sur "Apply changes" |
+| `After "Apply changes":` | vous avez modifié le formulaire pendant une session - vient après "Active: ...", qui décrit toujours ce qui tourne, et dit ce qui tournera une fois "Apply changes" cliqué |
 
 Pendant qu'une session tourne, **deux éléments sont verrouillés** (ils se déverrouillent à STOP) : le
 **filtre de trafic** (appliqué uniquement au START) et le **sélecteur de langue** (changer de langue
@@ -1207,8 +1207,8 @@ administrateur peut définir `BEAN_DATA_DIR` comme variable d'environnement syst
 
 | | **Statistics** ("Export CSV", Statistics -> Live) | **Connections** ("Export connections CSV") |
 |---|---|---|
-| fichier | `bean_network_tester_stats.csv` | `bean_network_tester_connections.csv` |
-| mode | **Ajoute** une ligne à chaque clic - un journal à partir duquel construire un graphique sur plusieurs exécutions | **Écrase** - un instantané de la table telle qu'elle est maintenant |
+| fichier | `bean_network_tester_stats.csv` | celui que vous choisissez - proposé sous le nom `bean_network_tester_connections_<date>_<heure>.csv` |
+| mode | **Ajoute** une ligne à chaque clic - un journal à partir duquel construire un graphique sur plusieurs exécutions | **Un fichier par export** - un instantané de la table telle qu'elle est maintenant (choisir un fichier existant le remplace) |
 | écriture | atomique (fichier temporaire + renommage), donc un plantage en cours d'écriture ne peut pas le tronquer | idem |
 | votre recherche / tri | sans objet | **respectés** - le fichier correspond à ce que vous regardiez |
 | "Show only the targeted traffic" | **ignoré volontairement** - voir ci-dessous | **respecté** |
@@ -1928,9 +1928,9 @@ jour, ni service externe. L'outil capture le trafic réseau sur votre ordinateur
 **ne le quittent jamais**. Quatre choses sortent, et seulement quand vous les demandez. La première
 est une page ouverte dans votre navigateur - la page de soutien ou la page du projet sur GitHub -
 quand vous cliquez vous-même sur le bouton correspondant. La deuxième, ce sont les requêtes d'écho
-de l'outil **Ping** de l'onglet Tools, qui ne vont qu'à l'adresse que vous saisissez, de Start à
+de l'outil **Ping** de l'onglet Tools, qui ne vont qu'à l'adresse que vous saisissez, de Ping à
 Stop. La troisième est ce que l'outil **NAT and STUN** du même onglet envoie quand vous appuyez sur
-Start : quelques requêtes aux deux serveurs que vous saisissez et de petits paquets de test à la
+Check : quelques requêtes aux deux serveurs que vous saisissez et de petits paquets de test à la
 propre adresse publique de ce réseau. La quatrième est l'outil **Port scan** du même onglet : une
 connexion TCP ou un datagramme UDP vers chaque port que vous choisissez, et une de plus vers un
 port resté sans réponse et interrogé à nouveau, à l'adresse que vous saisissez, de Scan jusqu'à la

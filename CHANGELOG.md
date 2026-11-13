@@ -101,6 +101,53 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Changed
 
+- **Exporting a table asks where to save it.** "Export connections CSV", and "Save CSV" on
+  Sockets, Port check and Port scan, open a save window with a name that carries the date and
+  time, in the folder you used last. A new export no longer replaces the previous one. The
+  button is unavailable while the table is empty. "Export CSV" on Statistics still adds a row
+  to its one file in your own folder.
+
+- **Profiles ask before they are lost.** Saving under the name of one of your profiles asks
+  before it replaces it, and "Delete" asks before it removes one. Enter answers "No". Once you
+  change a value the profile sets, the list shows "(changed)" after its name.
+
+- **The bar at the top says what runs and what is waiting.** During a session, after you
+  change something, it reads "Active: ... After "Apply changes": ...", so you can tell what
+  runs now from what starts after you apply. With no session it always starts with
+  "Preview:", and a field with an error is left out of it.
+
+- **A session that reaches every connection says so on every tab.** With no target, no
+  destination and no run time, a red line under the bar says that the session impairs every
+  connection on this computer, for as long as it runs. The log says it once the session has
+  started - not before a START that then fails.
+
+- **The log at the bottom wraps long lines,** so warnings, errors and the paths of saved
+  files can be read to the end.
+
+- **Ping's button reads "Ping" and NAT and STUN's reads "Check",** so neither looks like the
+  session's START beside it.
+
+- **A refused START says first what to do.** The message begins with the advice and puts the
+  system's own error under "Technical details". On Linux it says to close the program and open
+  it again, then type your password when it asks (or to start it with sudo), and the red line
+  at the top no longer names an internal part.
+
+- **What needs a session says so.** "Apply changes" and "Mark bug moment" are unavailable
+  while no session runs, and "Copy CLI command" says when it copied the command for the
+  settings in the form. The Events table says what will appear in it, and the Connections
+  table says to press START when no session runs.
+
+- **Clearer messages.** A regular expression that does not work says why, for example that a
+  "(" has no ")", and the hint about escaping a comma appears only where a comma cut the
+  pattern in two. A file that is not valid JSON is refused with its line and column. Tools >
+  Diagnostics shows a healthy row's values in the window's language. Closing the window asks
+  about the "session", as everything else calls it, the upload fields read "Upload latency"
+  and so on, and two section titles are shorter (the syntax stays under "?").
+
+- **Charts and boxes.** Chart axes count in even steps, such as 0, 10, 20, 30, 40, and an
+  empty Ping chart no longer shows "-0". Port scan shows how many ports its box holds, and
+  the "Buffer" box is as wide as the other numbers.
+
 - **Tools: Sockets shows a remote address only where there is one.** On Windows a TCP socket
   that is bound to a port and not connected yet showed "0.0.0.0" and port 0 as its other
   end. It now shows none, as a listening socket always did. A socket whose row names
