@@ -314,6 +314,9 @@ zeigt, was Sie gerade vor sich haben:
 | `Active:` | genau das wird gerade auf den Datenverkehr angewendet |
 | `After "Apply changes":` | Sie haben das Formular während einer Sitzung geändert - steht nach "Active: ...", das weiter beschreibt, was läuft, und sagt, was nach einem Klick auf "Apply changes" laufen wird |
 
+Die Leiste fasst drei Zeilen. Ein längerer Text endet dort mit "...", und der ganze Text erscheint,
+wenn Sie mit der Maus auf die Leiste zeigen.
+
 Während eine Sitzung läuft, sind **zwei Elemente gesperrt** (sie werden bei STOP wieder
 freigegeben): der **Verkehrsfilter** (wird nur bei START angewendet) und die **Sprachauswahl**
 (ein Sprachwechsel baut die gesamte Oberfläche neu auf). Die Schaltfläche STOP ist rot - sie lässt
@@ -1186,11 +1189,14 @@ Ein Pfad, den diese Sitzung sperrt, stellt nichts zu, daher wird er nie genannt.
 ## CSV-Exporte
 
 Zwei Schaltflächen schreiben zwei Dateien, und sie verhalten sich **absichtlich unterschiedlich**.
-Beide landen in Ihrem eigenen Ordner, `%LOCALAPPDATA%\BeanNetworkTester`, zusammen mit Ihren
-Profilen und dem Fensterzustand (oder im Projektstamm, wenn Sie aus den Quellen starten). Das
-Programm schreibt den vollständigen Pfad jedes Mal ins Protokoll, wenn es eine speichert. Sie
-liegen außerhalb des Programmordners, damit eine Aktualisierung des Programms - von Hand oder über
-einen Paketmanager, der diesen Ordner ersetzt - Ihre Dateien nicht mitnehmen kann. Setzen Sie
+"Export CSV" auf Statistics hängt eine Zeile an eine Datei in Ihrem eigenen Ordner an,
+`%LOCALAPPDATA%\BeanNetworkTester`, zusammen mit Ihren Profilen und dem Fensterzustand (oder im
+Projektstamm, wenn Sie aus den Quellen starten). "Export connections CSV" fragt, wohin gespeichert
+werden soll, und schlägt einen Namen mit Datum und Uhrzeit vor, im zuletzt verwendeten Ordner - beim
+ersten Mal in Ihrem eigenen. Das Programm schreibt den vollständigen Pfad jedes Mal ins Protokoll,
+wenn es eine Datei speichert. Ihr eigener Ordner liegt außerhalb des Programmordners, damit eine
+Aktualisierung des Programms - von Hand oder über einen Paketmanager, der diesen Ordner ersetzt -
+Ihre Dateien nicht mitnehmen kann. Setzen Sie
 `BEAN_DATA_DIR` auf einen Ordner Ihrer Wahl, um alles woanders zu halten, zum Beispiel auf demselben
 Stick wie eine portable Kopie.
 

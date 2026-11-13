@@ -84,11 +84,19 @@ def shown(app):
 
 def key_for(app, text):
     """The picker's text -> profile id: a preset's translated name, the user's own
-    name as it is, or the current profile when the text is the marked one."""
-    if text and text == shown(app):
-        return app._profile_key
+    name as it is, or the current profile when the text is the marked one.
+
+    A row of the list wins over the mark: a profile of the user's own may be NAMED
+    like the marked current one ("Office (changed)"), and picking that row loads it.
+    The mark is never a row, so only the text left in the picker reads like it.
+    """
     # asked on a pick, not kept: the names change with the language
-    return {T(key): key for key in PRESETS}.get(text, text)
+    preset = {T(key): key for key in PRESETS}.get(text)
+    if preset is not None:
+        return preset
+    if text and text not in app.profiles and text == shown(app):
+        return app._profile_key
+    return text
 
 
 def refresh_shown(app):

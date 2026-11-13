@@ -562,6 +562,9 @@ what you are looking at:
 | `Active:` | this is exactly what is applied to traffic right now |
 | `After "Apply changes":` | you changed the form during a session - it comes after "Active: ...", which still describes what runs, and says what will run once you click "Apply changes" |
 
+The bar holds three lines. A longer text ends with "..." there, and the whole of it shows when
+you point at the bar.
+
 While a session runs **two elements are locked** (they unlock on STOP): the **traffic filter**
 (applied only at START) and the **language selector** (changing language rebuilds the whole UI).
 The STOP button is red - it cannot be confused with START.

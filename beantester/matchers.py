@@ -700,7 +700,7 @@ _REGEX_REASONS = (("missing )", "errors.regex_unclosed_group"),
                   ("unbalanced parenthesis", "errors.regex_extra_paren"),
                   ("unterminated character set", "errors.regex_unclosed_set"),
                   ("nothing to repeat", "errors.regex_nothing_to_repeat"),
-                  ("multiple repeat", "errors.regex_nothing_to_repeat"),
+                  ("multiple repeat", "errors.regex_multiple_repeat"),
                   ("bad escape", "errors.regex_bad_escape"),
                   ("bad character range", "errors.regex_bad_range"))
 
@@ -716,10 +716,26 @@ def _regex_reason(exc):
 class _BadRegex(ValueError):
     """A term whose pattern ``re`` refuses, said with the reason it gave (each reason
     key is the whole sentence). A ValueError like every refusal here;
-    ``parse_matcher`` swaps it for the comma hint when a comma split the expression."""
+    ``parse_matcher`` swaps it for the comma hint when the comma that split the
+    expression belongs to the pattern (``_comma_cut``)."""
 
     def __init__(self, field, term, reason):
         super().__init__(str(_err(reason or "errors.bad_regex", field, term)))
+
+
+def _comma_cut(raws, index):
+    """True when the refused pattern of ``raws[index]`` compiles once the commas after
+    it are put back: "re:(chrome,firefox)" read as two terms, where "escape the
+    comma" is the fix. "re:[x, chrome.exe" stays refused with its comma back, so it
+    keeps the reason ``re`` gave. Compiled only, never run: no packet sees it."""
+    body = _split_negation(raws[index])[1][len(REGEX_PREFIX):]
+    for end in range(index + 1, len(raws)):
+        try:
+            re.compile(",".join([body, *raws[index + 1:end + 1]]).strip())
+        except (re.error, OverflowError, RecursionError):
+            continue
+        return True
+    return False
 
 
 @functools.lru_cache(maxsize=256)
@@ -916,9 +932,8 @@ def parse_matcher(text, kind, field="fields.filter", bounds=None):
         try:
             predicate, shape = _parse_term(kind, body, raw_term, field, bounds)
         except _BadRegex as bad:
-            if index < len(raws) - 1:
-                # a comma comes after this pattern, and a pattern cut in two at
-                # its comma is the usual way here: say how to keep the comma in it
+            if _comma_cut(raws, index):
+                # the comma after this pattern was its own: say how to keep it in
                 raise _err("errors.bad_filter_regex", field, raw_term) from bad
             raise
         terms.append(_Term(raw_term, negated, predicate, shape))

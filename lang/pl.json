@@ -166,6 +166,7 @@
   "errors.regex_bad_escape": "Pole '{field}': '{term}' to nie jest poprawne wyrażenie regularne: po ukośniku stoi litera, która we wzorcu nic nie znaczy.",
   "errors.regex_bad_range": "Pole '{field}': '{term}' to nie jest poprawne wyrażenie regularne: zakres w [ ] idzie wstecz, jak z-a.",
   "errors.regex_extra_paren": "Pole '{field}': '{term}' to nie jest poprawne wyrażenie regularne: nawias ) nie ma otwierającego (.",
+  "errors.regex_multiple_repeat": "Pole '{field}': '{term}' to nie jest poprawne wyrażenie regularne: znak powtórzenia (*, + albo ?) stoi tuż po innym, jak w a**. Żeby powtórzyć powtarzaną część, weź ją w nawias: (a*)*.",
   "errors.regex_nothing_to_repeat": "Pole '{field}': '{term}' to nie jest poprawne wyrażenie regularne: znak powtórzenia (*, + albo ?) nie ma przed sobą czego powtarzać.",
   "errors.regex_too_big": "Pole '{field}': '{term}' to nie jest poprawne wyrażenie regularne: wzorzec jest za duży albo za głęboko zagnieżdżony.",
   "errors.regex_unclosed_group": "Pole '{field}': '{term}' to nie jest poprawne wyrażenie regularne: nawias ( nie ma zamykającego ).",

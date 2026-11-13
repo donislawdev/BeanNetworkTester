@@ -301,6 +301,9 @@ motor está de fato fazendo. A barra abaixo do título diz o que você está ven
 | `Active:` | isto é exatamente o que está aplicado ao tráfego agora |
 | `After "Apply changes":` | você mudou o formulário durante uma sessão - vem depois de "Active: ...", que continua descrevendo o que roda, e diz o que vai rodar depois de clicar em "Apply changes" |
 
+A barra mostra três linhas. Um texto mais longo termina ali com "...", e o texto inteiro aparece
+quando você aponta o mouse para a barra.
+
 Enquanto uma sessão roda, **dois elementos ficam travados** (eles destravam no STOP): o **filtro de
 tráfego** (aplicado só no START) e o **seletor de idioma** (trocar o idioma reconstrói toda a
 interface). O botão STOP é vermelho - não dá para confundi-lo com o START.
@@ -1136,12 +1139,14 @@ Um caminho que esta sessão bloqueia não entrega nada, por isso nunca é o nome
 
 ## Exportações em CSV
 
-Dois botões gravam dois arquivos, e eles se comportam **de forma diferente de propósito**. Ambos vão
-para a sua própria pasta, `%LOCALAPPDATA%\BeanNetworkTester`, junto com os seus perfis e o estado da
-janela (ou para a raiz do projeto, quando executado a partir do código-fonte). O programa escreve o
-caminho completo no log a cada vez que salva um deles. Eles ficam fora da pasta do programa para que
-atualizar o programa - à mão ou por um gerenciador de pacotes, que substitui essa pasta - não leve os
-seus arquivos junto. Defina `BEAN_DATA_DIR` com uma pasta de sua escolha para manter tudo em outro
+Dois botões gravam dois arquivos, e eles se comportam **de forma diferente de propósito**. "Export
+CSV" em Statistics acrescenta uma linha a um arquivo da sua própria pasta,
+`%LOCALAPPDATA%\BeanNetworkTester`, junto com os seus perfis e o estado da janela (ou na raiz do
+projeto, quando executado a partir do código-fonte). "Export connections CSV" pergunta onde salvar e
+sugere um nome com a data e a hora, na última pasta usada (a sua própria pasta na primeira vez). O
+programa escreve o caminho completo no log a cada vez que salva um arquivo. A sua própria pasta fica
+fora da pasta do programa para que atualizar o programa - à mão ou por um gerenciador de pacotes, que
+substitui essa pasta - não leve os seus arquivos junto. Defina `BEAN_DATA_DIR` com uma pasta de sua escolha para manter tudo em outro
 lugar, por exemplo no mesmo pen drive de uma cópia portátil.
 
 A pasta pertence à conta do Windows com a qual o programa está rodando. Em uma conta sem permissões

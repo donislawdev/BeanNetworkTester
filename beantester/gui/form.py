@@ -364,6 +364,9 @@ class ControlForm:
         var = self.app.vars.get(field.key)
         if var is not None and F.is_active(field, var.get()):
             self._copy_mirrors(field.key)
+            # A copied value is judged like a typed one: a red source makes a red
+            # copy, and the strip reads the refused fields from this judgement.
+            self.validate_all()
         self.apply_overrides()
         self.app.on_form_changed()
 

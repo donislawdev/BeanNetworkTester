@@ -9280,7 +9280,7 @@ MUTATIONS = [
         "test": "test_a_round_trip_windows_stopped_measuring_while_data_went_out_is_said_to_be_old",
     },
     {
-        "label": "tcp health: the RTT axis near zero prints a number twice",
+        "label": "tcp health: the RTT axis near zero marks fractions of a millisecond",
         "file": "beantester/gui/chart.py",
         "old": "RTT_LEAST_PEAK = 4      # ms: the lowest top of the round-trip axis\n",
         "new": "RTT_LEAST_PEAK = 1      # ms: the lowest top of the round-trip axis\n",

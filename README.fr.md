@@ -315,6 +315,9 @@ le moteur fait réellement. La barre sous le titre vous indique ce que vous rega
 | `Active:` | c'est exactement ce qui est appliqué au trafic en ce moment |
 | `After "Apply changes":` | vous avez modifié le formulaire pendant une session - vient après "Active: ...", qui décrit toujours ce qui tourne, et dit ce qui tournera une fois "Apply changes" cliqué |
 
+La barre tient trois lignes. Un texte plus long s'y termine par "...", et le texte entier s'affiche
+quand vous pointez la barre avec la souris.
+
 Pendant qu'une session tourne, **deux éléments sont verrouillés** (ils se déverrouillent à STOP) : le
 **filtre de trafic** (appliqué uniquement au START) et le **sélecteur de langue** (changer de langue
 reconstruit toute l'interface). Le bouton STOP est rouge - impossible de le confondre avec START.
@@ -1189,12 +1192,14 @@ qu'un seul type de chemin.
 
 ## Exports CSV
 
-Deux boutons écrivent deux fichiers, et ils se comportent **différemment, volontairement**. Les deux
-atterrissent dans votre propre dossier, `%LOCALAPPDATA%\BeanNetworkTester`, avec vos profils et l'état
-de la fenêtre (ou à la racine du projet quand on exécute depuis les sources). Le programme écrit le
-chemin complet dans le journal à chaque enregistrement. Ils sont tenus hors du dossier du programme
-pour que la mise à jour du programme - à la main ou par un gestionnaire de paquets, qui remplace ce
-dossier - ne puisse pas emporter vos fichiers avec lui. Définissez `BEAN_DATA_DIR` sur un dossier de
+Deux boutons écrivent deux fichiers, et ils se comportent **différemment, volontairement**. "Export
+CSV" sur Statistics ajoute une ligne à un fichier de votre propre dossier,
+`%LOCALAPPDATA%\BeanNetworkTester`, avec vos profils et l'état de la fenêtre (ou à la racine du projet
+quand on exécute depuis les sources). "Export connections CSV" demande où enregistrer et propose un
+nom avec la date et l'heure, dans le dernier dossier utilisé (votre propre dossier la première fois).
+Le programme écrit le chemin complet dans le journal à chaque enregistrement. Votre propre dossier est
+tenu hors du dossier du programme pour que la mise à jour du programme - à la main ou par un
+gestionnaire de paquets, qui remplace ce dossier - ne puisse pas emporter vos fichiers avec lui. Définissez `BEAN_DATA_DIR` sur un dossier de
 votre choix pour tout garder ailleurs, par exemple sur la même clé qu'une copie portable.
 
 Le dossier appartient au compte Windows sous lequel le programme s'exécute. Sur un compte sans

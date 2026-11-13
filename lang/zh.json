@@ -166,6 +166,7 @@
   "errors.regex_bad_escape": "字段“{field}”：“{term}”不是有效的正则表达式：反斜杠后面的字母在模式中没有含义。",
   "errors.regex_bad_range": "字段“{field}”：“{term}”不是有效的正则表达式：[ ] 中的范围顺序颠倒，例如 z-a。",
   "errors.regex_extra_paren": "字段“{field}”：“{term}”不是有效的正则表达式：右括号 ) 没有对应的左括号 (。",
+  "errors.regex_multiple_repeat": "字段“{field}”：“{term}”不是有效的正则表达式：一个重复符号（*、+ 或 ?）紧跟在另一个之后，例如 a**。要重复一个已重复的部分，请把它放进括号：(a*)*。",
   "errors.regex_nothing_to_repeat": "字段“{field}”：“{term}”不是有效的正则表达式：重复符号（*、+ 或 ?）前面没有可重复的内容。",
   "errors.regex_too_big": "字段“{field}”：“{term}”不是有效的正则表达式：模式过大或嵌套过深。",
   "errors.regex_unclosed_group": "字段“{field}”：“{term}”不是有效的正则表达式：左括号 ( 没有对应的右括号 )。",

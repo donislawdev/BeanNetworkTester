@@ -103,8 +103,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 - **Exporting a table asks where to save it.** "Export connections CSV", and "Save CSV" on
   Sockets, Port check and Port scan, open a save window with a name that carries the date and
-  time, in the folder you used last. A new export no longer replaces the previous one. The
-  button is unavailable while the table is empty. "Export CSV" on Statistics still adds a row
+  time, in the folder you used last, so a new export no longer replaces the previous one
+  unless you choose that file. The button is unavailable while the table is empty. "Export CSV" on Statistics still adds a row
   to its one file in your own folder.
 
 - **Profiles ask before they are lost.** Saving under the name of one of your profiles asks
@@ -114,7 +114,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 - **The bar at the top says what runs and what is waiting.** During a session, after you
   change something, it reads "Active: ... After "Apply changes": ...", so you can tell what
   runs now from what starts after you apply. With no session it always starts with
-  "Preview:", and a field with an error is left out of it.
+  "Preview:", and a field with an error is left out of it. A text longer than the bar ends
+  with "..." and shows in full when you point at it.
 
 - **A session that reaches every connection says so on every tab.** With no target, no
   destination and no run time, a red line under the bar says that the session impairs every

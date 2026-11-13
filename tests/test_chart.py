@@ -90,11 +90,13 @@ def _drawn(w, h, draw):
 
 def test_the_rtt_chart_keeps_its_ticks_apart_near_zero_and_says_the_smoothed_value():
     """Loopback reads 0 ms (whole milliseconds): an axis topped at 1 printed
-    "1 1 0 0 0" on real Tk (2026-10-19). The readout says that 0 as under one
-    millisecond, the way the list and the details do."""
+    "1 1 0 0 0" on real Tk (2026-10-19), and with decimals it would mark steps of
+    0.25 ms that no round trip here is measured in. The readout says that 0 as under
+    one millisecond, the way the list and the details do."""
     got = _drawn(230, 125, lambda c: chart.draw_rtt_chart(c, [0, 0, 0], [0, 1, 0], 3))
     ticks = [item[6] for item in got if item[0] == "text" and item[1] == 44]   # left of the plot
-    check("five ticks, no number twice", len(ticks) == 5 and len(set(ticks)) == 5, f"({ticks})")
+    check("five ticks of whole milliseconds, no number twice",
+          sorted(ticks, key=float) == ["0", "1", "2", "3", "4"], f"({ticks})")
     texts = [item[6] for item in got if item[0] == "text"]
     check("the unit, the span and the smoothed value",
           {"ms", "-3 s", "< 1 ms"} <= set(texts), f"({texts})")

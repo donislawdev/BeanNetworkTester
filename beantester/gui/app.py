@@ -531,9 +531,7 @@ class App:
                 self.root, getattr(self, "summary_holder", None)):
             return
         try:
-            width = self.summary_holder.winfo_width()
-            if width and width > scaled(80):
-                self.summary.config(wraplength=width - scaled(8))
+            summary_strip.wrap(self)
         except Exception as _exc:
             crashlog.note(_exc, "gui.app")
         try:
@@ -850,7 +848,7 @@ class App:
             return
         self._summary_text = text
         try:
-            self.summary.config(text=text)
+            summary_strip.fit(self)           # whole, or cut with all of it in the bubble
         except Exception as _exc:
             crashlog.note(_exc, "gui.app")
 

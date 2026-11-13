@@ -97,8 +97,8 @@ def chart_canvas(parent, width, height):
 def draw_rtt_chart(canvas, smoothed, sample, span_s):
     """TCP health: one connection's round trips in ms, the newest measurement under
     the smoothed value Windows keeps - and the smoothed one said at the top right."""
-    # Whole milliseconds on an axis of five ticks: a top under 4 would print the same
-    # number twice ("1 1 0 0 0", rendered on loopback, 2026-10-19).
+    # Round trips come in whole milliseconds, so the lowest top is four gaps of 1 ms:
+    # a lower one marks steps of 0.25 ms on loopback, which no measurement here shows.
     peak = axis_top(max(max(smoothed, default=0), max(sample, default=0), RTT_LEAST_PEAK))
     readout = (T("tools.tcphealth.chart_now", v=rtt_number(round(smoothed[-1])))
                if len(smoothed) >= 2 else "")

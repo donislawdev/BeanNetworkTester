@@ -305,6 +305,9 @@ realmente. La barra bajo el título indica qué se está viendo:
 | `Active:` | esto es exactamente lo que se está aplicando al tráfico ahora mismo |
 | `After "Apply changes":` | cambió el formulario durante una sesión: va después de "Active: ...", que sigue describiendo lo que se ejecuta, y dice lo que se ejecutará al hacer clic en "Apply changes" |
 
+La barra muestra tres líneas. Un texto más largo termina allí con "...", y el texto completo aparece
+al señalar la barra con el ratón.
+
 Mientras una sesión está en marcha, **dos elementos quedan bloqueados** (se desbloquean con STOP): el
 **filtro de tráfico** (se aplica solo en START) y el **selector de idioma** (cambiar el idioma
 reconstruye toda la interfaz). El botón STOP es rojo, para que no se confunda con START.
@@ -1154,12 +1157,14 @@ el nombrado. Busque con `ice:turn` (o `ice:lan`, `ice:nat`...) para ver un solo 
 
 ## Exportaciones a CSV
 
-Dos botones escriben dos archivos, y se comportan **de forma distinta a propósito**. Ambos van a la
-carpeta propia del usuario, `%LOCALAPPDATA%\BeanNetworkTester`, junto con los perfiles y el estado de
-la ventana (o a la raíz del proyecto cuando se ejecuta desde el código fuente). El programa escribe
-la ruta completa en el registro cada vez que guarda uno. Se mantienen fuera de la carpeta del
-programa para que actualizarlo, a mano o mediante un gestor de paquetes que reemplaza esa carpeta, no
-pueda llevarse los archivos consigo. Defina `BEAN_DATA_DIR` con una carpeta a su elección para
+Dos botones escriben dos archivos, y se comportan **de forma distinta a propósito**. "Export CSV" en
+Statistics añade una fila a un archivo de la carpeta propia del usuario,
+`%LOCALAPPDATA%\BeanNetworkTester`, junto con los perfiles y el estado de la ventana (o en la raíz del
+proyecto cuando se ejecuta desde el código fuente). "Export connections CSV" pregunta dónde guardar y
+propone un nombre con la fecha y la hora, en la última carpeta usada (la carpeta propia la primera
+vez). El programa escribe la ruta completa en el registro cada vez que guarda un archivo. La carpeta
+propia se mantiene fuera de la carpeta del programa para que actualizarlo, a mano o mediante un gestor
+de paquetes que reemplaza esa carpeta, no pueda llevarse los archivos consigo. Defina `BEAN_DATA_DIR` con una carpeta a su elección para
 guardarlo todo en otro sitio, por ejemplo en el mismo pendrive que una copia portátil.
 
 La carpeta pertenece a la cuenta de Windows con la que se ejecuta el programa. En una cuenta sin

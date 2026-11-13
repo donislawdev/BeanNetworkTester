@@ -102,3 +102,28 @@ def test_the_picker_marks_a_profile_the_form_has_left():
         assert app.vars["latency"].get() == before, app.vars["latency"].get()
         assert app.profile_var.get() == name, app.profile_var.get()
     """)
+
+
+def test_a_profile_named_like_the_marked_one_loads_itself():
+    """Picking the row of a profile named "Office (changed)" while "Office" was the
+    marked current one loaded "Office" again: the text matched the mark first."""
+    run_answering("""
+        app.profiles.persist = lambda: None
+        app.vars["latency"].set("150")
+        answer(name="Office")
+        app.save_profile()
+        marked = bnt.T("app.profile_modified", name="Office")
+        app.vars["latency"].set("300")
+        answer(name=marked)
+        app.save_profile()
+
+        app.select_profile("Office")
+        app.vars["latency"].set("151")
+        app.on_form_changed()
+        assert app.profile_var.get() == marked, app.profile_var.get()
+
+        app.profile_var.set(marked)           # the row of the profile with that name
+        app.load_selected_profile()
+        assert app._profile_key == marked, app._profile_key
+        assert float(app.vars["latency"].get()) == 300.0, app.vars["latency"].get()
+    """)

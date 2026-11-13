@@ -196,7 +196,10 @@ def listed_count(text):
         if not part:
             continue
         low, dash, high = (piece.strip() for piece in part.partition("-"))
-        if not low.isdigit() or (dash and not high.isdigit()):
+        # isdecimal, not isdigit: "²" is a digit int() refuses, and this runs in the
+        # box's key handler. A decimal digit of any script, "٨٠", int() reads, and so
+        # does the scan's own parser.
+        if not low.isdecimal() or (dash and not high.isdecimal()):
             return None
         first, last = int(low), int(high) if dash else int(low)
         if first > last or last > PORT_BOUNDS[1]:

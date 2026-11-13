@@ -1011,3 +1011,36 @@ def test_the_strip_at_the_top_holds_three_lines_of_its_text():
         assert summary_strip.STRIP_LINES == 3
         assert app.summary_holder.kw.get("height") == want, app.summary_holder.kw
     """)
+
+
+def test_a_strip_text_longer_than_the_strip_ends_with_an_ellipsis_and_the_bubble_has_it_all():
+    """Every impairment, asymmetry and a target with an edit waiting took six lines
+    at the window's smallest width, and the strip showed three: the sentence that
+    says what waits was gone, with nothing saying so (real Tk, 2026-11-13)."""
+    run_gui("""
+        import math
+        from beantester.gui import summary_strip
+        from beantester.gui.scaling import line_height
+        from beantester.gui.tooltip import tooltip_text
+        label = app.summary
+        per_line = 60                                   # characters a line holds here
+        label.winfo_reqheight = lambda: line_height() * max(
+            1, math.ceil(len(str(label.cget("text"))) / per_line))
+        limit = per_line * summary_strip.STRIP_LINES
+        explain = tooltip_text("tips.summary")
+
+        whole = " ".join("word%03d" % n for n in range(60))      # 479 characters
+        app._summary_text = whole
+        summary_strip.fit(app)
+        shown = str(label.cget("text"))
+        assert shown.endswith(summary_strip.ELLIPSIS), shown
+        kept = shown[:-1]
+        assert whole.startswith(kept + " "), "cut at a word: " + shown
+        assert len(shown) <= limit < len(kept) + len(" word000") + 1, (len(shown), limit)
+        assert label._bnt_tooltip.text == whole + "\\n\\n" + explain, label._bnt_tooltip.text
+
+        app._summary_text = "Preview: +100 ms of ping."    # fits: as it is, bubble as before
+        summary_strip.fit(app)
+        assert label.cget("text") == app._summary_text, label.cget("text")
+        assert label._bnt_tooltip.text == explain, label._bnt_tooltip.text
+    """)

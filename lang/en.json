@@ -166,6 +166,7 @@
   "errors.regex_bad_escape": "Field '{field}': '{term}' is not a valid regular expression: a backslash is followed by a letter that means nothing in a pattern.",
   "errors.regex_bad_range": "Field '{field}': '{term}' is not a valid regular expression: a range inside [ ] goes backwards, like z-a.",
   "errors.regex_extra_paren": "Field '{field}': '{term}' is not a valid regular expression: a ) has no opening (.",
+  "errors.regex_multiple_repeat": "Field '{field}': '{term}' is not a valid regular expression: a repeat (*, + or ?) comes straight after another one, like a**. To repeat a repeated part, put it in brackets: (a*)*.",
   "errors.regex_nothing_to_repeat": "Field '{field}': '{term}' is not a valid regular expression: a repeat (*, + or ?) has nothing before it to repeat.",
   "errors.regex_too_big": "Field '{field}': '{term}' is not a valid regular expression: the pattern is too large or nested too deeply.",
   "errors.regex_unclosed_group": "Field '{field}': '{term}' is not a valid regular expression: a ( has no closing ).",

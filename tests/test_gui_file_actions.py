@@ -130,8 +130,12 @@ def test_loading_a_file_that_is_not_a_config_is_refused_readably():
         odd = os.path.join(tempfile.mkdtemp(), "odd.json")
         open(odd, "w", encoding="utf-8").write("[1, 2]")
         filedialog.askopenfilename = lambda **k: odd
+        shown.clear()                     # the first refusal must not answer for this one
         app.load_config_file()
-        assert shown[-1].startswith(bnt.T("dialogs.not_loaded") + ": "), shown[-1]
+        assert len(shown) == 1, shown
+        assert shown[0].startswith(bnt.T("dialogs.not_loaded") + ": "), shown[0]
+        assert shown[0] != bnt.T("dialogs.not_json", line=1, column=1), shown[0]
+        assert float(app.vars["loss"].get()) == 33.0, "the form must survive this one too"
     """)
 
 
