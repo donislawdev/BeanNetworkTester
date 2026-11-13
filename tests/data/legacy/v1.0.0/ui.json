@@ -19,7 +19,6 @@
   },
   "profile": "slow office wifi",
   "conn_columns": [
-    "kb",
     "proc",
     "proto",
     "remote_ip",
@@ -29,6 +28,7 @@
     "dropped",
     "down",
     "up",
+    "kb",
     "down_seen",
     "up_seen",
     "dur",

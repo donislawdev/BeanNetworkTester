@@ -161,17 +161,30 @@ def test_a_profile_from_every_release_still_loads_with_its_own_defaults():
 # Keys the window state of a release carries when a person used the window: if the
 # corpus stops carrying one, the checks below stop looking at it.
 _UI_KEYS_COVERED = ("geometry", "page", "stats_page", "tools_page", "language",
-                    "collapsed", "conn_sort", "event_sort", "conn_columns")
+                    "collapsed", "log_height", "conn_sort", "event_sort", "conn_columns")
+
+
+def _shape_fits(value, default):
+    """Whether ``value`` has the shape today's ``default`` has - this test's own
+    reading of the format, not the store's (`_fits`), so a store that starts
+    refusing a value it should keep cannot also be the judge of that."""
+    if isinstance(default, bool) or isinstance(value, bool):
+        return type(value) is type(default)
+    if isinstance(default, dict):
+        return isinstance(value, dict) and all(
+            key in value and _shape_fits(value[key], inner) for key, inner in default.items())
+    return isinstance(value, type(default))
 
 
 def test_a_saved_window_state_from_every_release_still_loads():
     """`*_ui.json` is a frozen format too, and it is the one a user never sees
     until the window opens in the wrong place.
 
-    EVERY key the old file carries comes back as written - or, when its shape is
-    one today's store no longer accepts, falls back to the default and says so in
-    ``problem``. Never quietly something else: a sort, a page or a collapsed
-    section that changed on its own is the layout the person made, lost.
+    EVERY key the old file carries comes back as written. Only a value whose shape
+    today's format no longer has (``_shape_fits``) may instead fall back to the
+    default, and then the store must say so in ``problem``. Never quietly something
+    else: a sort, a page or a collapsed section that changed on its own is the
+    layout the person made, lost.
     """
     from beantester.gui.ui_state import DEFAULTS, UiStateStore
 
@@ -185,28 +198,39 @@ def test_a_saved_window_state_from_every_release_still_loads():
             written = json.load(handle)
         for key, value in written.items():
             got = store.get(key)
-            if got == value:
+            if key not in DEFAULTS or _shape_fits(value, DEFAULTS[key]):
+                check("%s: window state keeps %s" % (tag, key), got == value,
+                      "(%r -> %r, problem=%r)" % (value, got, store.problem))
                 covered.add(key)
                 continue
             check("%s: window state %s that no longer fits goes back to its default, "
                   "and says so" % (tag, key),
-                  key in DEFAULTS and got == DEFAULTS[key] and key in (store.problem or ""),
+                  got == DEFAULTS[key] and key in (store.problem or ""),
                   "(%r -> %r, problem=%r)" % (value, got, store.problem))
     check("legacy corpus: the window state of some release carries each key a person "
           "sets", covered >= set(_UI_KEYS_COVERED),
           "(never kept: %s)" % sorted(set(_UI_KEYS_COVERED) - covered))
+    check("the shape oracle tells a list sort from a dict one, and a bool from a number",
+          not _shape_fits(["packets", True], {"col": "kb", "reverse": True})
+          and _shape_fits({"col": "t", "reverse": False}, {"col": "kb", "reverse": True})
+          and not _shape_fits(True, 0) and _shape_fits(240, 0),
+          "(the oracle itself is wrong)")
 
 
-def test_a_chosen_column_layout_keeps_its_order_and_gains_only_newer_columns():
+def test_a_chosen_column_layout_keeps_its_choice_and_gains_only_newer_columns():
     """🔴 The Connections columns a person chose, opened by the next release.
 
     The table shows only what was saved, so a column added since the file was
-    written must be added to it - once - and nothing else may move: the person's
-    order stays, and a column they hid stays hidden. 1.0.0 saved its layout without
-    ``conn_columns_known``, so this is the path every 1.0.0 user who ever chose
-    columns takes on their first start after the upgrade (``columns_to_show`` and
-    ``COLUMNS_BEFORE_KNOWN``). ``MANIFEST.json`` names the columns the release had,
-    which is what tells a column the person hid from one that did not exist yet.
+    written must be added to it, and nothing else may change: every column the
+    person kept is shown and every column they hid stays hidden. 1.0.0 saved its
+    layout without ``conn_columns_known``, so this is the path every 1.0.0 user who
+    ever chose columns takes on their first start after the upgrade
+    (``columns_to_show`` and ``COLUMNS_BEFORE_KNOWN``). ``MANIFEST.json`` names the
+    columns the release had, which is what tells a column the person hid from one
+    that did not exist yet.
+
+    Compared as a SET: the table keeps its own column order whatever it is given
+    (``SortableTree.set_visible_columns``), so order is not part of the choice.
     """
     from beantester.gui.pages.conns import COLUMNS, columns_to_show
     from beantester.gui.ui_state import UiStateStore
@@ -229,10 +253,12 @@ def test_a_chosen_column_layout_keeps_its_order_and_gains_only_newer_columns():
         shown = columns_to_show(store.get("conn_columns"), store.get("conn_columns_known"))
         visible = [column for column in (shown or []) if column in COLUMNS]
         added = [column for column in COLUMNS if column not in known_then]
-        expected = [column for column in chosen if column in COLUMNS] + added
-        check("%s: the person's columns in their order, hidden ones hidden, and each "
-              "newer column once (%s)" % (tag, added), visible == expected,
-              "(opens with %s, expected %s)" % (visible, expected))
+        hidden = [column for column in known_then if column not in chosen]
+        expected = {column for column in chosen if column in COLUMNS} | set(added)
+        check("%s: the person's columns shown, the %d they hid hidden, and each newer "
+              "column once (%s)" % (tag, len(hidden), added),
+              set(visible) == expected and len(visible) == len(set(visible)),
+              "(opens with %s, expected %s)" % (visible, sorted(expected)))
         layouts += 1
     check("legacy corpus: at least one release carries a chosen column layout",
           layouts >= 1, "(%d)" % layouts)
