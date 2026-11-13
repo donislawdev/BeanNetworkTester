@@ -18,7 +18,11 @@ from fakes import LANGS, ROOT, check
 
 
 def _names_doctor_can_give(monkeypatch):
-    """Every check name, from every branch doctor() has: Windows or not, frozen or not.
+    return {row[0] for row in _rows_doctor_can_give(monkeypatch)}
+
+
+def _rows_doctor_can_give(monkeypatch):
+    """Every check row, from every branch doctor() has: Windows or not, frozen or not.
 
     Taken by RUNNING it rather than read off the source, so a name built any other
     way than a literal is still found. Nothing here touches the machine: the
@@ -29,12 +33,12 @@ def _names_doctor_can_give(monkeypatch):
     monkeypatch.setattr(driver, "stale_temp_dirs", lambda: [])
     # elevated, so the program-folder row answers without writing a probe file
     monkeypatch.setattr(driver, "is_admin", lambda: True)
-    names = set()
+    rows = []
     for windows in (True, False):
         for frozen in (True, False):
             monkeypatch.setattr(driver, "is_windows", lambda w=windows: w)
             monkeypatch.setattr(driver, "is_frozen", lambda f=frozen: f)
-            names |= {row[0] for row in driver.doctor()[1]}
+            rows += driver.doctor()[1]
 
     # ...and Linux's, whichever machine runs this: off Windows the rows are the
     # capture backend's, and on a Windows runner that backend is WinDivert's.
@@ -44,8 +48,8 @@ def _names_doctor_can_give(monkeypatch):
             return capture_backend.EBPFDivertBackend.doctor_rows(release="6.8.0", root=ROOT, euid=0)
     monkeypatch.setattr(capture_backend, "current", lambda: _Linux())
     monkeypatch.setattr(driver, "is_windows", lambda: False)
-    names |= {row[0] for row in driver.doctor()[1]}
-    return names
+    rows += driver.doctor()[1]
+    return rows
 
 
 def test_every_check_doctor_can_give_has_a_name_in_every_language(monkeypatch):
@@ -59,6 +63,33 @@ def test_every_check_doctor_can_give_has_a_name_in_every_language(monkeypatch):
             texts = json.load(f)
         missing = sorted(n for n in names if diagnostics.check_key(n) not in texts)
         check(f"{code}: every check has a name", not missing, f"({missing})")
+
+
+def test_a_healthy_rows_words_are_said_in_the_windows_language(monkeypatch):
+    """UX audit 2026-11-13 (UX-GUI-011): "no", "elevated", "importable", "not
+    loaded", "none" and "steps of 0.0001 ms" stood in English in a Polish window.
+    The window says a healthy row's fixed words in its own language; a row that
+    explains something keeps the report's sentence (the report is unchanged)."""
+    rows = _rows_doctor_can_give(monkeypatch)
+    rows.append(driver._clock_check(type("Info", (), {"resolution": 1e-7,
+                                                      "implementation": "QPC()"})()))
+    rows.append(("privileges", "ok", "root"))     # Linux as root: /proc decides it there
+    healthy = [diagnostics.Check(*row) for row in rows if row[1] == "ok"]
+    bare = sorted({c.detail for c in healthy
+                   if diagnostics.detail_words(c) is None and re.fullmatch("[a-z ]+", c.detail)})
+    check("no healthy row is left a bare English word", not bare, f"({bare})")
+    clock = [diagnostics.detail_words(c) for c in healthy if c.name == "clock"]
+    check("the clock's steps too", clock and all(w and w[0] == "tools.diagnostics.detail.clock"
+                                                 for w in clock), f"({clock})")
+    check("the library's version is kept", diagnostics.detail_words(diagnostics.Check(
+        "pydivert", "ok", "importable, eBPFDivert 1.2.3")) == (
+        "tools.diagnostics.detail.importable_library", {"version": "1.2.3"}))
+    for code in LANGS:
+        with open(os.path.join(ROOT, "lang", f"{code}.json"), encoding="utf-8") as f:
+            texts = json.load(f)
+        keys = set(diagnostics.DETAIL_WORDS.values()) | {
+            "tools.diagnostics.detail.clock", "tools.diagnostics.detail.importable_library"}
+        check(f"{code}: every word has its text", keys <= set(texts), f"({keys - set(texts)})")
 
 
 def test_the_diagnosis_is_doctors_own_list_unchanged(monkeypatch):

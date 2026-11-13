@@ -210,6 +210,75 @@ def test_summary_prefix_tells_the_truth_about_the_session():
     """)
 
 
+def test_a_button_that_needs_a_session_is_off_without_one():
+    """UX audit 2026-11-13 (UX-GUI-014, -016): with no session "Apply changes" and
+    "Mark bug moment" only wrote "works after START" into the log; and the Events
+    table was a blank rectangle that never said what would appear in it."""
+    run_gui("""
+        app.engine.start = lambda *a, **k: None
+        stats = app.pages["statistics"]
+        assert app.btn_apply.kw.get("state") == "disabled", app.btn_apply.kw
+        stats.refresh_session()
+        assert stats.mark_btn.kw.get("state") == "disabled", stats.mark_btn.kw
+
+        app._start(); app._settle_transition()
+        assert app.btn_apply.kw.get("state") == "normal", app.btn_apply.kw
+        stats.refresh_session()
+        assert stats.mark_btn.kw.get("state") == "normal", stats.mark_btn.kw
+
+        app._stop(); app._settle_transition()
+        assert app.btn_apply.kw.get("state") == "disabled", app.btn_apply.kw
+
+        stats.refresh_events()
+        note = stats.events._empty_note
+        assert note is not None and note.kw.get("text") == bnt.T("tables.no_events_yet"), (
+            note and note.kw)
+    """)
+
+
+def test_during_a_session_the_strip_says_what_runs_and_what_waits_apart():
+    """UX audit 2026-11-13 (UX-GUI-004, -013): mid-session the strip read "Not
+    applied yet: +200 ms ping, 10% loss" while +200 ms had run since START and only
+    the 10% waited; stopped, it said "Active: no impairments", and it described
+    values the form refused ("250% loss")."""
+    run_gui("""
+        app.engine.start = lambda *a, **k: None
+        app.engine.is_running = lambda: True
+        app.vars["latency"].set("200")
+        app._start(); app._settle_transition()
+        app._form_changed = True
+        app._refresh_summary()
+        active = bnt.T("summary.prefix") + bnt.T("summary.latency", v="200") + "."
+        assert app._summary_text == active, app._summary_text
+
+        app.vars["loss"].set("10")
+        app.on_form_changed()
+        app._refresh_summary()
+        after = (bnt.T("summary.prefix_pending") + bnt.T("summary.latency", v="200") + ", "
+                 + bnt.T("summary.loss", v="10") + ".")
+        assert app._summary_text == active + " " + after, app._summary_text
+
+        app.apply_if_running()
+        app._refresh_summary()
+        assert app._summary_text.startswith(bnt.T("summary.prefix")), app._summary_text
+        assert bnt.T("summary.prefix_pending") not in app._summary_text, app._summary_text
+
+        app._stop(); app._settle_transition()
+        for key in ("latency", "loss"):
+            app.vars[key].set("0")
+        app.on_form_changed()
+        app._refresh_summary()
+        assert app._summary_text == bnt.T("summary.none_preview"), app._summary_text
+
+        app.vars["loss"].set("250")
+        app.form.validate_all()
+        app.on_form_changed()
+        app._refresh_summary()
+        assert app._summary_text == (bnt.T("summary.none_preview") + " "
+                                     + bnt.T("summary.skips_refused")), app._summary_text
+    """)
+
+
 def test_connection_row_feeds_the_targeting_fields():
     run_gui("""
         app.set_target_expression("chrome.exe")
@@ -973,13 +1042,14 @@ def test_a_damaged_column_layout_does_not_stop_the_window_from_being_built():
     """)
 
 
-def test_the_gui_says_the_same_thing_before_an_unbounded_start():
+def test_the_gui_says_the_same_thing_when_an_unbounded_session_starts():
     """The warning is not a CLI feature: in the GUI the same run is one click.
 
     Same sentence and the same condition as the CLI
-    (``settings.unbounded_impairment``), logged on the UI thread BEFORE the
-    driver load starts on the worker - so it is on screen while STOP is still
-    the next click rather than a minute of impaired traffic later.
+    (``settings.unbounded_impairment``), logged once the session RUNS - and the
+    banner above every page keeps saying it while it does. Logged before the
+    driver opened, a START refused for missing rights said "affects every
+    connection" over a run that never touched one (UX audit, UX-GUI-019).
     """
     run_gui("""
         app.engine.start = lambda *a, **k: None
@@ -995,6 +1065,16 @@ def test_the_gui_says_the_same_thing_before_an_unbounded_start():
 
         def warned(log):
             return any(warning in line for line in log)
+
+        def refused(*a, **k):
+            raise PermissionError(1, "Operation not permitted")
+        app.engine.start = refused
+        import beantester.gui.dialogs as _dlg
+        _dlg.show_start_failure = lambda *a, **k: None
+        log = start_with(loss=50, target="", duration=0)
+        assert not app.running and not warned(log), \
+            "a START that never ran warned about its reach: %r" % log
+        app.engine.start = lambda *a, **k: None
 
         log = start_with(loss=50, target="", duration=0)
         assert warned(log), "no warning for an unscoped, endless run: %r" % log
@@ -1017,6 +1097,55 @@ def test_the_gui_says_the_same_thing_before_an_unbounded_start():
         app.apply_if_running()
         assert warned(list(app._log_lines)), \
             "clearing the target mid-session went unannounced: %r" % app._log_lines
+    """)
+
+
+def test_a_session_that_reaches_every_connection_says_so_above_every_page():
+    """UX audit 2026-11-13 (UX-GUI-003): a session with nothing to narrow it and
+    nothing to end it impairs the browser, the messenger and the remote desktop,
+    and only one line in the log said so - cut at the window's edge - while the
+    window showed "Running". The banner sits on the root, so on every page, and
+    follows what the SESSION was given, not the form."""
+    run_gui("""
+        app.engine.start = lambda *a, **k: None
+        app.engine.is_running = lambda: True       # what "Apply changes" records against
+
+        def shown():
+            banner = app.reach_warning
+            on = banner in app.root.pack_slaves()
+            said = banner.kw.get("text") == bnt.T("warn.global_impairment")
+            assert on == said, "the text and the layout disagree: %r" % on
+            return on
+
+        def start_with(**values):
+            for key, value in values.items():
+                app.vars[key].set(value)
+            app._start(); app._settle_transition()
+
+        assert not shown(), "a stopped window warned about a session"
+        start_with(loss=30, target="", duration=0)
+        assert app.running and shown(), "an unbounded session ran with no banner"
+
+        # an edit nobody applied changes nothing yet: the banner follows the session
+        app.vars["target"].set("probe.exe")
+        app.on_form_changed()
+        assert shown(), "an unapplied target took the banner away"
+        app.apply_if_running()
+        assert not shown(), "the applied target did not take it away"
+        app.vars["target"].set("")
+        app.apply_if_running()
+        assert shown(), "clearing the target mid-session put no banner up"
+
+        # a language change rebuilds every banner - this one comes back with it
+        app.lang_var.set("English")
+        app._switch_language()
+        assert shown(), "the banner was lost in the rebuild"
+
+        app._stop(); app._settle_transition()
+        assert not app.running and not shown(), "the banner outlived the session"
+
+        start_with(loss=30, target="", duration=60)
+        assert app.running and not shown(), "a session with a run time ends on its own"
     """)
 
 

@@ -1,7 +1,7 @@
 """ICMP echo through Windows' own ICMP helper - the Tools tab's Ping - and Linux's sockets.
 
 The one place in the package that SENDS something of its own: an echo request to
-the address the person typed, from the moment they press Start until they press
+the address the person typed, from the moment they press Ping until they press
 Stop (``nettools/ping.py`` decides when; this module sends one). On Windows it goes
 through ``IcmpSendEcho2`` / ``Icmp6SendEcho2`` (Iphlpapi.dll, Microsoft Learn), the
 calls ``ping.exe`` makes - no raw socket, no process. ``tests/test_no_telemetry.py``

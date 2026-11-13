@@ -95,6 +95,20 @@ def text_width(text, padding=16, font=None):
     return scaled(len(str(text)) * 7 + padding)
 
 
+def line_height(font=None):
+    """Pixels one line of text takes, DPI-aware (the default font when none is given).
+
+    Falls back to an estimate when Tk cannot measure, like ``text_width``.
+    """
+    probe = font or _font_probe
+    if probe is not None:
+        try:
+            return int(probe.metrics("linespace"))
+        except Exception as _exc:
+            crashlog.note(_exc, "gui.scaling")
+    return scaled(16)
+
+
 def column_width(header, min_chars=0, padding=22):
     """Treeview column width: fits the header, never below ``min_chars``."""
     return max(text_width(header, padding), scaled(min_chars * 7 + padding))

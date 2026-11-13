@@ -115,8 +115,9 @@ def _run(win, default=None):
     return _result.pop(str(win), default)
 
 
-def _message(parent, title, message, accent, buttons, default=None):
-    """A message dialog. ``buttons`` is a list of (i18n key, value, style)."""
+def _message(parent, title, message, accent, buttons, default=None, focus=0):
+    """A message dialog. ``buttons`` is a list of (i18n key, value, style); the
+    keyboard starts on ``buttons[focus]``."""
     win, body = _shell(parent, title)
     row = ttk.Frame(body)
     row.pack(fill="x")
@@ -134,7 +135,9 @@ def _message(parent, title, message, accent, buttons, default=None):
                             command=lambda v=value: _close(win, v))
         button.pack(side="right", padx=(scaled(8), 0))
         made.append(button)
-    first = made[-1]            # buttons[0]: built last, the row packs from the right
+    # buttons[0] is built last (the row packs from the right), so buttons[i] is
+    # made[-1 - i]
+    first = made[-1 - focus]
     win.protocol("WM_DELETE_WINDOW", lambda: _close(win, default))
     win.bind("<Escape>", lambda e: _close(win, default))
     _enter_presses(win, made, first)
@@ -166,10 +169,37 @@ def start_failure_message(err, elevated):
     (measured 2026-10-20). The elevation hint is one entry in that table, not the
     answer to everything: it used to be appended to every failure, including to a
     window that was already elevated (WinError 433, which is about the driver).
+
+    The advice comes FIRST and the error under it, named as what it is: the dialog
+    used to open on "[Errno 1] ebpfdivert_open: Operation not permitted", a line
+    for whoever reads a bug report, with the sentence a person can act on below it
+    (UX audit 2026-11-13, UX-GUI-019). Where the window's way out differs from the
+    console's, the window says its own (``WINDOW_ADVICE``).
     """
     from ..capture_backend import current
     key = current().open_failure_hint(err, elevated)
-    return f"{err}\n\n{T(key)}" if key else str(err)
+    key = WINDOW_ADVICE.get(key, key)
+    if not key:
+        return str(err)
+    return f"{T(key)}\n\n{T('dialogs.technical_details')}: {err}"
+
+
+def config_failure_message(err):
+    """What "Load file..." says when it refuses a file. A file that is not JSON got
+    the parser's own English sentence ("Expecting ',' delimiter: line 1 column 14
+    (char 13)") in any language (UX audit 2026-11-13, UX-GUI-010): the person needs
+    the line and the column, said in theirs."""
+    import json
+    if isinstance(err, json.JSONDecodeError):
+        return T("dialogs.not_json", line=err.lineno, column=err.colno)
+    return f"{T('dialogs.not_loaded')}: {err}"
+
+
+# The window asks for the rights itself when it opens (UAC on Windows, pkexec on
+# Linux - cli._run_gui), so opening it again IS the fix there, while the console's
+# advice - "run it with sudo", the capability list - is the command line's way.
+WINDOW_ADVICE = {"dialogs.ebpf_needs_root": "dialogs.ebpf_needs_root_window",
+                 "dialogs.run_as_admin": "dialogs.run_as_admin_window"}
 
 
 def show_start_failure(parent, err, elevated):
@@ -186,10 +216,13 @@ def show_error(parent, title, message):
                     [("buttons.ok", True, "Accent.TButton")], default=True)
 
 
-def ask_yes_no(parent, title, message):
-    return bool(_message(parent, title, message, ACC,
+def ask_yes_no(parent, title, message, careful=False):
+    """Yes -> True. ``careful`` is for a Yes that loses the user's data: the
+    keyboard starts on No, so Enter pressed out of habit keeps it."""
+    return bool(_message(parent, title, message, CAUTION if careful else ACC,
                          [("buttons.yes", True, "Accent.TButton"),
-                          ("buttons.no", False, "TButton")], default=False))
+                          ("buttons.no", False, "TButton")], default=False,
+                         focus=1 if careful else 0))
 
 
 def show_help(parent, title, text):

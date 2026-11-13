@@ -392,13 +392,14 @@ def test_the_start_failure_advice_fits_the_failure_not_every_failure():
         assert shown, "a failed start has to tell the user something"
         assert "WinError 433" in shown[-1], shown[-1]
         assert bnt.T("dialogs.driver_busy") in shown[-1], shown[-1]
-        assert bnt.T("dialogs.run_as_admin") not in shown[-1], (
+        assert bnt.T("dialogs.run_as_admin_window") not in shown[-1], (
             "an elevated window was told to run as Administrator: " + shown[-1])
 
         # the failure that IS about rights keeps the sentence that helps
         app._is_admin = False
         app._finish_start(OpenFailed(5, "[WinError 5] Access is denied."))
-        assert bnt.T("dialogs.run_as_admin") in shown[-1], shown[-1]
+        # (in the window's words: it asks for the rights itself when it opens)
+        assert bnt.T("dialogs.run_as_admin_window") in shown[-1], shown[-1]
 
         # ...and the button comes back either way, or the window is stuck
         assert app.running is False
@@ -435,8 +436,8 @@ def test_a_linux_window_says_what_capturing_needs_and_the_advice_that_fits():
         assert not any(bnt.T("log.note_windows") in line for line in app._log_lines)
         app._finish_start(refused)
         assert "Operation not permitted" in shown[-1], shown[-1]
-        assert bnt.T("dialogs.ebpf_needs_root") in shown[-1], shown[-1]
-        assert bnt.T("dialogs.run_as_admin") not in shown[-1], shown[-1]
+        assert bnt.T("dialogs.ebpf_needs_root_window") in shown[-1], shown[-1]
+        assert bnt.T("dialogs.run_as_admin_window") not in shown[-1], shown[-1]
 
         # root, refused all the same (lockdown, an LSM): not "use sudo"
         capture_backend._euid = lambda: 0
@@ -444,7 +445,7 @@ def test_a_linux_window_says_what_capturing_needs_and_the_advice_that_fits():
         assert app._is_admin is True
         app._finish_start(refused)
         assert bnt.T("dialogs.ebpf_refused_as_root") in shown[-1], shown[-1]
-        assert bnt.T("dialogs.ebpf_needs_root") not in shown[-1], shown[-1]
+        assert bnt.T("dialogs.ebpf_needs_root_window") not in shown[-1], shown[-1]
         app._check_environment()
         app._logview.drain()
         assert any(bnt.T("log.ebpf_note_experimental") in line for line in app._log_lines)
@@ -459,7 +460,7 @@ def test_a_linux_window_says_what_capturing_needs_and_the_advice_that_fits():
         app._finish_start(refused)
         assert bnt.T("dialogs.ebpf_root_without_caps") in shown[-1], shown[-1]
         assert bnt.T("dialogs.ebpf_refused_as_root") not in shown[-1], shown[-1]
-        assert bnt.T("dialogs.ebpf_needs_root") not in shown[-1], shown[-1]
+        assert bnt.T("dialogs.ebpf_needs_root_window") not in shown[-1], shown[-1]
     """)
 
 
@@ -1528,6 +1529,37 @@ def test_a_start_that_fails_shows_the_dialog_that_fits_the_failure():
         assert shown[1][0] == bnt.T("dialogs.start_failed"), shown
         assert "The parameter is incorrect" in shown[1][1], shown
         assert app.running is False
+    """)
+
+
+def test_a_refused_start_says_what_to_do_first_and_the_error_under_it():
+    """UX audit 2026-11-13 (UX-GUI-019): the dialog opened on "[Errno 1]
+    ebpfdivert_open: Operation not permitted" and told a person at a window to
+    "run it with sudo" - while the window asks for the password itself when it
+    opens. The advice comes first now, in the window's own words where they differ
+    from the console's, and the error under it, named."""
+    run_gui("""
+        import errno
+        import beantester.capture_backend as backends
+        import beantester.gui.dialogs as dialogs
+
+        class Backend:
+            hint = ""
+            def open_failure_hint(self, exc, elevated=None):
+                return self.hint
+        backend = Backend()
+        backends.current = lambda: backend
+        err = PermissionError(errno.EPERM, "Operation not permitted")
+        for hint, said in (("dialogs.ebpf_needs_root", "dialogs.ebpf_needs_root_window"),
+                           ("dialogs.run_as_admin", "dialogs.run_as_admin_window"),
+                           ("dialogs.ebpf_kernel", "dialogs.ebpf_kernel")):
+            backend.hint = hint
+            text = dialogs.start_failure_message(err, False)
+            advice, gap, details = text.partition(chr(10) * 2)
+            assert advice == bnt.T(said) and gap, (hint, text)
+            assert details == bnt.T("dialogs.technical_details") + ": " + str(err), text
+        backend.hint = ""
+        assert dialogs.start_failure_message(err, False) == str(err)
     """)
 
 

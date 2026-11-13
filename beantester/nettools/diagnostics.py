@@ -43,6 +43,36 @@ class Check(NamedTuple):
     detail: str         # program text, exactly as --doctor prints it
 
 
+# The words a healthy row says, exactly as --doctor prints them, and the key the WINDOW
+# says them with. "no", "elevated", "importable" and "steps of 0.0001 ms" read as
+# leftovers in a Polish window (UX audit 2026-11-13, UX-GUI-011). Only these: a row
+# that explains something keeps the report's own sentence - it is what a bug report
+# quotes and what the "?" sheet explains - and the report itself stays as it is.
+DETAIL_WORDS = {"yes": "tools.diagnostics.detail.yes", "no": "tools.diagnostics.detail.no",
+                "elevated": "tools.diagnostics.detail.elevated",
+                "importable": "tools.diagnostics.detail.importable",
+                "not loaded": "tools.diagnostics.detail.not_loaded",
+                "none": "tools.diagnostics.detail.none",
+                "present": "tools.diagnostics.detail.present",
+                "root": "tools.diagnostics.detail.root"}       # Linux, run as root
+CLOCK_STEPS, CLOCK_UNIT = ", steps of ", " ms"           # driver._clock_check's ok row
+LIBRARY_PREFIX = "importable, eBPFDivert "               # capture_backend._pydivert_row
+
+
+def detail_words(check):
+    """``(key, params)`` the window says a row's detail with, None to show it as it is."""
+    key = DETAIL_WORDS.get(check.detail)
+    if key is not None:
+        return key, {}
+    clock, steps, ms = check.detail.partition(CLOCK_STEPS)
+    if check.name == "clock" and steps and ms.endswith(CLOCK_UNIT):
+        return "tools.diagnostics.detail.clock", {"clock": clock, "ms": ms[:-len(CLOCK_UNIT)]}
+    if check.detail.startswith(LIBRARY_PREFIX):
+        return ("tools.diagnostics.detail.importable_library",
+                {"version": check.detail[len(LIBRARY_PREFIX):]})
+    return None
+
+
 class Found(NamedTuple):
     """What one report section's ``read`` gave."""
     value: object = None        # None: not read on this system, or the read failed

@@ -682,11 +682,44 @@ def _blows_the_budget(rx):
 
 
 class _Refused(Exception):
-    """A pattern that will not be used, and the ``errors.*`` key that says why."""
+    """A pattern that will not be used, the ``errors.*`` key that says why, and for a
+    pattern ``re`` refused, the key of the reason it gave ("" when there is none)."""
 
-    def __init__(self, key):
+    def __init__(self, key, reason=""):
         super().__init__(key)
         self.key = key
+        self.reason = reason
+
+
+# What ``re`` says about a pattern it refuses, as a reason a person can act on - by
+# the start of its message (the wording of CPython's own parser). The comma hint the
+# error used to give every refused pattern belongs to ONE case only, a pattern a comma
+# cut in two, and ``parse_matcher`` is where that case is known (UX audit 2026-11-13,
+# UX-GUI-009: "re:^fire(" was told to escape a comma it did not have).
+_REGEX_REASONS = (("missing )", "errors.regex_unclosed_group"),
+                  ("unbalanced parenthesis", "errors.regex_extra_paren"),
+                  ("unterminated character set", "errors.regex_unclosed_set"),
+                  ("nothing to repeat", "errors.regex_nothing_to_repeat"),
+                  ("multiple repeat", "errors.regex_nothing_to_repeat"),
+                  ("bad escape", "errors.regex_bad_escape"),
+                  ("bad character range", "errors.regex_bad_range"))
+
+
+def _regex_reason(exc):
+    """The i18n key of why ``re`` refused a pattern, "" when the table does not know."""
+    if isinstance(exc, (OverflowError, RecursionError)):
+        return "errors.regex_too_big"
+    message = str(getattr(exc, "msg", "") or "")
+    return next((key for start, key in _REGEX_REASONS if message.startswith(start)), "")
+
+
+class _BadRegex(ValueError):
+    """A term whose pattern ``re`` refuses, said with the reason it gave (each reason
+    key is the whole sentence). A ValueError like every refusal here;
+    ``parse_matcher`` swaps it for the comma hint when a comma split the expression."""
+
+    def __init__(self, field, term, reason):
+        super().__init__(str(_err(reason or "errors.bad_regex", field, term)))
 
 
 @functools.lru_cache(maxsize=256)
@@ -728,7 +761,7 @@ def _accepted_regex(pattern):
     # expression tester raised although it promises it never does, and the Control
     # page raised on every keystroke. This is the single place all of them pass.
     except (re.error, OverflowError, RecursionError) as exc:
-        raise _Refused("errors.bad_filter_regex") from exc
+        raise _Refused("errors.bad_filter_regex", _regex_reason(exc)) from exc
     if _blows_the_budget(rx) and _blows_the_budget(rx):
         raise _Refused("errors.filter_regex_too_slow")
     return rx
@@ -737,10 +770,12 @@ def _accepted_regex(pattern):
 def _compile_regex(pattern, field, term):
     pattern = pattern.strip()
     if not pattern:
-        raise _err("errors.bad_filter_regex", field, term)
+        raise _BadRegex(field, term, "")
     try:
         return _accepted_regex(pattern)
     except _Refused as refused:
+        if refused.key == "errors.bad_filter_regex":
+            raise _BadRegex(field, term, refused.reason) from refused
         raise _err(refused.key, field, term) from refused
 
 
@@ -873,18 +908,29 @@ def parse_matcher(text, kind, field="fields.filter", bounds=None):
         raise ValueError(f"unknown matcher kind: {kind!r}") from exc
 
     terms = []
-    for raw_term in split_terms(text):
+    raws = list(split_terms(text))
+    for index, raw_term in enumerate(raws):
         negated, body = _split_negation(raw_term)
         if not body:
             raise _err("errors.bad_filter_term", field, raw_term)
-        if kind == KIND_INT:
-            predicate, shape = _parse_int_term(body, raw_term, field, bounds)
-        elif kind == KIND_IP:
-            predicate, shape = _parse_ip_term(body, raw_term, field)
-        else:
-            predicate, shape = _parse_process_term(body, raw_term, field)
+        try:
+            predicate, shape = _parse_term(kind, body, raw_term, field, bounds)
+        except _BadRegex as bad:
+            if index < len(raws) - 1:
+                # a comma comes after this pattern, and a pattern cut in two at
+                # its comma is the usual way here: say how to keep the comma in it
+                raise _err("errors.bad_filter_regex", field, raw_term) from bad
+            raise
         terms.append(_Term(raw_term, negated, predicate, shape))
     return cls(text, terms)
+
+
+def _parse_term(kind, body, raw_term, field, bounds):
+    if kind == KIND_INT:
+        return _parse_int_term(body, raw_term, field, bounds)
+    if kind == KIND_IP:
+        return _parse_ip_term(body, raw_term, field)
+    return _parse_process_term(body, raw_term, field)
 
 
 def validate_matcher(text, kind, field="fields.filter", bounds=None):

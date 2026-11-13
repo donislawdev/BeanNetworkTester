@@ -12,13 +12,13 @@ caller holds. The Y axis is LABELLED in whichever unit the reader picked (see
 change - the docstring used to say "Y axis in KB/s" and that stopped being
 true the moment the preference existed.
 """
+import math
 import tkinter as tk
 from collections.abc import Callable, Sequence
 from typing import NamedTuple
 
 from ..i18n import T
 from ..nettools.tcphealth import rtt_number
-from ..utils import nice_ceiling
 from .rates import BASE_LABEL, DEFAULT_UNIT, UNIT_LABEL, in_unit
 from .scaling import chart_geometry, scaled
 from .theme import BG2, DOWN_C, FONT, GRID_C, MUT, UP_C, WARN
@@ -39,17 +39,30 @@ class Series(NamedTuple):
     readout: str = ""
 
 
-def _axis_label(value, peak):
-    """Y-axis number with enough precision that adjacent ticks stay distinct.
+# A Y axis is cut into this many equal gaps (five ticks, floor and top included),
+# and one gap is one of these x 10^k, so the ticks read 0 1 2 3 4, 0 2 4 6 8,
+# 0 2.5 5 7.5 10 or 0 5 10 15 20. The top used to be the "nice" number instead
+# (``utils.nice_ceiling``: 1, 2, 2.5, 5 x 10^k) and each gap a quarter of it, so a top
+# of 5 printed "0 1 2 4 5" and a top of 1 "0.0 0.2 0.5 0.8 1.0" - an uneven scale
+# that read as a broken one (UX audit 2026-11-13, UX-GUI-012).
+TICK_GAPS = 4
+GAP_STEPS = (1, 2, 2.5, 5, 10)
 
-    A tiny peak (an idle link sits at peak=1) needs decimals, or 0.25/0.5/0.75
-    all round to the same integer and the axis reads "0 0 0 1 1".
-    """
-    if peak >= 10:
-        return f"{value:.0f}"
-    if peak >= 1:
-        return f"{value:.1f}"
-    return f"{value:.2f}"
+
+def axis_top(value):
+    """The lowest top at or above ``value`` whose four gaps are a round size."""
+    want = max(float(value), 1e-9) / TICK_GAPS
+    base = 10 ** math.floor(math.log10(want))
+    gap = next(round(m * base, 12) for m in GAP_STEPS if want <= m * base * (1 + 1e-9))
+    return gap * TICK_GAPS
+
+
+def tick_label(top):
+    """How every tick of an axis topped at ``top`` is written: as many decimals as one
+    gap needs, the same for all, so a gap of 2.5 reads 0.0 2.5 5.0 7.5 10.0."""
+    gap = top / TICK_GAPS
+    decimals = next(d for d in range(12) if abs(round(gap, d) - gap) <= gap * 1e-9)
+    return lambda value: f"{value:.{decimals}f}"
 
 
 def draw_throughput_chart(canvas, down_hist, up_hist, sample_interval_s=0.7,
@@ -57,19 +70,20 @@ def draw_throughput_chart(canvas, down_hist, up_hist, sample_interval_s=0.7,
     """Redraw the throughput chart on the given canvas.
 
     ``unit`` changes the AXIS LABELS and the caption only. The history and the
-    plot scale stay in KB/s, which is what the caller holds and what the
-    engine counts - converting the data as well would mean the "nice" ceiling
-    were computed on one scale and drawn on another, and the shape of the line
-    is the same either way.
+    plot scale stay in KB/s, which is what the caller holds and what the engine
+    counts. The top is chosen in the unit READ, though, and taken back to KB/s:
+    round ticks in KB/s are not round in Mbit/s (1024 KB/s is 8.39 Mbit/s).
     """
-    peak = nice_ceiling(max(max(down_hist), max(up_hist), 1.0))
+    factor = in_unit(1.0, unit)
+    top = axis_top(max(max(down_hist), max(up_hist), 1.0) * factor)
+    label = tick_label(top)
 
     def readout(key, hist):
         return T(key, v=f"{hist[-1]:.0f}") if len(hist) >= 2 else ""
 
     draw_line_chart(canvas, (Series(down_hist, DOWN_C, readout("chart.cur_down", down_hist)),
                              Series(up_hist, UP_C, readout("chart.cur_up", up_hist))),
-                    peak, lambda v: _axis_label(in_unit(v, unit), in_unit(peak, unit)),
+                    top / factor, lambda v: label(v * factor),
                     UNIT_LABEL.get(unit, BASE_LABEL),
                     f"-{len(down_hist) * sample_interval_s:.0f} s")
 
@@ -85,11 +99,11 @@ def draw_rtt_chart(canvas, smoothed, sample, span_s):
     the smoothed value Windows keeps - and the smoothed one said at the top right."""
     # Whole milliseconds on an axis of five ticks: a top under 4 would print the same
     # number twice ("1 1 0 0 0", rendered on loopback, 2026-10-19).
-    peak = nice_ceiling(max(max(smoothed, default=0), max(sample, default=0), RTT_LEAST_PEAK))
+    peak = axis_top(max(max(smoothed, default=0), max(sample, default=0), RTT_LEAST_PEAK))
     readout = (T("tools.tcphealth.chart_now", v=rtt_number(round(smoothed[-1])))
                if len(smoothed) >= 2 else "")
     draw_line_chart(canvas, (Series(sample, UP_C), Series(smoothed, DOWN_C, readout)),
-                    peak, lambda v: f"{v:.0f}", T("tools.tcphealth.unit_ms"), f"-{span_s} s")
+                    peak, tick_label(peak), T("tools.tcphealth.unit_ms"), f"-{span_s} s")
 
 
 def _canvas_size(canvas):
@@ -114,11 +128,13 @@ def draw_ping_chart(canvas, values, changes=()):
     trips = [v for v in values if v is not None]
     # Room above the highest round trip: the readout stands in the plot's top right
     # corner, and a steady 204 ms under a 250 ms top ran through it (rendered).
-    peak = nice_ceiling(max(max(trips, default=0) * PING_HEADROOM, RTT_LEAST_PEAK))
+    peak = axis_top(max(max(trips, default=0) * PING_HEADROOM, RTT_LEAST_PEAK))
     newest = next((v for v in reversed(values) if v is not None), None)
     readout = T("tools.ping.chart_now", v=rtt_number(newest)) if newest is not None else ""
-    draw_line_chart(canvas, (Series(values, DOWN_C, readout),), peak, lambda v: f"{v:.0f}",
-                    T("tools.tcphealth.unit_ms"), T("tools.ping.chart_span", n=len(values)))
+    # no pings yet: no span either - it read "-0" under an empty plot
+    span = T("tools.ping.chart_span", n=len(values)) if values else ""
+    draw_line_chart(canvas, (Series(values, DOWN_C, readout),), peak, tick_label(peak),
+                    T("tools.tcphealth.unit_ms"), span)
     if len(values) < 2:
         return
     g = chart_geometry(*_canvas_size(canvas))

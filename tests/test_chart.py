@@ -4,7 +4,10 @@ Tools tab's RTT.
 The throughput picture is pinned item by item: the two expected lists below were
 recorded from ``draw_throughput_chart`` BEFORE it became a caller of the shared
 ``draw_line_chart`` (2026-10-19), so the refactor is proved to draw the same chart -
-every line, label, colour and position. A recording canvas, so no Tk is needed.
+every line, label, colour and position. Recorded again on 2026-11-13, when the
+top of an axis became four round gaps (UX audit, UX-GUI-012), and checked by hand:
+a top of 40 over a plot from y=170 to y=24 puts 10 KB/s at 170 - 146/4 = 133.5.
+A recording canvas, so no Tk is needed.
 """
 from beantester import i18n
 from beantester.gui import chart, scaling
@@ -48,26 +51,26 @@ def _grid(y, label, right=484):
             ("text", 44, y, "e", MUT, SMALL, label)]
 
 
-THROUGHPUT = (_grid(170.0, "0") + _grid(133.5, "12") + _grid(97.0, "25") + _grid(60.5, "38")
-              + _grid(24.0, "50") + [
+THROUGHPUT = (_grid(170.0, "0") + _grid(133.5, "10") + _grid(97.0, "20") + _grid(60.5, "30")
+              + _grid(24.0, "40") + [
     ("text", 6, 12, "w", MUT, SMALL, "KB/s"),
     ("text", 52, 182, "w", MUT, SMALL, "-3 s"),
     ("text", 484, 182, "e", MUT, SMALL, "now"),
-    ("line", (52.0, 170.0, 196.0, 140.8, 340.0, 111.6, 484.0, 53.2), DOWN_C, 2, True),
-    ("oval", (481.0, 50.2, 487.0, 56.2), DOWN_C),
-    ("line", (52.0, 155.4, 196.0, 155.4, 340.0, 155.4, 484.0, 152.48), UP_C, 2, True),
-    ("oval", (481.0, 149.48, 487.0, 155.48), UP_C),
+    ("line", (52.0, 170.0, 196.0, 133.5, 340.0, 97.0, 484.0, 24.0), DOWN_C, 2, True),
+    ("oval", (481.0, 21.0, 487.0, 27.0), DOWN_C),
+    ("line", (52.0, 151.75, 196.0, 151.75, 340.0, 151.75, 484.0, 148.1), UP_C, 2, True),
+    ("oval", (481.0, 145.1, 487.0, 151.1), UP_C),
     ("text", 478, 32, "e", DOWN_C, BOLD, "down 40 KB/s"),
     ("text", 478, 48, "e", UP_C, BOLD, "up 6 KB/s")])
 
-SHORT = (_grid(60.0, "0.00", 284) + _grid(24.0, "0.01", 284) + [
+SHORT = (_grid(60.0, "0.0000", 284) + _grid(24.0, "0.0100", 284) + [
     ("text", 6, 12, "w", MUT, SMALL, "Mbit/s"),
     ("text", 52, 72, "w", MUT, SMALL, "-1 s"),
     ("text", 284, 72, "e", MUT, SMALL, "now"),
-    ("line", (52.0, 52.8, 284.0, 45.6), DOWN_C, 2, True),
-    ("oval", (281.0, 42.6, 287.0, 48.6), DOWN_C),
-    ("line", (52.0, 56.4, 284.0, 49.2), UP_C, 2, True),
-    ("oval", (281.0, 46.2, 287.0, 52.2), UP_C),
+    ("line", (52.0, 54.1, 284.0, 48.2), DOWN_C, 2, True),
+    ("oval", (281.0, 45.2, 287.0, 51.2), DOWN_C),
+    ("line", (52.0, 57.05, 284.0, 51.15), UP_C, 2, True),
+    ("oval", (281.0, 48.15, 287.0, 54.15), UP_C),
     ("text", 278, 32, "e", DOWN_C, BOLD, "down 0 KB/s"),
     ("text", 278, 48, "e", UP_C, BOLD, "up 0 KB/s")])
 
@@ -142,9 +145,13 @@ def test_the_ping_chart_marks_each_lost_ping_on_the_time_axis():
     check("the newest answer is the readout, the span counts pings",
           "201 ms" in texts and "-5" in texts, f"({texts})")
     ticks = [item[6] for item in got if item[0] == "text" and item[1] == 44]
-    # 204 x PING_HEADROOM = 265, to the next nice number: 500 (without the room: 250,
-    # and the 204 ms line ran through the readout)
-    check("room above the highest round trip for the readout", ticks[-1] == "500", f"({ticks})")
+    # 204 x PING_HEADROOM = 265, up to four round gaps: 400 (without the room the
+    # 204 ms line ran through the readout)
+    check("room above the highest round trip for the readout, in even steps",
+          ticks == ["0", "100", "200", "300", "400"], f"({ticks})")
+    got = _drawn(500, 200, lambda c: chart.draw_ping_chart(c, []))
+    texts = [item[6] for item in got if item[0] == "text"]
+    check("no pings yet: no span under the plot (it read -0)", "-0" not in texts, f"({texts})")
     got = _drawn(500, 200, lambda c: chart.draw_ping_chart(c, [None, None]))
     check("nothing came back yet: marks, no line, no readout",
           len([i for i in got if i[0] == "line" and i[2] == WARN]) == 2
@@ -174,3 +181,22 @@ def test_the_ping_chart_draws_a_dashed_line_where_the_session_changed():
     big = [item for item in canvas.items if len(item) == 6]
     check("at 200% the dashes and gaps are twice as long, like every pixel of the chart",
           len(big) == 1 and big[0][5] == tuple(2 * px for px in chart.CHANGE_DASH), f"({big})")
+
+
+def test_every_axis_is_cut_into_four_equal_round_gaps():
+    """A top of 5 read "0 1 2 4 5" and a top of 1 "0.0 0.2 0.5 0.8 1.0" (UX audit
+    2026-11-13, UX-GUI-012): the top was the round number and each tick a quarter of
+    it. The GAP is round now, and every tick says it with the same decimals."""
+    table = [(0.5, ["0.0", "0.2", "0.4", "0.6", "0.8"]),
+             (1, ["0.00", "0.25", "0.50", "0.75", "1.00"]),
+             (4, ["0", "1", "2", "3", "4"]),
+             (5, ["0", "2", "4", "6", "8"]),
+             (10, ["0.0", "2.5", "5.0", "7.5", "10.0"]),
+             (12, ["0", "5", "10", "15", "20"]),
+             (40, ["0", "10", "20", "30", "40"]),
+             (265, ["0", "100", "200", "300", "400"])]
+    for value, want in table:
+        top = chart.axis_top(value)
+        label = chart.tick_label(top)
+        got = [label(top * gap / chart.TICK_GAPS) for gap in range(chart.TICK_GAPS + 1)]
+        check(f"{value} -> {want}", got == want and top >= value, f"({top}, {got})")

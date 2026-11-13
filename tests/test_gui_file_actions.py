@@ -122,6 +122,28 @@ def test_loading_a_file_that_is_not_a_config_is_refused_readably():
 
         assert shown, "a broken file must be reported, not swallowed"
         assert float(app.vars["loss"].get()) == 33.0, "the form must survive a bad load"
+        # in the window's language, with where it broke - not the parser's English
+        # "Expecting value: line 1 column 1 (char 0)" (UX audit 2026-11-13, UX-GUI-010)
+        assert shown[-1] == bnt.T("dialogs.not_json", line=1, column=1), shown[-1]
+
+        # a refusal that is not about JSON keeps its own words
+        odd = os.path.join(tempfile.mkdtemp(), "odd.json")
+        open(odd, "w", encoding="utf-8").write("[1, 2]")
+        filedialog.askopenfilename = lambda **k: odd
+        app.load_config_file()
+        assert shown[-1].startswith(bnt.T("dialogs.not_loaded") + ": "), shown[-1]
+    """)
+
+
+def test_copying_the_command_before_any_session_says_it_is_the_forms():
+    """"Save repro report" beside it asks for START first; "Copy CLI command" copied
+    the form's command in silence about where it came from (UX-GUI-014)."""
+    run_gui("""
+        app.vars["loss"].set("7")
+        app.copy_repro_cli()
+        assert app._log_lines[-1].split("] ", 1)[1].startswith(
+            bnt.T("log.copied_from_form") + ": "), app._log_lines[-1]
+        assert "--loss 7" in app._log_lines[-1], app._log_lines[-1]
     """)
 
 

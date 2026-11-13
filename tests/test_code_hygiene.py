@@ -403,7 +403,9 @@ SILENT_BROAD_HANDLERS = {
     # (external review P3-31), where its handler now records to crashlog.note.
     # 9 until 2026-10-14: opening the support page moved to gui/links.open_page
     # with the GitHub button, where its handler records to crashlog.note too.
-    "gui/app.py": 8,
+    # 8 until 2026-11-13: saving a profile moved to gui/profile_actions.py, where
+    # the form's refusal it swallowed is caught as the ValueError it is.
+    "gui/app.py": 7,
     # The two from app.py: a report that cannot be written is shown in a dialog,
     # a command that cannot be copied is said in the log. Both are the user's
     # answer, not a fault to record.

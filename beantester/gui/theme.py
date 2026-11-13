@@ -182,6 +182,7 @@ SCROLL_TROUGH = "#20232b"
 # `scaled(<number>)` and a numeric padding in the files that follow this rule.
 # Today that is the Tools tab; the older pages move over in their own change.
 SPACE = {
+    "window": 14,       # the main window's header, banners and bottom bar from its edge
     "page": 10,         # a page's content from the edge of the window
     "row": 8,           # between one row of controls and the next
     "inline": 8,        # after a control, before the next one in the same row

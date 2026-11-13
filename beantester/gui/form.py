@@ -112,6 +112,7 @@ class ControlForm:
         self.rate_hints = {}        # rate field key -> its converted-value label
         self.run_locked = {}        # section id -> controls its extra locks mid-session
         self._invalid = set()      # section ids whose fields currently fail validation
+        self._refused = set()      # ...and the settings keys of those fields
         self.columns = 1
         self.column_frames = []
         self._relayout_job = None
@@ -276,7 +277,10 @@ class ControlForm:
         self.labels[field.key] = label
 
         entry = ttk.Entry(cell, textvariable=app.vars[field.key], width=field.width)
-        entry.pack(side="left", fill="x", expand=span)
+        # A number keeps its width even on a row of its own: "Buffer" stretched
+        # across the whole card while every other number is short (UX audit
+        # 2026-11-13, UX-GUI-017). An expression grows with the room it gets.
+        entry.pack(side="left", fill="x", expand=span and field.kind != F.NUMBER)
         self.entries[field.key] = entry
         add_tooltip(label, field.tip)
         add_tooltip(entry, field.tip)
@@ -633,6 +637,7 @@ class ControlForm:
             entry = self.entries.get(key)
             if entry is None or field.kind in (F.BOOL, F.CHOICE):
                 continue
+            self._refused.discard(key)
             if not enabled or self.is_overridden(key) or self.is_locked(key):
                 self._mark(entry, ok=True)
                 continue
@@ -642,6 +647,7 @@ class ControlForm:
                 self._mark(entry, ok=True)
             except ValueError as e:
                 self._mark(entry, ok=False)
+                self._refused.add(key)
                 messages.append(str(e))
         try:
             if messages:
@@ -666,6 +672,10 @@ class ControlForm:
         only to fail in a dialog - the bad field is already flagged red.
         """
         return bool(self._invalid)
+
+    def refused_keys(self):
+        """The settings keys whose fields fail live validation right now (red)."""
+        return frozenset(self._refused)
 
     @staticmethod
     def _parse(field, text):

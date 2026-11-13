@@ -338,13 +338,13 @@ MUTATIONS = [
         # One fixed path, two workers: whichever finishes last publishes, and the
         # other one's file is gone. Easier to hit now that the window stays
         # responsive during the write.
-        "label": "gui: two clicks can start two exports onto the same file",
+        "label": "gui: two clicks can start two exports of the same snapshot",
         "file": "beantester/gui/csv_export.py",
         "old": ("    if not _EXPORT_LOCK.acquire(blocking=False):\n"
-                "        # Two clicks, one file. Refusing out loud beats two workers"
-                " racing to\n"
-                "        # `os.replace` the same path, where the winner is whichever"
-                " finishes last.\n"
+                "        # Two clicks, one snapshot. Refusing out loud beats two workers"
+                " writing\n"
+                "        # the same rows, the first of them into a file nobody asked for"
+                " twice.\n"
                 '        app.log(T("log.conns_export_busy"))\n'
                 "        return None\n"),
         "new": "    _EXPORT_LOCK.acquire(blocking=False)\n",
@@ -947,11 +947,12 @@ MUTATIONS = [
         "file": "tests/test_code_shape.py",
         # Re-anchored 2026-10-14 (1 -> 2, engine.py joined the band when the
         # page buttons left app.py) and 2026-10-20 (2 -> 3, cli.py joined it when
-        # the window's rights questions left app.py) - the owner's decisions. Same
-        # proof: a count frozen looser than the measurement is caught by the
-        # equality half.
-        "old": "FILES_NEAR_CEILING = 3          # beantester/gui/app.py",
-        "new": "FILES_NEAR_CEILING = 4          # beantester/gui/app.py",
+        # the window's rights questions left app.py) and 2026-11-13 (3 -> 5,
+        # portmap.py and nettools/nat.py joined it when the UX audit's carve-outs
+        # left app.py) - the owner's decisions. Same proof: a count frozen looser
+        # than the measurement is caught by the equality half.
+        "old": "FILES_NEAR_CEILING = 5          # gui/app.py",
+        "new": "FILES_NEAR_CEILING = 6          # gui/app.py",
         "test": "test_the_crowd_counts_are_not_set_so_loosely_that_they_never_fire",
     },
     {
@@ -1099,7 +1100,7 @@ MUTATIONS = [
         # once, and an entry that fells a crowd proves nothing about any one of them.
         "label": "ratchet: the nesting crowd count is frozen looser than the measurement",
         "file": "tests/test_code_shape.py",
-        "old": "DEPTHS_NEAR_CEILING = 5         # make_gear_icon at 5, four more at 4",
+        "old": "DEPTHS_NEAR_CEILING = 4         # make_gear_icon at 5, three more at 4",
         "new": "DEPTHS_NEAR_CEILING = 20        # make_gear_icon at 5, eleven more at 4",
         "test": "test_the_depth_ceiling_and_its_count_are_not_set_so_loosely_they_never_fire",
     },
@@ -1447,19 +1448,19 @@ MUTATIONS = [
         "label": "warning: the GUI starts an unbounded run in silence",
         "file": "beantester/gui/app.py",
         "old": "        warn_if_unbounded(s, self.log)\n"
-               "        # Immediate feedback",
+               "        self.running = True",
         "new": "        pass\n"
-               "        # Immediate feedback",
-        "test": "test_the_gui_says_the_same_thing_before_an_unbounded_start",
+               "        self.running = True",
+        "test": "test_the_gui_says_the_same_thing_when_an_unbounded_session_starts",
     },
     {
         "label": "warning: a session that BECOMES unbounded says nothing",
         "file": "beantester/gui/app.py",
         "old": "        warn_if_unbounded(s, self.log)\n"
-               "        self.engine.log_event(\"CHANGE\"",
+               "        banners.refresh_reach(self)\n",
         "new": "        pass\n"
-               "        self.engine.log_event(\"CHANGE\"",
-        "test": "test_the_gui_says_the_same_thing_before_an_unbounded_start",
+               "        banners.refresh_reach(self)\n",
+        "test": "test_the_gui_says_the_same_thing_when_an_unbounded_session_starts",
     },
     {
         "label": "warning: --dry-run previews the values but not the shape",
@@ -1503,13 +1504,9 @@ MUTATIONS = [
     },
     {
         "label": "errors: saving a profile throws the precise message away again",
-        "file": "beantester/gui/app.py",
-        "old": "            dialogs.show_error(self.root, T(\"log.error\"), str(e))\n"
-               "            return\n"
-               "        self._persist_profiles()",
-        "new": "            dialogs.show_error(self.root, T(\"log.error\"), \"nope\")\n"
-               "            return\n"
-               "        self._persist_profiles()",
+        "file": "beantester/gui/profile_actions.py",
+        "old": "        dialogs.show_error(app.root, T(\"log.error\"), str(e))\n",
+        "new": "        dialogs.show_error(app.root, T(\"log.error\"), \"nope\")\n",
         "test": "test_saving_a_profile_with_a_bad_value_names_the_field",
     },
     {
@@ -1805,9 +1802,9 @@ MUTATIONS = [
     {
         "label": "tables: an unsearched empty table blames a search nobody made",
         "file": "beantester/gui/pages/conns.py",
-        "old": ("        self.table.set_empty_text(\"tables.no_conns_match\"\n"
-                "                                  if self.search_var.get().strip()\n"
-                "                                  else \"tables.no_conns_yet\")"),
+        "old": ("        self.table.set_empty_text(\"tables.no_conns_match\" if self.search_var.get().strip()\n"
+                "                                  else \"tables.no_conns_yet\" if self.app.running\n"
+                "                                  else \"tables.no_conns_stopped\")"),
         "new": "        self.table.set_empty_text(\"tables.no_conns_match\")",
         "test": "test_an_empty_table_says_so_instead_of_showing_a_blank_rectangle",
     },
@@ -3592,8 +3589,8 @@ MUTATIONS = [
         # guard below it would go quiet while the reworded promise stood unchecked.
         "label": "toolbox promise: the README sentence is reworded behind the check",
         "file": "README.md",
-        "old": "  own public address, when you press Start, and Port scan connects to the ports you choose on\n",
-        "new": "  own public address, when you press Start, and Port scan connects to any ports it likes on\n",
+        "old": "  own public address, when you press Check, and Port scan connects to the ports you choose on\n",
+        "new": "  own public address, when you press Check, and Port scan connects to any ports it likes on\n",
         "test": "test_the_tools_tab_promise_holds_for_everything_its_code_can_send",
     },
     {
@@ -4228,10 +4225,34 @@ MUTATIONS = [
     {
         # P3-27: "Perfect network" over the deleted profile's values, applied by START.
         "label": "app: a deleted profile's values sit under the fallback's name",
-        "file": "beantester/gui/app.py",
-        "old": '        self._set_profile_key(DEFAULT_PROFILE, current="")\n',
-        "new": "        self._set_profile_key(DEFAULT_PROFILE)\n",
+        "file": "beantester/gui/profile_actions.py",
+        "old": '    set_key(app, DEFAULT_PROFILE, current="")\n',
+        "new": "    set_key(app, DEFAULT_PROFILE)\n",
         "test": "test_deleting_the_loaded_profile_names_no_profile_over_its_values",
+    },
+    {
+        # UX audit 2026-11-13 (UX-GUI-005): one Enter replaced a profile for good.
+        "label": "profiles: saving under an existing name replaces it without asking",
+        "file": "beantester/gui/profile_actions.py",
+        "old": "    if name in app.profiles and not dialogs.ask_yes_no(\n",
+        "new": "    if False and name in app.profiles and not dialogs.ask_yes_no(\n",
+        "test": "test_saving_under_an_existing_name_asks_before_replacing_it",
+    },
+    {
+        # UX audit 2026-11-13 (UX-GUI-006): "Delete" deleted on the first click.
+        "label": "profiles: Delete removes the profile without asking",
+        "file": "beantester/gui/profile_actions.py",
+        "old": "    if not dialogs.ask_yes_no(app.root, T(\"dialogs.delete_profile_title\"),\n",
+        "new": "    if False and not dialogs.ask_yes_no(app.root, T(\"dialogs.delete_profile_title\"),\n",
+        "test": "test_deleting_a_profile_asks_first_and_no_keeps_it",
+    },
+    {
+        # UX audit 2026-11-13 (UX-GUI-003): "Running" over a machine-wide impairment.
+        "label": "banners: a session that reaches every connection shows no banner",
+        "file": "beantester/gui/banners.py",
+        "old": "    if not running or settings is None or not unbounded_impairment(settings):\n",
+        "new": "    if True:\n",
+        "test": "test_a_session_that_reaches_every_connection_says_so_above_every_page",
     },
     {
         # P3-35: NFKD leaves the l-stroke whole; nine Polish labels unreachable.
@@ -6608,9 +6629,9 @@ MUTATIONS = [
     },
     {
         "label": "gui rights: the red line keeps the Windows words everywhere",
-        "file": "beantester/gui/app.py",
-        "old": "                root, text=T(capture_backend.current().rights_banner()), style=\"Bad.TLabel\",\n",
-        "new": "                root, text=T(\"warn.not_admin\"), style=\"Bad.TLabel\",\n",
+        "file": "beantester/gui/banners.py",
+        "old": "        app.admin_warning.config(text=T(capture_backend.current().rights_banner()))\n",
+        "new": "        app.admin_warning.config(text=T(\"warn.not_admin\"))\n",
         "test": "test_a_linux_window_says_what_capturing_needs_and_the_advice_that_fits",
     },
     {

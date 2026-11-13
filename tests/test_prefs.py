@@ -224,6 +224,7 @@ def test_restore_last_profile_covers_the_users_own_profiles():
         app.select_profile("presets.terrible")
 
         _dlg.ask_string = lambda *a, **k: "My VPN"
+        _dlg.ask_yes_no = lambda *a, **k: True     # "Delete the profile?" below -> Yes
         app.save_profile()
         assert app._profile_key == "My VPN", app._profile_key
         assert app.ui.get("profile") == "My VPN", app.ui.get("profile")

@@ -16,6 +16,7 @@ def test_export_connections_csv_writes_the_current_view():
         import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "conns.csv")
         m.CONNECTIONS_CSV_FILE = path
+        m.ask_path = lambda app, default: default   # "Save as" answers with the path the test chose
 
         app.engine.now_ref = lambda: 10.0
         app.engine.connections_snapshot = lambda limit=None: [
@@ -90,6 +91,7 @@ def test_a_failed_connections_export_leaves_no_tmp_file_behind():
         import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "conns.csv")
         m.CONNECTIONS_CSV_FILE = path
+        m.ask_path = lambda app, default: default   # "Save as" answers with the path the test chose
 
         app.engine.now_ref = lambda: 10.0
         app.engine.connections_snapshot = lambda limit=None: [
@@ -118,6 +120,7 @@ def test_export_connections_csv_writes_a_portless_row_with_empty_port_cells():
         import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "conns.csv")
         m.CONNECTIONS_CSV_FILE = path
+        m.ask_path = lambda app, default: default   # "Save as" answers with the path the test chose
 
         app.engine.now_ref = lambda: 10.0
         app.engine.connections_snapshot = lambda limit=None: [
@@ -147,6 +150,7 @@ def test_export_connections_csv_honours_the_search():
         import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "conns.csv")
         m.CONNECTIONS_CSV_FILE = path
+        m.ask_path = lambda app, default: default   # "Save as" answers with the path the test chose
 
         app.engine.now_ref = lambda: 10.0
         app.engine.connections_snapshot = lambda limit=None: [
@@ -180,6 +184,7 @@ def test_export_connections_csv_avg_matches_the_table_rounding():
         from beantester.views import avg_packet_bytes
         path = os.path.join(tempfile.mkdtemp(), "conns.csv")
         m.CONNECTIONS_CSV_FILE = path
+        m.ask_path = lambda app, default: default   # "Save as" answers with the path the test chose
 
         app.engine.now_ref = lambda: 10.0
         row = dict(local_port=1, remote_ip="1.1.1.1", remote_port=443, proto="TCP",
@@ -244,6 +249,7 @@ def test_both_exports_tell_the_user_the_whole_path():
         folder = tempfile.mkdtemp()
         m.CSV_FILE = os.path.join(folder, "stats.csv")
         m.CONNECTIONS_CSV_FILE = os.path.join(folder, "conns.csv")
+        m.ask_path = lambda app, default: default   # "Save as" answers with the path the test chose
 
         lines = []
         app.log = lambda text: lines.append(str(text))
@@ -283,6 +289,7 @@ def test_a_process_name_cannot_arrive_as_a_spreadsheet_formula():
         import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "conns.csv")
         m.CONNECTIONS_CSV_FILE = path
+        m.ask_path = lambda app, default: default   # "Save as" answers with the path the test chose
 
         app.engine.now_ref = lambda: 10.0
         app.engine.connections_snapshot = lambda limit=None: [
@@ -307,12 +314,13 @@ def test_a_process_name_cannot_arrive_as_a_spreadsheet_formula():
 
 
 def test_a_second_export_is_refused_while_the_first_is_still_writing():
-    """Two clicks, one file - definition of done, point 9.
+    """Two clicks, one snapshot - definition of done, point 9.
 
-    `CONNECTIONS_CSV_FILE` is a single fixed path, so two workers racing to
-    `os.replace` it would publish whichever finished last and silently discard the
-    other. Now that the write is off the UI thread the window stays responsive
-    during it, which makes the second click EASIER than it used to be.
+    It was one fixed path, so two workers racing to `os.replace` it would publish
+    whichever finished last and silently discard the other; the person names the
+    file now, and a double click still must not write the same snapshot twice. The
+    write is off the UI thread, so the window stays responsive during it, which
+    makes the second click EASIER than it used to be.
 
     The lock is held by the test rather than by a real first export, so this asks
     the question without racing to ask it.
@@ -324,6 +332,7 @@ def test_a_second_export_is_refused_while_the_first_is_still_writing():
         # export, and without this it writes to the shipped default path - which
         # left a stray CSV in the repository the first time it ran.
         m.CONNECTIONS_CSV_FILE = os.path.join(tempfile.mkdtemp(), "conns.csv")
+        m.ask_path = lambda app, default: default   # "Save as" answers with the path the test chose
 
         assert m._EXPORT_LOCK.acquire(blocking=False), "the lock must start free"
         try:
@@ -360,6 +369,7 @@ def test_the_connection_export_does_not_run_on_the_ui_thread():
         import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "conns.csv")
         m.CONNECTIONS_CSV_FILE = path
+        m.ask_path = lambda app, default: default   # "Save as" answers with the path the test chose
 
         where = {}
         real = m.filter_sort_connections
@@ -436,6 +446,7 @@ def test_a_second_sockets_export_is_refused_and_a_failed_one_frees_the_next(tmp_
     lines = []
     app = SimpleNamespace(log=lambda text: lines.append(str(text)))
     monkeypatch.setattr(m, "SOCKETS_CSV_FILE", str(tmp_path / "sockets.csv"))
+    monkeypatch.setattr(m, "ask_path", lambda app, default: default)  # "Save as" answers with the path the test chose
     assert m._SOCKETS_LOCK.acquire(blocking=False), "the lock must start free"
     try:
         refused = m.export_sockets(app, [])
@@ -473,3 +484,69 @@ def test_a_socket_row_says_when_it_was_first_seen_and_when_it_closed():
     assert new[-2:] == [stamp(seen), ""], new
     closed = m._socket_cells(s._replace(change=sk.CLOSED, at=gone, seen_at=seen))
     assert closed[-2:] == [stamp(seen), stamp(gone)], closed
+
+
+def test_a_table_export_asks_where_and_offers_a_name_with_the_date_and_time():
+    """UX audit 2026-11-13 (UX-GUI-007), the owner's choice: every export of a
+    table went to one fixed file in the data folder - the second destroyed the
+    first, and only a line in the log said where it was. It asks now, offers a name
+    with the date and time in the folder the last one went to, and a cancel writes
+    nothing and holds nothing. The stats export stays the one appended file."""
+    run_gui('''
+        import os, re, tempfile
+        import tkinter.filedialog as fd
+        import beantester.gui.csv_export as m
+        asked, answers = [], []
+
+        def save_as(**kw):
+            asked.append(kw)
+            return answers.pop(0)
+        fd.asksaveasfilename = save_as
+        # a temp "data folder": code that does not ask (the old one) writes there,
+        # never into the tree this runs from
+        m.CONNECTIONS_CSV_FILE = os.path.join(tempfile.mkdtemp(), "bean_network_tester_connections.csv")
+        data = os.path.dirname(m.CONNECTIONS_CSV_FILE)
+        app.engine.now_ref = lambda: 3.0
+        app.engine.connections_snapshot = lambda limit=None: [
+            dict(local_port=5000, remote_ip="1.1.1.1", remote_port=443, proto="TCP",
+                 packets=1, scoped=False, first=1.0, last=2.0)]
+        stamp = "_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}[.]csv"
+
+        answers.append("")                              # cancelled
+        assert app.export_connections_csv() is None
+        assert asked[-1]["initialdir"] == data, asked[-1]
+        assert re.fullmatch("bean_network_tester_connections" + stamp,
+                            asked[-1]["initialfile"]), asked[-1]
+        assert asked[-1]["parent"] is app.root, asked[-1]
+
+        folder = tempfile.mkdtemp()
+        answers.append(os.path.join(folder, "mine.csv"))   # the cancel freed the lock
+        app.export_connections_csv().join(20)
+        assert open(os.path.join(folder, "mine.csv"), encoding="utf-8").read().startswith(
+            "process,"), "the file the person named was not written"
+
+        # the next one starts where that one went - for any table
+        for export, name in ((lambda: m.export_sockets(app, []), "sockets"),
+                             (lambda: m.export_ports(app, [], 0.0), "ports"),
+                             (lambda: m.export_scan(app, [], "127.0.0.1", 0.0), "port_scan")):
+            answers.append("")
+            assert export() is None, name
+            assert asked[-1]["initialdir"] == folder, (name, asked[-1])
+            assert re.fullmatch("bean_network_tester_" + name + stamp,
+                                asked[-1]["initialfile"]), asked[-1]
+        print("asked-done")
+    ''')
+
+
+def test_the_connections_export_is_off_while_the_table_is_empty():
+    """An export of an empty table reported success and left an empty file."""
+    run_gui('''
+        page = app.pages["connections"]
+        assert page.export_btn.instate(["disabled"]), "live over an empty table"
+        page._apply({"rows": [dict(proto="TCP")], "total": 1, "limit": 0,
+                     "totals": None, "scope_active": False})
+        assert page.export_btn.instate(["!disabled"]), "off over a table with a row"
+        page._apply({"rows": [], "total": 1, "limit": 0,
+                     "totals": None, "scope_active": False})
+        assert page.export_btn.instate(["disabled"]), "live over a search matching nothing"
+    ''')

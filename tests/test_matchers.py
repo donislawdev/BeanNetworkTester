@@ -584,10 +584,30 @@ def test_a_pattern_the_parser_cannot_build_is_a_value_error_on_every_kind():
         for kind in (KIND_INT, KIND_IP, KIND_PROCESS):
             with pytest.raises(ValueError) as caught:
                 parse_matcher(text, kind, "fields.target")
-            said = matchers._err("errors.bad_filter_regex", "fields.target", text)
+            said = matchers._err("errors.regex_too_big", "fields.target", text)
             check(f"{text[:20]} ({kind}): the ordinary 'not a valid regular "
-                  "expression' error", str(caught.value) == str(said),
+                  "expression' error, with its reason", str(caught.value) == str(said),
                   f"({str(caught.value)[:90]!r})")
+
+
+def test_a_refused_pattern_says_why_and_the_comma_hint_only_where_a_comma_cut_it():
+    """UX audit 2026-11-13 (UX-GUI-009): "re:^fire(" was told to escape a comma it
+    did not have. The reason is the one ``re`` gave; the comma hint is for a pattern
+    a comma cut in two - a term with the rest of it after it."""
+    from beantester import matchers
+    cases = [("re:^fire(", "re:^fire(", "errors.regex_unclosed_group"),
+             ("re:a)", "re:a)", "errors.regex_extra_paren"),
+             ("re:[abc", "re:[abc", "errors.regex_unclosed_set"),
+             ("re:*a", "re:*a", "errors.regex_nothing_to_repeat"),
+             ("re:[z-a]", "re:[z-a]", "errors.regex_bad_range"),
+             ("re:", "re:", "errors.bad_regex"),
+             ("chrome.exe, re:[x", "re:[x", "errors.regex_unclosed_set"),
+             ("re:^(a,b)$", "re:^(a", "errors.bad_filter_regex")]
+    for text, term, key in cases:
+        with pytest.raises(ValueError) as caught:
+            parse_matcher(text, KIND_PROCESS, "fields.target")
+        said = str(matchers._err(key, "fields.target", term))
+        check(f"{text!r}: {key}", str(caught.value) == said, f"({str(caught.value)!r})")
 
 
 def test_an_accepted_pattern_is_not_judged_again(monkeypatch):
