@@ -226,7 +226,8 @@ def test_one_tick_takes_one_stats_snapshot_and_the_banner_reads_it():
 def test_a_resize_inside_the_window_does_not_rewrap_the_root_labels():
     """Bound on the root, the handler heard every widget's <Configure> (394 while
     the window was built). Only the root's and the summary holder's own events can
-    change what it computes, so only those reach it."""
+    change what it computes, so only those reach it. And the strip is rewrapped only
+    when its width moved: a text cut to fit is measured again then, several times."""
     run_gui(_counting("""
         class Event:
             def __init__(self, widget):
@@ -235,6 +236,8 @@ def test_a_resize_inside_the_window_does_not_rewrap_the_root_labels():
         for name in ("summary", "admin_warning", "engine_warning"):
             if getattr(app, name) is not None:
                 counting(getattr(app, name), name)
+        width = [700]                            # the strip's width, moved below
+        app.summary_holder.winfo_width = lambda: width[0]
 
         app._on_root_configure(Event(next(iter(app.form.entries.values()))))
         app._on_root_configure(Event(".a.widget.tkinter.never.named"))
@@ -243,9 +246,13 @@ def test_a_resize_inside_the_window_does_not_rewrap_the_root_labels():
         app._on_root_configure(Event(app.root))
         assert {"summary", "engine_warning"} <= {name for name, _ in CALLS}, CALLS
         CALLS.clear()
+        width[0] = 710
         app._on_root_configure(Event(app.summary_holder))
         assert "summary" in {name for name, _ in CALLS}, CALLS
         CALLS.clear()
+        app._on_root_configure(Event(app.summary_holder))   # the same width again
+        assert "summary" not in {name for name, _ in CALLS}, CALLS
+        width[0] = 720
         app._on_root_configure()                 # called directly: as before
         assert "summary" in {name for name, _ in CALLS}, CALLS
     """))
