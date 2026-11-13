@@ -1,0 +1,38 @@
+{
+  "geometry": "1200x800+40+40",
+  "page": "connections",
+  "stats_page": "events",
+  "tools_page": "diagnostics",
+  "language": "pl",
+  "collapsed": [
+    "flapping",
+    "destination"
+  ],
+  "log_height": 240,
+  "conn_sort": {
+    "col": "packets",
+    "reverse": false
+  },
+  "event_sort": {
+    "col": "t",
+    "reverse": true
+  },
+  "profile": "slow office wifi",
+  "conn_columns": [
+    "kb",
+    "proc",
+    "proto",
+    "remote_ip",
+    "remote_port",
+    "packets",
+    "scoped",
+    "dropped",
+    "down",
+    "up",
+    "down_seen",
+    "up_seen",
+    "dur",
+    "idle"
+  ],
+  "window.about": "760x540+90+90"
+}
