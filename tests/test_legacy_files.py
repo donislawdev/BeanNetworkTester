@@ -24,15 +24,21 @@ really wrote. Each directory carries a `MANIFEST.json` naming the tag.
 
 Adding a release means adding a directory; this file needs no edit, because
 everything below iterates the corpus. That is deliberate: a guard that must be
-extended by hand is a guard that stops covering the newest thing first.
+extended by hand is a guard that stops covering the newest thing first. The
+directory is written by `internal_tools/legacy_corpus.py --tag vX.Y.Z` (the tag's
+own writers, from `git archive`), and
+`test_every_release_but_the_newest_has_a_corpus_folder` says when one is missing.
 """
 import json
 import os
+import re
 
 from fakes import check
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CORPUS = os.path.join(HERE, "data", "legacy")
+CHANGELOG = os.path.join(os.path.dirname(HERE), "CHANGELOG.md")
+RELEASED = re.compile(r"^## \[(\d+\.\d+\.\d+)\] - ", re.M)
 
 
 def releases():
@@ -52,6 +58,33 @@ def test_the_corpus_is_not_empty():
     found = releases()
     check("legacy corpus: at least two released versions are kept",
           len(found) >= 2, "(%s)" % ", ".join(found) or "(empty)")
+
+
+def _missing_folders(changelog_text, folders):
+    """Released versions (``## [X.Y.Z] - date``, newest first) with no folder.
+
+    The newest is excused: its folder is written from its tag, after the release.
+    """
+    return [f"v{version}" for version in RELEASED.findall(changelog_text)[1:]
+            if f"v{version}" not in folders]
+
+
+def test_every_release_but_the_newest_has_a_corpus_folder():
+    """The corpus stopped at v0.4.0 for five releases (measured 2026-11-13): the
+    docstring above said a release means a new folder, and nothing said when one was
+    missing. Now the first release after a forgotten one turns this red, before
+    anybody can upgrade from the release the guard does not have."""
+    with open(CHANGELOG, encoding="utf-8") as handle:
+        text = handle.read()
+    check("the changelog names at least five releases",
+          len(RELEASED.findall(text)) >= 5, f"({RELEASED.findall(text)})")
+    gone = _missing_folders(text, releases())
+    check("every release but the newest has a folder in tests/data/legacy", not gone,
+          f"(missing {gone}: python internal_tools/legacy_corpus.py --tag <it>)")
+    planted = _missing_folders("## [Unreleased]\n\n## [2.0.0] - x\n\n## [1.1.0] - x\n\n"
+                               "## [1.0.0] - x\n", ["v1.0.0"])
+    check("the same reading finds a planted gap, and excuses the newest",
+          planted == ["v1.1.0"], f"({planted})")
 
 
 def test_a_config_file_from_every_release_still_loads():
@@ -125,11 +158,37 @@ def test_a_profile_from_every_release_still_loads_with_its_own_defaults():
                   % (tag, name), not zeroed, "(zero-filled: %s)" % zeroed)
 
 
+# Keys the window state of a release carries when a person used the window: if the
+# corpus stops carrying one, the checks below stop looking at it.
+_UI_KEYS_COVERED = ("geometry", "page", "stats_page", "tools_page", "language",
+                    "collapsed", "log_height", "conn_sort", "event_sort", "conn_columns")
+
+
+def _shape_fits(value, default):
+    """Whether ``value`` has the shape today's ``default`` has - this test's own
+    reading of the format, not the store's (`_fits`), so a store that starts
+    refusing a value it should keep cannot also be the judge of that."""
+    if isinstance(default, bool) or isinstance(value, bool):
+        return type(value) is type(default)
+    if isinstance(default, dict):
+        return isinstance(value, dict) and all(
+            key in value and _shape_fits(value[key], inner) for key, inner in default.items())
+    return isinstance(value, type(default))
+
+
 def test_a_saved_window_state_from_every_release_still_loads():
     """`*_ui.json` is a frozen format too, and it is the one a user never sees
-    until the window opens in the wrong place."""
-    from beantester.gui.ui_state import UiStateStore
+    until the window opens in the wrong place.
 
+    EVERY key the old file carries comes back as written. Only a value whose shape
+    today's format no longer has (``_shape_fits``) may instead fall back to the
+    default, and then the store must say so in ``problem``. Never quietly something
+    else: a sort, a page or a collapsed section that changed on its own is the
+    layout the person made, lost.
+    """
+    from beantester.gui.ui_state import DEFAULTS, UiStateStore
+
+    covered = set()
     for tag in releases():
         path = os.path.join(CORPUS, tag, "ui.json")
         if not os.path.exists(path):
@@ -137,11 +196,72 @@ def test_a_saved_window_state_from_every_release_still_loads():
         store = UiStateStore(path)
         with open(path, encoding="utf-8") as handle:
             written = json.load(handle)
-        for key in ("geometry", "page", "language"):
-            if key in written:
-                check("%s: window state keeps %s" % (tag, key),
-                      store.get(key) == written[key],
-                      "(%r -> %r)" % (written[key], store.get(key)))
+        for key, value in written.items():
+            got = store.get(key)
+            if key not in DEFAULTS or _shape_fits(value, DEFAULTS[key]):
+                check("%s: window state keeps %s" % (tag, key), got == value,
+                      "(%r -> %r, problem=%r)" % (value, got, store.problem))
+                covered.add(key)
+                continue
+            check("%s: window state %s that no longer fits goes back to its default, "
+                  "and says so" % (tag, key),
+                  got == DEFAULTS[key] and key in (store.problem or ""),
+                  "(%r -> %r, problem=%r)" % (value, got, store.problem))
+    check("legacy corpus: the window state of some release carries each key a person "
+          "sets", covered >= set(_UI_KEYS_COVERED),
+          "(never kept: %s)" % sorted(set(_UI_KEYS_COVERED) - covered))
+    check("the shape oracle tells a list sort from a dict one, and a bool from a number",
+          not _shape_fits(["packets", True], {"col": "kb", "reverse": True})
+          and _shape_fits({"col": "t", "reverse": False}, {"col": "kb", "reverse": True})
+          and not _shape_fits(True, 0) and _shape_fits(240, 0),
+          "(the oracle itself is wrong)")
+
+
+def test_a_chosen_column_layout_keeps_its_choice_and_gains_only_newer_columns():
+    """🔴 The Connections columns a person chose, opened by the next release.
+
+    The table shows only what was saved, so a column added since the file was
+    written must be added to it, and nothing else may change: every column the
+    person kept is shown and every column they hid stays hidden. 1.0.0 saved its
+    layout without ``conn_columns_known``, so this is the path every 1.0.0 user who
+    ever chose columns takes on their first start after the upgrade
+    (``columns_to_show`` and ``COLUMNS_BEFORE_KNOWN``). ``MANIFEST.json`` names the
+    columns the release had, which is what tells a column the person hid from one
+    that did not exist yet.
+
+    Compared as a SET: the table keeps its own column order whatever it is given
+    (``SortableTree.set_visible_columns``), so order is not part of the choice.
+    """
+    from beantester.gui.pages.conns import COLUMNS, columns_to_show
+    from beantester.gui.ui_state import UiStateStore
+
+    layouts = 0
+    for tag in releases():
+        path = os.path.join(CORPUS, tag, "ui.json")
+        manifest = os.path.join(CORPUS, tag, "MANIFEST.json")
+        if not os.path.exists(path):
+            continue
+        with open(path, encoding="utf-8") as handle:
+            chosen = json.load(handle).get("conn_columns")
+        if chosen is None:
+            continue
+        with open(manifest, encoding="utf-8") as handle:
+            known_then = json.load(handle).get("columns")
+        check("%s: its MANIFEST names the columns that release had" % tag,
+              isinstance(known_then, list) and bool(known_then), "(%r)" % known_then)
+        store = UiStateStore(path)
+        shown = columns_to_show(store.get("conn_columns"), store.get("conn_columns_known"))
+        visible = [column for column in (shown or []) if column in COLUMNS]
+        added = [column for column in COLUMNS if column not in known_then]
+        hidden = [column for column in known_then if column not in chosen]
+        expected = {column for column in chosen if column in COLUMNS} | set(added)
+        check("%s: the person's columns shown, the %d they hid hidden, and each newer "
+              "column once (%s)" % (tag, len(hidden), added),
+              set(visible) == expected and len(visible) == len(set(visible)),
+              "(opens with %s, expected %s)" % (visible, sorted(expected)))
+        layouts += 1
+    check("legacy corpus: at least one release carries a chosen column layout",
+          layouts >= 1, "(%d)" % layouts)
 
 
 def test_a_repro_command_from_every_release_still_parses():

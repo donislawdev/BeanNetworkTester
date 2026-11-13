@@ -1,0 +1,29 @@
+{
+  "tag": "v0.7.0",
+  "python": "3.15.2",
+  "written": {
+    "config": true,
+    "profiles": true,
+    "repro cli": true,
+    "ui": true
+  },
+  "columns": [
+    "proc",
+    "pid",
+    "proto",
+    "remote_ip",
+    "remote_port",
+    "local_port",
+    "packets",
+    "scoped",
+    "dropped",
+    "down",
+    "up",
+    "kb",
+    "down_seen",
+    "up_seen",
+    "avg",
+    "dur",
+    "idle"
+  ]
+}

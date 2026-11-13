@@ -1,0 +1,32 @@
+{
+  "slow office wifi": {
+    "down": 0,
+    "up": 0,
+    "buffer": 1000,
+    "lat": 80,
+    "jit": 40,
+    "spike_prob": 0,
+    "spike_ms": 0,
+    "loss": 2,
+    "loss_burst": 0,
+    "corrupt": 0,
+    "dup": 0,
+    "flap_period": 0,
+    "flap_down": 0
+  },
+  "everything at once": {
+    "down": 256,
+    "up": 64,
+    "buffer": 1000,
+    "lat": 200,
+    "jit": 90,
+    "spike_prob": 0,
+    "spike_ms": 0,
+    "loss": 5,
+    "loss_burst": 0,
+    "corrupt": 1,
+    "dup": 2,
+    "flap_period": 0,
+    "flap_down": 0
+  }
+}
