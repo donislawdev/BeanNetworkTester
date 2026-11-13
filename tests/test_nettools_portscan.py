@@ -669,3 +669,22 @@ def test_a_scan_connects_only_to_the_address_typed():
           ["UDP", ["192.0.2.1", 9]] in [[kind, address] for event, kind, address in seen["all"]
                                          if event == "socket.connect"],
           f"({seen['all'][-2:]})")
+
+
+def test_the_box_says_how_many_ports_a_plain_list_names():
+    """The default list of 71 ports read "21, 22, 23, ... 69, 8" in its box, so what
+    would be scanned could not be seen (UX audit 2026-11-13, UX-GUI-017). A plain
+    list is counted as the scan lists it - overlaps once, port 0 never; anything
+    else would mean listing 65535 ports on every key, so it is not counted."""
+    table = [(ps.COMMON_TEXT, 71), ("80, 443", 2), ("1-1024", 1024), ("80, 80", 1),
+             ("0-10", 10), ("1-100, 50-150", 150), (" 22 ,", 1), ("65535", 1),
+             ("!80", None), ("8*", None), ("re:^80", None), ("", None), ("0", None),
+             ("70000", None), ("10-5", None), ("80-", None),
+             # a digit int() refuses must not raise out of the key handler
+             (chr(0xB2), None), ("80-" + chr(0xB3), None), (chr(0x2460), None),
+             # a decimal digit of another script is a number to the scan too
+             (chr(0x0668) + chr(0x0660), 1)]
+    for text, want in table:
+        assert ps.listed_count(text) == want, (text, ps.listed_count(text), want)
+    arabic_eighty = chr(0x0668) + chr(0x0660)
+    assert ps.parse_ports(arabic_eighty).matches(80), "the scan reads it as port 80"

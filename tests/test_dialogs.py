@@ -137,6 +137,22 @@ def test_a_dialog_opens_with_the_keyboard_on_its_default_button():
     ''', "focus-ok")
 
 
+def test_a_question_whose_yes_loses_data_starts_on_no():
+    """Replacing or deleting a profile cannot be undone, so Enter pressed out of
+    habit must keep it: ``careful`` puts the keyboard - and Enter from anywhere
+    else - on "No". Every other yes/no question keeps "Yes" (owner decision D-2)."""
+    run_pressing('''
+        yes, no = T("buttons.yes"), T("buttons.no")
+        careful = lambda: d.ask_yes_no(root, "T", "replace it?", careful=True)
+        answer, started, found = press(careful)
+        assert started is found[no], started
+        assert answer is False, answer                     # Enter, keyboard nowhere
+        assert press(careful, on=yes)[0] is True           # Yes still says yes
+        assert press(lambda: d.ask_yes_no(root, "T", "proceed?"))[0] is True
+        print("careful-ok")
+    ''', "careful-ok")
+
+
 def test_the_render_check_presses_the_dialogs_keys_on_real_tk():
     """The key half of the tests above runs in CI, not here.
 

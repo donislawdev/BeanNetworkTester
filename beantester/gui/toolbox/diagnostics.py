@@ -296,8 +296,11 @@ class DiagnosticsPanel:
             word, word_style = _state_text(found.state)
             ttk.Label(head, text=word, style=word_style, width=CHARS["state"]).pack(side="left")
             ttk.Label(head, text=check_name(found.name)).pack(side="left")
-            # The program's own words, as --doctor prints them: a bug report quotes
-            # these, and the "?" sheet explains them in the reader's language.
-            wrapping_label(self.rows, found.detail).pack(fill="x", pady=(space("hair"), 0))
+            # A healthy row's few fixed words in the reader's language; anything that
+            # explains something in the program's own words, as --doctor prints
+            # them: a bug report quotes these, and the "?" sheet explains them.
+            words = diagnostics.detail_words(found)
+            detail = T(words[0], **words[1]) if words else found.detail
+            wrapping_label(self.rows, detail).pack(fill="x", pady=(space("hair"), 0))
         wrapping_label(self.rows, T("about.data_dir", path=diagnosis.data_dir)).pack(
             fill="x", pady=(space("row"), 0))

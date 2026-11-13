@@ -7,7 +7,7 @@ CLAIM it. This file is the first thing that looks at the code, which matters mor
 here than usual: this tool intercepts the user's network traffic, so "it sends
 nothing on its own" is the one promise where being wrong is not a bug but a
 betrayal. Since 2026-10-19 the promise names its one exception - the Tools tab's
-Ping, which sends echo requests to the address the person typed, from Start to
+Ping, which sends echo requests to the address the person typed, from Ping to
 Stop - and every way that tool sends is a named entry below (WIRE_ALLOWED,
 ALLOWED_CALLS, TOOLS_TAB_SENDING), so nothing else can send under its cover.
 
@@ -210,11 +210,11 @@ ALLOWED_CALLS = {
         "so nothing else reaches the resolver",
     ("beantester/nettools/nat.py", "socket", "getaddrinfo"):
         "the Tools tab's NAT and STUN: the two server NAMES the person typed, looked up "
-        "once when they press Start, by the system's own resolver. A text that is not an "
+        "once when they press Ping, by the system's own resolver. A text that is not an "
         "address or a host name with an optional port is refused before it "
         "(nettools/nat.py::parse_server, which uses Ping's reading of a name)",
     ("beantester/nettools/nat.py", "socket", "socket"):
-        "the Tools tab's NAT and STUN, only after Start: UDP sockets that send STUN Binding "
+        "the Tools tab's NAT and STUN, only after Check: UDP sockets that send STUN Binding "
         "requests and TURN Allocates to the two typed servers and a few dozen test "
         "datagrams to this network's own public address (the one the STUN server's first "
         "answer gave), a TCP connection for one Allocate per TCP or TLS transport, and the "
@@ -372,7 +372,7 @@ WIRE_FUNCTIONS = {
 #
 # The ICMP echo pair (2026-10-19, the owner's decision for the Tools tab's Ping, with
 # the promise reworded to say so): an echo request to the address the person typed,
-# one at a time, from Start to Stop - what `ping.exe` sends. `icmp.py` is the one
+# one at a time, from Ping to Stop - what `ping.exe` sends. `icmp.py` is the one
 # module allowed to make it, and the Tools tab's promise names the tool (below).
 WIRE_ALLOWED = {
     ("beantester/tcpreset.py", "SetTcpEntry"):
@@ -380,7 +380,7 @@ WIRE_ALLOWED = {
     ("beantester/tcpreset.py", "SOCK_DESTROY"):
         "the same reset on Linux (2026-10-26): that one connection's socket, by its id",
     ("beantester/icmp.py", "IcmpSendEcho2"):
-        "Ping on the Tools tab: an IPv4 echo request to the typed address, Start to Stop",
+        "Ping on the Tools tab: an IPv4 echo request to the typed address, Ping to Stop",
     ("beantester/icmp.py", "Icmp6SendEcho2"):
         "the same request for an IPv6 address",
 }
@@ -1071,37 +1071,37 @@ TOOLS_TAB_FILES = ("beantester/nettools/", "beantester/gui/toolbox/",
                    "beantester/gui/pages/toolbox.py")
 TOOLS_TAB_PROMISE = ("Only **Ping**, **NAT and STUN** and **Port scan** on this tab send "
                      "anything over the network: Ping sends echo requests to the address you "
-                     "type, from Start to Stop, NAT and STUN sends a few requests to the two "
+                     "type, from Ping to Stop, NAT and STUN sends a few requests to the two "
                      "servers you type and small test packets to this network's own public "
-                     "address, when you press Start, and Port scan connects to the ports you "
+                     "address, when you press Check, and Port scan connects to the ports you "
                      "choose on the address you type, from Scan to the end or Stop.")
 
 # What the tools named in the promise send, keyed exactly as TOOLS_TAB_QUIET_EXCEPTIONS:
 # finding -> (the tool's id, where it goes). Exact in both directions.
 TOOLS_TAB_SENDING = {
     ("beantester/icmp.py", "wire", "IcmpSendEcho2"):
-        ("ping", "an IPv4 echo request to the typed address, one at a time, Start to Stop"),
+        ("ping", "an IPv4 echo request to the typed address, one at a time, Ping to Stop"),
     ("beantester/icmp.py", "wire", "Icmp6SendEcho2"):
         ("ping", "the same request for an IPv6 address"),
     ("beantester/nettools/ping.py", "socket"):
         ("ping", "import for the name lookup below"),
     ("beantester/nettools/ping.py", "socket", "getaddrinfo"):
-        ("ping", "a typed NAME, looked up once at Start by the system's own resolver"),
+        ("ping", "a typed NAME, looked up once at Ping by the system's own resolver"),
     ("beantester/icmpsock.py", "socket"):
         ("ping", "import for the ICMP socket below"),
     ("beantester/icmpsock.py", "socket", "socket"):
-        ("ping", "on Linux, an echo request to the typed address, one at a time, Start to Stop"),
+        ("ping", "on Linux, an echo request to the typed address, one at a time, Ping to Stop"),
     ("beantester/nettools/nat.py", "socket"):
         ("nat", "import for the sockets and the name lookup below"),
     ("beantester/nettools/nat.py", "socket", "getaddrinfo"):
-        ("nat", "the two typed server NAMES, looked up once at Start by the system's resolver"),
+        ("nat", "the two typed server NAMES, looked up once at Check by the system's resolver"),
     ("beantester/nettools/nat.py", "socket", "socket"):
         ("nat", "STUN and TURN requests to the two typed servers and test datagrams to this "
-                "network's own public address, after Start"),
+                "network's own public address, after Check"),
     ("beantester/nettools/nat.py", "ssl"):
         ("nat", "import for the TLS context below"),
     ("beantester/nettools/nat.py", "ssl", "create_default_context"):
-        ("nat", "the TLS of the TURN server's TLS transports, after Start"),
+        ("nat", "the TLS of the TURN server's TLS transports, after Check"),
     ("beantester/nettools/portscan.py", "socket"):
         ("portscan", "import for the sockets below"),
     ("beantester/nettools/portscan.py", "socket", "socket"):

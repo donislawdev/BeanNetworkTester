@@ -8,8 +8,8 @@ a UDP datagram per port, and once more for a port the second round asks again. N
 packets and no administrator rights for the scan itself.
 
 What is sent, and where, is the promise this tool is held to (README, "Tools"): to the
-ONE address typed (a name is looked up once, at Start, by Ping's reading of a name),
-on the ports typed, from Start to the end or Stop. Any address may be scanned (the
+ONE address typed (a name is looked up once, at Scan, by Ping's reading of a name),
+on the ports typed, from Scan to the end or Stop. Any address may be scanned (the
 owner's decision, 2026-11-11); the help says to scan only machines you may test.
 
 Measured 2026-11-11 on Windows, Linux, macOS and LAN devices, and the reasons the code
@@ -181,6 +181,37 @@ def parse_ports(text):
     """The typed ports as a matcher, in the Control page's port language. Raises
     ``ValueError`` with a message in the window's language."""
     return parse_matcher(text, KIND_INT, FIELD, PORT_BOUNDS)
+
+
+def listed_count(text):
+    """How many ports a typed list names, said beside the box while typing - None for
+    anything but plain ports and ranges (an exclusion, a wildcard, a ``re:``): their
+    count means listing 65535 ports, which ``plan`` does once, on a worker, and not
+    the UI thread on every key. Port 0 is not counted: no scan asks it. The default
+    list of 71 ports showed as "21, 22, 23, ... 69, 8" in its box, so what would be
+    scanned could not be seen (UX audit 2026-11-13, UX-GUI-017)."""
+    spans = []
+    for part in text.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        low, dash, high = (piece.strip() for piece in part.partition("-"))
+        # isdecimal, not isdigit: "²" is a digit int() refuses, and this runs in the
+        # box's key handler. A decimal digit of any script, "٨٠", int() reads, and so
+        # does the scan's own parser.
+        if not low.isdecimal() or (dash and not high.isdecimal()):
+            return None
+        first, last = int(low), int(high) if dash else int(low)
+        if first > last or last > PORT_BOUNDS[1]:
+            return None
+        spans.append((max(first, 1), last))
+    total, reached = 0, 0
+    for first, last in sorted(spans):           # overlaps counted once, as scanned
+        first = max(first, reached + 1)
+        if last >= first:
+            total += last - first + 1
+            reached = last
+    return total or None
 
 
 class Plan(NamedTuple):

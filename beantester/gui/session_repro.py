@@ -91,13 +91,17 @@ def copy_command(app):
     try:
         recorded = settings_of(app)
         if recorded is None:
-            # No session yet: the command the form WOULD run.
+            # No session yet: the command the form WOULD run - and the log says
+            # so, beside "Save repro report", which asks for START first (UX audit
+            # 2026-11-13, UX-GUI-014).
             cli = settings_to_cli_string(app._settings_from_widgets(),
                                          seed=app.engine.effective_seed())
+            said = T("log.copied_from_form")
         else:
             cli = session_command(app.engine, recorded)
+            said = T("log.copied")
         app.copy_to_clipboard(cli)
-        app.log(f"{T('log.copied')}: {cli}")
+        app.log(f"{said}: {cli}")
     except Exception as e:
         app.log(f"{T('log.not_copied')}: {e}")
 

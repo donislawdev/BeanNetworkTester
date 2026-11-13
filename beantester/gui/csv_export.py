@@ -1,11 +1,19 @@
-"""The CSV exports: the appended session stats, and the connection, socket and port
-check snapshots.
+"""The CSV exports: the appended session stats, and the connection, socket, port
+check and port scan snapshots.
 
 Carved out of ``gui/app.py`` when it sat at the size ceiling (convention 32b says
 split rather than raise the number). They still read the App - the engine snapshot,
 the current view, the log - so they take it as an argument instead of pretending to
 be independent, and ``App.export_csv`` / ``App.export_connections_csv`` stay as the
 names every caller already uses.
+
+Where they go (owner decision 2026-11-13, UX audit UX-GUI-007): a table's snapshot
+asks, through "Save as", with a name carrying the date and time in the folder the
+last one went to (the data folder the first time). Each used to overwrite one fixed
+file in the data folder, so a second export destroyed the first, and the only word
+of where it went was a line in the log. The stats export does NOT ask: it is an
+append log, one row per click, and a spreadsheet of a session's evolution is its
+whole point - it stays one file in the data folder (``CSV_FILE``).
 
 The column tables live here too, and they are the source the README guard reads.
 """
@@ -98,6 +106,31 @@ def formula_safe(value):
     return value
 
 
+# The folder the last snapshot was saved to, for this run of the program only - a
+# path of the user's is not written into ui.json for a convenience.
+_LAST_FOLDER = {"path": ""}
+
+
+def ask_path(app, default):
+    """Where a table's snapshot goes: "Save as", offering ``default``'s name with the
+    date and time in it, in the folder the last export went to - ``default``'s own
+    (the data folder) the first time. "" when the person cancelled.
+
+    UI thread only (a dialog). The writers stay on their workers and take the
+    answer as plain data, like everything else they are handed.
+    """
+    from tkinter import filedialog
+    stem, ext = os.path.splitext(os.path.basename(default))
+    folder = _LAST_FOLDER["path"] or os.path.dirname(default)
+    path = filedialog.asksaveasfilename(
+        parent=app.root, title=T("dialogs.save_csv"), initialdir=folder,
+        initialfile=f"{stem}_{time.strftime('%Y-%m-%d_%H-%M-%S')}{ext}",
+        defaultextension=ext, filetypes=[("CSV", "*" + ext), (T("dialogs.all_files"), "*.*")])
+    if path:
+        _LAST_FOLDER["path"] = os.path.dirname(path)
+    return path
+
+
 def export_stats(app):
     snap = app.engine.stats_snapshot()
     info = app.engine.session_info()
@@ -156,9 +189,9 @@ CONN_CSV_HEADER = ["process", "pid", "proto", "remote_ip", "remote_port",
                    "packets_in_scope"]
 
 
-# One export at a time, and the thing being protected is the FILE, not the window:
-# `CONNECTIONS_CSV_FILE` is one fixed path, so two windows would collide on it as
-# surely as two clicks. Module scope is therefore right rather than lazy.
+# One export at a time. It protected the FILE while every export went to one fixed
+# path; the person picks the file now, and one at a time still keeps a double click
+# from writing the same snapshot twice.
 _EXPORT_LOCK = threading.Lock()
 
 
@@ -167,9 +200,9 @@ def export_connections(app):
 
     The display row-limit is a rendering cap, not part of what the user asked
     to see, so the export carries every filtered row - sorted the same way the
-    table is. The file is overwritten atomically each time (tmp + os.replace):
-    it is a snapshot of "the connections as they are now", not an append log
-    like the stats CSV.
+    table is. The file is written whole or not at all (``_replace_csv``): it is a
+    snapshot of "the connections as they are now", not an append log like the
+    stats CSV. Where: the person says (``ask_path``).
 
     OFF THE UI THREAD, because everything after the snapshot is unbounded work on
     a table that may hold 200 000 flows: a full filter and sort with no row cap,
@@ -184,15 +217,21 @@ def export_connections(app):
 
     Returns the worker thread so a caller that needs the file on disk before it
     goes on can join it. The GUI does not. ``None`` back means an export was
-    already running and this click was refused.
+    already running and this click was refused, or the person cancelled.
     """
     if not _EXPORT_LOCK.acquire(blocking=False):
-        # Two clicks, one file. Refusing out loud beats two workers racing to
-        # `os.replace` the same path, where the winner is whichever finishes last.
+        # Two clicks, one snapshot. Refusing out loud beats two workers writing
+        # the same rows, the first of them into a file nobody asked for twice.
         app.log(T("log.conns_export_busy"))
         return None
     try:
-        payload = _connections_payload(app)
+        # the question first, the snapshot after: the rows are the ones on
+        # screen when the person said where, not when they started to choose
+        path = ask_path(app, CONNECTIONS_CSV_FILE)
+        if not path:
+            _EXPORT_LOCK.release()
+            return None
+        payload = dict(_connections_payload(app), path=path)
     except BaseException:
         _EXPORT_LOCK.release()
         raise
@@ -229,7 +268,7 @@ def _write_connections_now(app, payload):
         payload["snapshot"], payload["query"],
         payload["sort"]["col"], payload["sort"]["reverse"],
         now=now, proc_map=proc_map, limit=0)
-    path = CONNECTIONS_CSV_FILE
+    path = payload["path"]
     try:
         _replace_csv(path, CONN_CSV_HEADER, (_connection_cells(c, now, proc_map) for c in rows))
     except Exception as e:
@@ -288,29 +327,35 @@ SOCKETS_CSV_HEADER = ["process", "service", "pid", "proto", "local_ip", "local_p
                       "remote_ip", "remote_port", "state", "opened", "first_seen",
                       "closed_at"]
 
-# One export of the socket table at a time - its own file, so its own lock.
+# One export of the socket table at a time - its own table, so its own lock.
 _SOCKETS_LOCK = threading.Lock()
 
 
 def export_sockets(app, rows):
     """Write the socket table's rows - as the window shows them: its search, its
-    "Show" and its order - to their CSV, overwritten each time like the connections
+    "Show" and its order - to the CSV the person names, like the connections
     snapshot, and on a worker for its reason. ``rows`` are the window's own
     ``nettools.sockets.Socket`` values, which nothing changes once made, so they
     are handed over as they are. Returns the worker, or None when an export was
-    already running."""
-    return _start(app, _SOCKETS_LOCK, _write_sockets, (app, list(rows)), "sockets-csv")
+    already running or the person cancelled."""
+    return _start(app, _SOCKETS_LOCK, SOCKETS_CSV_FILE, _write_sockets, (app, list(rows)),
+                  "sockets-csv")
 
 
-def _start(app, lock, write, args, name):
-    """Run one Tools-tab export on a worker of its own, one at a time per file:
-    the worker, or None when one was already running (said in the log). ``write``
-    releases ``lock`` when it is done."""
+def _start(app, lock, default, write, args, name):
+    """Run one Tools-tab export on a worker of its own, one at a time per table,
+    into the file the person names (``ask_path``, offering ``default``'s name): the
+    worker, or None when one was already running (said in the log) or the person
+    cancelled. ``write`` takes the path last and releases ``lock`` when it is done."""
     if not lock.acquire(blocking=False):
         app.log(T("log.conns_export_busy"))
         return None
     try:
-        worker = threading.Thread(target=write, args=args, name=name, daemon=True)
+        path = ask_path(app, default)
+        if not path:
+            lock.release()
+            return None
+        worker = threading.Thread(target=write, args=(*args, path), name=name, daemon=True)
         worker.start()
     except BaseException:
         lock.release()
@@ -331,10 +376,9 @@ def _socket_cells(s):
         _stamp(s.created), _stamp(s.seen_at), _stamp(s.at if s.change == CLOSED else None))]
 
 
-def _write_sockets(app, rows):
+def _write_sockets(app, rows, path):
     """Worker thread: the connections snapshot's write (``_replace_csv``), so a
-    failure leaves the previous export whole."""
-    path = SOCKETS_CSV_FILE
+    failure leaves a file that was there whole."""
     try:
         _replace_csv(path, SOCKETS_CSV_HEADER, (_socket_cells(s) for s in rows))
         app.log(f"{T('log.sockets_saved_to')} {path} ({len(rows)})")
@@ -358,10 +402,11 @@ _PORTS_LOCK = threading.Lock()
 
 def export_ports(app, rows, checked_at):
     """Write the port check's rows - as the window shows them: "Hide free ports" and
-    the order - to their CSV, overwritten each time. ``rows`` are the check's own
+    the order - to the CSV the person names. ``rows`` are the check's own
     ``nettools.portcheck.Row`` values; ``checked_at`` the time of that check. Returns
-    the worker, or None when an export was already running."""
-    return _start(app, _PORTS_LOCK, _write_ports, (app, list(rows), checked_at), "ports-csv")
+    the worker, or None when an export was already running or the person cancelled."""
+    return _start(app, _PORTS_LOCK, PORTS_CSV_FILE, _write_ports, (app, list(rows), checked_at),
+                  "ports-csv")
 
 
 def _holders_text(owners):
@@ -377,9 +422,8 @@ def _port_cells(row, checked_at):
         _holders_text(row.owners), listens, _stamp(checked_at))]
 
 
-def _write_ports(app, rows, checked_at):
-    """Worker thread: the same write as the sockets export, its own file and lock."""
-    path = PORTS_CSV_FILE
+def _write_ports(app, rows, checked_at, path):
+    """Worker thread: the same write as the sockets export, its own lock."""
     try:
         _replace_csv(path, PORTS_CSV_HEADER, (_port_cells(r, checked_at) for r in rows))
         app.log(f"{T('log.ports_saved_to')} {path} ({len(rows)})")
@@ -402,10 +446,10 @@ _SCAN_LOCK = threading.Lock()
 
 def export_scan(app, rows, address, scanned_at):
     """Write the port scan's rows - as the window shows them, in its order - to their
-    CSV, overwritten each time. ``address`` is the one the scan asked. Returns the
-    worker, or None when an export was already running."""
-    return _start(app, _SCAN_LOCK, _write_scan, (app, list(rows), address, scanned_at),
-                  "port-scan-csv")
+    CSV the person names. ``address`` is the one the scan asked. Returns the
+    worker, or None when an export was already running or the person cancelled."""
+    return _start(app, _SCAN_LOCK, PORT_SCAN_CSV_FILE, _write_scan,
+                  (app, list(rows), address, scanned_at), "port-scan-csv")
 
 
 def _scan_cells(row, address, scanned_at):
@@ -415,9 +459,8 @@ def _scan_cells(row, address, scanned_at):
         _stamp(scanned_at))]
 
 
-def _write_scan(app, rows, address, scanned_at):
-    """Worker thread: the same write as the other exports, its own file and lock."""
-    path = PORT_SCAN_CSV_FILE
+def _write_scan(app, rows, address, scanned_at, path):
+    """Worker thread: the same write as the other exports, its own lock."""
     try:
         _replace_csv(path, PORT_SCAN_CSV_HEADER,
                      (_scan_cells(r, address, scanned_at) for r in rows))

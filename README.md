@@ -61,8 +61,8 @@ exists.
 - **Export to CSV** - session statistics and a snapshot of the connections table.
 - **Command-line mode** - scriptable for CI, with exit codes and JSON output.
 - **No telemetry, nothing sent on its own** - the Ping tool pings only the address you type,
-  from Start to Stop, the NAT and STUN tool sends a few requests to the two servers you type
-  and small test packets to this network's own public address, when you press Start, and the
+  from Ping to Stop, the NAT and STUN tool sends a few requests to the two servers you type
+  and small test packets to this network's own public address, when you press Check, and the
   Port scan tool connects to the ports you choose on the address you type, from Scan to the end
   or Stop.
 
@@ -357,14 +357,14 @@ monitor is gone it returns to the centre of the current screen.
   sub-tabs: **Network** (Ping, NAT and STUN, Port scan), **This computer** (Sockets, TCP
   health, Port check, Adapters) and **This program** (Filter tester, Diagnostics).
   Only **Ping**, **NAT and STUN** and **Port scan** on this tab send anything over the
-  network: Ping sends echo requests to the address you type, from Start to Stop, NAT and STUN
+  network: Ping sends echo requests to the address you type, from Ping to Stop, NAT and STUN
   sends a few requests to the two servers you type and small test packets to this network's
-  own public address, when you press Start, and Port scan connects to the ports you choose on
+  own public address, when you press Check, and Port scan connects to the ports you choose on
   the address you type, from Scan to the end or Stop. Today:
   - **Ping** - does the session's latency and loss really reach the traffic? Type an IP
     address or a host name, choose how often to ping, how long to wait for a reply, how
     many bytes of data each ping carries (**Size**, 32 like ping.exe, up to 65 500) and how
-    many pings to send (**Pings**, or until Stop), and press **Start**. Each ping is a row -
+    many pings to send (**Pings**, or until Stop), and press **Ping**. Each ping is a row -
     when it went out, its round trip, its TTL and what came back - the round trips of the
     last 60 are charted, and a line above the table gives the numbers: sent, replies, lost,
     the longest run of losses, the lowest, average and highest round trip, the jitter (how
@@ -388,13 +388,13 @@ monitor is gone it returns to the centre of the current screen.
     1373 are lost. Duplication does not show - only the first reply to each ping counts.
     Windows waits for a reply in steps of half a second, so the wait is offered in whole
     seconds. A reply that comes after the wait counts as lost - with a long latency, choose a
-    longer wait. A name is looked up once, at Start, the way any program does, and the
+    longer wait. A name is looked up once, when you press Ping, the way any program does, and the
     address it gave is shown. Right-click a row of **Sockets** or of the Connections page
     and choose **"Ping this address"** to ping its far end. **"Copy results"** copies the
     rows, each part's numbers and the run's, in English.
   - **NAT and STUN** - how does this network's router treat a call (WebRTC and the like)?
     Type a STUN server and a TURN server at another address (Cloudflare's are filled in) and
-    press **Start**. In a few seconds the table shows the public address the router gives
+    press **Check**. In a few seconds the table shows the public address the router gives
     this computer and whether it keeps the port. The NAT mapping row says whether one socket
     gets the same public port for every server (then devices behind other routers can
     usually connect directly) or a new one for each (then a call may need a relay). The two
@@ -558,9 +558,12 @@ what you are looking at:
 
 | Prefix | Meaning |
 |---|---|
-| `Preview:` | the app is stopped - this describes what will happen after START |
+| `Preview:` | the app is stopped - this describes what will happen after START. A field with an error is left out, and the bar says so |
 | `Active:` | this is exactly what is applied to traffic right now |
-| `Unapplied changes:` | the form was changed - click "Apply changes" |
+| `After "Apply changes":` | you changed the form during a session - it comes after "Active: ...", which still describes what runs, and says what will run once you click "Apply changes" |
+
+The bar holds three lines. A longer text ends with "..." there, and the whole of it shows when
+you point at the bar.
 
 While a session runs **two elements are locked** (they unlock on STOP): the **traffic filter**
 (applied only at START) and the **language selector** (changing language rebuilds the whole UI).
@@ -897,7 +900,10 @@ destination, blocking, RST, MTU, NAT expiry, the schedule, the seed - stays out 
 profile warns you about the ones you currently have switched on. Use **"Save file..."** for the
 complete configuration. Picking a profile or a preset sets **all** of those fields at once,
 including the ones a given preset does not mention - those go back to their default, so "Perfect
-network" really means perfect. Profiles saved by an earlier version load unchanged.
+network" really means perfect. Once you change one of those fields, the list shows the profile's
+name with **(changed)** after it. Saving under the name of a profile you already have asks before
+it replaces it, and **Delete** asks before it removes one - neither can be undone, so Enter answers
+No. Profiles saved by an earlier version load unchanged.
 
 In the CLI (`--preset`) a preset can be given by its **canonical id** or a **name in any UI
 language** (case- and Polish-diacritic-insensitive - `"Perfect network"` works too). Ids:
@@ -1466,13 +1472,18 @@ blocks delivers nothing, so it is never the one named. Search with `ice:turn` (o
 
 ## CSV exports
 
-Two buttons write two files, and they behave **differently on purpose**. Both land in your own
-folder, `%LOCALAPPDATA%\BeanNetworkTester`, together with your profiles and the window state (or
-in the project root when running from source). The program writes the full path into the log
-every time it saves one. They are kept out of the program folder so that updating the program -
-by hand or through a package manager, which replaces that folder - cannot take your files with
-it. Set `BEAN_DATA_DIR` to a folder of your choosing to keep everything somewhere else, for
-example on the same stick as a portable copy.
+The statistics and the tables are exported **differently on purpose**. **Export CSV** on
+Statistics adds a row to one file in your own folder, `%LOCALAPPDATA%\BeanNetworkTester`,
+together with your profiles and the window state (or in the project root when running from
+source). A table's export - **Export connections CSV**, and **Save CSV** on Tools > Sockets,
+Port check and Port scan - asks where to save it, offering a name with the date and time in it
+(`bean_network_tester_connections_2026-11-13_15-30-00.csv`) in the folder the last one went to,
+your own folder the first time, so a second export does not replace the first. Its button is
+unavailable while the table is empty. The program writes the full path into the log every time
+it saves a file. Your own folder is kept out of the program folder so that updating the
+program - by hand or through a package manager, which replaces that folder - cannot take your
+files with it. Set `BEAN_DATA_DIR` to a folder of your choosing to keep everything somewhere
+else, for example on the same stick as a portable copy.
 
 The folder belongs to the Windows account the program is running as. On an account without
 administrator rights, agreeing to the elevation prompt runs the program as the administrator
@@ -1484,8 +1495,8 @@ variable.
 
 | | **Statistics** ("Export CSV", Statistics -> Live) | **Connections** ("Export connections CSV") |
 |---|---|---|
-| file | `bean_network_tester_stats.csv` | `bean_network_tester_connections.csv` |
-| mode | **Appends** a row per click - a log you can build a chart from across runs | **Overwrites** - a snapshot of the table as it is now |
+| file | `bean_network_tester_stats.csv` in your own folder | the one you choose - offered as `bean_network_tester_connections_<date>_<time>.csv` |
+| mode | **Appends** a row per click - a log you can build a chart from across runs | **A file per export** - a snapshot of the table as it is now (choosing an existing file replaces it) |
 | written | atomically (temp file + rename), so a crash mid-write cannot truncate it | same |
 | your search / sorting | not applicable | **followed** - the file matches what you were looking at |
 | "Show only the targeted traffic" | **ignored on purpose** - see below | **followed** |
@@ -1493,15 +1504,16 @@ variable.
 | columns change between versions | the old file is renamed with a timestamp and a new one started, so rows never misalign under a stale header | not applicable |
 | encoding | UTF-8 with no byte-order mark. Double-clicked, Excel reads such a file in the Windows code page and mangles letters outside it (process names in Polish or Chinese). Open it through **Data > Get Data > From File > From Text/CSV** and set **File Origin** to **65001: Unicode (UTF-8)** | same |
 
-**Save CSV** on **Tools > Sockets** writes `bean_network_tester_sockets.csv` to the same folder,
-the way the connections export does: overwritten each time, written atomically, UTF-8 with no
+**Save CSV** on **Tools > Sockets** saves the way the connections export does: where you choose,
+offered as `bean_network_tester_sockets_<date>_<time>.csv`, written atomically, UTF-8 with no
 byte-order mark, and the rows as the table shows them - its search, its **Show** choice and its
 order. Nothing is read again for it: the file holds the rows on screen. Its columns are listed in
-"Sockets CSV columns" below. **Save CSV** on **Tools > Port check** writes
-`bean_network_tester_ports.csv` the same way, with the rows as the table shows them - **Hide free
-ports** and the order included. Its columns are in "Port check CSV columns" below. **Save CSV**
-on **Tools > Port scan** writes `bean_network_tester_port_scan.csv` the same way, the rows in the
-table's order. Its columns are in "Port scan CSV columns" below.
+"Sockets CSV columns" below. **Save CSV** on **Tools > Port check** saves the same way, offered
+as `bean_network_tester_ports_<date>_<time>.csv`, with the rows as the table shows them - **Hide
+free ports** and the order included. Its columns are in "Port check CSV columns" below. **Save
+CSV** on **Tools > Port scan** saves the same way, offered as
+`bean_network_tester_port_scan_<date>_<time>.csv`, the rows in the table's order. Its columns are
+in "Port scan CSV columns" below.
 
 The statistics CSV does not follow the "show only the targeted traffic" switch because it is an
 append log: a file whose columns mean one thing in some rows and another in the rest is worse than
@@ -2012,6 +2024,9 @@ beantester/              the implementation package
     crash.py             what the GUI tells the crash logger: report context, breadcrumb
     csv_export.py        the CSV exports and the column names they write
     session_repro.py     what the session ran with: the repro report and "Copy CLI command"
+    profile_actions.py   the profile picker: what it lists and shows, save, delete
+    summary_strip.py     the sentence(s) in the strip under the title
+    banners.py           the red lines under that strip: rights, dropped packets, reach
     applied.py           what "Apply changes" compares the form with (a pure helper)
     theme.py  chart.py  tooltip.py  profiles.py  icon.py  labels.py
 lang/                    translations (en, pl, zh)
@@ -2113,6 +2128,10 @@ seeded).
 - **A target that names every program narrows nothing** - `*.exe`, `exe` or `*` match nearly every
   process that has a connection, so such a run gets the same start-time warning as a run with no
   target at all.
+- **A session with nothing to narrow it and no run time impairs every connection on the
+  computer** - the browser, a messenger, a remote desktop. The window says so in a red line under
+  the bar at the top, on every tab, for as long as such a session runs (and the log once, when it
+  starts). A target process, a destination or a run time takes it away.
 - **Statistics and Connections show ALL captured traffic by default** - whatever the "Traffic to
   modify" filter passes. Targeting (process / IP / port) decides only **what gets broken**, not what
   is visible in the tables and counters. Two switches in Settings, in the **"Scope"** card, change
@@ -2248,7 +2267,7 @@ external services. The tool captures network traffic on your computer - and that
 it**. Four things go out, and only when you ask for them. One is a page opened in your browser - the
 support page or the project's page on GitHub - when you click the button for it yourself. Another is
 the echo requests of the **Ping** tool on the Tools tab, which go only to the address you type, from
-Start to Stop. The third is what the **NAT and STUN** tool on the same tab sends when you press Start:
+Ping to Stop. The third is what the **NAT and STUN** tool on the same tab sends when you press Check:
 a few requests to the two servers you type and small test packets to this network's own public
 address. The fourth is the **Port scan** tool on the same tab: a TCP connection or a UDP datagram
 to each port you choose, and once more to a port that gave no answer and is asked again, on the

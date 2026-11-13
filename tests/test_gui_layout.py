@@ -1406,6 +1406,27 @@ def test_turning_asymmetry_on_copies_the_download_values_across():
     """)
 
 
+def test_a_refused_value_copied_by_the_switch_is_refused_in_its_new_box_too():
+    """The copy is a new value in the upload box, so it is judged like a typed one:
+    a red "Latency" made a "Latency (upload)" that looked fine and that the strip
+    described as if a session could run with it."""
+    run_gui("""
+        from beantester.fields import FIELDS
+        app.vars["latency"].set("12x")
+        app.vars["latency_up"].set("5")
+        app.form.validate_all()
+        assert "latency" in app.form.refused_keys()
+        assert "latency_up" not in app.form.refused_keys()
+
+        app.vars["asym"].set(True)
+        app.form._on_switch(FIELDS["asym"])
+        assert app.vars["latency_up"].get() == "12x", app.vars["latency_up"].get()
+        assert "latency_up" in app.form.refused_keys(), app.form.refused_keys()
+        assert app.form.entries["latency_up"].kw.get("style") == "Bad.TEntry", (
+            app.form.entries["latency_up"].kw)
+    """)
+
+
 def test_the_upload_fields_look_dead_while_the_switch_is_off():
     """An editable box that changes nothing is a lie about what the tool is
     doing - the rule ``apply_overrides`` already enforced for a field another

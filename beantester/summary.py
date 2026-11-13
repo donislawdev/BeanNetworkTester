@@ -99,6 +99,13 @@ def _block_part(block_ip, block_port, tr):
     return tr("summary.block", v=block_ip)
 
 
+# "No impairment" said after each prefix: a stopped window describes what START
+# would do, so it must not say "Active" (UX audit 2026-11-13, UX-GUI-013). A table,
+# not a branch: this function holds the complexity ceiling (tests/test_code_shape.py).
+NONE_KEYS = {"summary.prefix_preview": "summary.none_preview",
+             "summary.prefix_pending": "summary.none_pending"}
+
+
 def settings_summary(s, lang=None, prefix_key="summary.prefix"):
     """Return a readable description of the active impairments in the given language.
 
@@ -201,5 +208,5 @@ def settings_summary(s, lang=None, prefix_key="summary.prefix"):
     if seed not in (None, -1, "", "-1"):
         parts.append(tr("summary.seed", v=seed))
     if not parts:
-        return tr("summary.none")
+        return tr(NONE_KEYS.get(prefix_key, "summary.none"))
     return tr(prefix_key) + ", ".join(parts) + "."

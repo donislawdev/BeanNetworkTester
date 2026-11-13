@@ -6,11 +6,11 @@ program that impairs. Sending one request is ``icmp.py``'s; this module decides 
 WHAT (``parse``, ``resolve``) and keeps what came back (``Run``).
 
 What is sent, and where, is the promise this tool is held to (README, "Tools"):
-echo requests to the address the person typed, from Start to Stop. So a text that
+echo requests to the address the person typed, from Ping to Stop. So a text that
 is not plainly an address or a host name is refused HERE, before anything could
 send it anywhere: ``999.1.1.1`` and ``127.1`` are refused rather than handed to the
 name lookup, which would put a DNS query for them on the wire. A name is looked up
-once, at Start, by the system (``getaddrinfo``: on Windows the hosts file, its cache,
+once, at Ping, by the system (``getaddrinfo``: on Windows the hosts file, its cache,
 then its DNS servers; on Linux the sources its name service lists), and the address
 it gave is shown, because a name with an IPv6 address first may not be pinged where
 the person thinks.
@@ -341,7 +341,7 @@ class Part:
 
 
 class Run:
-    """One run, Start to Stop: the target, what was asked, what came back, the totals
+    """One run, Ping to Stop: the target, what was asked, what came back, the totals
     and the parts.
 
     The totals count every ping of the run; the rows keep the last ``KEPT``.

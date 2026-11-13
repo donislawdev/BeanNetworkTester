@@ -163,6 +163,10 @@ class PortScanPanel:
                                          CHARS["host"], "tips.tools_portscan_address")
         self.ports_entry = self._entry(bar, "tools.portscan.ports", self.ports,
                                        CHARS["ports"], "tips.tools_portscan_ports")
+        # how many the box holds: its default list does not fit in it (UX-GUI-017)
+        self.ports_count = ttk.Label(bar, text="", style="Muted.TLabel")
+        self.ports_count.pack(side="left", padx=(0, space("inline")))
+        self._count_ports()
         dialogs.help_button(bar, self.app.root, "tools.portscan.help_title", help_keys(),
                             "tips.tools_portscan_help").pack(side="left",
                                                              padx=(0, space("inline")))
@@ -309,7 +313,12 @@ class PortScanPanel:
         # Remembered at every key: a language change rebuilds the panel.
         self.memory["address"] = self.address.get()
         self.memory["ports"] = self.ports.get()
+        self._count_ports()
         self._sync_controls()
+
+    def _count_ports(self):
+        count = portscan.listed_count(self.ports.get())
+        self.ports_count.config(text=T("tools.portscan.ports_count", n=count) if count else "")
 
     def _ticked(self, proto, var):
         self.memory[f"proto_{proto}"] = "1" if var.get() else ""

@@ -340,12 +340,20 @@ def test_an_empty_table_says_so_instead_of_showing_a_blank_rectangle():
         note = table._empty_note
         assert note is not None, "the Connections table declares no empty note"
 
-        # nothing typed: an empty table means no traffic YET, and saying
-        # "nothing matches your search" to someone who never searched is a lie
+        # nothing typed and no session: START is the one thing to do (UX audit
+        # 2026-11-13, UX-GUI-016) - "as soon as traffic goes through" did not say it
         page.search_var.set("")
         page._apply({"rows": [], "total": 0, "limit": 0,
                      "totals": {"down": 0, "up": 0, "total": 0}, "scope_active": False})
         assert "place" in note.kw, "nothing was shown on an empty table"
+        assert note.kw.get("text") == bnt.T("tables.no_conns_stopped"), \
+            "wrong reason with no session: %r" % note.kw.get("text")
+
+        # nothing typed, a session running: an empty table means no traffic YET,
+        # and "nothing matches your search" to someone who never searched is a lie
+        app.running = True
+        page._apply({"rows": [], "total": 0, "limit": 0,
+                     "totals": {"down": 0, "up": 0, "total": 0}, "scope_active": False})
         assert note.kw.get("text") == bnt.T("tables.no_conns_yet"),             "wrong reason with no search typed: %r" % note.kw.get("text")
 
         # ...and with a query typed, the other reason

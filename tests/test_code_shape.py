@@ -87,7 +87,11 @@ from fakes import ROOT, check
 # call that builds both page buttons (`gui/links.py`, with GitHub). The band falls
 # to 83.3 and `App.__init__` is 82 - 1.3 lines clear, so the arithmetic above now
 # bites at the next line `__init__` gains, not the next `_build_ui` loses.
-FUNCTION_CEILING = 119          # beantester/gui/app.py::_build_ui
+# Lowered 2026-11-13 from 119: the window's three red banners went to
+# `gui/banners.py` (UX audit, the reach banner joined them), so `_build_ui` is 112
+# and the ceiling is the next function down, `cli.build_arg_parser`. The band falls
+# to 81.2 and `App.__init__` is 81 - its next line puts it in the crowd.
+FUNCTION_CEILING = 116          # beantester/cli.py::build_arg_parser
 # Lowered 2026-09-02 from 1192, the routine door again: the four GUI lifecycle fixes
 # needed room in `app.py`, which was pinned to the ceiling exactly, so the log box's
 # own bookkeeping moved to `gui/logview.py` and the fixes went in under the number
@@ -146,7 +150,13 @@ FUNCTION_CEILING = 119          # beantester/gui/app.py::_build_ui
 # of the geometry the window opens with moved into `scaling.restored_geometry`.
 # 1083 -> 1073 on 2026-11-09: the "matches nothing" banner's packing moved into
 # `labels.show_banner`, shared with the call card's line.
-FILE_CEILING = 1073             # beantester/gui/app.py
+# 1073 -> 966 on 2026-11-13: the UX audit's fixes needed room in `app.py`, pinned to
+# the ceiling exactly, so the profile picker's actions went to `gui/profile_actions.py`,
+# the summary strip's sentences to `gui/summary_strip.py` and the banners to
+# `gui/banners.py`. The band falls to 676.2, onto `portmap.py` (693) and
+# `nettools/nat.py` (678), neither of which grew - see FILES_NEAR_CEILING.
+# 966 -> 964 the same day: the strip's wrap width went to `summary_strip.wrap`.
+FILE_CEILING = 964              # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
 # to a record and is blind to everything creeping upward together: five files at
@@ -165,7 +175,10 @@ CROWD_BAND = 0.70
 # 2 -> 3 on 2026-10-20, the owner's decision: `app.py` lost 5 lines when the window's
 # rights questions moved into `capture_backend` (Linux stage 2a), the ceiling followed
 # it to 1086 and the band to 760.2 - and `cli.py`, 761 since Linux stage 1, is in it.
-FILES_NEAR_CEILING = 3          # beantester/gui/app.py, engine.py, cli.py (since 2026-10-20)
+# 3 -> 5 on 2026-11-13, the owner's decision, for the reason of 2026-10-14: the band
+# came down onto two files when `app.py` lost 107 lines, and the alternative was an
+# `app.py` kept longer than it needs to be to hold the count.
+FILES_NEAR_CEILING = 5          # gui/app.py, cli.py, engine.py, portmap.py, nettools/nat.py
 FUNCTIONS_NEAR_CEILING = 2      # _build_ui, build_arg_parser
 
 # 🔴 THE THIRD AXIS, added 2026-08-21 - and this file used to say, in the paragraph
@@ -211,7 +224,9 @@ DEPTH_BAND = 4                  # absolute: see above
 # R-2, W-A6), and the block that held it was the function's deepest. 6 -> 5 on
 # 2026-11-11: the user files adopted from beside a frozen program stopped cleaning
 # up their own temp file in a nested try (`paths.write_atomically` does it).
-DEPTHS_NEAR_CEILING = 5         # make_gear_icon at 5, four more at 4
+# 5 -> 4 on 2026-11-13: the banner packing left `App._drain_engine_warning` for
+# `gui/banners.show`, which is shallower.
+DEPTHS_NEAR_CEILING = 4         # make_gear_icon at 5, three more at 4
 
 
 def _logic_lines(source):
@@ -855,14 +870,18 @@ def test_the_strictly_typed_modules_only_ever_grow():
 # Lowered 2026-10-14 from 93: `App.open_donate` went to `gui/links.py` with the
 # GitHub button. The band falls to 64.4 and `SortableTree` is 64 - it has NO method
 # left to gain before it joins the crowd.
-CLASS_METHOD_CEILING = 92       # gui/app.py::App (95 until 2026-09-29: _peak_rates, _signature)
+# 92 -> 85 on 2026-11-13: six profile helpers left App with `gui/profile_actions.py`
+# (UX audit), and `_short_label` is an alias of its function now. The band falls to
+# 59.5 and takes `SortableTree` (64) in - see CLASSES_NEAR_METHOD_CEILING.
+CLASS_METHOD_CEILING = 85       # gui/app.py::App (95 until 2026-09-29: _peak_rates, _signature)
 CLASS_ATTR_CEILING = 76         # gui/app.py::App (77 until 2026-10-03: _proc_refresh_t)
 # The crowd counts, on the same 70% band as the sizes. Methods: App (92) and
 # BeanEngine (75) against a band of 64.4. Attributes: App (76) and BeanCore (57)
 # against a band of 53.2 - and BeanCore is the interesting one, because it is a
 # 485-line file that no size ratchet has ever had a reason to look at. Fifty-seven
 # attributes is what a decision core with twelve pipeline steps accumulates.
-CLASSES_NEAR_METHOD_CEILING = 2     # App, BeanEngine
+# 2 -> 3 on 2026-11-13, the owner's decision: SortableTree did not grow, the band fell.
+CLASSES_NEAR_METHOD_CEILING = 3     # App, BeanEngine, SortableTree
 CLASSES_NEAR_ATTR_CEILING = 2       # App, BeanCore
 
 

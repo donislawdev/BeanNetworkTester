@@ -283,6 +283,7 @@ class StatsPage:
         buttons.pack(fill="x", padx=scaled(8), pady=(0, scaled(8)))
         mark = ttk.Button(buttons, text=T("buttons.mark_bug"), command=self.app.mark_bug)
         mark.pack(side="left")
+        self.mark_btn = mark
         repro = ttk.Button(buttons, text=T("buttons.save_repro"), command=self.app.save_repro)
         repro.pack(side="left", padx=scaled(6))
         copy = ttk.Button(buttons, text=T("buttons.copy_cli"), command=self.app.copy_repro_cli)
@@ -391,7 +392,9 @@ class StatsPage:
     def _build_events(self, parent):
         holder = ttk.Frame(parent)
         holder.pack(fill="both", expand=True, padx=scaled(8), pady=scaled(6))
+        # an empty table said nothing of what would appear in it (UX-GUI-016)
         self.events = SortableTree(holder, EVENT_COLUMNS, sort=self.app.event_sort,
+                                   empty_text="tables.no_events_yet",
                                    on_sort=self._on_event_sort, height=14,
                                    stretch=("desc",), tips=EVENT_TIPS,
                                    tags=EVENT_COLORS,
@@ -588,6 +591,9 @@ class StatsPage:
     def refresh_session(self):
         from ...utils import bytes_to_mb, human_duration
         app = self.app
+        # a marker needs a session to mark: it only wrote "works after START" into
+        # the log (UX audit 2026-11-13, UX-GUI-014)
+        configure_changed(self.mark_btn, state="normal" if app.running else "disabled")
         snap = app.last_snapshot or {}
         info = app.engine.session_info()
         unit = app.pref("rate_unit")

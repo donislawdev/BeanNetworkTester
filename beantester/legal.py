@@ -340,7 +340,7 @@ def cli_report():
               "Telemetry: none. This program sends nothing on its own. Its Ping tool "
               "pings only the address you type, its NAT and STUN tool sends a few "
               "requests to the two servers you type and small test datagrams to this "
-              "network's own public address, when you press Start, and its Port scan "
+              "network's own public address, when you press Check, and its Port scan "
               "tool connects to the ports you choose on the address you type, from Scan "
               "to the end or Stop."]
     return "\n".join(lines)

@@ -34,17 +34,17 @@ from ..filters import cli_key_for, i18n_key_for, i18n_keys, windivert_for
 from .. import capture_backend, crashlog, driver, winenv
 from . import csv_export
 from ..i18n import (FALLBACK_LANGUAGE, T, available_languages, current_language,
-                    field_name, set_language)
+                    set_language)
 from ..paths import prepare_user_data, scenarios_dir
-from ..presets import (PRESETS, preset_to_settings, resolve_preset,
-                       settings_to_preset)
+from ..presets import PRESETS, preset_to_settings
 from ..settings import (DEFAULT_SETTINGS, apply_settings, load_config_file,
-                        non_profile_active, save_config_file, settings_from_raw,
-                        warn_if_unbounded)
+                        save_config_file, settings_from_raw, warn_if_unbounded)
 from ..summary import settings_summary
 from ..utils import number_string
 from . import crash as gui_crash
-from . import applied, clipboard, configure, dialogs, links, session_repro
+from . import (applied, banners, clipboard, configure, dialogs, links, profile_actions,
+               session_repro, summary_strip)
+from .profile_actions import DEFAULT_PROFILE
 from .icon import (apply_window_icon, make_gear_icon, show_idle_icon,
                    show_running_icon)
 from .labels import show_banner
@@ -57,8 +57,7 @@ from .scaling import (init_scaling, max_window_size, min_window_size, restored_g
                       scaled)
 from .scrollable import WheelDispatcher
 from .theme import (BG, FIELD, FG, MONO_FONT, MUT, apply_dark_titlebar,
-                    disable_maximize, init_style, popdown_height,
-                    popdown_width, unhighlight_combobox)
+                    disable_maximize, init_style, space, unhighlight_combobox)
 from .tooltip import add_tooltip
 from .ui_state import DEFAULTS as UI_DEFAULTS, UiStateStore
 from . import prefs
@@ -66,7 +65,6 @@ from .prefs import PREFS_BY_KEY
 from . import panels          # noqa: F401  (importing it REGISTERS the windows)
 from .windows import WindowManager
 
-DEFAULT_PROFILE = "presets.perfect"    # the form always starts on a perfect link
 TICK_MS = 700                      # UI refresh period
 LOG_LINES = 6                      # height of the log strip, in text lines
 CHART_SAMPLES = 120                # throughput history length (~80 s at 0.7 s)
@@ -179,7 +177,7 @@ class App:
         # NOT the displayed text: preset names are translated, so storing the label
         # meant that switching the language left the combobox showing an English
         # name over a Polish list (and any lookup by that name failed).
-        # A plain assignment on purpose: _set_profile_key() would write this
+        # A plain assignment on purpose: profile_actions.set_key() would write this
         # default into ui.json before _restore_last_profile() gets to read the
         # remembered one.
         self._profile_key = DEFAULT_PROFILE
@@ -210,7 +208,6 @@ class App:
         self.profiles = ProfileStore()
         self._lang = self.ui.get("language") or current_language()
         self._is_admin = self._detect_admin()   # decides the "run as admin" banner
-        self.admin_warning = None
         self._init_vars()
 
         # Bind ONCE, for the App's lifetime - not inside _build_ui. The handler
@@ -331,7 +328,7 @@ class App:
                 continue
             widget.destroy()
 
-        pad = scaled(14)
+        pad = space("window")
         header = ttk.Frame(root)
         header.pack(side="top", fill="x", padx=pad, pady=(scaled(12), scaled(2)))
         ttk.Label(header, text=APP_NAME, style="Title.TLabel").pack(side="left")
@@ -396,10 +393,10 @@ class App:
         # height inside the pack chain: a longer summary (e.g. after picking a
         # worse preset) grew it by a line, the notebook below was resized, and the
         # whole page visibly jumped. Its height is now reserved up front.
-        self.summary_holder = ttk.Frame(root, height=scaled(36))
+        self.summary_holder = ttk.Frame(root, height=summary_strip.height())
         self.summary_holder.pack(side="top", fill="x", padx=pad, pady=(0, scaled(4)))
         self.summary_holder.pack_propagate(False)
-        self.summary = ttk.Label(self.summary_holder, text=T("summary.none"),
+        self.summary = ttk.Label(self.summary_holder, text=T("summary.none_preview"),
                                  style="Muted.TLabel", justify="left", anchor="nw",
                                  wraplength=scaled(620))
         # Packed to its TEXT, not to the strip. Filling the (full-width, fixed-height)
@@ -408,31 +405,11 @@ class App:
         # across the header, nowhere near the line it explains.
         self.summary.pack(side="left", anchor="nw")
         add_tooltip(self.summary, "tips.summary")
-        # Not admin -> the WinDivert driver will not load and START will fail. Say
-        # it up front, as a banner, instead of only a line in the log strip at the
-        # bottom (easy to miss) and a dialog after the click. Same treatment as the
-        # other "your run is not doing what you think" warnings.
-        # These two banners are the ONLY wrapping labels whose container is the
-        # persistent root, so - unlike a field note, whose container dies with it -
-        # wrapping_label's per-label <Configure> binding would pile up on the root,
-        # one per rebuild. They are plain labels instead, wrapped by the single
-        # _on_root_configure below (which already does exactly this for the
-        # summary). Same look as wrapping_label: left/anchored, an initial
-        # wraplength refined on the first resize.
-        if not self._is_admin:
-            self.admin_warning = ttk.Label(
-                root, text=T(capture_backend.current().rights_banner()), style="Bad.TLabel",
-                justify="left", anchor="w", wraplength=scaled(600))
-            self.admin_warning.pack(side="top", fill="x", padx=pad,
-                                    pady=(0, scaled(4)))
-        # A queue overflow means the TOOL is dropping the user's packets - packets
-        # they did not ask to lose - so their measured loss is partly ours. That was
-        # a number in a table on a page they might never open. It is now a banner:
-        # a run whose numbers are WRONG must not look like a run that went fine.
-        self.engine_warning = ttk.Label(
-            root, text="", style="Bad.TLabel",
-            justify="left", anchor="w", wraplength=scaled(600))
+        # The red lines under it: no rights to capture, the tool dropping packets,
+        # a session that reaches every connection (gui/banners.py makes them).
+        self.admin_warning = self.engine_warning = self.reach_warning = None
         self._shown_engine_warning = None
+        banners.build(self)
 
         # The bottom strip (START/STOP + log) is packed FIRST, against the bottom
         # edge, so the notebook can never take its space. It used to share a
@@ -481,7 +458,7 @@ class App:
         log_box = tk.Text(self.log_wrap, height=LOG_LINES, state="disabled",
                           font=(MONO_FONT, 9), bg=FIELD, fg=MUT,
                           insertbackground=FG, relief="flat", borderwidth=0,
-                          highlightthickness=0, wrap="none",
+                          highlightthickness=0, wrap="word",
                           yscrollcommand=log_sb.set)
         log_box.pack(side="left", fill="both", expand=True)
         log_sb.config(command=log_box.yview)
@@ -554,18 +531,14 @@ class App:
                 self.root, getattr(self, "summary_holder", None)):
             return
         try:
-            width = self.summary_holder.winfo_width()
-            if width and width > scaled(80):
-                self.summary.config(wraplength=width - scaled(8))
+            summary_strip.wrap(self)
         except Exception as _exc:
             crashlog.note(_exc, "gui.app")
         try:
             root_width = self.root.winfo_width()
             if root_width and root_width > scaled(80):
-                wrap = max(scaled(80), root_width - scaled(28))   # padx both sides + margin
-                for banner in (self.admin_warning, self.engine_warning):
-                    if banner is not None:
-                        banner.config(wraplength=wrap)
+                # padx both sides + margin
+                banners.wrap(self, max(scaled(80), root_width - scaled(28)))
         except Exception as _exc:
             crashlog.note(_exc, "gui.app")
 
@@ -823,6 +796,7 @@ class App:
         self._form_changed = True
         self._refresh_dirty()
         self._refresh_start_enabled()
+        profile_actions.refresh_shown(self)     # "(changed)" once the form leaves it
 
     def on_sections_changed(self, collapsed):
         self.collapsed_sections = list(collapsed)
@@ -869,185 +843,41 @@ class App:
         if not self._form_changed:
             return
         self._form_changed = False
-        raw = self._raw_settings()
-        if not self.running:
-            prefix = "summary.prefix_preview"
-        elif self._is_dirty():
-            prefix = "summary.prefix_pending"
-        else:
-            prefix = "summary.prefix"
-        text = settings_summary(raw, self._lang, prefix_key=prefix)
+        text = summary_strip.text(self)       # which sentence, and why: gui/summary_strip.py
         if text == self._summary_text:
             return
         self._summary_text = text
         try:
-            self.summary.config(text=text)
+            summary_strip.fit(self)           # whole, or cut with all of it in the bubble
         except Exception as _exc:
             crashlog.note(_exc, "gui.app")
 
-    # -- profiles ---------------------------------------------------------------- #
-    @staticmethod
-    def _short_label(key):
-        """Short form of a field label: no colon (``i18n.field_name``), and no
-        parenthetical either - a comma-separated list wants the bare name."""
-        return field_name(key).split("(")[0].strip().rstrip(":").strip()
-
-    def _active_non_profile_settings(self, s):
-        """Translated labels of active settings a profile will NOT store."""
-        return [self._short_label(key) for key in non_profile_active(s)]
-
-    def _is_reserved_profile_name(self, name):
-        """True for names taken by a built-in preset (in any language)."""
-        return resolve_preset(name) is not None
+    # -- profiles: gui/profile_actions.py (the names stay: the page, smoke, tests) -- #
+    _short_label = staticmethod(profile_actions.short_label)
 
     def profile_names(self):
-        """Everything the picker offers: presets first, then the user's own.
-
-        Nothing else - no group headings. The dropdown sits under the "Profiles"
-        heading and every row in it is a profile, so a row that only says which
-        group comes next is a row the user can pick and get nothing from.
-        """
-        self._preset_disp2canon = {T(k): k for k in PRESETS}
-        return [T(k) for k in PRESETS] + self.profiles.names()
-
-    def profile_label(self, key):
-        """Displayed name of a profile id (presets are translated, own ones are not)."""
-        return T(key) if key in PRESETS else str(key or "")
-
-    def profile_key_for(self, label):
-        """Displayed name -> canonical id (or the name itself, for own profiles)."""
-        return getattr(self, "_preset_disp2canon", {}).get(label, label)
+        return profile_actions.names(self)
 
     def _sync_profile_widgets(self):
-        """Refill the profile list, show the selection, gate the Delete button."""
-        if self.profile_cb is None:
-            return
-        try:
-            names = self.profile_names()      # also refreshes the label<->key lookups
-            # width too, not just the row count: saving a profile is how a LONG
-            # name gets into this list, and a picker that fits at build time can
-            # stop fitting a keystroke later
-            self.profile_cb.config(values=names, height=popdown_height(names),
-                                   width=popdown_width(names))
-        except Exception as _exc:
-            crashlog.note(_exc, "gui.app")
-        try:
-            self.profile_var.set(self.profile_label(self._profile_key))
-        except Exception as _exc:
-            crashlog.note(_exc, "gui.app")
-        if self.btn_delete_profile is not None:
-            try:
-                # built-in presets and the group headings are not deletable;
-                # the button used to look live and then silently do nothing
-                deletable = self._profile_key in self.profiles
-                self.btn_delete_profile.config(
-                    state="normal" if deletable else "disabled")
-            except Exception as _exc:
-                crashlog.note(_exc, "gui.app")
+        profile_actions.sync_widgets(self)
 
     def on_profile_selected(self, event=None):
         """``<<ComboboxSelected>>`` on the profile picker."""
         unhighlight_combobox(event)      # readonly comboboxes stay "selected" otherwise
         self.load_selected_profile()
 
-    def _set_profile_key(self, key, current=None):
-        """Make ``key`` the current profile AND the one remembered for next start.
-
-        The single place that writes ``_profile_key``. It used to be written by
-        each of the three paths that change the current profile, and only one of
-        them (picking from the list) also remembered it - so saving a new profile,
-        which is how a user ENDS UP on their own profile, left "Restore the last
-        profile on startup" pointing at the preset picked before it. Persisting
-        right here, not on close, is the same rule preferences follow: a
-        deliberate choice must survive an unclean exit.
-
-        ``current`` is a different current profile for THIS session only:
-        deleting the loaded profile remembers the fallback for the next start but
-        names no profile now (see ``delete_profile``).
-        """
-        self._profile_key = key if current is None else current
-        self.ui.set("profile", key)
-        self.ui.persist()
-
     def select_profile(self, key):
-        """Fill the form from a preset/profile id. Never applies by itself."""
-        preset = PRESETS.get(key) or self.profiles.get(key)
-        if not preset:
-            return
-        self._set_profile_key(key)
-        for setting, value in preset_to_settings(preset).items():
-            self.vars[setting].set(widget_value(setting, value))
-        self._sync_profile_widgets()
-        self.form.validate_all()
-        self.form.apply_overrides()
-        self.on_form_changed()
-        self.log(f"{T('log.loaded_profile')}: {self.profile_label(key)}")
-        if self.running:
-            self.log(T("log.apply_needed"))
+        profile_actions.select(self, key)
 
     def load_selected_profile(self):
-        """Load whatever ``profile_var`` currently names.
-
-        Every row in the picker is a real profile (``profile_names``), so there
-        is nothing to pick that does not load something.
-        """
-        self.select_profile(self.profile_key_for(self.profile_var.get()))
+        """Load whatever the picker names (every row in it is a real profile)."""
+        self.select_profile(profile_actions.key_for(self, self.profile_var.get()))
 
     def save_profile(self):
-        # warn up front (once, contextually) when active settings fall outside the
-        # profile scope, so nothing is lost silently
-        try:
-            extras = self._active_non_profile_settings(self._settings_from_widgets())
-        except Exception:
-            extras = []
-        if extras:
-            dialogs.show_warning(
-                self.root, T("dialogs.profile_scope_title"),
-                T("dialogs.profile_scope_warning", fields=", ".join(extras)))
-        name = dialogs.ask_string(self.root, T("dialogs.save_profile"),
-                                  T("dialogs.profile_name"))
-        name = (name or "").strip()
-        if not name:
-            return
-        if self._is_reserved_profile_name(name):
-            dialogs.show_error(self.root, T("log.error"), T("dialogs.profile_name_taken"))
-            return
-        try:
-            values = settings_to_preset(self._settings_from_widgets())
-            self.profiles.set(name, {k: float(v) for k, v in values.items()})
-        except ValueError as e:
-            # The message _settings_from_widgets raises names the field and its
-            # range ("Field 'Loss' must be between 0 and 100"); this used to
-            # throw it away and show "Values must be numbers", which named
-            # neither. _start, four hundred lines down, has always shown str(e)
-            # for the SAME exception from the SAME call. float() below cannot be
-            # the one raising: settings_to_preset reads an already validated
-            # dict, so every value it hands over is a number.
-            dialogs.show_error(self.root, T("log.error"), str(e))
-            return
-        self._persist_profiles()
-        self._set_profile_key(name)      # saving one also SELECTS it - remember that
-        self._sync_profile_widgets()
-        self.log(f"{T('log.profile_saved')}: {name}")
+        profile_actions.save(self)
 
     def delete_profile(self):
-        name = self._profile_key
-        if name not in self.profiles:
-            return                    # presets are not deletable (button is disabled)
-        self.profiles.delete(name)
-        self._persist_profiles()
-        # Remember what we fall back TO for the next start, not the name that no
-        # longer exists - and name NO profile now. The form still holds the deleted
-        # profile's values, and the picker read "Perfect network" over them, which
-        # START then applied under that name (external review, P3-27).
-        self._set_profile_key(DEFAULT_PROFILE, current="")
-        self._sync_profile_widgets()
-        self.log(f"{T('log.profile_deleted')}: {name}")
-
-    def _persist_profiles(self):
-        err = self.profiles.persist()
-        if err:
-            self.log(f"{T('log.profiles_not_saved')}: {err}")
+        profile_actions.delete(self)
 
     # -- session actions ---------------------------------------------------------- #
     # The two exports live in gui/csv_export.py - they are file work, not window
@@ -1146,8 +976,7 @@ class App:
             if self.running:
                 self.log(T("log.apply_needed"))
         except Exception as e:
-            dialogs.show_error(self.root, T("log.error"),
-                               f"{T('dialogs.not_loaded')}: {e}")
+            dialogs.show_error(self.root, T("log.error"), dialogs.config_failure_message(e))
 
     def save_config_file(self):
         path = filedialog.asksaveasfilename(title=T("dialogs.save_config"),
@@ -1180,6 +1009,7 @@ class App:
         # at START would mean the one path that reaches this state in silence is
         # the one the user takes deliberately.
         warn_if_unbounded(s, self.log)
+        banners.refresh_reach(self)
         self.engine.log_event("CHANGE", settings_summary(s, "en"))
         self.log(f"{T('log.applied_changes')}: {settings_summary(s, self._lang)}")
         self._applied_sig = applied.after_apply(self._applied_sig, self._raw_settings())
@@ -1214,20 +1044,7 @@ class App:
         if text == self._shown_engine_warning:
             return                      # unchanged: no widget work at all
         self._shown_engine_warning = text
-        with crashlog.quiet("gui.app"):
-            if text:
-                self.engine_warning.config(text=text)
-                if not self.engine_warning.winfo_ismapped():
-                    # `after=self.summary_holder`, NOT `before=self.nb`: the notebook
-                    # lives inside its own holder, so it is not a sibling here and
-                    # pack() refuses - silently, since this is wrapped. The banner
-                    # then existed, reported itself as mapped, and drew nothing.
-                    self.engine_warning.pack(side="top", fill="x",
-                                             padx=scaled(14), pady=(0, scaled(4)),
-                                             after=self.summary_holder)
-            else:
-                self.engine_warning.config(text="")
-                self.engine_warning.pack_forget()
+        banners.show(self, self.engine_warning, text)
 
     def _drain_target_warning(self):
         """Render the current target verdict. Main thread only."""
@@ -1304,11 +1121,6 @@ class App:
         self._applied_sig = self._signature(self._raw_settings())
         filt = windivert_for(s["filter"])
         duration = s.get("duration", 0)
-        # Same sentence the CLI prints, from the same condition and the same
-        # function: nothing narrows this run and nothing ends it, so every
-        # connection on the machine is in scope. Said before the driver opens, on
-        # the UI thread, while STOP is still one click away.
-        warn_if_unbounded(s, self.log)
         # Immediate feedback: the psutil target resolution and the WinDivert driver
         # load (~0.5-1 s) run on the worker thread below, so without this the click
         # feels dead until the driver is up. Log now, on the UI thread, before work.
@@ -1350,6 +1162,13 @@ class App:
             return
         s = self._pending_start_settings
         session_repro.started(self, s)
+        # Same sentence the CLI prints, from the same condition and the same
+        # function: nothing narrows this run and nothing ends it, so every
+        # connection on the machine is in scope. Said once the session RUNS, and
+        # the banner (gui/banners.py) keeps saying it: before the driver opened, a
+        # START refused for missing rights logged "affects every connection" over
+        # a run that never touched one (UX audit 2026-11-13, UX-GUI-019).
+        warn_if_unbounded(s, self.log)
         self.running = True
         self.peaks.reset()
         try:
@@ -1537,6 +1356,8 @@ class App:
             self.status.config(
                 text=T("app.status.running" if running else "app.status.stopped"),
                 style="Good.TLabel" if running else "Status.Bad.TLabel")
+            # nothing to apply to without a session (UX audit 2026-11-13, UX-GUI-014)
+            self.btn_apply.config(state="normal" if running else "disabled")
             # Title bar + taskbar icon also tell the truth: a running capture
             # gets an "RUNNING" tag and the recording-dot icon, so it is obvious
             # the tool is live even when the window is minimised.
@@ -1570,6 +1391,7 @@ class App:
         # doing it here makes the lock immediate, like every other surface.
         with crashlog.quiet("gui.app"):
             self.windows.refresh()
+        banners.refresh_reach(self)
         self._form_changed = True
         self._refresh_dirty()
         self._refresh_start_enabled()

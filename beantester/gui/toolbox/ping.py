@@ -1,7 +1,7 @@
 """Tools tab: Ping - is the session's latency and loss really reaching the traffic?
 
 The only tool on this tab that sends anything: an echo request to the address the
-person typed, at the pace they chose, from Start to Stop (``icmp.py`` sends one,
+person typed, at the pace they chose, from Ping to Stop (``icmp.py`` sends one,
 ``nettools/ping.py`` decides what and keeps what came back). Everything else is
 drawing.
 
@@ -272,7 +272,7 @@ def _one(run, wanted, mark):
     ``(run, sent_at, target, Echo or Refused, mark)``; the time is taken here, the
     moment before the request goes, because a request asked for while the last one of
     a replaced run still waits starts only when that one is answered. The Echo is
-    ``None`` when ``wanted()`` said Stop came first (README, "Tools": from Start to
+    ``None`` when ``wanted()`` said Stop came first (README, "Tools": from Ping to
     Stop). ``mark`` - the session's when the request was asked for - only rides along
     to the answer."""
     sent_at = time.time()
@@ -361,7 +361,7 @@ class PingPanel:
             "tips.tools_ping_wait")
         # The size is typed, not chosen: a packet size limit cuts at one byte (1372
         # bytes of data passed --max-size 1400 and 1373 did not), so the person needs
-        # the exact number on either side of it. Checked at Start, like the address.
+        # the exact number on either side of it. Checked at Ping, like the address.
         ttk.Label(options, text=T("tools.ping.size")).pack(side="left")
         self.size = tk.StringVar(value=self.memory.get("size", str(ping.DEFAULT_SIZE)))
         self.size_entry = ttk.Entry(options, textvariable=self.size, width=CHARS["port"])

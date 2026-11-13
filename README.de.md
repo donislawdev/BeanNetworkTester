@@ -67,7 +67,7 @@ der es braucht, dass es existiert.
 - **Befehlszeilenmodus** - skriptfähig für CI, mit Exit-Codes und JSON-Ausgabe.
 - **Keine Telemetrie, sendet nichts von sich aus** - das Werkzeug Ping pingt nur die Adresse, die
   Sie eingeben, und NAT and STUN sendet einige Anfragen an die beiden Server, die Sie eingeben, und
-  kleine Testpakete an die eigene öffentliche Adresse dieses Netzwerks, wenn Sie Start drücken,
+  kleine Testpakete an die eigene öffentliche Adresse dieses Netzwerks, wenn Sie Check drücken,
   und Port scan verbindet sich mit den Ports, die Sie wählen, unter der Adresse, die Sie
   eingeben, von Scan bis zum Ende oder Stop.
 
@@ -236,9 +236,9 @@ zurück.
   Gruppen von Untertabs: **Network** (Ping, NAT and STUN, Port scan), **This computer**
   (Sockets, TCP health, Port check, Adapters) und **This program** (Filter tester,
   Diagnostics). Nur **Ping**, **NAT and STUN** und **Port scan** auf diesem Tab senden etwas
-  über das Netzwerk: Ping sendet Echo-Anfragen an die Adresse, die Sie eingeben, von Start bis
+  über das Netzwerk: Ping sendet Echo-Anfragen an die Adresse, die Sie eingeben, von Ping bis
   Stop, NAT and STUN sendet einige Anfragen an die beiden Server, die Sie eingeben, und kleine
-  Testpakete an die eigene öffentliche Adresse dieses Netzwerks, wenn Sie Start drücken, und
+  Testpakete an die eigene öffentliche Adresse dieses Netzwerks, wenn Sie Check drücken, und
   Port scan verbindet sich mit den Ports, die Sie wählen, unter der Adresse, die Sie eingeben,
   von Scan bis zum Ende oder Stop. Scannen Sie nur Computer, die Sie testen dürfen. Derzeit:
   - **Sockets** - jeder TCP- und UDP-Socket auf diesem Computer, wie `netstat -ano`, und es ist
@@ -310,9 +310,12 @@ zeigt, was Sie gerade vor sich haben:
 
 | Präfix | Bedeutung |
 |---|---|
-| `Preview:` | die App ist gestoppt - das beschreibt, was nach START passieren wird |
+| `Preview:` | die App ist gestoppt - das beschreibt, was nach START passieren wird. Ein Feld mit einem Fehler bleibt außen vor, und die Leiste sagt es |
 | `Active:` | genau das wird gerade auf den Datenverkehr angewendet |
-| `Unapplied changes:` | das Formular wurde geändert - klicken Sie auf "Apply changes" |
+| `After "Apply changes":` | Sie haben das Formular während einer Sitzung geändert - steht nach "Active: ...", das weiter beschreibt, was läuft, und sagt, was nach einem Klick auf "Apply changes" laufen wird |
+
+Die Leiste fasst drei Zeilen. Ein längerer Text endet dort mit "...", und der ganze Text erscheint,
+wenn Sie mit der Maus auf die Leiste zeigen.
 
 Während eine Sitzung läuft, sind **zwei Elemente gesperrt** (sie werden bei STOP wieder
 freigegeben): der **Verkehrsfilter** (wird nur bei START angewendet) und die **Sprachauswahl**
@@ -1186,11 +1189,14 @@ Ein Pfad, den diese Sitzung sperrt, stellt nichts zu, daher wird er nie genannt.
 ## CSV-Exporte
 
 Zwei Schaltflächen schreiben zwei Dateien, und sie verhalten sich **absichtlich unterschiedlich**.
-Beide landen in Ihrem eigenen Ordner, `%LOCALAPPDATA%\BeanNetworkTester`, zusammen mit Ihren
-Profilen und dem Fensterzustand (oder im Projektstamm, wenn Sie aus den Quellen starten). Das
-Programm schreibt den vollständigen Pfad jedes Mal ins Protokoll, wenn es eine speichert. Sie
-liegen außerhalb des Programmordners, damit eine Aktualisierung des Programms - von Hand oder über
-einen Paketmanager, der diesen Ordner ersetzt - Ihre Dateien nicht mitnehmen kann. Setzen Sie
+"Export CSV" auf Statistics hängt eine Zeile an eine Datei in Ihrem eigenen Ordner an,
+`%LOCALAPPDATA%\BeanNetworkTester`, zusammen mit Ihren Profilen und dem Fensterzustand (oder im
+Projektstamm, wenn Sie aus den Quellen starten). "Export connections CSV" fragt, wohin gespeichert
+werden soll, und schlägt einen Namen mit Datum und Uhrzeit vor, im zuletzt verwendeten Ordner - beim
+ersten Mal in Ihrem eigenen. Das Programm schreibt den vollständigen Pfad jedes Mal ins Protokoll,
+wenn es eine Datei speichert. Ihr eigener Ordner liegt außerhalb des Programmordners, damit eine
+Aktualisierung des Programms - von Hand oder über einen Paketmanager, der diesen Ordner ersetzt -
+Ihre Dateien nicht mitnehmen kann. Setzen Sie
 `BEAN_DATA_DIR` auf einen Ordner Ihrer Wahl, um alles woanders zu halten, zum Beispiel auf demselben
 Stick wie eine portable Kopie.
 
@@ -1204,8 +1210,8 @@ Administrator `BEAN_DATA_DIR` als systemweite Umgebungsvariable setzen.
 
 | | **Statistics** ("Export CSV", Statistics -> Live) | **Connections** ("Export connections CSV") |
 |---|---|---|
-| Datei | `bean_network_tester_stats.csv` | `bean_network_tester_connections.csv` |
-| Modus | **Hängt** bei jedem Klick eine Zeile **an** - ein Protokoll, aus dem Sie über mehrere Läufe hinweg ein Diagramm bauen können | **Überschreibt** - ein Schnappschuss der Tabelle, wie sie jetzt ist |
+| Datei | `bean_network_tester_stats.csv` | die Sie wählen - vorgeschlagen als `bean_network_tester_connections_<Datum>_<Uhrzeit>.csv` |
+| Modus | **Hängt** bei jedem Klick eine Zeile **an** - ein Protokoll, aus dem Sie über mehrere Läufe hinweg ein Diagramm bauen können | **Eine Datei pro Export** - ein Schnappschuss der Tabelle, wie sie jetzt ist (eine vorhandene Datei zu wählen, ersetzt sie) |
 | geschrieben | atomar (temporäre Datei + Umbenennen), sodass ein Absturz mitten im Schreiben sie nicht abschneiden kann | ebenso |
 | Ihre Suche / Sortierung | nicht zutreffend | **wird befolgt** - die Datei entspricht dem, was Sie gesehen haben |
 | "Show only the targeted traffic" | **absichtlich ignoriert** - siehe unten | **wird befolgt** |
@@ -1933,8 +1939,8 @@ Daten **verlassen ihn nie**. Vier Dinge gehen nur hinaus, wenn Sie darum bitten.
 Seite, die in Ihrem Browser geöffnet wird - die Unterstützungsseite oder die Seite des Projekts auf
 GitHub -, wenn Sie selbst auf die entsprechende Schaltfläche klicken. Das zweite sind die
 Echo-Anfragen des Werkzeugs **Ping** auf dem Tab Tools, die nur an die Adresse gehen, die Sie
-eingeben, von Start bis Stop. Das dritte ist, was das Werkzeug **NAT and STUN** auf demselben Tab
-sendet, wenn Sie Start drücken: einige Anfragen an die beiden Server, die Sie eingeben, und kleine
+eingeben, von Ping bis Stop. Das dritte ist, was das Werkzeug **NAT and STUN** auf demselben Tab
+sendet, wenn Sie Check drücken: einige Anfragen an die beiden Server, die Sie eingeben, und kleine
 Testpakete an die eigene öffentliche Adresse dieses Netzwerks. Das vierte ist das Werkzeug
 **Port scan** auf demselben Tab: eine TCP-Verbindung oder ein UDP-Datagramm an jeden Port, den
 Sie wählen, und noch einmal an einen Port, der keine Antwort gab und erneut gefragt wird, unter

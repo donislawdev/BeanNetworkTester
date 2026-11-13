@@ -67,7 +67,7 @@ tester que lo necesite.
 - **Modo de línea de comandos** - automatizable para CI, con códigos de salida y salida JSON.
 - **Sin telemetría, no envía nada por su cuenta** - la herramienta Ping solo hace ping a la
   dirección que se escribe, y NAT and STUN envía unas pocas solicitudes a los dos servidores que se
-  escriben y pequeños paquetes de prueba a la propia dirección pública de esta red, al pulsar Start,
+  escriben y pequeños paquetes de prueba a la propia dirección pública de esta red, al pulsar Check,
   y Port scan se conecta a los puertos que se eligen en la dirección que se escribe, de Scan
   hasta el final o Stop.
 
@@ -233,9 +233,9 @@ está, vuelve al centro de la pantalla actual.
   tres grupos de subpestañas: **Network** (Ping, NAT and STUN, Port scan), **This computer**
   (Sockets, TCP health, Port check, Adapters) y **This program** (Filter tester, Diagnostics).
   Solo **Ping**, **NAT and STUN** y **Port scan** envían algo por la red en esta pestaña: Ping
-  envía solicitudes de eco a la dirección que se escribe, de Start a Stop, NAT and STUN envía
+  envía solicitudes de eco a la dirección que se escribe, de Ping a Stop, NAT and STUN envía
   unas pocas solicitudes a los dos servidores que se escriben y pequeños paquetes de prueba a la
-  propia dirección pública de esta red, al pulsar Start, y Port scan se conecta a los puertos que
+  propia dirección pública de esta red, al pulsar Check, y Port scan se conecta a los puertos que
   se eligen en la dirección que se escribe, de Scan hasta el final o Stop. Solo se deben escanear
   equipos que se tenga permiso para probar. Hoy:
   - **Sockets** - todos los sockets TCP y UDP de este equipo, como `netstat -ano`, sin necesidad de
@@ -301,9 +301,12 @@ realmente. La barra bajo el título indica qué se está viendo:
 
 | Prefijo | Significado |
 |---|---|
-| `Preview:` | la aplicación está detenida: describe lo que ocurrirá después de START |
+| `Preview:` | la aplicación está detenida: describe lo que ocurrirá después de START. Un campo con un error queda fuera, y la barra lo dice |
 | `Active:` | esto es exactamente lo que se está aplicando al tráfico ahora mismo |
-| `Unapplied changes:` | se modificó el formulario: haga clic en "Apply changes" |
+| `After "Apply changes":` | cambió el formulario durante una sesión: va después de "Active: ...", que sigue describiendo lo que se ejecuta, y dice lo que se ejecutará al hacer clic en "Apply changes" |
+
+La barra muestra tres líneas. Un texto más largo termina allí con "...", y el texto completo aparece
+al señalar la barra con el ratón.
 
 Mientras una sesión está en marcha, **dos elementos quedan bloqueados** (se desbloquean con STOP): el
 **filtro de tráfico** (se aplica solo en START) y el **selector de idioma** (cambiar el idioma
@@ -1154,12 +1157,14 @@ el nombrado. Busque con `ice:turn` (o `ice:lan`, `ice:nat`...) para ver un solo 
 
 ## Exportaciones a CSV
 
-Dos botones escriben dos archivos, y se comportan **de forma distinta a propósito**. Ambos van a la
-carpeta propia del usuario, `%LOCALAPPDATA%\BeanNetworkTester`, junto con los perfiles y el estado de
-la ventana (o a la raíz del proyecto cuando se ejecuta desde el código fuente). El programa escribe
-la ruta completa en el registro cada vez que guarda uno. Se mantienen fuera de la carpeta del
-programa para que actualizarlo, a mano o mediante un gestor de paquetes que reemplaza esa carpeta, no
-pueda llevarse los archivos consigo. Defina `BEAN_DATA_DIR` con una carpeta a su elección para
+Dos botones escriben dos archivos, y se comportan **de forma distinta a propósito**. "Export CSV" en
+Statistics añade una fila a un archivo de la carpeta propia del usuario,
+`%LOCALAPPDATA%\BeanNetworkTester`, junto con los perfiles y el estado de la ventana (o en la raíz del
+proyecto cuando se ejecuta desde el código fuente). "Export connections CSV" pregunta dónde guardar y
+propone un nombre con la fecha y la hora, en la última carpeta usada (la carpeta propia la primera
+vez). El programa escribe la ruta completa en el registro cada vez que guarda un archivo. La carpeta
+propia se mantiene fuera de la carpeta del programa para que actualizarlo, a mano o mediante un gestor
+de paquetes que reemplaza esa carpeta, no pueda llevarse los archivos consigo. Defina `BEAN_DATA_DIR` con una carpeta a su elección para
 guardarlo todo en otro sitio, por ejemplo en el mismo pendrive que una copia portátil.
 
 La carpeta pertenece a la cuenta de Windows con la que se ejecuta el programa. En una cuenta sin
@@ -1172,8 +1177,8 @@ variable de entorno de todo el sistema.
 
 | | **Statistics** ("Export CSV", Statistics -> Live) | **Connections** ("Export connections CSV") |
 |---|---|---|
-| archivo | `bean_network_tester_stats.csv` | `bean_network_tester_connections.csv` |
-| modo | **Añade** una fila por clic: un registro con el que se puede construir un gráfico a lo largo de varias ejecuciones | **Sobrescribe**: una instantánea de la tabla tal como está ahora |
+| archivo | `bean_network_tester_stats.csv` | el que usted elija: se propone `bean_network_tester_connections_<fecha>_<hora>.csv` |
+| modo | **Añade** una fila por clic: un registro con el que se puede construir un gráfico a lo largo de varias ejecuciones | **Un archivo por exportación**: una instantánea de la tabla tal como está ahora (elegir un archivo existente lo reemplaza) |
 | escritura | atómica (archivo temporal + renombrado), así que un fallo a mitad de la escritura no puede truncarlo | igual |
 | su búsqueda / ordenación | no se aplica | **se respeta**: el archivo coincide con lo que se estaba viendo |
 | "Show only the targeted traffic" | **se ignora a propósito**: véase más abajo | **se respeta** |
@@ -1882,8 +1887,8 @@ actualizaciones, ni servicios externos. La herramienta captura tráfico de red e
 datos **nunca salen de él**. Solo salen cuatro cosas, y solo cuando se piden. Una es una página
 abierta en el navegador (la página de apoyo o la página del proyecto en GitHub), cuando se hace clic
 por cuenta propia en el botón correspondiente. Otra son las solicitudes de eco de la herramienta
-**Ping** de la pestaña Tools, que van solo a la dirección que se escribe, de Start a Stop. La tercera
-es lo que envía la herramienta **NAT and STUN** de la misma pestaña al pulsar Start: unas pocas
+**Ping** de la pestaña Tools, que van solo a la dirección que se escribe, de Ping a Stop. La tercera
+es lo que envía la herramienta **NAT and STUN** de la misma pestaña al pulsar Check: unas pocas
 solicitudes a los dos servidores que se escriben y pequeños paquetes de prueba a la propia dirección
 pública de esta red. La cuarta es la herramienta **Port scan** de la misma pestaña: una conexión
 TCP o un datagrama UDP a cada puerto que se elige, y otra vez a un puerto que no respondió y se

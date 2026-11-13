@@ -13,7 +13,7 @@ def test_the_form_starts_on_a_perfect_link():
         assert app.profile_var.get() == bnt.T("presets.perfect")
         s = app._settings_from_widgets()
         assert (s["latency"], s["jitter"], s["loss"]) == (0.0, 0.0, 0.0), s
-        assert app._summary_text in (None, bnt.T("summary.none"))
+        assert app._summary_text in (None, bnt.T("summary.none_preview"))
     """)
 
 
@@ -45,6 +45,8 @@ def test_delete_is_disabled_for_a_built_in_preset():
         app._sync_profile_widgets()
         assert app.btn_delete_profile.kw.get("state") == "normal"
 
+        import beantester.gui.dialogs as _dlg
+        _dlg.ask_yes_no = lambda *a, **k: True     # "Delete the profile?" -> Yes
         app.delete_profile()
         assert "Moje VPN" not in app.profiles
         # The fallback is what the NEXT start restores (test_prefs pins that);
@@ -64,6 +66,8 @@ def test_deleting_the_loaded_profile_names_no_profile_over_its_values():
         app.loss_var.set("37")
         app.profiles.set("Moje VPN", app._settings_from_widgets())
         app.select_profile("Moje VPN")
+        import beantester.gui.dialogs as _dlg
+        _dlg.ask_yes_no = lambda *a, **k: True     # "Delete the profile?" -> Yes
         app.delete_profile()
         assert app.loss_var.get() == "37", "deleting a profile must not reset the form"
         assert app.profile_var.get() == "", app.profile_var.get()
@@ -970,4 +974,73 @@ def test_an_entry_a_row_cannot_use_is_coloured_inert_not_disabled():
         set_menu_entry_available(menu, 4, True)
         live = menu.entry_states[4]
         assert live == dict.fromkeys(MENU_ENTRY_INERT, ""), live
+    """)
+
+
+def test_a_long_log_line_can_be_read_to_its_end():
+    """UX audit 2026-11-13 (UX-GUI-002): the log at the bottom of the window cut
+    every line at its right edge, with no horizontal bar and no way to reach the
+    rest - and some warnings, errors and the paths of saved files are said nowhere
+    else. It wraps at word boundaries; trimming still counts LOGICAL lines."""
+    run_gui("""
+        assert app.log_box.kw.get("wrap") == "word", app.log_box.kw.get("wrap")
+    """)
+
+
+def test_a_number_keeps_its_width_on_a_row_of_its_own():
+    """"Buffer" has a row of its own (its hint needs the room) and its box stretched
+    across the whole card, while every other number is short (UX audit 2026-11-13,
+    UX-GUI-017). An expression on a row of its own still grows with it."""
+    run_gui("""
+        buffer, target = app.form.entries["buffer"], app.form.entries["target"]
+        assert buffer.pack_info.get("expand") is False, buffer.pack_info
+        assert target.pack_info.get("expand") is True, target.pack_info
+    """)
+
+
+def test_the_strip_at_the_top_holds_three_lines_of_its_text():
+    """During a session the strip says what runs AND what waits - two sentences,
+    which took both of its two lines at 1441 px and lost the second one in a
+    narrower window (UX audit 2026-11-13, UX-GUI-004). Still a fixed height, so
+    typing never makes the page jump."""
+    run_gui("""
+        from beantester.gui import summary_strip
+        from beantester.gui.scaling import line_height
+        from beantester.gui.theme import space
+        want = line_height() * summary_strip.STRIP_LINES + space("tight")
+        assert summary_strip.STRIP_LINES == 3
+        assert app.summary_holder.kw.get("height") == want, app.summary_holder.kw
+    """)
+
+
+def test_a_strip_text_longer_than_the_strip_ends_with_an_ellipsis_and_the_bubble_has_it_all():
+    """Every impairment, asymmetry and a target with an edit waiting took six lines
+    at the window's smallest width, and the strip showed three: the sentence that
+    says what waits was gone, with nothing saying so (real Tk, 2026-11-13)."""
+    run_gui("""
+        import math
+        from beantester.gui import summary_strip
+        from beantester.gui.scaling import line_height
+        from beantester.gui.tooltip import tooltip_text
+        label = app.summary
+        per_line = 60                                   # characters a line holds here
+        label.winfo_reqheight = lambda: line_height() * max(
+            1, math.ceil(len(str(label.cget("text"))) / per_line))
+        limit = per_line * summary_strip.STRIP_LINES
+        explain = tooltip_text("tips.summary")
+
+        whole = " ".join("word%03d" % n for n in range(60))      # 479 characters
+        app._summary_text = whole
+        summary_strip.fit(app)
+        shown = str(label.cget("text"))
+        assert shown.endswith(summary_strip.ELLIPSIS), shown
+        kept = shown[:-1]
+        assert whole.startswith(kept + " "), "cut at a word: " + shown
+        assert len(shown) <= limit < len(kept) + len(" word000") + 1, (len(shown), limit)
+        assert label._bnt_tooltip.text == whole + "\\n\\n" + explain, label._bnt_tooltip.text
+
+        app._summary_text = "Preview: +100 ms of ping."    # fits: as it is, bubble as before
+        summary_strip.fit(app)
+        assert label.cget("text") == app._summary_text, label.cget("text")
+        assert label._bnt_tooltip.text == explain, label._bnt_tooltip.text
     """)

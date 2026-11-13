@@ -1328,6 +1328,7 @@ def test_save_csv_writes_the_rows_on_screen_as_they_are_and_reads_nothing():
         import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "sockets.csv")
         m.SOCKETS_CSV_FILE = path
+        m.ask_path = lambda app, default: default   # "Save as" answers with the path the test chose
         ROWS[0] = ROWS[0]._replace(created=1_700_000_000.0)
         NAMES[1234] = "=cmd.exe"
         panel = open_sockets()
@@ -2181,6 +2182,7 @@ def test_save_csv_writes_the_port_check_as_it_is_on_screen():
         import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "ports.csv")
         m.PORTS_CSV_FILE = path
+        m.ask_path = lambda app, default: default   # "Save as" answers with the path the test chose
         panel = open_ports()
         assert "disabled" in panel.export_btn.state(), "nothing to save yet"
         type_ports(panel, "8080-8082, 9010")
@@ -3342,6 +3344,7 @@ def test_the_buttons_fill_the_ports_and_save_and_copy_what_is_on_screen():
         import beantester.gui.csv_export as m
         path = os.path.join(tempfile.mkdtemp(), "scan.csv")
         m.PORT_SCAN_CSV_FILE = path
+        m.ask_path = lambda app, default: default   # "Save as" answers with the path the test chose
         panel = open_scan()
         presets = [w for w in panel.inputs if w.cget("text") == T("tools.portscan.all")]
         presets[0].invoke()
@@ -3366,4 +3369,19 @@ def test_the_buttons_fill_the_ports_and_save_and_copy_what_is_on_screen():
         assert copied.startswith("Port scan of 192.0.2.10") and "TCP 22 open (SSH)" in copied, \\
             copied
         os.remove(path)
+    """))
+
+
+def test_the_port_scan_box_says_how_many_ports_it_holds():
+    """The default 71 ports did not fit in their box (UX audit 2026-11-13,
+    UX-GUI-017): the count stands beside it, follows typing and a preset, and says
+    nothing for a list only the scan itself can count."""
+    run_gui(SCAN + textwrap.dedent("""
+        panel = open_scan()
+        said = lambda: panel.ports_count.cget("text")
+        assert said() == T("tools.portscan.ports_count", n=71), said()
+        type_in(panel, "", "20-25")
+        assert said() == T("tools.portscan.ports_count", n=6), said()
+        type_in(panel, "", "!80")
+        assert said() == "", said()
     """))

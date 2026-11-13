@@ -13,7 +13,7 @@ This is not decoration. Two of the things it shows are obligations, not niceties
   goes. The answer is "nowhere" - what the program sends is the Tools tab's Ping
   (echo requests, to the address the person typed) and NAT and STUN (a few requests
   to the two servers the person typed and test packets to the network's own public
-  address), both only after Start - and the answer belongs where they are looking.
+  address), both only after Ping or Check - and the answer belongs where they are looking.
   ``tests/test_no_telemetry.py`` holds this window's sentence to the tab's registry.
 
 The page buttons (Donate, GitHub - ``gui/links.py``) are here as well as in the

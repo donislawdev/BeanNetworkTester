@@ -260,10 +260,13 @@ class ConnsPage:
         pause.pack(side="left", padx=scaled(10))
         add_tooltip(pause, "tips.freeze")
 
-        export = ttk.Button(top, text=T("buttons.export_conns"),
-                            command=app.export_connections_csv)
-        export.pack(side="left", padx=scaled(10))
-        add_tooltip(export, "tips.export_conns")
+        # Live only while the table has rows: an export of nothing reported success
+        # and left an empty file (UX audit 2026-11-13, UX-GUI-007). See _apply.
+        self.export_btn = ttk.Button(top, text=T("buttons.export_conns"),
+                                     command=app.export_connections_csv)
+        self.export_btn.pack(side="left", padx=scaled(10))
+        self.export_btn.state(["disabled"])
+        add_tooltip(self.export_btn, "tips.export_conns")
 
         self.count = ttk.Label(top, text="", style="Muted.TLabel")
         self.count.pack(side="right")
@@ -820,12 +823,15 @@ class ConnsPage:
         # with nothing typed means no traffic yet, and telling that user that
         # "nothing matches what you are looking for" is a lie about a search
         # they never made.
-        self.table.set_empty_text("tables.no_conns_match"
-                                  if self.search_var.get().strip()
-                                  else "tables.no_conns_yet")
+        # ...and with no session, the one thing to do is START, which "as soon as
+        # traffic goes through" did not say (UX audit 2026-11-13, UX-GUI-016)
+        self.table.set_empty_text("tables.no_conns_match" if self.search_var.get().strip()
+                                  else "tables.no_conns_yet" if self.app.running
+                                  else "tables.no_conns_stopped")
         # LAZY: hand over the raw rows; _render runs for the visible ones only
         self.table.set_model(rows, render=self._render, key_of=self._key_of,
                              tag_of=self._tag_of)
+        self.export_btn.state(["!disabled"] if rows else ["disabled"])
         if limit and len(rows) >= limit:
             text = T("conns.shown_of_limited", shown=len(rows), total=total, limit=limit)
         else:

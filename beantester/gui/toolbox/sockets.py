@@ -631,6 +631,10 @@ class SocketsPanel:
         busy = self.job.busy() and not self._quiet
         for button in (self.refresh_btn, self.mark_btn):
             button.state(["disabled"] if busy else ["!disabled"])
+        # nothing on screen, nothing to save: it wrote an empty file (UX-GUI-007)
+        latest = self._latest()
+        self.export_btn.state(["!disabled"] if latest is not None and latest.rows
+                              else ["disabled"])
 
     def _export(self):
         """"Save CSV": the rows on screen - this search, this "Show", this order -
