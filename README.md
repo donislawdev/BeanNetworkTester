@@ -608,10 +608,10 @@ only (ping), loopback only (127.0.0.1/::1 - for testing communication between lo
 Every filter covers **IPv4 and IPv6**. (If ping "does not react", it is almost always because the
 chosen filter does not include ICMP.)
 
-**All traffic except loopback** leaves alone the programs on this computer that talk to each
-other - a local development server, a database, a tool that reaches its own background process
-over 127.0.0.1 - so they keep working at full speed while everything that goes over the network is
-impaired as usual. A connection to this computer's own network address (its 192.168.x address,
+**All traffic except loopback** captures everything that goes over the network, so your settings
+act on it exactly as with "All traffic", and leaves alone the programs on this computer that talk
+to each other - a local development server, a database, a tool that reaches its own background
+process over 127.0.0.1 - so they keep working at full speed. A connection to this computer's own network address (its 192.168.x address,
 say) is loopback too, on Windows and on Linux, so it is left alone as well - and the "loopback
 only" filter catches it.
 

@@ -181,10 +181,20 @@ class Scenario:
         self.source = source
 
     def settings_at(self, t, base=None):
+        """``base`` with every step up to ``t`` on top - minus what a step cannot change.
+
+        The keys of ``NOT_APPLIED_LIVE`` (the traffic filter, the seed, the run
+        time...) are warned about when the file loads and then ignored, so they stay
+        at ``base``: the settings a session STARTED with. Carried through instead,
+        every reader of the result described a session that is not running - the
+        warnings about what the traffic filter leaves out named a filter the driver
+        never opened, and the event log listed it.
+        """
         s = dict(base or DEFAULT_SETTINGS)
         for step in self.steps:
             if float(step.get("at", 0)) <= t and "settings" in step:
-                s.update(step["settings"])
+                s.update((key, value) for key, value in step["settings"].items()
+                         if key not in NOT_APPLIED_LIVE)
         return s
 
     def events_between(self, t0, t1):

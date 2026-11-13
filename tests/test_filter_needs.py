@@ -141,6 +141,9 @@ CASES = (
     (("udp", dict(block_ip="10.0.0.1", block_reject=True)),
      [(SETTING, TCP, ("block_reject",))]),
     (("udp", dict(block_reject=True)), []),
+    # the block is ONE gate, armed by either expression (fields.GATE_ARMED_BY)
+    (("udp", dict(block_port="80", block_reject=True)),
+     [(SETTING, TCP, ("block_reject",))]),
     # step 2b: loopback survives both switches
     (("loopback", dict(lan_mode=True, internet_only=True)),
      [(SETTING, NETWORK, ("lan_mode", "internet_only"))]),
@@ -200,6 +203,21 @@ def test_every_filter_and_every_field_speak_exactly_when_a_need_is_left_out():
     for filt in ("both", "no-loopback"):
         check(f"{filt}: silent with every field in play at once",
               _leaves_out(filt, **IN_PLAY, block_ip="10.0.0.1") == [])
+
+
+def test_a_scenario_step_cannot_swap_the_filter_the_session_started_with():
+    """A step naming another filter is ignored (the loader says so), and the lines
+    must describe the filter the driver opened, not the one in the step."""
+    from beantester import Scenario
+    sc = Scenario([{"at": 0, "settings": {"filter": "udp", "syn_drop": 10}}])
+    started_both = sc.settings_at(1, dict(DEFAULT_SETTINGS, filter="both"))
+    check("started on 'both': the step's 'udp' leaves SYN drop nothing - not said",
+          settings_the_filter_leaves_out(started_both) == [],
+          f"({settings_the_filter_leaves_out(started_both)})")
+    started_udp = sc.settings_at(1, dict(DEFAULT_SETTINGS, filter="udp"))
+    check("started on 'udp': SYN drop from the step is named",
+          settings_the_filter_leaves_out(started_udp) == [(SETTING, TCP, ("syn_drop",))],
+          f"({settings_the_filter_leaves_out(started_udp)})")
 
 
 # -- what a person reads ---------------------------------------------------------- #

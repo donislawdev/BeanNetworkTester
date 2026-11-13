@@ -674,9 +674,11 @@ def _say_what_the_filter_leaves_out(s, log):
     would break a run somebody meant.
     """
     shown = T(i18n_key_for(str(s.get("filter", DEFAULT_SETTINGS["filter"]))))
+    where = section_name(F.SECTION_BY_ID[FIELDS["filter"].section].label)
     for sentence, missing, keys in settings_the_filter_leaves_out(s):
         names = ", ".join(_name_and_section(FIELDS[key]) for key in keys)
-        log(T(sentence, filter=shown, traffic=T("filters.lacks_" + missing), fields=names))
+        log(T(sentence, filter=shown, traffic=T("filters.lacks_" + missing), fields=names,
+              where=where))
 
 
 def _need_left_out(field, g, admits):
@@ -692,15 +694,16 @@ def _need_left_out(field, g, admits):
 def _in_play(field, g):
     """Is the field set AND read? Set, its switch on (``live_when``), not made inert
     by another field (``overridden_by``: Download under a schedule) and, for a
-    parameter, its trigger armed (``parameter_of``: Reject without a block). Each of
-    those already says "this does nothing" on its own, and saying it a second time
-    for the filter would be noise."""
+    parameter, its gate armed (``fields.gate_armed_by``: Reject without any block).
+    Each of those already says "this does nothing" on its own, and saying it a
+    second time for the filter would be noise."""
     def on(key):
         return F.is_active(FIELDS[key], g(key))
     return (on(field.key)
             and (not field.live_when or on(field.live_when))
             and (not field.overridden_by or not on(field.overridden_by))
-            and (not field.parameter_of or on(field.parameter_of)))
+            and (not field.parameter_of
+                 or any(on(key) for key in F.gate_armed_by(field.parameter_of))))
 
 
 def _asks_for(field, need, value):

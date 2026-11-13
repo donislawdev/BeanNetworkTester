@@ -415,7 +415,8 @@ FIELD_DEFS = (
     # `unbounded_impairment` must not warn about a run that damages nothing. It
     # names `block_ip` because a parameter names one trigger and the pair is one
     # gate - `block_active` is set from either field, and step 2c reads them as an
-    # OR. A checkbox rather than a drop/reject dropdown: CHOICE is not a general
+    # OR (`GATE_ARMED_BY` below says so to the readers that need the whole gate).
+    # A checkbox rather than a drop/reject dropdown: CHOICE is not a general
     # kind in this form (it is the traffic filter wearing one - see
     # gui/form.py), two values are a checkbox, and if a third mode ever arrives
     # (ICMP port-unreachable for UDP) that is the moment to generalise it, with a
@@ -646,6 +647,17 @@ NARROWING_KEYS = tuple(f.key for f in FIELD_DEFS if f.narrows)
 # each of them up to its maximum with every impairment still off - a stronger
 # statement than the two names it used to keep in a list of its own.
 PARAMETER_KEYS = tuple(f.key for f in FIELD_DEFS if f.parameter_of)
+# What ARMS a parameter's gate, where that is more than the trigger it names.
+# Blocking is one gate read as an OR of its two expressions (decide() step 2c), so
+# "Refuse blocked connections" waits on either; every other parameter waits on its
+# trigger alone. Beside ``parameter_of`` rather than in it: that names ONE trigger,
+# which the pass-through suite turns up with every impairment off.
+GATE_ARMED_BY = {"block_ip": ("block_ip", "block_port")}
+
+
+def gate_armed_by(trigger):
+    """The fields any one of which arms the gate ``trigger`` names."""
+    return GATE_ARMED_BY.get(trigger, (trigger,))
 
 
 def overriding_field(field):

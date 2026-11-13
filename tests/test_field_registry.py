@@ -308,3 +308,18 @@ def test_a_field_that_waits_on_a_switch_names_a_real_one_and_what_it_mirrors():
     check("some field waits on a switch at all",
           len(F.CONDITIONAL_IMPAIRING_KEYS) >= 1,
           f"({F.CONDITIONAL_IMPAIRING_KEYS})")
+
+
+def test_a_gate_armed_by_more_than_its_trigger_names_real_impairments():
+    """``GATE_ARMED_BY`` says which fields arm a parameter's gate when that is more
+    than its trigger (blocking: either expression). A typo there would leave a
+    parameter armed by nothing, and no other reader would notice."""
+    triggers = {f.parameter_of for f in F.FIELD_DEFS if f.parameter_of}
+    for trigger, armed_by in F.GATE_ARMED_BY.items():
+        check(f"{trigger}: a trigger some parameter names", trigger in triggers)
+        check(f"{trigger}: arms its own gate too", trigger in armed_by, f"({armed_by})")
+        for key in armed_by:
+            check(f"{trigger}: {key} is a field that impairs",
+                  key in F.FIELDS and bool(F.FIELDS[key].impairs), f"({key})")
+    check("every other trigger arms its gate alone",
+          F.gate_armed_by("spike_prob") == ("spike_prob",))
