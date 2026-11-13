@@ -31,6 +31,7 @@ from fakes import check
 # its two protocol names instead.
 EXPECTED_FILTERS = {
     "both": "(ip or ipv6) and (tcp or udp or icmp or icmpv6)",
+    "no-loopback": "not loopback and (ip or ipv6) and (tcp or udp or icmp or icmpv6)",
     "out": "outbound and (ip or ipv6) and (tcp or udp or icmp or icmpv6)",
     "in": "inbound and (ip or ipv6) and (tcp or udp or icmp or icmpv6)",
     "tcp": "(ip or ipv6) and tcp",

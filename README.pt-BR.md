@@ -955,7 +955,7 @@ completa: listas, faixas, `!`, `>`, `<`, `>=`, `<=`, curingas, `re:`, e `--dst-i
 | `--target` | processos: nome, PID, faixa de PIDs, curinga, regex | `--target chrome.exe`<br>`--target "chrome,!chromedriver"`<br>`--target ">1000"` |
 | `--dst-ip` | endereços IP remotos (IPv4 e IPv6) | `--dst-ip 1.2.3.4`<br>`--dst-ip "10.0.0.1-10.0.0.50,!10.0.0.7"`<br>`--dst-ip "192.168.1.0/24"`<br>`--dst-ip "2001:db8::/32"` |
 | `--dst-port` | portas remotas (0-65535) | `--dst-port 443`<br>`--dst-port "80,443,8000-8100"`<br>`--dst-port "!53"`<br>`--dst-port ">1024"` |
-| `--filter` | qual tráfego capturar, afinal (IPv4 + IPv6): `both,out,in,tcp,udp,ping,loopback` | `--filter tcp` |
+| `--filter` | qual tráfego capturar, afinal (IPv4 + IPv6): `both,no-loopback,out,in,tcp,udp,ping,loopback` | `--filter tcp` |
 
 **Bloqueio (firewall)** - descarta todo o tráfego para os destinos escolhidos. O bloqueio dispara por **IP OU porta** (um campo vazio é ignorado, então `--block-port 443` sozinho bloqueia a 443 para qualquer endereço). A mesma [sintaxe de filtros](#sintaxe-de-filtros-processo--ip--porta) de cima. Respeita o direcionamento por processo (bloqueia apenas o tráfego do alvo).
 

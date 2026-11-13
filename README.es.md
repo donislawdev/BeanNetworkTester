@@ -973,7 +973,7 @@ completa: listas, rangos, `!`, `>`, `<`, `>=`, `<=`, comodines, `re:`, y `--dst-
 | `--target` | procesos: nombre, PID, rango de PID, comodín, expresión regular | `--target chrome.exe`<br>`--target "chrome,!chromedriver"`<br>`--target ">1000"` |
 | `--dst-ip` | direcciones IP remotas (IPv4 e IPv6) | `--dst-ip 1.2.3.4`<br>`--dst-ip "10.0.0.1-10.0.0.50,!10.0.0.7"`<br>`--dst-ip "192.168.1.0/24"`<br>`--dst-ip "2001:db8::/32"` |
 | `--dst-port` | puertos remotos (0-65535) | `--dst-port 443`<br>`--dst-port "80,443,8000-8100"`<br>`--dst-port "!53"`<br>`--dst-port ">1024"` |
-| `--filter` | qué tráfico capturar (IPv4 + IPv6): `both,out,in,tcp,udp,ping,loopback` | `--filter tcp` |
+| `--filter` | qué tráfico capturar (IPv4 + IPv6): `both,no-loopback,out,in,tcp,udp,ping,loopback` | `--filter tcp` |
 
 **Bloqueo (cortafuegos)** - descarta todo el tráfico hacia los destinos elegidos. El bloqueo se activa por **IP O puerto** (un campo vacío se ignora, así que `--block-port 443` por sí solo bloquea el 443 hacia cualquier dirección). La misma [sintaxis de filtros](#sintaxis-de-filtros-proceso--ip--puerto) de arriba. Respeta la selección de procesos (bloquea solo el tráfico del objetivo).
 

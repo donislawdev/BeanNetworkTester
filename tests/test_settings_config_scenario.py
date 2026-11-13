@@ -389,6 +389,24 @@ def test_a_misspelled_scenario_key_is_an_error_not_a_silent_default():
           "lop" in str(bad_file.value), f"({bad_file.value})")
 
 
+def test_a_step_cannot_change_what_a_session_takes_at_start():
+    """A step's traffic filter, seed, run time... are warned about on loading and
+    ignored (D-27), so ``settings_at`` keeps them at the base the session STARTED
+    with. Carried through, they made every reader describe a filter the driver never
+    opened - the filter warnings, and the event log's step summary."""
+    from beantester import Scenario
+    from beantester.settings import DEFAULT_SETTINGS, NOT_APPLIED_LIVE
+    changed = dict(filter="udp", seed=7, duration=30, narrow_filter=True, row_limit=5)
+    check("the step below tries every key a step cannot change",
+          set(changed) == set(NOT_APPLIED_LIVE), f"({sorted(NOT_APPLIED_LIVE)})")
+    sc = Scenario([{"at": 0, "settings": dict(changed, latency=200)}])
+    now = sc.settings_at(1, dict(DEFAULT_SETTINGS))
+    for key in changed:
+        check(f"a step leaves {key} at what the session started with",
+              now[key] == DEFAULT_SETTINGS[key], f"({now[key]!r})")
+    check("a live setting in the same step still applies", now["latency"] == 200)
+
+
 def test_scenario_settings_at():
     from beantester import Scenario
     sc = Scenario([{"at": 0, "settings": {"loss": 0, "latency": 0}},

@@ -20,7 +20,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from .. import fields as F
-from ..fields import CONTROL_SECTIONS, FIELDS, SECTIONS
+from ..fields import CONTROL_SECTIONS, FIELDS, SECTION_BY_ID
 from ..filters import i18n_keys
 from ..i18n import T
 from ..matchers import parse_matcher
@@ -37,7 +37,6 @@ from .theme import CARD_WRAP_PAD, popdown_height, unhighlight_combobox
 from .tooltip import add_tooltip
 from .. import crashlog
 
-SECTION_BY_ID = {s.id: s for s in SECTIONS}
 SPAN_KINDS = (F.CHOICE, F.BOOL, F.EXPR, F.SCHEDULE)
 
 

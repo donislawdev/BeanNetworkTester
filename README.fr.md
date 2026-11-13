@@ -1004,7 +1004,7 @@ accepte en plus le CIDR)
 | `--target` | processus : nom, PID, plage de PID, caractère générique, expression régulière | `--target chrome.exe`<br>`--target "chrome,!chromedriver"`<br>`--target ">1000"` |
 | `--dst-ip` | adresses IP distantes (IPv4 et IPv6) | `--dst-ip 1.2.3.4`<br>`--dst-ip "10.0.0.1-10.0.0.50,!10.0.0.7"`<br>`--dst-ip "192.168.1.0/24"`<br>`--dst-ip "2001:db8::/32"` |
 | `--dst-port` | ports distants (0-65535) | `--dst-port 443`<br>`--dst-port "80,443,8000-8100"`<br>`--dst-port "!53"`<br>`--dst-port ">1024"` |
-| `--filter` | quel trafic capturer, tout simplement (IPv4 + IPv6) : `both,out,in,tcp,udp,ping,loopback` | `--filter tcp` |
+| `--filter` | quel trafic capturer, tout simplement (IPv4 + IPv6) : `both,no-loopback,out,in,tcp,udp,ping,loopback` | `--filter tcp` |
 
 **Blocage (pare-feu)** - abandonne tout le trafic vers les destinations choisies. Le blocage se déclenche sur **IP OU port** (un champ vide est ignoré, donc `--block-port 443` seul bloque le 443 vers n'importe quelle adresse). Même [syntaxe de filtre](#syntaxe-des-filtres-processus--ip--port) que ci-dessus. Il respecte le ciblage par processus (ne bloque que le trafic de la cible).
 

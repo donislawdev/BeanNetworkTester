@@ -7,6 +7,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- **"All traffic except loopback".** A new choice under "Traffic to modify"
+  (`--filter no-loopback`) captures everything that goes over the network, so your settings act
+  on it as with "All traffic", and leaves alone the programs on this computer that talk to
+  each other: a local development server, a database, a tool that reaches its own background
+  process over 127.0.0.1. A connection to the computer's own network address counts as
+  loopback too. That traffic does not even reach the tool, so a busy local database no longer
+  uses up what the session can handle.
+
+- **The log says when the traffic filter leaves a setting nothing to work on.** For example
+  SYN drop with "UDP only" (only TCP has a SYN), Download with "Outbound only", a port with
+  "ICMP only" (ping has no ports), or call targeting with "TCP only". The line names each
+  setting and the section it is in, and says what to do: choose another option under "Traffic
+  to modify", or clear the setting. The run still starts.
+
 - **Tools: Port scan.** A new tool in the Network group shows which ports of another
   computer answer. Type an address or a name and the ports, or fill in the common ports,
   1-1024 or every port, tick TCP or UDP, and press "Scan". Each port reads open, closed or no
@@ -101,6 +115,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Changed
 
+- **New names in "Traffic to modify".** The first choice reads "All traffic, loopback included
+  (TCP, UDP, ICMP)" instead of "Both directions (TCP+UDP+ICMP)", next to the new "All traffic
+  except loopback". What it captures, and `--filter both`, are unchanged.
+
 - **Exporting a table asks where to save it.** "Export connections CSV", and "Save CSV" on
   Sockets, Port check and Port scan, open a save window with a name that carries the date and
   time, in the folder you used last, so a new export no longer replaces the previous one
@@ -173,6 +191,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   them too.
 
 ### Fixed
+
+- **A scenario step no longer changes what the session says about its traffic filter.** A step
+  that sets the traffic filter, the seed or the run time is ignored, as the warning on opening
+  the file says. Until now the warnings about the filter and the event log still described
+  that step's filter, although the session kept the one it started with.
+
+- **The tooltip of "Traffic to modify" names the right section.** It sent you to "Target
+  destination" (in Polish and Chinese, to other names that do not exist either). It now says
+  "Destination targeting", the section that takes a single port or address.
 
 - **Saving a CSV can no longer be redirected into another file.** The Connections export and
   the Sockets table's "Save CSV" first wrote to a temporary file whose name was known in

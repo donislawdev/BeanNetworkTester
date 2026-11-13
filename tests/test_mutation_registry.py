@@ -1417,8 +1417,8 @@ MUTATIONS = [
     {
         "label": "warning: LAN mode is demoted from impairment to scenery",
         "file": "beantester/fields.py",
-        "old": "          tip=\"tips.lan_mode\", span=False, cli=\"lan-mode\", impairs=IMPAIRS_ALL),",
-        "new": "          tip=\"tips.lan_mode\", span=False, cli=\"lan-mode\"),",
+        "old": "          tip=\"tips.lan_mode\", span=False, cli=\"lan-mode\", impairs=IMPAIRS_ALL,",
+        "new": "          tip=\"tips.lan_mode\", span=False, cli=\"lan-mode\",",
         "test": "test_the_warning_names_lan_mode_which_reads_like_a_scope",
     },
     {
@@ -12217,8 +12217,8 @@ MUTATIONS = [
     {
         "label": "fields: the media switch bounds nothing",
         "file": "beantester/fields.py",
-        "old": "          tip=\"tips.call_media\", cli=\"call-media\", narrows=True),\n",
-        "new": "          tip=\"tips.call_media\", cli=\"call-media\"),\n",
+        "old": "          tip=\"tips.call_media\", cli=\"call-media\", narrows=True, needs=(UDP,)),\n",
+        "new": "          tip=\"tips.call_media\", cli=\"call-media\", needs=(UDP,)),\n",
         "test": "test_a_call_scope_bounds_a_session",
     },
     {

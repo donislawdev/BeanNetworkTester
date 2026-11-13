@@ -131,6 +131,24 @@ def test_field_name_strips_a_colon_of_either_width(monkeypatch):
           f"({i18n.field_name('fields.probe', 'xx')!r})")
 
 
+def test_section_name_drops_the_form_hint_in_either_script(monkeypatch):
+    """A section title carries a hint for the form after two spaces in English and
+    Polish, and after a full-width parenthesis in Chinese. Inside a sentence the
+    hint goes and the name stays - including a name whose own parenthesis is set
+    off with one space."""
+    from beantester import i18n
+    wide = chr(0xFF08) + "0 = " + chr(0x4E0D) + chr(0xFF09)        # "（0 = 不）"
+    monkeypatch.setitem(i18n._translations, "xx", {
+        "frames.a": "Speed limit  (0 = unlimited)",
+        "frames.b": "Blocking (firewall)",
+        "frames.c": chr(0x9650) + chr(0x901F) + wide,               # "限速（0 = 不）"
+        "frames.d": "Session"})
+    for key, want in (("frames.a", "Speed limit"), ("frames.b", "Blocking (firewall)"),
+                      ("frames.c", chr(0x9650) + chr(0x901F)), ("frames.d", "Session")):
+        got = i18n.section_name(key, "xx")
+        check(f"section_name({key}) is {want!r}", got == want, f"({got!r})")
+
+
 def test_sentences_join_with_a_space_except_after_a_full_width_stop():
     """The NAT and STUN conclusions are two sentences in one line: English needs a
     space between them, Chinese none after its full stop ("电脑。 这里" was on the

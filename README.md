@@ -602,11 +602,22 @@ clamp to 100%.
 
 ## All options explained
 
-**Traffic to modify** - which traffic to capture at all. Options: both directions (TCP+UDP+ICMP),
-outbound only, inbound only, TCP only, UDP only, ICMP only (ping), loopback only (127.0.0.1/::1 -
-for testing communication between local processes). Every filter covers **IPv4 and
-IPv6**. (If ping "does not react", it is almost always because the chosen filter does not include
-ICMP.)
+**Traffic to modify** - which traffic to capture at all. Options: all traffic, loopback included
+(TCP+UDP+ICMP), all traffic except loopback, outbound only, inbound only, TCP only, UDP only, ICMP
+only (ping), loopback only (127.0.0.1/::1 - for testing communication between local processes).
+Every filter covers **IPv4 and IPv6**. (If ping "does not react", it is almost always because the
+chosen filter does not include ICMP.)
+
+**All traffic except loopback** captures everything that goes over the network, so your settings
+act on it exactly as with "All traffic", and leaves alone the programs on this computer that talk
+to each other - a local development server, a database, a tool that reaches its own background
+process over 127.0.0.1 - so they keep working at full speed. A connection to this computer's own network address (its 192.168.x address,
+say) is loopback too, on Windows and on Linux, so it is left alone as well - and the "loopback
+only" filter catches it.
+
+**When the filter leaves a setting nothing to work on**, the log says so when the settings are
+applied, naming the setting and its section. For example: SYN drop with "UDP only" (only TCP has
+a SYN), Download with "Outbound only", or a port with "ICMP only" (ping has no ports).
 
 **Loopback traffic counts as upload.** Windows hands over both directions of a conversation
 between two programs on this computer as outgoing, whichever filter is chosen. For that traffic
@@ -1281,7 +1292,7 @@ ranges, `!`, `>`, `<`, `>=`, `<=`, wildcards, `re:`, and `--dst-ip` additionally
 | `--target` | processes: name, PID, PID range, wildcard, regex | `--target chrome.exe`<br>`--target "chrome,!chromedriver"`<br>`--target ">1000"` |
 | `--dst-ip` | remote IP addresses (IPv4 and IPv6) | `--dst-ip 1.2.3.4`<br>`--dst-ip "10.0.0.1-10.0.0.50,!10.0.0.7"`<br>`--dst-ip "192.168.1.0/24"`<br>`--dst-ip "2001:db8::/32"` |
 | `--dst-port` | remote ports (0-65535) | `--dst-port 443`<br>`--dst-port "80,443,8000-8100"`<br>`--dst-port "!53"`<br>`--dst-port ">1024"` |
-| `--filter` | which traffic to capture at all (IPv4 + IPv6): `both,out,in,tcp,udp,ping,loopback` | `--filter tcp` |
+| `--filter` | which traffic to capture at all (IPv4 + IPv6): `both,no-loopback,out,in,tcp,udp,ping,loopback` | `--filter tcp` |
 
 **Blocking (firewall)** - drop all traffic to the chosen destinations. Blocking triggers on **IP OR port** (an empty field is ignored, so `--block-port 443` alone blocks 443 to any address). Same [filter syntax](#filter-syntax-process--ip--port) as above. It respects process targeting (blocks only the target's traffic).
 

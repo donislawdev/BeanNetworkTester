@@ -156,7 +156,9 @@ FUNCTION_CEILING = 116          # beantester/cli.py::build_arg_parser
 # `gui/banners.py`. The band falls to 676.2, onto `portmap.py` (693) and
 # `nettools/nat.py` (678), neither of which grew - see FILES_NEAR_CEILING.
 # 966 -> 964 the same day: the strip's wrap width went to `summary_strip.wrap`.
-FILE_CEILING = 964              # beantester/gui/app.py
+# 964 -> 963 the same day: the section lookup `app.py` and `form.py` each built for
+# themselves became one, `fields.SECTION_BY_ID`.
+FILE_CEILING = 963              # beantester/gui/app.py
 
 # 🔴 THE SECOND KNOB. A ceiling on the worst single item sees one thing growing
 # to a record and is blind to everything creeping upward together: five files at

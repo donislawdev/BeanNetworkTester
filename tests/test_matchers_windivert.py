@@ -21,14 +21,10 @@ Two layers of guard, deliberately:
   WinDivert's, or eBPFDivert's copy of the same code - so it is not my reading of
   the filter language checked against my reading of the matcher.
 """
-import struct
-import sys
-
-import pytest
-
 from beantester.matchers import (KIND_INT, KIND_IP, KIND_PROCESS, PORT_BOUNDS,
                                  parse_matcher, windivert_fragment)
 from fakes import check
+from filter_oracle import evaluator, ipv4, udp_body
 
 
 def _fragment(text, kind):
@@ -111,17 +107,7 @@ def test_no_address_dependent_terms_leak_into_the_fragment():
             check("%r stays free of %s" % (text, banned), banned not in frag, frag)
 
 
-# -- the oracle: the driver's own evaluator, win32 only ------------------------- #
-def _udp(src_ip, dst_ip, src_port, dst_port):
-    payload = b"x" * 16
-    udp = struct.pack(">HHHH", src_port, dst_port, 8 + len(payload), 0) + payload
-    total = 20 + len(udp)
-    ip = struct.pack(">BBHHHBBH4s4s", 0x45, 0, total, 1, 0, 64, 17, 0,
-                     bytes(int(x) for x in src_ip.split(".")),
-                     bytes(int(x) for x in dst_ip.split(".")))
-    return ip + udp
-
-
+# -- the oracle: the driver's own evaluator (tests/filter_oracle.py) ------------ #
 def test_the_fragment_never_excludes_what_the_matcher_accepts():
     """The invariant, checked against the capture driver's OWN evaluator.
 
@@ -134,29 +120,15 @@ def test_the_fragment_never_excludes_what_the_matcher_accepts():
     Run in full outside the suite over 27 648 packet views on 16 expressions with
     zero violations (2026-07-28); the sweep here is trimmed to keep the suite fast.
     """
-    pytest.importorskip("pydivert")
-    import ctypes
-    from pydivert.windivert_dll import WinDivertAddress
+    driver_evaluates = evaluator()
 
-    addr = WinDivertAddress()
-    if sys.platform.startswith("linux"):
-        from pydivert.bpf import libebpfdivert
-        if libebpfdivert is None:
-            pytest.skip("pydivert is installed, but its libebpfdivert did not load")
+    def evaluates(text, raw):
+        # A blank address, as this test always used: the fragments carry no
+        # address-dependent term (see the test above), so the bits do not matter.
+        return driver_evaluates(text, raw, outbound=0, loopback=0)
 
-        def evaluates(text, raw):
-            # 1 = matches, 0 = does not, anything else is an error - which must not
-            # read as a match, or a broken evaluator would hide every violation.
-            buf = ctypes.create_string_buffer(raw, len(raw))
-            return libebpfdivert.ebpfdivert_helper_eval_filter(
-                text.encode(), buf, len(raw), ctypes.byref(addr)) == 1
-    else:
-        from pydivert import windivert_dll as w
-
-        def evaluates(text, raw):
-            buf = ctypes.create_string_buffer(raw, len(raw))
-            return bool(w.WinDivertHelperEvalFilter(text.encode(), buf, len(raw),
-                                                    ctypes.byref(addr)))
+    def _udp(src_ip, dst_ip, src_port, dst_port):
+        return ipv4(17, udp_body(src_port, dst_port, b"x" * 16), src_ip, dst_ip)
 
     ips = ["8.8.8.8", "8.8.4.4", "10.1.2.3", "192.168.1.25"]
     ports = [53, 80, 443, 1024, 8080, 8100]

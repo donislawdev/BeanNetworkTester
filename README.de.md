@@ -999,7 +999,7 @@ Listen, Bereiche, `!`, `>`, `<`, `>=`, `<=`, Platzhalter, `re:`, und `--dst-ip` 
 | `--target` | Prozesse: Name, PID, PID-Bereich, Platzhalter, Regex | `--target chrome.exe`<br>`--target "chrome,!chromedriver"`<br>`--target ">1000"` |
 | `--dst-ip` | entfernte IP-Adressen (IPv4 und IPv6) | `--dst-ip 1.2.3.4`<br>`--dst-ip "10.0.0.1-10.0.0.50,!10.0.0.7"`<br>`--dst-ip "192.168.1.0/24"`<br>`--dst-ip "2001:db8::/32"` |
 | `--dst-port` | entfernte Ports (0-65535) | `--dst-port 443`<br>`--dst-port "80,443,8000-8100"`<br>`--dst-port "!53"`<br>`--dst-port ">1024"` |
-| `--filter` | welcher Datenverkehr überhaupt erfasst wird (IPv4 + IPv6): `both,out,in,tcp,udp,ping,loopback` | `--filter tcp` |
+| `--filter` | welcher Datenverkehr überhaupt erfasst wird (IPv4 + IPv6): `both,no-loopback,out,in,tcp,udp,ping,loopback` | `--filter tcp` |
 
 **Sperren (Firewall)** - jeglichen Datenverkehr zu den gewählten Zielen verwerfen. Das Sperren greift bei **IP ODER Port** (ein leeres Feld wird ignoriert, `--block-port 443` allein sperrt also 443 zu jeder Adresse). Dieselbe [Filtersyntax](#filtersyntax-prozess--ip--port) wie oben. Es berücksichtigt die Prozessauswahl (sperrt nur den Datenverkehr des Ziels).
 

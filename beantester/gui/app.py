@@ -29,7 +29,7 @@ from ..fields import BOOL as F_BOOL
 from ..fields import CHOICE as F_CHOICE
 from ..fields import NUMBER as F_NUMBER
 from ..fields import SEED as F_SEED
-from ..fields import FIELD_DEFS, SECTIONS, off_value, widget_value
+from ..fields import FIELD_DEFS, SECTION_BY_ID, SECTIONS, off_value, widget_value
 from ..filters import cli_key_for, i18n_key_for, i18n_keys, windivert_for
 from .. import capture_backend, crashlog, driver, winenv
 from . import csv_export
@@ -68,7 +68,6 @@ from .windows import WindowManager
 TICK_MS = 700                      # UI refresh period
 LOG_LINES = 6                      # height of the log strip, in text lines
 CHART_SAMPLES = 120                # throughput history length (~80 s at 0.7 s)
-SECTION_BY_ID = {s.id: s for s in SECTIONS}
 # On a FRESH install (no saved ui state) the advanced sections start collapsed:
 # opening the tool on a dozen expanded panels of NAT/MTU/schedule jargon is a wall
 # for a first-time user. Only the simple, common sections stay open; the choice is
