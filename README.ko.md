@@ -867,7 +867,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--target` | 프로세스: 이름, PID, PID 범위, 와일드카드, 정규식 | `--target chrome.exe`<br>`--target "chrome,!chromedriver"`<br>`--target ">1000"` |
 | `--dst-ip` | 원격 IP 주소(IPv4와 IPv6) | `--dst-ip 1.2.3.4`<br>`--dst-ip "10.0.0.1-10.0.0.50,!10.0.0.7"`<br>`--dst-ip "192.168.1.0/24"`<br>`--dst-ip "2001:db8::/32"` |
 | `--dst-port` | 원격 포트(0-65535) | `--dst-port 443`<br>`--dst-port "80,443,8000-8100"`<br>`--dst-port "!53"`<br>`--dst-port ">1024"` |
-| `--filter` | 애초에 어떤 트래픽을 캡처할지(IPv4 + IPv6): `both,out,in,tcp,udp,ping,loopback` | `--filter tcp` |
+| `--filter` | 애초에 어떤 트래픽을 캡처할지(IPv4 + IPv6): `both,no-loopback,out,in,tcp,udp,ping,loopback` | `--filter tcp` |
 
 **차단 (방화벽)** - 선택한 목적지로 가는 모든 트래픽을 버립니다. 차단은 **IP 또는 포트** 중 하나에 해당하면 동작합니다(비어 있는 필드는 무시되므로 `--block-port 443`만 주면 모든 주소로 가는 443이 차단됩니다). 위와 같은 [필터 구문](#필터-구문-프로세스--ip--포트)을 씁니다. 프로세스 대상 지정을 따릅니다(대상의 트래픽만 차단합니다).
 

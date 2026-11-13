@@ -305,6 +305,22 @@ def field_name(key, lang=None):
     return str(translate(key, lang)).rstrip().rstrip(LABEL_COLONS).rstrip()
 
 
+def section_name(key, lang=None):
+    """A form section's title for use INSIDE a sentence: the title without its hint.
+
+    Some titles carry a hint for the form ("Speed limit  (0 = unlimited)"), which in
+    a sentence is a second sentence wedged into the first. English and Polish set the
+    hint off with two spaces, Chinese with a full-width parenthesis (U+FF08) and no
+    space, so the title ends at whichever comes first. A name that keeps its own
+    parenthesis with ONE space ("Blocking (firewall)") stays whole in English and
+    Polish, and the Chinese one loses it, which still names the section.
+    """
+    title = str(translate(key, lang))
+    for mark in ("  ", chr(0xFF08)):          # U+FF08, the full-width "("
+        title = title.split(mark)[0]
+    return title.strip()
+
+
 def sentences(texts):
     """Translated sentences as one line: a space between two, as English writes them,
     and none after a full-width stop - there a space is a gap in the middle of a

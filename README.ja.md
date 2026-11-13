@@ -528,7 +528,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--target` | プロセス: 名前、PID、PID の範囲、ワイルドカード、正規表現 | `--target chrome.exe`<br>`--target "chrome,!chromedriver"`<br>`--target ">1000"` |
 | `--dst-ip` | リモートの IP アドレス (IPv4 と IPv6) | `--dst-ip 1.2.3.4`<br>`--dst-ip "10.0.0.1-10.0.0.50,!10.0.0.7"`<br>`--dst-ip "192.168.1.0/24"`<br>`--dst-ip "2001:db8::/32"` |
 | `--dst-port` | リモートのポート (0-65535) | `--dst-port 443`<br>`--dst-port "80,443,8000-8100"`<br>`--dst-port "!53"`<br>`--dst-port ">1024"` |
-| `--filter` | そもそもどのトラフィックを取得するか (IPv4 + IPv6): `both,out,in,tcp,udp,ping,loopback` | `--filter tcp` |
+| `--filter` | そもそもどのトラフィックを取得するか (IPv4 + IPv6): `both,no-loopback,out,in,tcp,udp,ping,loopback` | `--filter tcp` |
 
 **ブロック (ファイアウォール)** - 選んだ宛先へのトラフィックをすべて破棄します。ブロックは **IP または ポート** のどちらかで作動します (空のフィールドは無視されるので、`--block-port 443` だけなら、どのアドレスへの 443 もブロックします)。[フィルター構文](#フィルター構文-プロセス--ip--ポート)は上と同じです。プロセスの指定に従います (対象のトラフィックだけをブロックします)。
 

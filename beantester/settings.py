@@ -15,9 +15,9 @@ from . import portmap
 from .core import burst_loss_params, compile_endpoint, compile_payload
 from .jsonfile import load_json, write_json
 from .fields import FIELD_DEFS, FIELDS
-from .filters import CLI_FILTERS
-from .i18n import T, field_name, translate
-from .matchers import KIND_PROCESS, parse_matcher, port_expression
+from .filters import CLI_FILTERS, FILTER_ADMITS, PORTS, i18n_key_for
+from .i18n import T, field_name, section_name, translate
+from .matchers import KIND_INT, KIND_PROCESS, parse_matcher, port_expression
 from .processes import TARGET_FIELD
 from .targeting import ports_shared_with_others
 from .utils import number_string, to_number
@@ -629,6 +629,110 @@ def _depends_on_direction(g):
                 or str(g("target") or "").strip())
 
 
+def settings_the_filter_leaves_out(s):
+    """``[(sentence key, missing trait, field keys), ...]``: what the filter starves.
+
+    The traffic filter is applied IN THE DRIVER, so a setting that needs what it
+    leaves out never sees a packet: "SYN drop" with the UDP filter, "Download" with
+    "Outbound only", a port with the ICMP filter. The session then changes less than
+    the form says, or nothing at all, and that reads as a broken tool.
+
+    Read from the registry on both sides - ``filters.FILTER_ADMITS`` says what a
+    filter lets through, ``Field.needs`` what a field needs - so a field is covered
+    by declaring its needs once. One entry per sentence and missing trait, its
+    fields in registry order; a field with two needs counts once, for the first one
+    left out. Two sentences because the consequence differs: an impairment with no
+    packet changes nothing (``log.filter_skips_setting``), a targeting field with no
+    packet selects nothing (``log.filter_skips_scope``).
+
+    Total, like ``unbounded_impairment``: it reads through ``DEFAULT_SETTINGS``, and
+    a filter it does not know or an expression that does not compile give nothing -
+    validation reports those, and a warning that could abort a start would be worse
+    than the run it warns about.
+    """
+    def g(key):
+        return s.get(key, DEFAULT_SETTINGS[key])
+
+    admits = FILTER_ADMITS.get(str(g("filter")))
+    if admits is None:
+        return []
+    groups = {}
+    for field in FIELD_DEFS:
+        missing = _need_left_out(field, g, admits)
+        if missing is not None:
+            sentence = ("log.filter_skips_setting" if field.impairs or field.parameter_of
+                        else "log.filter_skips_scope")
+            groups.setdefault((sentence, missing), []).append(field.key)
+    return [(sentence, missing, tuple(keys))
+            for (sentence, missing), keys in groups.items()]
+
+
+def _say_what_the_filter_leaves_out(s, log):
+    """``settings_the_filter_leaves_out`` through ``log``, one line per entry.
+
+    Said, never refused, like every other line ``apply_settings`` says: refusing
+    would break a run somebody meant.
+    """
+    shown = T(i18n_key_for(str(s.get("filter", DEFAULT_SETTINGS["filter"]))))
+    for sentence, missing, keys in settings_the_filter_leaves_out(s):
+        names = ", ".join(_name_and_section(FIELDS[key]) for key in keys)
+        log(T(sentence, filter=shown, traffic=T("filters.lacks_" + missing), fields=names))
+
+
+def _need_left_out(field, g, admits):
+    """The first of ``field.needs`` the filter leaves out, while the field is in play."""
+    if not field.needs or not _in_play(field, g):
+        return None
+    for need in field.needs:
+        if not admits.lets_through(need) and _asks_for(field, need, g(field.key)):
+            return need
+    return None
+
+
+def _in_play(field, g):
+    """Is the field set AND read? Set, its switch on (``live_when``), not made inert
+    by another field (``overridden_by``: Download under a schedule) and, for a
+    parameter, its trigger armed (``parameter_of``: Reject without a block). Each of
+    those already says "this does nothing" on its own, and saying it a second time
+    for the filter would be noise."""
+    def on(key):
+        return F.is_active(FIELDS[key], g(key))
+    return (on(field.key)
+            and (not field.live_when or on(field.live_when))
+            and (not field.overridden_by or not on(field.overridden_by))
+            and (not field.parameter_of or on(field.parameter_of)))
+
+
+def _asks_for(field, need, value):
+    """Does this value ask for ``need``? Always, but for a port expression and ports.
+
+    decide() asks a port expression about a packet with no port at all (ICMP) - in
+    step 2 for the destination and 2c for the block - and only its own verdict says
+    whether that packet passes: "443", and even "*", turn it away, "!53" lets it
+    through (measured 2026-11-13). So the same matcher is asked the same question
+    here. One that does not compile asks for nothing (see the caller).
+    """
+    if need != PORTS or field.expr_kind != KIND_INT:
+        return True
+    try:
+        matcher = parse_matcher(setting_expression(field.key, value), field.expr_kind,
+                                field.label, field.bounds)
+    except ValueError:
+        return False
+    return not matcher.matches(None)
+
+
+def _name_and_section(field):
+    """A field's name inside a sentence, with the section it sits in.
+
+    Always the section, not only for the two labels two fields share ("Port" and
+    "IP", destination and blocking): "Media" or "Checks (STUN)" say nothing without
+    "Call targeting" next to them, and the section is also where to look for it.
+    """
+    return T("log.field_in_section", field=field_name(field.label),
+             section=section_name(F.SECTION_BY_ID[field.section].label))
+
+
 def _say_what_the_burst_loss_will_do(g, log):
     """Two things a person cannot read off the two fields in front of them.
 
@@ -796,6 +900,7 @@ def apply_settings(engine, s, log=lambda *_: None, live=None):
     # the RST builder in core.py - so with the loopback filter nothing is download.
     if g("filter") == "loopback" and _depends_on_direction(g):
         log(T("log.loopback_all_upload"))
+    _say_what_the_filter_leaves_out(s, log)
     block_ip = setting_expression("block_ip", g("block_ip"))
     block_port = setting_expression("block_port", g("block_port"))
     block = None                                # None = leave the block alone

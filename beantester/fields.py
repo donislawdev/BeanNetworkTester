@@ -13,11 +13,13 @@ its argparse flag). Everything else is derived:
 is a renderer of this table, not a hand-written form.
 
 Layering: this module depends only on ``matchers`` (expression kinds),
-``processes`` (the target field's i18n key) and ``utils`` (number formatting for
-``widget_value``) - no tkinter, no i18n lookups at import time.
+``processes`` (the target field's i18n key), ``utils`` (number formatting for
+``widget_value``) and ``filters`` (what a traffic filter lets through, for
+``Field.needs``) - no tkinter, no i18n lookups at import time.
 """
 from typing import NamedTuple, Optional, Tuple
 
+from .filters import INBOUND, NETWORK, OUTBOUND, PORTS, TCP, UDP
 from .matchers import KIND_INT, KIND_IP, KIND_PROCESS, PAYLOAD_BOUNDS, PORT_BOUNDS
 from .processes import TARGET_FIELD
 from .utils import number_string
@@ -105,6 +107,13 @@ class Field(NamedTuple):
     # what makes the second set of boxes never blank: switching it on describes
     # the same link it described a moment ago, and only an edit changes anything.
     mirror_of: str = ""
+    # What the traffic FILTER has to let through for this field to have anything to
+    # act on: traits from ``filters`` (TCP, UDP, PORTS, INBOUND, OUTBOUND, NETWORK),
+    # ALL of them. Taken from the gate in decide() that reads the field, like
+    # ``impairs``, never from its name. A filter that leaves one out is said at
+    # apply (``settings._say_what_the_filter_leaves_out``): "SYN drop" with the UDP
+    # filter changes no packet, and silence there reads as a broken tool.
+    needs: Tuple[str, ...] = ()
 
 
 FIELD_DEFS = (
@@ -118,8 +127,11 @@ FIELD_DEFS = (
     # span=False on both: they are one decision seen from two sides, so they sit
     # side by side rather than stacked with a card's width of nothing beside each.
     # A BOOL would take a whole row by kind - see fields.Field.span.
+    # needs NETWORK, both of them: loopback survives either switch (step 2b), so
+    # with the loopback filter they cut nothing.
     Field("lan_mode", BOOL, "fields.lan_mode", "traffic",
-          tip="tips.lan_mode", span=False, cli="lan-mode", impairs=IMPAIRS_ALL),
+          tip="tips.lan_mode", span=False, cli="lan-mode", impairs=IMPAIRS_ALL,
+          needs=(NETWORK,)),
     # The mirror of the line above, and IMPAIRS_ALL for the same reason: on its
     # own, with the whole rest of the form at zero, it cuts every local address
     # this machine talks to. Loopback survives (utils.is_lan_ip).
@@ -130,25 +142,30 @@ FIELD_DEFS = (
     # shortcut of --lan-mode (allow_abbrev stays on: ADR 2026-08-02).
     Field("internet_only", BOOL, "fields.internet_only", "traffic",
           tip="tips.internet_only", span=False, cli="internet-only",
-          impairs=IMPAIRS_ALL),
+          impairs=IMPAIRS_ALL, needs=(NETWORK,)),
 
     # -- target process ---------------------------------------------------- #
+    # needs PORTS whatever the expression says: step 1 finds a process by its
+    # local port, and a packet without one (ICMP) is turned away before any
+    # expression is asked.
     Field("target", EXPR, TARGET_FIELD, "target_process", expr_kind=KIND_PROCESS,
           width=34, tip="tips.target_process", hint="fields.target_example",
-          span=True, cli="target", narrows=True),
+          span=True, cli="target", narrows=True, needs=(PORTS,)),
 
     # -- speed limit ------------------------------------------------------- #
     # A throughput schedule REPLACES the constant limits (BeanCore._current_rates
     # takes its rates from the schedule steps). That was documented but invisible:
     # the two fields sat there looking live while the engine ignored them.
+    # Step 11 takes the rate by direction: download for what comes in, upload for
+    # what goes out - hence the one direction each needs.
     Field("down", NUMBER, "fields.download", "speed_limit", unit="KB/s",
           bounds=RATE, tip="tips.down_limit", in_profile=True, cli="down",
           overridden_by="rate_schedule", override_note="fields.schedule_overrides",
-          impairs=IMPAIRS_ALL),
+          impairs=IMPAIRS_ALL, needs=(INBOUND,)),
     Field("up", NUMBER, "fields.upload", "speed_limit", unit="KB/s",
           bounds=RATE, tip="tips.up_limit", in_profile=True, cli="up",
           overridden_by="rate_schedule", override_note="fields.schedule_overrides",
-          impairs=IMPAIRS_ALL),
+          impairs=IMPAIRS_ALL, needs=(OUTBOUND,)),
     # The link buffer for the speed limit: how much queueing delay a rate-limited
     # link may build up before it drops (bufferbloat), in ms. 0 = unbounded. It
     # applies to the constant limits AND to a schedule, so it is NOT
@@ -307,9 +324,12 @@ FIELD_DEFS = (
     # -- destination ------------------------------------------------------- #
     Field("dst_ip", EXPR, "fields.ip", "destination", expr_kind=KIND_IP,
           width=26, tip="tips.dest", span=True, cli="dst-ip", narrows=True),
+    # needs PORTS only while the expression turns a portless packet away - "443"
+    # does, "!53" does not (settings._say_what_the_filter_leaves_out asks the
+    # matcher, as step 2 does). Same for block_port below, in step 2c.
     Field("dst_port", EXPR, "fields.port", "destination", expr_kind=KIND_INT,
           bounds=PORT_BOUNDS, width=18, tip="tips.dest", span=True, cli="dst-port",
-          narrows=True),
+          narrows=True, needs=(PORTS,)),
     # Which address family the targeting covers - part of the same question as
     # the IP field above it, which is why it lives in this card and not next to
     # "LAN mode" and "Internet only". Those two CUT traffic (impairs=all); these
@@ -342,12 +362,15 @@ FIELD_DEFS = (
     # whole message, the magic cookie, the exact length), and media counts only on a
     # flow that has carried STUN, so QUIC, VPNs on DTLS and this session's own HTTPS
     # stay out.
+    # needs UDP: step 2 turns TCP away outright, and ice.call_part reads nothing
+    # that is not plainly UDP.
     Field("call_checks", BOOL, "fields.call_checks", "call",
-          tip="tips.call_checks", cli="call-checks", narrows=True),
+          tip="tips.call_checks", cli="call-checks", narrows=True, needs=(UDP,)),
     Field("call_turn_control", BOOL, "fields.call_turn_control", "call",
-          tip="tips.call_turn_control", cli="call-turn-control", narrows=True),
+          tip="tips.call_turn_control", cli="call-turn-control", narrows=True,
+          needs=(UDP,)),
     Field("call_media", BOOL, "fields.call_media", "call",
-          tip="tips.call_media", cli="call-media", narrows=True),
+          tip="tips.call_media", cli="call-media", narrows=True, needs=(UDP,)),
 
     # -- payload size ------------------------------------------------------ #
     # Which packets the impairments reach, by how many bytes of data they carry
@@ -366,10 +389,10 @@ FIELD_DEFS = (
     # with exit 2 (allow_abbrev stays on: ADR 2026-08-02).
     Field("payload_udp", EXPR, "fields.payload_udp", "payload", unit="B",
           expr_kind=KIND_INT, bounds=PAYLOAD_BOUNDS, width=18, tip="tips.payload",
-          span=True, cli="payload-udp"),
+          span=True, cli="payload-udp", needs=(UDP,)),
     Field("payload_tcp", EXPR, "fields.payload_tcp", "payload", unit="B",
           expr_kind=KIND_INT, bounds=PAYLOAD_BOUNDS, width=18, tip="tips.payload",
-          span=True, cli="payload-tcp"),
+          span=True, cli="payload-tcp", needs=(TCP,)),
 
     # -- blocking (firewall) ---------------------------------------------- #
     # Drop traffic to matching destinations outright. IP OR port (each takes part
@@ -387,7 +410,7 @@ FIELD_DEFS = (
           impairs=IMPAIRS_MATCHED),
     Field("block_port", EXPR, "fields.port", "block", expr_kind=KIND_INT,
           bounds=PORT_BOUNDS, width=18, tip="tips.block", span=True, cli="block-port",
-          impairs=IMPAIRS_MATCHED),
+          impairs=IMPAIRS_MATCHED, needs=(PORTS,)),
     # A PARAMETER of the block, so no `impairs`: on its own it blocks nothing and
     # `unbounded_impairment` must not warn about a run that damages nothing. It
     # names `block_ip` because a parameter names one trigger and the pair is one
@@ -397,20 +420,29 @@ FIELD_DEFS = (
     # gui/form.py), two values are a checkbox, and if a third mode ever arrives
     # (ICMP port-unreachable for UDP) that is the moment to generalise it, with a
     # second user to design against.
+    # needs TCP and OUTBOUND: step 2c answers only an outgoing TCP packet.
     Field("block_reject", BOOL, "fields.block_reject", "block",
-          tip="tips.block_reject", cli="block-reject", parameter_of="block_ip"),
+          tip="tips.block_reject", cli="block-reject", parameter_of="block_ip",
+          needs=(TCP, OUTBOUND)),
 
     # -- advanced ---------------------------------------------------------- #
+    # needs TCP: step 7 drops a SYN, and only TCP has one.
     Field("syn_drop", NUMBER, "fields.syn_drop", "advanced", unit="%",
-          bounds=PCT, width=6, tip="tips.syn", cli="syn-drop", impairs=IMPAIRS_ALL),
+          bounds=PCT, width=6, tip="tips.syn", cli="syn-drop", impairs=IMPAIRS_ALL,
+          needs=(TCP,)),
     Field("max_size", NUMBER, "fields.max_size", "advanced",
           unit_key="fields.unit_b_off", bounds=(0.0, 65535.0), width=8,
           tip="tips.mtu", cli="max-size", impairs=IMPAIRS_ALL),
+    # needs PORTS and INBOUND: step 3 keeps a flow by its ports and drops only
+    # what comes in after the mapping expired.
     Field("nat_timeout", NUMBER, "fields.nat_timeout", "advanced",
           unit_key="fields.unit_s_off", bounds=SECONDS, width=6,
-          tip="tips.nat", cli="nat-timeout", impairs=IMPAIRS_ALL),
+          tip="tips.nat", cli="nat-timeout", impairs=IMPAIRS_ALL,
+          needs=(PORTS, INBOUND)),
+    # needs TCP: step 4 runs only `if is_tcp`.
     Field("rst_prob", NUMBER, "fields.rst", "advanced", unit="%",
-          bounds=PCT, width=6, tip="tips.rst", cli="rst-prob", impairs=IMPAIRS_ALL),
+          bounds=PCT, width=6, tip="tips.rst", cli="rst-prob", impairs=IMPAIRS_ALL,
+          needs=(TCP,)),
     Field("rst_cooldown", NUMBER, "fields.rst_cooldown", "advanced", unit="s",
           bounds=RESET_S, width=6, tip="tips.rst_cooldown", cli="rst-cooldown",
           parameter_of="rst_prob"),
@@ -566,6 +598,7 @@ SECTIONS = (
 
 # Sections split by surface. The Control page and the Settings window are both
 # renderers of this one table (see gui/form.py::ControlForm(sections=...)).
+SECTION_BY_ID = {s.id: s for s in SECTIONS}
 CONTROL_SECTIONS = tuple(s for s in SECTIONS if s.surface == "control")
 SETTINGS_SECTIONS = tuple(s for s in SECTIONS if s.surface == "settings")
 

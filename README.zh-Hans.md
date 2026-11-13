@@ -808,7 +808,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--target` | 进程：名称、PID、PID 范围、通配符、正则 | `--target chrome.exe`<br>`--target "chrome,!chromedriver"`<br>`--target ">1000"` |
 | `--dst-ip` | 远程 IP 地址（IPv4 和 IPv6） | `--dst-ip 1.2.3.4`<br>`--dst-ip "10.0.0.1-10.0.0.50,!10.0.0.7"`<br>`--dst-ip "192.168.1.0/24"`<br>`--dst-ip "2001:db8::/32"` |
 | `--dst-port` | 远程端口（0-65535） | `--dst-port 443`<br>`--dst-port "80,443,8000-8100"`<br>`--dst-port "!53"`<br>`--dst-port ">1024"` |
-| `--filter` | 到底捕获哪些流量（IPv4 + IPv6）：`both,out,in,tcp,udp,ping,loopback` | `--filter tcp` |
+| `--filter` | 到底捕获哪些流量（IPv4 + IPv6）：`both,no-loopback,out,in,tcp,udp,ping,loopback` | `--filter tcp` |
 
 **阻断（防火墙）**：丢弃发往所选目标的所有流量。阻断由 **IP 或端口** 触发（空字段会被忽略，
 所以单独的 `--block-port 443` 会阻断发往任何地址的 443）。与上面相同的[过滤语法](#过滤语法进程--ip--端口)。

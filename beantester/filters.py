@@ -14,14 +14,25 @@ Two rules this file exists to enforce:
   this list and quietly fought with the destination *Port* field (two places
   deciding about ports, with different semantics). Ports belong to the port
   field, which understands lists, ranges and exclusions anyway.
+
+And one table it keeps beside the list: ``FILTER_ADMITS``, what each filter lets
+through, which is how a setting the chosen filter leaves nothing to act on gets
+said out loud (``fields.Field.needs``).
 """
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, FrozenSet, List, NamedTuple, Optional, Tuple
 
 _ALL_IP = "(ip or ipv6)"
 _ALL_PROTO = "(tcp or udp or icmp or icmpv6)"
 
 FILTER_DEFS: List[Tuple[str, str, str]] = [
     ("both", "filters.both", f"{_ALL_IP} and {_ALL_PROTO}"),
+    # Everything the first one takes except a program on this machine talking to
+    # another one on it: a local development server, a database, IPC. Second, so
+    # the two "all traffic" entries stand together. Every reader keeps the KEY,
+    # never the position (ui.json, config files, scenarios, the repro command), and
+    # the default is entry 0, so the order is free to choose.
+    ("no-loopback", "filters.no_loopback",
+     f"not loopback and {_ALL_IP} and {_ALL_PROTO}"),
     ("out",  "filters.out",  f"outbound and {_ALL_IP} and {_ALL_PROTO}"),
     ("in",   "filters.in",   f"inbound and {_ALL_IP} and {_ALL_PROTO}"),
     ("tcp",  "filters.tcp",  f"{_ALL_IP} and tcp"),
@@ -64,6 +75,59 @@ def windivert_for(cli_key: str) -> str:
 def i18n_keys() -> List[str]:
     """Filter i18n keys in canonical order (drives the GUI combobox)."""
     return [name for _, name, _ in FILTER_DEFS]
+
+
+# -- what each filter lets through ----------------------------------------------- #
+# Three things a setting can depend on, and the answer each filter gives. A setting
+# declares what it needs (``fields.Field.needs``) and ``settings.apply_settings``
+# says so when the chosen filter lets none of it through: a session that changes
+# nothing reads as a broken tool, not as a filter doing what it was told.
+TCP, UDP, ICMP = "tcp", "udp", "icmp"                 # protocol
+INBOUND, OUTBOUND = "inbound", "outbound"             # direction
+LOOPBACK, NETWORK = "loopback", "network"             # this machine to itself, or not
+PORTS = "ports"                                       # derived: TCP or UDP
+TRAITS = frozenset({TCP, UDP, ICMP, INBOUND, OUTBOUND, LOOPBACK, NETWORK, PORTS})
+
+
+class Admits(NamedTuple):
+    """What a filter EXPRESSION lets through, as three independent sets.
+
+    Independent because every filter here is a product of the three - measured
+    with the driver's own evaluator on Windows and on Linux, 2026-11-13 - and
+    ``tests/test_filter_needs.py`` holds each declaration to exactly that product,
+    so a filter added later that is not one fails there instead of being described
+    wrongly here.
+
+    It describes the expression, not what the driver does with it: Windows hands
+    over BOTH halves of a loopback conversation as outbound (measured, see the RST
+    builder in ``core.py``), and that trap has a warning of its own
+    (``log.loopback_all_upload``) rather than a second one from this table.
+    """
+    protocols: FrozenSet[str]
+    directions: FrozenSet[str]
+    paths: FrozenSet[str]
+
+    def lets_through(self, trait: str) -> bool:
+        if trait == PORTS:
+            return bool(self.protocols & {TCP, UDP})
+        return trait in self.protocols or trait in self.directions or trait in self.paths
+
+
+_EVERY_PROTOCOL = frozenset({TCP, UDP, ICMP})
+_BOTH_WAYS = frozenset({INBOUND, OUTBOUND})
+_EVERY_PATH = frozenset({LOOPBACK, NETWORK})
+
+# Keyed by CLI key, like the readers of FILTER_DEFS above.
+FILTER_ADMITS: Dict[str, Admits] = {
+    "both": Admits(_EVERY_PROTOCOL, _BOTH_WAYS, _EVERY_PATH),
+    "no-loopback": Admits(_EVERY_PROTOCOL, _BOTH_WAYS, frozenset({NETWORK})),
+    "out": Admits(_EVERY_PROTOCOL, frozenset({OUTBOUND}), _EVERY_PATH),
+    "in": Admits(_EVERY_PROTOCOL, frozenset({INBOUND}), _EVERY_PATH),
+    "tcp": Admits(frozenset({TCP}), _BOTH_WAYS, _EVERY_PATH),
+    "udp": Admits(frozenset({UDP}), _BOTH_WAYS, _EVERY_PATH),
+    "ping": Admits(frozenset({ICMP}), _BOTH_WAYS, _EVERY_PATH),
+    "loopback": Admits(_EVERY_PROTOCOL, _BOTH_WAYS, frozenset({LOOPBACK})),
+}
 
 
 # -- narrowing the handle's filter to what could possibly be impaired ------------ #

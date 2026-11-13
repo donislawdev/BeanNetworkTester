@@ -14,7 +14,7 @@ def test_filters_and_presets():
     aligned = all(n.FILTERS[name] == list(n.CLI_FILTERS.values())[i]
                   for i, name in enumerate(n.FILTERS))
     check("filters: GUI<->CLI aligned by index", aligned)
-    for key in ("both", "out", "in", "tcp", "udp", "ping"):
+    for key in ("both", "no-loopback", "out", "in", "tcp", "udp", "ping", "loopback"):
         check(f"CLI filter '{key}' exists", key in n.CLI_FILTERS)
     for key in ("dns", "http", "https", "web"):
         # port presets were removed: the destination Port field owns ports now
