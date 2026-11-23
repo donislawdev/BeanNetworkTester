@@ -1,0 +1,47 @@
+<section class="hero">
+  <h1>Nepřetržitý ping, který počítá za vás</h1>
+  <p class="lead">Nepřetržitý ping je nejrychlejší způsob, jak zjistit, zda je spojení stabilní: jeden požadavek echo za druhým, dokud ho nezastavíte. Windows i Linux ho mají v konzoli. Nástroj {{app.tools.ping.tab}} na kartě {{app.app.tabs.tools}} dělá totéž a uchovává čísla, která vám konzole nechá spočítat samotným: jitter, nejdelší sérii ztrát a dobu odezvy, do které se vešlo 95 % odpovědí.</p>
+</section>
+
+<section>
+  <h2>V konzoli</h2>
+  <p>V příkazovém řádku Windows <code>-t</code> pinguje, dokud nestisknete Ctrl+C. Ctrl+Break vypíše dosavadní součty a pokračuje.</p>
+<pre><code>ping -t 1.1.1.1</code></pre>
+  <p>Chcete-li výstup uložit do souboru nebo ke každému řádku přidat čas, v PowerShellu:</p>
+<pre><code>ping -t 1.1.1.1 > ping.txt
+ping.exe -t 1.1.1.1 | ForEach-Object { "{0:HH:mm:ss} {1}" -f (Get-Date), $_ }</code></pre>
+  <p>PowerShell 7 na to má vlastní příkaz a v Linuxu běží obyčejný ping stejně až do Ctrl+C. <code>-D</code> přidá ke každému řádku časové razítko:</p>
+<pre><code>Test-Connection 1.1.1.1 -Repeat
+ping -D 1.1.1.1</code></pre>
+  <p>Žádný z nich běh během něj neshrnuje: dostanete řádek na každou odpověď a součty na konci.</p>
+</section>
+
+<section>
+  <h2>S nástrojem {{app.tools.ping.tab}}</h2>
+  <ul>
+    <li>Napište adresu nebo název, zvolte, jak často pingovat, jak dlouho čekat na odpověď, kolik bajtů každý ping nese (32, jako posílá <code>ping.exe</code>, až 65 500) a kolik pingů poslat, nebo ho nechte běžet až do {{app.tools.ping.stop}}. Pak stiskněte <strong>{{app.tools.ping.start}}</strong>.</li>
+    <li>Každý ping je řádek: kdy odešel, jeho doba odezvy, TTL a co se vrátilo. Graf ukazuje doby odezvy posledních 60.</li>
+    <li>Řádek nad tabulkou drží součty: odesláno, odpovědí, ztraceno, nejdelší série ztrát, nejnižší, průměrná a nejvyšší doba odezvy, jitter (o kolik se doba odezvy mění od jedné odpovědi k další) a doba, do které se vešlo 95 % odpovědí.</li>
+    <li>Pinguje dál, i když je vpředu jiná karta. Klikněte pravým tlačítkem na řádek v {{app.tools.sockets.tab}} nebo v {{app.app.tabs.connections}} a zvolte <strong>{{app.menu.ping_address}}</strong>, abyste pingovali jeho druhý konec.</li>
+    <li><strong>{{app.tools.ping.copy}}</strong> zkopíruje řádky a součty anglicky, pro hlášení chyby.</li>
+  </ul>
+  <p>Odpověď, která přijde po době čekání, se počítá jako ztracená. Při velkém zpoždění zvolte delší čekání.</p>
+</section>
+
+<section>
+  <h2>Sledujte, jak přichází špatná síť</h2>
+  <p>Spusťte ping a potom na stránce ovládání relaci s nějakým zpožděním a ztrátami. Když relace začne, skončí, dostane nové nastavení nebo přejde na další krok scénáře, řádek ukáže čas od té chvíle a o kolik se průměrná doba odezvy a podíl ztrát liší od předchozích, a graf ten okamžik označí přerušovanou čarou. Další řádek říká, co relace s těmito pingy dělá: poškozuje je, vidí je a nechává je být, nebo je vůbec nezachytává.</p>
+  <p>S výchozím filtrem provozu nese ping zpoždění dvakrát, takže 100 ms zpoždění přidá k době odezvy asi 200 ms, a ztráty zasahují požadavek a odpověď zvlášť, takže při 20 % ztrát se ztratí zhruba třetina pingů. Relace mířená na jeden program se pingu nikdy nedotkne, protože ping nepatří ke spojení žádného programu: v tom případě miřte na adresu.</p>
+</section>
+
+<section>
+  <h2>V Linuxu</h2>
+  <p>Nástroj funguje i v Linuxu. Nepotřebuje <code>sudo</code> tam, kde systém vaší skupině dovolí posílat ping, jako v Ubuntu 26.04, a potřebuje ho tam, kde ne, jako v Ubuntu 24.04. Zbytek popisuje <a href="../simulace-site-v-linuxu/">stránka o Linuxu</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

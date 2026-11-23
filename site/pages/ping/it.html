@@ -1,0 +1,47 @@
+<section class="hero">
+  <h1>Un ping continuo che tiene i conti al posto tuo</h1>
+  <p class="lead">Un ping continuo è il modo più rapido per vedere se una connessione è stabile: una richiesta di echo dopo l'altra, finché non lo fermi. Windows e Linux ne hanno uno nella console. Lo strumento {{app.tools.ping.tab}} della scheda {{app.app.tabs.tools}} fa lo stesso e tiene i numeri che la console ti lascia contare da solo: il jitter, la serie di perdite più lunga e il tempo di andata e ritorno entro cui è rimasto il 95% delle risposte.</p>
+</section>
+
+<section>
+  <h2>Nella console</h2>
+  <p>Nel prompt dei comandi di Windows, <code>-t</code> esegue il ping finché non premi Ctrl+C. Ctrl+Interr mostra i totali fino a quel momento e continua.</p>
+<pre><code>ping -t 1.1.1.1</code></pre>
+  <p>Per salvare l'output in un file, o mettere un orario su ogni riga, in PowerShell:</p>
+<pre><code>ping -t 1.1.1.1 > ping.txt
+ping.exe -t 1.1.1.1 | ForEach-Object { "{0:HH:mm:ss} {1}" -f (Get-Date), $_ }</code></pre>
+  <p>PowerShell 7 ha un comando apposito, e su Linux un ping normale va già avanti fino a Ctrl+C. <code>-D</code> mette un'indicazione temporale su ogni riga:</p>
+<pre><code>Test-Connection 1.1.1.1 -Repeat
+ping -D 1.1.1.1</code></pre>
+  <p>Nessuno di questi riassume l'esecuzione mentre procede: ottieni una riga per risposta e i totali alla fine.</p>
+</section>
+
+<section>
+  <h2>Con lo strumento {{app.tools.ping.tab}}</h2>
+  <ul>
+    <li>Scrivi un indirizzo o un nome, scegli ogni quanto fare il ping, quanto aspettare una risposta, quanti byte porta ogni ping (32, come invia <code>ping.exe</code>, fino a 65 500) e quanti ping inviare, oppure lascialo andare fino a {{app.tools.ping.stop}}. Poi premi <strong>{{app.tools.ping.start}}</strong>.</li>
+    <li>Ogni ping è una riga: quando è partito, il suo tempo di andata e ritorno, il TTL e cosa è tornato. Un grafico mostra i tempi degli ultimi 60.</li>
+    <li>Una riga sopra la tabella tiene i totali: inviati, risposte, persi, la serie di perdite più lunga, il tempo di andata e ritorno minimo, medio e massimo, il jitter (quanto il tempo si sposta da una risposta alla successiva) e il tempo entro cui è rimasto il 95% delle risposte.</li>
+    <li>Continua il ping mentre un'altra scheda è in primo piano. Fai clic destro su una riga di {{app.tools.sockets.tab}} o di {{app.app.tabs.connections}} e scegli <strong>{{app.menu.ping_address}}</strong> per fare il ping all'altro capo.</li>
+    <li><strong>{{app.tools.ping.copy}}</strong> copia le righe e i totali, in inglese, per una segnalazione di bug.</li>
+  </ul>
+  <p>Una risposta che arriva dopo l'attesa conta come persa. Con una latenza alta, scegli un'attesa più lunga.</p>
+</section>
+
+<section>
+  <h2>Guarda arrivare la rete scadente</h2>
+  <p>Avvia il ping, poi una sessione nella pagina di controllo con un po' di latenza e di perdite. Quando la sessione parte, si ferma, riceve nuove impostazioni o passa al passo successivo di uno scenario, la riga mostra il tempo trascorso da allora e come il tempo medio di andata e ritorno e la quota persa differiscono da prima, e il grafico segna il momento con una linea tratteggiata. Un'altra riga dice cosa fa la sessione a questi ping: li danneggia, li vede e li lascia stare, oppure non li cattura.</p>
+  <p>Con il filtro del traffico predefinito un ping porta la latenza due volte, quindi 100 ms di latenza aggiungono circa 200 ms al tempo di andata e ritorno, e la perdita colpisce la richiesta e la risposta separatamente, quindi il 20% di perdita fa perdere circa un terzo dei ping. Una sessione puntata su un programma non tocca mai un ping, perché un ping non appartiene alla connessione di nessun programma: in quel caso puntala sull'indirizzo.</p>
+</section>
+
+<section>
+  <h2>Su Linux</h2>
+  <p>Lo strumento funziona anche su Linux. Non serve <code>sudo</code> dove il sistema permette al tuo gruppo di inviare ping, come su Ubuntu 26.04, e serve dove non lo permette, come su Ubuntu 24.04. Il resto è nella <a href="../simulare-la-rete-su-linux/">pagina su Linux</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

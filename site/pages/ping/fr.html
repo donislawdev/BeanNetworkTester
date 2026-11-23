@@ -1,0 +1,47 @@
+<section class="hero">
+  <h1>Un ping continu qui fait les comptes pour vous</h1>
+  <p class="lead">Un ping continu est le moyen le plus rapide de voir si une connexion est stable : une requête d'écho après l'autre, jusqu'à ce que vous l'arrêtiez. Windows et Linux en ont un dans la console. L'outil {{app.tools.ping.tab}} de l'onglet {{app.app.tabs.tools}} fait la même chose et garde les chiffres que la console vous laisse compter vous-même : la gigue, la plus longue série de pertes et l'aller-retour sous lequel sont restées 95 % des réponses.</p>
+</section>
+
+<section>
+  <h2>Dans la console</h2>
+  <p>Dans l'invite de commandes Windows, <code>-t</code> pingue jusqu'à ce que vous appuyiez sur Ctrl+C. Ctrl+Pause affiche les totaux jusque-là et continue.</p>
+<pre><code>ping -t 1.1.1.1</code></pre>
+  <p>Pour garder la sortie dans un fichier, ou mettre une heure sur chaque ligne, dans PowerShell :</p>
+<pre><code>ping -t 1.1.1.1 > ping.txt
+ping.exe -t 1.1.1.1 | ForEach-Object { "{0:HH:mm:ss} {1}" -f (Get-Date), $_ }</code></pre>
+  <p>PowerShell 7 a sa propre commande pour cela, et sous Linux un ping ordinaire tourne déjà jusqu'à Ctrl+C. <code>-D</code> ajoute un horodatage à chaque ligne :</p>
+<pre><code>Test-Connection 1.1.1.1 -Repeat
+ping -D 1.1.1.1</code></pre>
+  <p>Aucun d'eux ne résume l'exécution pendant qu'elle tourne : vous obtenez une ligne par réponse et les totaux à la fin.</p>
+</section>
+
+<section>
+  <h2>Avec l'outil {{app.tools.ping.tab}}</h2>
+  <ul>
+    <li>Saisissez une adresse ou un nom, choisissez à quelle fréquence pinguer, combien de temps attendre une réponse, combien d'octets porte chaque ping (32, comme ce qu'envoie <code>ping.exe</code>, jusqu'à 65 500) et combien de pings envoyer, ou laissez-le tourner jusqu'à {{app.tools.ping.stop}}. Puis appuyez sur <strong>{{app.tools.ping.start}}</strong>.</li>
+    <li>Chaque ping est une ligne : quand il est parti, son aller-retour, son TTL et ce qui est revenu. Un graphique montre les allers-retours des 60 derniers.</li>
+    <li>Une ligne au-dessus du tableau garde les totaux : envoyés, réponses, perdus, la plus longue série de pertes, l'aller-retour le plus bas, moyen et le plus haut, la gigue (de combien l'aller-retour bouge d'une réponse à la suivante) et l'aller-retour sous lequel sont restées 95 % des réponses.</li>
+    <li>Il continue de pinguer quand un autre onglet est au premier plan. Cliquez avec le bouton droit sur une ligne de {{app.tools.sockets.tab}} ou de {{app.app.tabs.connections}} et choisissez <strong>{{app.menu.ping_address}}</strong> pour pinguer son autre bout.</li>
+    <li><strong>{{app.tools.ping.copy}}</strong> copie les lignes et les totaux, en anglais, pour un rapport de bug.</li>
+  </ul>
+  <p>Une réponse qui arrive après le délai d'attente compte comme perdue. Avec une latence élevée, choisissez une attente plus longue.</p>
+</section>
+
+<section>
+  <h2>Regardez arriver le mauvais réseau</h2>
+  <p>Lancez le ping, puis une session sur la page de contrôle avec un peu de latence et de pertes. Quand la session démarre, s'arrête, reçoit de nouveaux réglages ou passe à l'étape suivante d'un scénario, la ligne indique le temps écoulé depuis et en quoi l'aller-retour moyen et la part perdue diffèrent d'avant, et le graphique marque l'instant d'un trait pointillé. Une autre ligne dit ce que la session fait de ces pings : elle les dégrade, les voit et les laisse tranquilles, ou ne les capture pas du tout.</p>
+  <p>Avec le filtre de trafic par défaut, un ping subit la latence deux fois : 100 ms de latence ajoutent donc environ 200 ms à l'aller-retour, et les pertes frappent la requête et la réponse séparément, donc 20 % de pertes font perdre environ un tiers des pings. Une session qui vise un programme ne touche jamais un ping, car un ping n'appartient à la connexion d'aucun programme : visez alors l'adresse.</p>
+</section>
+
+<section>
+  <h2>Sous Linux</h2>
+  <p>L'outil fonctionne aussi sous Linux. Il n'a pas besoin de <code>sudo</code> là où le système laisse votre groupe envoyer des pings, comme sous Ubuntu 26.04, et en a besoin là où ce n'est pas le cas, comme sous Ubuntu 24.04. Le reste est sur <a href="../simuler-un-reseau-sous-linux/">la page Linux</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

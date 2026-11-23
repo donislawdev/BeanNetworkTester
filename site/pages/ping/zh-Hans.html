@@ -1,0 +1,47 @@
+<section class="hero">
+  <h1>帮你记下数字的持续 ping</h1>
+  <p class="lead">持续 ping 是查看连接是否稳定的最快方法：一个回显请求接着一个，直到你停止。Windows 和 Linux 的控制台里都有。{{app.app.tabs.tools}} 选项卡上的 {{app.tools.ping.tab}} 工具做同样的事，还会记下控制台要你自己去数的数字：抖动、最长的连续丢包，以及 95% 的回复都没有超过的往返时间。</p>
+</section>
+
+<section>
+  <h2>在控制台中</h2>
+  <p>在 Windows 命令提示符中，<code>-t</code> 会一直 ping，直到你按 Ctrl+C。按 Ctrl+Break 会显示到目前为止的统计并继续。</p>
+<pre><code>ping -t 1.1.1.1</code></pre>
+  <p>要把输出存到文件里，或者在每一行前加上时间，可以在 PowerShell 中：</p>
+<pre><code>ping -t 1.1.1.1 > ping.txt
+ping.exe -t 1.1.1.1 | ForEach-Object { "{0:HH:mm:ss} {1}" -f (Get-Date), $_ }</code></pre>
+  <p>PowerShell 7 有专门的命令；在 Linux 上，普通的 ping 本来就会一直运行到 Ctrl+C。<code>-D</code> 会在每一行前加上时间戳：</p>
+<pre><code>Test-Connection 1.1.1.1 -Repeat
+ping -D 1.1.1.1</code></pre>
+  <p>它们都不会在运行过程中做汇总：你得到的是每个回复一行，以及最后的总计。</p>
+</section>
+
+<section>
+  <h2>使用 {{app.tools.ping.tab}} 工具</h2>
+  <ul>
+    <li>输入地址或名称，选择多久 ping 一次、等待回复多久、每个 ping 携带多少字节（32，与 <code>ping.exe</code> 发送的相同，最大 65 500），以及发送多少个 ping，或者让它一直运行到 {{app.tools.ping.stop}}。然后按 <strong>{{app.tools.ping.start}}</strong>。</li>
+    <li>每个 ping 是一行：何时发出、往返时间、TTL 以及返回了什么。图表显示最近 60 个的往返时间。</li>
+    <li>表格上方的一行保存总计：已发送、回复、丢失、最长的连续丢包、最低、平均和最高往返时间、抖动（往返时间从一个回复到下一个回复变化多少），以及 95% 的回复都没有超过的往返时间。</li>
+    <li>切换到其他选项卡时它也会继续 ping。在 {{app.tools.sockets.tab}} 或 {{app.app.tabs.connections}} 中右键单击一行，选择 <strong>{{app.menu.ping_address}}</strong>，即可 ping 它的远端。</li>
+    <li><strong>{{app.tools.ping.copy}}</strong> 会把各行和总计以英文复制，方便写进缺陷报告。</li>
+  </ul>
+  <p>在等待时间之后才到的回复算作丢失。延迟很大时，请选择更长的等待时间。</p>
+</section>
+
+<section>
+  <h2>看着弱网到来</h2>
+  <p>先开始 ping，再在控制页启动一个带有延迟和丢包的会话。当会话开始、停止、应用新设置或进入场景的下一步时，这一行会显示从那一刻起经过的时间，以及平均往返时间和丢失比例与之前相比的变化，图表会用虚线标出这个时刻。另一行会说明会话对这些 ping 做了什么：损伤它们、看到但不处理，或者根本不捕获。</p>
+  <p>使用默认的流量过滤时，一个 ping 会承受两次延迟，所以 100 ms 的延迟会让往返时间增加约 200 ms；丢包分别作用于请求和回复，所以 20% 的丢包大约会丢掉三分之一的 ping。针对某个程序的会话永远不会影响 ping，因为 ping 不属于任何程序的连接：这时请改为针对地址。</p>
+</section>
+
+<section>
+  <h2>在 Linux 上</h2>
+  <p>这个工具在 Linux 上也能用。在系统允许你的用户组发送 ping 的地方（如 Ubuntu 26.04）不需要 <code>sudo</code>，在不允许的地方（如 Ubuntu 24.04）则需要。其余内容见 <a href="../linux-ruowang-moni/">Linux 页面</a>。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,138 @@
+{
+  "id": "ping",
+  "order": 76,
+  "languages": {
+    "en": {
+      "slug": "continuous-ping",
+      "link_text": "Continuous ping",
+      "title": "Continuous ping with a chart, jitter and packet loss",
+      "description": "Run a continuous ping from cmd, PowerShell or Linux, or with a tool that charts each reply and counts jitter, loss streaks and the 95th percentile."
+    },
+    "pl": {
+      "slug": "ciagly-ping",
+      "link_text": "Ciągły ping",
+      "title": "Ciągły ping z wykresem, jitterem i utratą pakietów",
+      "description": "Ciągły ping z cmd, PowerShella albo Linuksa, albo narzędziem, które rysuje każdą odpowiedź i liczy jitter, serie strat i 95. percentyl."
+    },
+    "zh-Hans": {
+      "slug": "chixu-ping",
+      "link_text": "持续 ping",
+      "title": "带图表、抖动和丢包统计的持续 ping",
+      "description": "在 cmd、PowerShell 或 Linux 中运行持续 ping，或使用一个能画出每次回复并统计抖动、连续丢包和第 95 百分位的工具。"
+    },
+    "ja": {
+      "slug": "renzoku-ping",
+      "link_text": "連続 ping",
+      "title": "グラフ・ジッター・パケットロス付きの連続 ping",
+      "description": "cmd、PowerShell、Linux で連続 ping を実行する方法と、各応答をグラフにしてジッター、連続ロス、95 パーセンタイルを数えるツール。"
+    },
+    "de": {
+      "slug": "dauer-ping",
+      "link_text": "Dauer-Ping",
+      "title": "Dauer-Ping mit Diagramm, Jitter und Paketverlust",
+      "description": "Ein Dauer-Ping in cmd, PowerShell oder unter Linux, oder mit einem Werkzeug, das jede Antwort zeichnet und Jitter, Verlustserien und das 95. Perzentil zählt."
+    },
+    "fr": {
+      "slug": "ping-continu",
+      "link_text": "Ping continu",
+      "title": "Ping continu avec graphique, gigue et perte de paquets",
+      "description": "Un ping continu depuis cmd, PowerShell ou Linux, ou avec un outil qui trace chaque réponse et compte la gigue, les séries de pertes et le 95e centile."
+    },
+    "es": {
+      "slug": "ping-continuo",
+      "link_text": "Ping continuo",
+      "title": "Ping continuo con gráfico, jitter y pérdida de paquetes",
+      "description": "Un ping continuo desde cmd, PowerShell o Linux, o con una herramienta que dibuja cada respuesta y cuenta el jitter, las rachas de pérdidas y el percentil 95."
+    },
+    "pt-BR": {
+      "slug": "ping-continuo",
+      "link_text": "Ping contínuo",
+      "title": "Ping contínuo com gráfico, jitter e perda de pacotes",
+      "description": "Um ping contínuo pelo cmd, PowerShell ou Linux, ou com uma ferramenta que desenha cada resposta e conta o jitter, as sequências de perda e o percentil 95."
+    },
+    "it": {
+      "slug": "ping-continuo",
+      "link_text": "Ping continuo",
+      "title": "Ping continuo con grafico, jitter e perdita di pacchetti",
+      "description": "Un ping continuo da cmd, PowerShell o Linux, oppure con uno strumento che traccia ogni risposta e conta jitter, serie di perdite e 95° percentile."
+    },
+    "id": {
+      "slug": "ping-terus-menerus",
+      "link_text": "Ping terus-menerus",
+      "title": "Ping terus-menerus dengan grafik, jitter, dan packet loss",
+      "description": "Ping terus-menerus dari cmd, PowerShell, atau Linux, atau alat yang menggambar setiap balasan dan menghitung jitter, deret kehilangan, dan persentil ke-95."
+    },
+    "ru": {
+      "slug": "nepreryvnyj-ping",
+      "link_text": "Непрерывный ping",
+      "title": "Непрерывный ping с графиком, джиттером и потерями",
+      "description": "Непрерывный ping из cmd, PowerShell или Linux либо инструментом, который рисует каждый ответ и считает джиттер, серии потерь и 95-й процентиль."
+    },
+    "tr": {
+      "slug": "surekli-ping",
+      "link_text": "Sürekli ping",
+      "title": "Grafik, jitter ve paket kaybıyla sürekli ping",
+      "description": "cmd, PowerShell ya da Linux üzerinde sürekli ping, ya da her yanıtı çizen ve jitter, kayıp serileri ve 95. yüzdeliği sayan bir araç."
+    },
+    "cs": {
+      "slug": "neprerusovany-ping",
+      "link_text": "Nepřetržitý ping",
+      "title": "Nepřetržitý ping s grafem, jitterem a ztrátou paketů",
+      "description": "Nepřetržitý ping z cmd, PowerShellu nebo Linuxu, nebo nástrojem, který kreslí každou odpověď a počítá jitter, série ztrát a 95. percentil."
+    },
+    "vi": {
+      "slug": "ping-lien-tuc",
+      "link_text": "Ping liên tục",
+      "title": "Ping liên tục với biểu đồ, jitter và mất gói",
+      "description": "Chạy ping liên tục từ cmd, PowerShell hoặc Linux, hoặc bằng công cụ vẽ từng phản hồi và đếm jitter, chuỗi mất gói và phân vị thứ 95."
+    },
+    "hi": {
+      "slug": "lagataar-ping",
+      "link_text": "लगातार ping",
+      "title": "चार्ट, जिटर और पैकेट लॉस के साथ लगातार ping",
+      "description": "cmd, PowerShell या Linux से लगातार ping चलाएँ, या ऐसे टूल से जो हर जवाब का चार्ट बनाता है और जिटर, लगातार लॉस और 95वाँ पर्सेंटाइल गिनता है।"
+    },
+    "ko": {
+      "slug": "yeonsok-ping",
+      "link_text": "연속 ping",
+      "title": "그래프·지터·패킷 손실을 보여 주는 연속 ping",
+      "description": "cmd, PowerShell, Linux에서 연속 ping을 실행하거나, 응답마다 그래프로 그리고 지터, 연속 손실, 95번째 백분위수를 세는 도구를 쓰는 방법."
+    },
+    "ar": {
+      "slug": "ping-mutawasil",
+      "link_text": "ping متواصل",
+      "title": "ping متواصل مع رسم بياني وتذبذب وفقدان حزم",
+      "description": "شغّل ping متواصلًا من cmd أو PowerShell أو Linux، أو بأداة ترسم كل رد وتحسب التذبذب وسلاسل الفقدان والمئين الخامس والتسعين."
+    },
+    "ro": {
+      "slug": "ping-continuu",
+      "link_text": "Ping continuu",
+      "title": "Ping continuu cu grafic, jitter și pierderi de pachete",
+      "description": "Un ping continuu din cmd, PowerShell sau Linux, ori cu un instrument care desenează fiecare răspuns și numără jitterul, seriile de pierderi și percentila 95."
+    },
+    "nl": {
+      "slug": "doorlopende-ping",
+      "link_text": "Doorlopende ping",
+      "title": "Doorlopende ping met grafiek, jitter en pakketverlies",
+      "description": "Een doorlopende ping vanuit cmd, PowerShell of Linux, of met een hulpmiddel dat elk antwoord tekent en jitter, verliesreeksen en het 95e percentiel telt."
+    },
+    "zh-Hant": {
+      "slug": "chixu-ping",
+      "link_text": "持續 ping",
+      "title": "附圖表、抖動與封包遺失統計的持續 ping",
+      "description": "在 cmd、PowerShell 或 Linux 中執行持續 ping，或使用一個能畫出每次回覆並統計抖動、連續遺失與第 95 百分位的工具。"
+    },
+    "uk": {
+      "slug": "bezperervnyi-ping",
+      "link_text": "Безперервний ping",
+      "title": "Безперервний ping із графіком, джитером і втратами",
+      "description": "Безперервний ping із cmd, PowerShell чи Linux або інструментом, який малює кожну відповідь і рахує джитер, серії втрат і 95-й процентиль."
+    },
+    "th": {
+      "slug": "ping-tor-nueang",
+      "link_text": "ping ต่อเนื่อง",
+      "title": "ping ต่อเนื่องพร้อมกราฟ จิตเตอร์ และแพ็กเก็ตสูญหาย",
+      "description": "รัน ping ต่อเนื่องจาก cmd, PowerShell หรือ Linux หรือใช้เครื่องมือที่วาดกราฟทุกคำตอบ และนับจิตเตอร์ ช่วงสูญหายต่อเนื่อง และเปอร์เซ็นไทล์ที่ 95"
+    }
+  }
+}

@@ -1,0 +1,47 @@
+<section class="hero">
+  <h1>数字を記録してくれる連続 ping</h1>
+  <p class="lead">連続 ping は、接続が安定しているかを見るいちばん早い方法です。止めるまで、エコー要求を次々に送ります。Windows にも Linux にもコンソールにあります。{{app.app.tabs.tools}} タブの {{app.tools.ping.tab}} ツールは同じことをしたうえで、コンソールでは自分で数えるしかない数字を記録します: ジッター、いちばん長い連続ロス、そして応答の 95% が収まった往復時間です。</p>
+</section>
+
+<section>
+  <h2>コンソールで</h2>
+  <p>Windows のコマンドプロンプトでは、<code>-t</code> を付けると Ctrl+C を押すまで ping を続けます。Ctrl+Break を押すと、それまでの集計を表示して続行します。</p>
+<pre><code>ping -t 1.1.1.1</code></pre>
+  <p>出力をファイルに残したり、各行に時刻を付けたりするには、PowerShell で:</p>
+<pre><code>ping -t 1.1.1.1 > ping.txt
+ping.exe -t 1.1.1.1 | ForEach-Object { "{0:HH:mm:ss} {1}" -f (Get-Date), $_ }</code></pre>
+  <p>PowerShell 7 には専用のコマンドがあり、Linux ではふつうの ping が最初から Ctrl+C まで続きます。<code>-D</code> は各行にタイムスタンプを付けます:</p>
+<pre><code>Test-Connection 1.1.1.1 -Repeat
+ping -D 1.1.1.1</code></pre>
+  <p>どれも、実行中に途中経過をまとめてはくれません。応答ごとに1行と、最後の合計が出るだけです。</p>
+</section>
+
+<section>
+  <h2>{{app.tools.ping.tab}} ツールで</h2>
+  <ul>
+    <li>アドレスか名前を入力し、ping の間隔、応答を待つ時間、各 ping が運ぶバイト数 (<code>ping.exe</code> と同じ 32、最大 65 500)、送る ping の数を選ぶか、{{app.tools.ping.stop}} まで続けさせます。そして <strong>{{app.tools.ping.start}}</strong> を押します。</li>
+    <li>ping 1回が1行です: 送った時刻、往復時間、TTL、返ってきたもの。グラフには直近 60 回の往復時間が出ます。</li>
+    <li>表の上の1行に合計が残ります: 送信数、応答数、ロス数、いちばん長い連続ロス、最小・平均・最大の往復時間、ジッター (応答ごとに往復時間がどれだけ動くか)、そして応答の 95% が収まった往復時間。</li>
+    <li>ほかのタブを前面にしていても ping は続きます。{{app.tools.sockets.tab}} や {{app.app.tabs.connections}} の行を右クリックして <strong>{{app.menu.ping_address}}</strong> を選ぶと、その相手側に ping を送ります。</li>
+    <li><strong>{{app.tools.ping.copy}}</strong> は各行と合計を英語でコピーするので、バグ報告に使えます。</li>
+  </ul>
+  <p>待ち時間を過ぎてから届いた応答はロスとして数えます。遅延が大きいときは、待ち時間を長めにしてください。</p>
+</section>
+
+<section>
+  <h2>悪いネットワークがやって来るのを見る</h2>
+  <p>ping を始めてから、コントロールページで遅延とロスを入れたセッションを開始します。セッションが開始・停止したとき、新しい設定が適用されたとき、シナリオの次のステップに移ったとき、その行にはその時点からの経過時間と、平均往復時間とロス率が以前とどう違うかが出て、グラフはその瞬間を破線で示します。別の行には、セッションがこれらの ping に何をしているかが出ます: 劣化させている、見えているが手を出していない、そもそも捕捉していない、のいずれかです。</p>
+  <p>既定のトラフィックフィルターでは、ping は遅延を2回受けるので、100 ms の遅延で往復時間は約 200 ms 増えます。ロスは要求と応答に別々にかかるので、20% のロスでは ping のおよそ3分の1が失われます。1つのプログラムを対象にしたセッションは ping に一切触れません。ping はどのプログラムの接続にも属さないからです。その場合はアドレスを対象にしてください。</p>
+</section>
+
+<section>
+  <h2>Linux では</h2>
+  <p>このツールは Linux でも動きます。Ubuntu 26.04 のように、システムがあなたのグループに ping の送信を許している環境では <code>sudo</code> は要らず、Ubuntu 24.04 のように許していない環境では必要です。そのほかは <a href="../linux-de-nettowaku-moni/">Linux のページ</a>を参照してください。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
