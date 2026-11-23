@@ -1,0 +1,73 @@
+<section class="hero">
+  <h1>เครือข่ายแย่บน Linux สำหรับแอปเดียวเท่านั้น</h1>
+  <p class="lead">บน Linux คำตอบที่ใช้กันทั่วไปคือ tc กับ netem ซึ่งเพิ่มความหน่วงและการสูญหายให้กับอินเทอร์เฟซเครือข่ายทั้งตัวจากบรรทัดคำสั่ง Bean Network Tester สร้างความเสียหายแบบเดียวกันให้โปรแกรมเดียว จากหน้าต่างหรือจากบรรทัดคำสั่ง และหยุดเองเมื่อครบเวลา เวอร์ชัน Linux ยังเป็นรุ่นทดลอง และหน้านี้บอกว่าสิ่งนั้นหมายถึงอะไร</p>
+</section>
+
+<section>
+  <h2>คำสั่ง tc netem และสิ่งที่ใช้ที่นี่</h2>
+  <p>คำสั่ง netem กับคำสั่งที่ใกล้เคียงที่สุดที่นี่ วางคู่กัน ให้รันด้วย <code>sudo</code> และคง <code>--target</code> กับ <code>--duration</code> ไว้ เพราะถ้าไม่มีสองตัวนี้ ผลจะกระทบทั้งเครื่องเหมือน netem</p>
+<pre><code>sudo tc qdisc add dev eth0 root netem delay 100ms 20ms loss 5%
+sudo ./BeanNetworkTester --target firefox --latency 100 --jitter 20 --loss 5 --duration 60</code></pre>
+  <table>
+    <tr><th>netem</th><th>การตั้งค่าในหน้าต่าง</th><th>แฟล็ก</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 100%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 100</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <p>ไม่ใช่ทุกตัวเลขที่ย้ายมาได้แบบหนึ่งต่อหนึ่ง netem หน่วงเฉพาะสิ่งที่ออกจากอินเทอร์เฟซ แต่เครื่องมือนี้ดักทั้งสองทิศทาง ดังนั้น <code>--latency 100</code> จะเพิ่มเวลาไปกลับราว 200 ms หากต้องการหน่วงเฉพาะขาออก ให้เพิ่ม <code>--filter out</code> ความเร็วของ netem เป็นบิตต่อวินาที ส่วนขีดจำกัดความเร็วที่นี่เป็น KB/s <a href="../netem-samrap-windows/">หน้า netem</a> อธิบายความต่างแต่ละข้อ</p>
+</section>
+
+<section>
+  <h2>ทำไมไม่ใช้ netem อย่างเดียว</h2>
+  <ul>
+    <li><strong>โปรแกรมเดียว ไม่ใช่ทั้งอินเทอร์เฟซ</strong> netem ทำให้ทุกอย่างที่ออกทาง <code>eth0</code> ช้าลง รวมถึงเซสชัน ssh ของคุณด้วย ที่นี่ <code>--target</code> เลือกโปรเซสตามชื่อ (บน Linux ไม่มี <code>.exe</code>: <code>firefox</code>, <code>chrome</code>) PID ที่อยู่ หรือพอร์ต ส่วนที่เหลือของเครื่องทำงานตามปกติ</li>
+    <li><strong>สองทิศทาง</strong> netem ปรับรูปทราฟฟิกขาออก ส่วนทราฟฟิกขาเข้าต้องใช้อุปกรณ์ ifb และกฎอีกชุดหนึ่ง ที่นี่ดาวน์โหลดและอัปโหลดมีขีดจำกัดของตัวเอง</li>
+    <li><strong>เก็บกวาดเอง</strong> กฎของ netem จะอยู่จนกว่าคุณจะลบ เซสชันที่นี่จบหลัง <code>--duration</code> และถ้าโปรแกรมถูกบังคับปิด ทราฟฟิกที่มันกักไว้จะไหลต่อหลังประมาณ 3 วินาที</li>
+    <li><strong>เห็นว่าเกิดอะไรขึ้น</strong> มีกราฟ ตารางการเชื่อมต่อ และตัวนับสิ่งที่ถูกหน่วง ถูกทิ้ง และถูกปล่อยผ่าน แทน <code>tc -s qdisc</code></li>
+    <li><strong>รันซ้ำได้</strong> <code>--seed</code> เล่นซ้ำการสูญหายและจิตเตอร์แบบสุ่มชุดเดิม และ <a href="../senario-tam-wela/">สถานการณ์ตามเวลา</a> เปลี่ยนการตั้งค่าในวินาทีที่กำหนด เหมือนสคริปต์ที่มี <code>tc</code> กับ <code>sleep</code></li>
+  </ul>
+</section>
+
+<section>
+  <h2>สิ่งที่ต้องมี</h2>
+  <ul>
+    <li><strong>แพ็กเกจ</strong> จากหน้ารุ่นที่เผยแพร่ เป็นไฟล์ <code>.tar.gz</code> ที่มี Python และ Tk ของตัวเอง สร้างบน Ubuntu 24.04 และตรวจบน Ubuntu 24.04 และ 26.04 สำหรับ x86_64 และต้องใช้ glibc 2.38 ขึ้นไป</li>
+    <li><strong>เคอร์เนล</strong>: Linux 5.10 ขึ้นไปที่สร้างพร้อม BTF การดักจับทำงานบน eBPF</li>
+    <li><strong>Root</strong> หรือสิทธิ์ CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN และ CAP_NET_RAW หน้าต่างจะขอรหัสผ่านผู้ดูแลระบบในกล่องโต้ตอบของเดสก์ท็อปเอง บรรทัดคำสั่งต้องใช้ <code>sudo</code> และ <code>--simulate</code> ไม่ต้องใช้ทั้งสองอย่าง</li>
+  </ul>
+<pre><code>tar -xzf BeanNetworkTester-*-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+sudo ./BeanNetworkTester --doctor</code></pre>
+  <p><code>--install-desktop</code> เพิ่มโปรแกรมลงในเมนูแอปพลิเคชัน จึงควรรันโดยไม่ใช้ <code>sudo</code> ส่วน <code>--doctor</code> จะแสดงรายการสิ่งที่เครื่องยังขาด</p>
+</section>
+
+<section>
+  <h2>เครื่องมือเครือข่ายก็ใช้บน Linux ได้</h2>
+  <p>แท็บ {{app.app.tabs.tools}} ตอบคำถามก่อนและระหว่างการทดสอบ ได้แก่ {{app.tools.ping.tab}} (ping ต่อเนื่องพร้อมกราฟ), {{app.tools.nat.tab}}, {{app.tools.portscan.tab}}, {{app.tools.sockets.tab}}, {{app.tools.portcheck.tab}}, {{app.tools.tcphealth.tab}} (ค่าที่เคอร์เนลเก็บไว้สำหรับแต่ละการเชื่อมต่อ แบบที่ <code>ss -ti</code> แสดง) และ {{app.tools.adapters.tab}} (แบบที่ <code>ip addr</code> และ <code>ip route</code> แสดง) {{app.tools.tcphealth.tab}} และ {{app.tools.adapters.tab}} ไม่ต้องใช้ <code>sudo</code> ส่วน {{app.tools.ping.tab}} ต้องใช้เฉพาะเมื่อระบบไม่อนุญาตให้กลุ่มของคุณส่ง ping เช่นบน Ubuntu 24.04</p>
+</section>
+
+<section>
+  <h2>ตอนนี้ Linux ต่างตรงไหน</h2>
+  <ul>
+    <li><code>--target</code> อ่านรายการซ็อกเก็ตของระบบ ดังนั้นการแลกเปลี่ยนครั้งแรกของการเชื่อมต่อใหม่อาจผ่านไปก่อนที่เป้าหมายจะมีผล</li>
+    <li>เมื่อเครื่องมือตามไม่ทัน เคอร์เนลจะปล่อยแพ็กเก็ตผ่านข้างเครื่องมือโดยไม่ถูกทำให้เสีย และตัวนับจะบอกว่ามีกี่แพ็กเก็ต</li>
+    <li>ชิ้นส่วน IP ผ่านไปโดยไม่ถูกแตะต้องเสมอ</li>
+    <li>บน Linux ผลรวมตรวจสอบและการรับรองของรุ่นที่เผยแพร่ทำหน้าที่แทนลายเซ็นโค้ด โดยบอกว่าบิลด์ใดสร้างไฟล์ขึ้นมา และ <a href="../daonlot/">หน้าดาวน์โหลด</a> แสดงวิธีตรวจสอบ</li>
+  </ul>
+  <p>สำหรับการตั้งค่าถาวรของทั้งอินเทอร์เฟซ netem มีอยู่ในเคอร์เนลของคุณแล้วและเป็นเครื่องมือที่ถูกต้อง เครื่องมือนี้มีไว้ทดสอบแอปพลิเคชันหนึ่งตัวเป็นช่วงเวลาหนึ่ง</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

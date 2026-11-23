@@ -1,0 +1,73 @@
+<section class="hero">
+  <h1>Linux で1つのアプリだけに悪いネットワークを再現する</h1>
+  <p class="lead">Linux でよく使われるのは tc と netem です。コマンドラインから、ネットワークインターフェース全体に遅延とロスを加えます。Bean Network Tester は同じ種類の劣化を1つのプログラムだけに、ウィンドウからでもコマンドラインからでも与え、時間が来れば自分で止まります。Linux 版は試験的なもので、このページではそれが何を意味するかを説明します。</p>
+</section>
+
+<section>
+  <h2>tc netem のコマンドと、ここで使うもの</h2>
+  <p>netem のコマンドと、ここでいちばん近いコマンドを並べます。<code>sudo</code> で実行し、<code>--target</code> と <code>--duration</code> は外さないでください。外すと netem と同じようにコンピューター全体に効きます。</p>
+<pre><code>sudo tc qdisc add dev eth0 root netem delay 100ms 20ms loss 5%
+sudo ./BeanNetworkTester --target firefox --latency 100 --jitter 20 --loss 5 --duration 60</code></pre>
+  <table>
+    <tr><th>netem</th><th>ウィンドウの設定</th><th>フラグ</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 100%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 100</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <p>数値がすべて1対1で移るわけではありません。netem が遅らせるのはインターフェースから出ていくものだけですが、このツールは両方向を捕捉するので、<code>--latency 100</code> は往復時間に約 200 ms を加えます。出ていくものだけを遅らせるには <code>--filter out</code> を付けてください。netem の速度はビット毎秒で、ここでの速度制限は KB/s です。それぞれの違いは <a href="../windows-de-netem/">netem のページ</a>で説明しています。</p>
+</section>
+
+<section>
+  <h2>netem だけで足りない理由</h2>
+  <ul>
+    <li><strong>インターフェース全体ではなく、1つのプログラム。</strong>netem は <code>eth0</code> から出ていくものすべてを遅くし、ssh のセッションも例外ではありません。ここでは <code>--target</code> がプロセス名 (Linux では <code>.exe</code> なし: <code>firefox</code>、<code>chrome</code>)、PID、アドレス、ポートで対象を選び、マシンのほかの部分は普段どおり動きます。</li>
+    <li><strong>両方向。</strong>netem が整形するのは出ていくものだけで、入ってくる通信には ifb デバイスと2組目のルールが必要です。ここではダウンロードとアップロードにそれぞれ別の制限があります。</li>
+    <li><strong>後片付けをする。</strong>netem のルールは削除するまで残ります。ここのセッションは <code>--duration</code> のあとで終わり、プログラムが強制終了されても、保持していた通信は約 3 秒後に再び流れます。</li>
+    <li><strong>何が起きたか見える。</strong><code>tc -s qdisc</code> の代わりに、グラフ、接続テーブル、遅延・破棄・通過したものの件数が見えます。</li>
+    <li><strong>実行を繰り返せる。</strong><code>--seed</code> は同じランダムなロスとジッターを再生し、<a href="../jikan-henka-shinario/">時間に沿ったシナリオ</a>は決めた秒数で設定を変えます。<code>tc</code> と <code>sleep</code> で書いたスクリプトと同じことです。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>必要なもの</h2>
+  <ul>
+    <li><strong>リリースページのパッケージ</strong>: 専用の Python と Tk を含む <code>.tar.gz</code> です。Ubuntu 24.04 でビルドされ、x86_64 向けに Ubuntu 24.04 と 26.04 で確認されています。glibc 2.38 以降が必要です。</li>
+    <li><strong>カーネル</strong>: BTF 付きでビルドされた Linux 5.10 以降。捕捉は eBPF で動きます。</li>
+    <li><strong>root</strong>、または CAP_BPF、CAP_PERFMON、CAP_NET_ADMIN、CAP_NET_RAW のケーパビリティ。ウィンドウはデスクトップ自身のダイアログで管理者のパスワードを求め、コマンドラインには <code>sudo</code> が必要で、<code>--simulate</code> はどちらも要りません。</li>
+  </ul>
+<pre><code>tar -xzf BeanNetworkTester-*-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+sudo ./BeanNetworkTester --doctor</code></pre>
+  <p><code>--install-desktop</code> はプログラムをアプリケーションメニューに追加するので、<code>sudo</code> なしで実行してください。<code>--doctor</code> は、このマシンにまだ足りないものを一覧にします。</p>
+</section>
+
+<section>
+  <h2>ネットワークツールも Linux で動く</h2>
+  <p>{{app.app.tabs.tools}} タブは、テストの前や最中の疑問に答えます: {{app.tools.ping.tab}} (グラフ付きの連続 ping)、{{app.tools.nat.tab}}、{{app.tools.portscan.tab}}、{{app.tools.sockets.tab}}、{{app.tools.portcheck.tab}}、{{app.tools.tcphealth.tab}} (カーネルが接続ごとに保持しているもの、<code>ss -ti</code> が表示するのと同じ)、{{app.tools.adapters.tab}} (<code>ip addr</code> と <code>ip route</code> が表示するのと同じ)。{{app.tools.tcphealth.tab}} と {{app.tools.adapters.tab}} は <code>sudo</code> が要らず、{{app.tools.ping.tab}} が必要とするのは、Ubuntu 24.04 のように、システムがあなたのグループに ping の送信を許していない場合だけです。</p>
+</section>
+
+<section>
+  <h2>現在の Linux での違い</h2>
+  <ul>
+    <li><code>--target</code> はシステムのソケット一覧を読むので、新しい接続の最初のやり取りは、対象指定が効く前に通ることがあります。</li>
+    <li>ツールが追いつけないとき、カーネルはパケットを劣化させずにツールの横を通し、その数はカウンターに出ます。</li>
+    <li>IP フラグメントはいつもそのまま通ります。</li>
+    <li>Linux では、リリースのチェックサムと証明がコード署名の代わりになり、どのビルドがファイルを作ったかを示します。確かめ方は<a href="../daunrodo/">ダウンロードページ</a>にあります。</li>
+  </ul>
+  <p>インターフェース全体に恒久的な設定をするなら、netem はすでにカーネルに入っていて、それが正しい道具です。このツールは、1つのアプリケーションをしばらくテストするためのものです。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

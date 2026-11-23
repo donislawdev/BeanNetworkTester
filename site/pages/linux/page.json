@@ -1,0 +1,138 @@
+{
+  "id": "linux",
+  "order": 73,
+  "languages": {
+    "en": {
+      "slug": "simulate-network-on-linux",
+      "link_text": "Bad network on Linux",
+      "title": "Simulate packet loss and latency on Linux, for one app",
+      "description": "A netem alternative aimed at one program: each tc netem command next to the flags that do the same, what the Linux version needs, and where it differs."
+    },
+    "pl": {
+      "slug": "symulacja-sieci-w-linuksie",
+      "link_text": "Zła sieć w Linuksie",
+      "title": "Symulacja utraty pakietów i opóźnienia w Linuksie",
+      "description": "Alternatywa dla netem, która psuje sieć jednej aplikacji: każda komenda tc netem obok flag, które robią to samo, wymagania i różnice wobec Windows."
+    },
+    "zh-Hans": {
+      "slug": "linux-ruowang-moni",
+      "link_text": "Linux 上的弱网",
+      "title": "在 Linux 上为单个应用模拟丢包和延迟",
+      "description": "只针对一个程序的 netem 替代方案：每条 tc netem 命令对应的参数、Linux 版的要求，以及与 Windows 的不同之处。"
+    },
+    "ja": {
+      "slug": "linux-de-nettowaku-moni",
+      "link_text": "Linux で悪いネットワーク",
+      "title": "Linux で1つのアプリにパケットロスと遅延を再現",
+      "description": "1つのプログラムだけを対象にする netem の代わり。tc netem の各コマンドに対応するフラグ、Linux 版の要件、Windows との違い。"
+    },
+    "de": {
+      "slug": "netzwerk-simulieren-unter-linux",
+      "link_text": "Schlechtes Netz unter Linux",
+      "title": "Paketverlust und Latenz unter Linux für eine App simulieren",
+      "description": "Eine netem-Alternative für ein einzelnes Programm: jeder tc-netem-Befehl neben den passenden Flags, was die Linux-Version braucht und wo sie abweicht."
+    },
+    "fr": {
+      "slug": "simuler-un-reseau-sous-linux",
+      "link_text": "Mauvais réseau sous Linux",
+      "title": "Simuler perte de paquets et latence sous Linux, pour une app",
+      "description": "Une alternative à netem pour un seul programme : chaque commande tc netem avec ses options équivalentes, les prérequis sous Linux et les différences."
+    },
+    "es": {
+      "slug": "simular-red-en-linux",
+      "link_text": "Mala red en Linux",
+      "title": "Simular pérdida de paquetes y latencia en Linux para una app",
+      "description": "Una alternativa a netem para un solo programa: cada comando tc netem junto a sus opciones equivalentes, qué necesita la versión de Linux y qué cambia."
+    },
+    "pt-BR": {
+      "slug": "simular-rede-no-linux",
+      "link_text": "Rede ruim no Linux",
+      "title": "Simular perda de pacotes e latência no Linux para um app",
+      "description": "Uma alternativa ao netem para um só programa: cada comando tc netem ao lado das flags equivalentes, o que a versão Linux exige e onde ela difere."
+    },
+    "it": {
+      "slug": "simulare-la-rete-su-linux",
+      "link_text": "Rete scadente su Linux",
+      "title": "Simulare perdita di pacchetti e latenza su Linux per un'app",
+      "description": "Un'alternativa a netem per un solo programma: ogni comando tc netem accanto ai flag equivalenti, cosa serve alla versione Linux e dove è diversa."
+    },
+    "id": {
+      "slug": "simulasi-jaringan-di-linux",
+      "link_text": "Jaringan buruk di Linux",
+      "title": "Simulasi packet loss dan latensi di Linux untuk satu aplikasi",
+      "description": "Alternatif netem untuk satu program: setiap perintah tc netem beserta flag yang setara, kebutuhan versi Linux, dan bedanya dengan Windows."
+    },
+    "ru": {
+      "slug": "simulyaciya-seti-v-linux",
+      "link_text": "Плохая сеть в Linux",
+      "title": "Потеря пакетов и задержка в Linux для одного приложения",
+      "description": "Замена netem для одной программы: каждая команда tc netem рядом с равнозначными флагами, что нужно версии для Linux и чем она отличается."
+    },
+    "tr": {
+      "slug": "linuxta-ag-simulasyonu",
+      "link_text": "Linux üzerinde kötü ağ",
+      "title": "Linux'ta tek uygulama için paket kaybı ve gecikme",
+      "description": "Tek bir program için netem alternatifi: her tc netem komutu ve aynı işi yapan bayraklar, Linux sürümünün gereksinimleri ve Windows'tan farkları."
+    },
+    "cs": {
+      "slug": "simulace-site-v-linuxu",
+      "link_text": "Špatná síť v Linuxu",
+      "title": "Simulace ztráty paketů a zpoždění v Linuxu pro jednu aplikaci",
+      "description": "Alternativa k netem pro jeden program: každý příkaz tc netem vedle odpovídajících přepínačů, co potřebuje verze pro Linux a v čem se liší."
+    },
+    "vi": {
+      "slug": "mo-phong-mang-tren-linux",
+      "link_text": "Mạng kém trên Linux",
+      "title": "Mô phỏng mất gói và độ trễ trên Linux cho một ứng dụng",
+      "description": "Giải pháp thay thế netem cho một chương trình: mỗi lệnh tc netem cùng các cờ tương ứng, yêu cầu của bản Linux và những điểm khác biệt."
+    },
+    "hi": {
+      "slug": "linux-par-network-simulation",
+      "link_text": "Linux पर खराब नेटवर्क",
+      "title": "Linux पर एक ऐप के लिए पैकेट लॉस और लेटेंसी",
+      "description": "एक प्रोग्राम के लिए netem का विकल्प: हर tc netem कमांड के साथ बराबर फ़्लैग, Linux संस्करण की ज़रूरतें और Windows से अंतर।"
+    },
+    "ko": {
+      "slug": "linux-neteuwokeu-simyulleisyeon",
+      "link_text": "Linux의 나쁜 네트워크",
+      "title": "Linux에서 앱 하나에 패킷 손실과 지연 시뮬레이션",
+      "description": "프로그램 하나만을 위한 netem 대안: tc netem 명령마다 같은 일을 하는 플래그, Linux 버전에 필요한 것, Windows와 다른 점."
+    },
+    "ar": {
+      "slug": "muhakat-alshabaka-ala-linux",
+      "link_text": "شبكة سيئة على Linux",
+      "title": "محاكاة فقدان الحزم وزمن الاستجابة على Linux لتطبيق واحد",
+      "description": "بديل لـ netem لبرنامج واحد: كل أمر tc netem بجانب الخيارات المكافئة، وما تحتاجه نسخة Linux، وأين تختلف عن Windows."
+    },
+    "ro": {
+      "slug": "simulare-retea-pe-linux",
+      "link_text": "Rețea proastă pe Linux",
+      "title": "Pierderi de pachete și latență pe Linux, pentru o aplicație",
+      "description": "O alternativă la netem pentru un singur program: fiecare comandă tc netem lângă opțiunile echivalente, ce cere versiunea Linux și unde diferă."
+    },
+    "nl": {
+      "slug": "netwerk-simuleren-op-linux",
+      "link_text": "Slecht netwerk op Linux",
+      "title": "Pakketverlies en latentie simuleren op Linux voor één app",
+      "description": "Een netem-alternatief voor één programma: elk tc netem-commando naast de vlaggen die hetzelfde doen, wat de Linux-versie nodig heeft en waar die afwijkt."
+    },
+    "zh-Hant": {
+      "slug": "linux-ruowang-moni",
+      "link_text": "Linux 上的弱網",
+      "title": "在 Linux 上為單一應用程式模擬封包遺失與延遲",
+      "description": "只針對一個程式的 netem 替代方案：每條 tc netem 指令對應的旗標、Linux 版的需求，以及與 Windows 的差異。"
+    },
+    "uk": {
+      "slug": "symulyaciya-merezhi-v-linux",
+      "link_text": "Погана мережа в Linux",
+      "title": "Втрата пакетів і затримка в Linux для одного застосунку",
+      "description": "Заміна netem для однієї програми: кожна команда tc netem поруч із відповідними прапорцями, що потрібно версії для Linux і чим вона відрізняється."
+    },
+    "th": {
+      "slug": "jamlong-khrueakhai-bon-linux",
+      "link_text": "เครือข่ายแย่บน Linux",
+      "title": "จำลองแพ็กเก็ตสูญหายและความหน่วงบน Linux สำหรับแอปเดียว",
+      "description": "ทางเลือกแทน netem สำหรับโปรแกรมเดียว: คำสั่ง tc netem แต่ละคำสั่งคู่กับแฟล็กที่ทำงานเหมือนกัน สิ่งที่เวอร์ชัน Linux ต้องใช้ และจุดที่ต่างจาก Windows"
+    }
+  }
+}

@@ -1,0 +1,73 @@
+<section class="hero">
+  <h1>Linux에서 앱 하나에만 나쁜 네트워크 만들기</h1>
+  <p class="lead">Linux에서 흔히 쓰는 답은 tc와 netem입니다. 명령줄에서 네트워크 인터페이스 전체에 지연과 손실을 더합니다. Bean Network Tester는 같은 종류의 손상을 프로그램 하나에만, 창에서든 명령줄에서든 주고, 시간이 되면 스스로 멈춥니다. Linux 버전은 실험 단계이며, 이 페이지는 그것이 무슨 뜻인지 설명합니다.</p>
+</section>
+
+<section>
+  <h2>tc netem 명령과 여기서 쓸 것</h2>
+  <p>netem 명령과 여기서 가장 가까운 명령을 나란히 놓았습니다. <code>sudo</code>로 실행하고 <code>--target</code>과 <code>--duration</code>은 빼지 마세요. 이 둘이 없으면 netem처럼 컴퓨터 전체에 영향을 줍니다.</p>
+<pre><code>sudo tc qdisc add dev eth0 root netem delay 100ms 20ms loss 5%
+sudo ./BeanNetworkTester --target firefox --latency 100 --jitter 20 --loss 5 --duration 60</code></pre>
+  <table>
+    <tr><th>netem</th><th>창의 설정</th><th>플래그</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 100%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 100</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <p>모든 숫자가 그대로 옮겨지지는 않습니다. netem은 인터페이스를 떠나는 것만 늦추지만 이 도구는 양방향을 모두 잡기 때문에, <code>--latency 100</code>은 왕복 시간에 약 200 ms를 더합니다. 나가는 것만 늦추려면 <code>--filter out</code>을 더하세요. netem의 속도는 초당 비트 단위이고, 여기의 속도 제한은 KB/s 단위입니다. 각 차이는 <a href="../windows-yong-netem/">netem 페이지</a>에서 설명합니다.</p>
+</section>
+
+<section>
+  <h2>그냥 netem을 쓰면 안 되는 이유</h2>
+  <ul>
+    <li><strong>인터페이스 전체가 아니라 프로그램 하나.</strong> netem은 <code>eth0</code>으로 나가는 모든 것을 느리게 하고, ssh 세션도 예외가 아닙니다. 여기서는 <code>--target</code>이 프로세스 이름(Linux에서는 <code>.exe</code> 없이: <code>firefox</code>, <code>chrome</code>), PID, 주소 또는 포트로 대상을 고르고, 나머지 컴퓨터는 평소처럼 동작합니다.</li>
+    <li><strong>양방향.</strong> netem은 나가는 트래픽을 다듬고, 들어오는 트래픽에는 ifb 장치와 두 번째 규칙 묶음이 필요합니다. 여기서는 다운로드와 업로드에 각각 따로 제한이 있습니다.</li>
+    <li><strong>뒷정리를 합니다.</strong> netem 규칙은 지울 때까지 남아 있습니다. 여기의 세션은 <code>--duration</code>이 지나면 끝나고, 프로그램이 강제로 종료되어도 붙잡고 있던 트래픽은 약 3초 뒤 다시 흐릅니다.</li>
+    <li><strong>무슨 일이 있었는지 보입니다.</strong> <code>tc -s qdisc</code> 대신 그래프, 연결 표, 그리고 지연·폐기·통과된 것의 카운터가 있습니다.</li>
+    <li><strong>실행을 반복할 수 있습니다.</strong> <code>--seed</code>는 같은 무작위 손실과 지터를 다시 재생하고, <a href="../sigan-byeol-sinario/">시간별 시나리오</a>는 정해 둔 초에 설정을 바꿉니다. <code>tc</code>와 <code>sleep</code>으로 짠 스크립트와 같습니다.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>필요한 것</h2>
+  <ul>
+    <li><strong>릴리스 페이지의 패키지</strong>: 자체 Python과 Tk가 들어 있는 <code>.tar.gz</code>입니다. Ubuntu 24.04에서 빌드하고 x86_64용으로 Ubuntu 24.04와 26.04에서 확인하며, glibc 2.38 이상이 필요합니다.</li>
+    <li><strong>커널</strong>: BTF를 넣어 빌드한 Linux 5.10 이상. 캡처는 eBPF로 동작합니다.</li>
+    <li><strong>Root</strong>, 또는 CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN, CAP_NET_RAW 권한. 창은 데스크톱 자체의 대화 상자에서 관리자 비밀번호를 묻고, 명령줄에는 <code>sudo</code>가 필요하며, <code>--simulate</code>는 둘 다 필요 없습니다.</li>
+  </ul>
+<pre><code>tar -xzf BeanNetworkTester-*-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+sudo ./BeanNetworkTester --doctor</code></pre>
+  <p><code>--install-desktop</code>은 프로그램을 애플리케이션 메뉴에 추가하므로 <code>sudo</code> 없이 실행하세요. <code>--doctor</code>는 이 컴퓨터에 아직 무엇이 부족한지 알려 줍니다.</p>
+</section>
+
+<section>
+  <h2>네트워크 도구도 Linux에서 동작합니다</h2>
+  <p>{{app.app.tabs.tools}} 탭은 테스트 전과 테스트 중의 질문에 답합니다: {{app.tools.ping.tab}}(그래프가 있는 연속 ping), {{app.tools.nat.tab}}, {{app.tools.portscan.tab}}, {{app.tools.sockets.tab}}, {{app.tools.portcheck.tab}}, {{app.tools.tcphealth.tab}}(커널이 연결마다 보관하는 값, <code>ss -ti</code>가 보여 주는 것과 같음), {{app.tools.adapters.tab}}(<code>ip addr</code>와 <code>ip route</code>가 보여 주는 것과 같음). {{app.tools.tcphealth.tab}}와 {{app.tools.adapters.tab}}에는 <code>sudo</code>가 필요 없고, {{app.tools.ping.tab}}는 Ubuntu 24.04처럼 시스템이 사용자 그룹의 ping 전송을 허용하지 않는 곳에서만 필요합니다.</p>
+</section>
+
+<section>
+  <h2>지금 Linux에서 다른 점</h2>
+  <ul>
+    <li><code>--target</code>은 시스템의 소켓 목록을 읽기 때문에, 새 연결의 첫 주고받기는 대상 지정이 적용되기 전에 지나갈 수 있습니다.</li>
+    <li>도구가 따라가지 못하면 커널이 패킷을 손상 없이 도구 옆으로 지나가게 하고, 그 수는 카운터에 나옵니다.</li>
+    <li>IP 조각은 언제나 그대로 지나갑니다.</li>
+    <li>Linux에서는 릴리스의 체크섬과 증명이 코드 서명을 대신하며, 어떤 빌드가 파일을 만들었는지 알려 줍니다. 확인 방법은 <a href="../dauninrodeu/">다운로드 페이지</a>에 있습니다.</li>
+  </ul>
+  <p>인터페이스 전체를 영구적으로 설정하려면 netem이 이미 커널에 있고, 그것이 맞는 도구입니다. 이 도구는 애플리케이션 하나를 한동안 테스트하기 위한 것입니다.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,73 @@
+<section class="hero">
+  <h1>Špatná síť v Linuxu, jen pro jednu aplikaci</h1>
+  <p class="lead">V Linuxu je obvyklou odpovědí tc s netem: z příkazové řádky přidá zpoždění a ztráty celému síťovému rozhraní. Bean Network Tester způsobí stejné škody jedinému programu, z okna nebo z příkazové řádky, a sám se zastaví. Jeho verze pro Linux je experimentální a tato stránka říká, co to znamená.</p>
+</section>
+
+<section>
+  <h2>Příkazy tc netem a co použít tady</h2>
+  <p>Příkaz netem a nejbližší příkaz tady, vedle sebe. Spouštějte ho přes <code>sudo</code> a nechte v něm <code>--target</code> a <code>--duration</code>: bez nich působí na celý počítač, stejně jako netem.</p>
+<pre><code>sudo tc qdisc add dev eth0 root netem delay 100ms 20ms loss 5%
+sudo ./BeanNetworkTester --target firefox --latency 100 --jitter 20 --loss 5 --duration 60</code></pre>
+  <table>
+    <tr><th>netem</th><th>Nastavení v okně</th><th>Přepínač</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 100%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 100</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <p>Ne všechna čísla se přenášejí jedna ku jedné. netem zpožďuje jen to, co opouští rozhraní, kdežto tento nástroj zachytává oba směry, takže <code>--latency 100</code> přidá k době odezvy asi 200 ms: přidejte <code>--filter out</code>, aby se zpožďovalo jen odchozí. Rychlost v netem je v bitech za sekundu, omezení rychlosti tady v KB/s. Každý rozdíl vysvětluje <a href="../netem-pro-windows/">stránka o netem</a>.</p>
+</section>
+
+<section>
+  <h2>Proč ne prostě netem?</h2>
+  <ul>
+    <li><strong>Jeden program, ne celé rozhraní.</strong> netem zpomalí vše, co odchází přes <code>eth0</code>, včetně vaší relace ssh. Tady <code>--target</code> vybere proces podle jména (v Linuxu bez <code>.exe</code>: <code>firefox</code>, <code>chrome</code>), PID, adresu nebo port a zbytek počítače pracuje normálně.</li>
+    <li><strong>Oba směry.</strong> netem tvaruje to, co odchází, a příchozí provoz potřebuje zařízení ifb a druhou sadu pravidel. Tady má stahování i odesílání vlastní limit.</li>
+    <li><strong>Uklidí po sobě.</strong> Pravidlo netem zůstává, dokud ho nesmažete. Relace tady skončí po <code>--duration</code>, a pokud je program násilně ukončen, provoz, který držel, znovu poteče asi po 3 sekundách.</li>
+    <li><strong>Vidíte, co se stalo.</strong> Graf, tabulka spojení a počítadla zpožděného, zahozeného a propuštěného místo <code>tc -s qdisc</code>.</li>
+    <li><strong>Běhy se opakují.</strong> <code>--seed</code> přehraje stejné náhodné ztráty a jitter a <a href="../scenare-v-case/">časované scénáře</a> mění nastavení v zadaných sekundách, jako skript z <code>tc</code> a <code>sleep</code>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Co potřebuje</h2>
+  <ul>
+    <li><strong>Balíček</strong> ze stránky vydání, <code>.tar.gz</code> s vlastním Pythonem a Tk. Sestavuje se na Ubuntu 24.04 a ověřuje na Ubuntu 24.04 a 26.04, pro x86_64, a potřebuje glibc 2.38 nebo novější.</li>
+    <li><strong>Jádro</strong>: Linux 5.10 nebo novější, sestavený s BTF. Zachytávání běží na eBPF.</li>
+    <li><strong>Root</strong>, nebo oprávnění CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN a CAP_NET_RAW. Okno se ptá na heslo správce ve vlastním dialogu pracovního prostředí, příkazová řádka potřebuje <code>sudo</code> a <code>--simulate</code> nepotřebuje ani jedno.</li>
+  </ul>
+<pre><code>tar -xzf BeanNetworkTester-*-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+sudo ./BeanNetworkTester --doctor</code></pre>
+  <p><code>--install-desktop</code> přidá program do nabídky aplikací, takže ho spouštějte bez <code>sudo</code>. <code>--doctor</code> vypíše, co počítači ještě chybí.</p>
+</section>
+
+<section>
+  <h2>Síťové nástroje fungují i v Linuxu</h2>
+  <p>Karta {{app.app.tabs.tools}} odpovídá na otázky před testem a během něj: {{app.tools.ping.tab}} (nepřetržitý ping s grafem), {{app.tools.nat.tab}}, {{app.tools.portscan.tab}}, {{app.tools.sockets.tab}}, {{app.tools.portcheck.tab}}, {{app.tools.tcphealth.tab}} (co jádro uchovává pro každé spojení, jak to ukazuje <code>ss -ti</code>) a {{app.tools.adapters.tab}} (jak je ukazují <code>ip addr</code> a <code>ip route</code>). {{app.tools.tcphealth.tab}} a {{app.tools.adapters.tab}} nepotřebují <code>sudo</code> a {{app.tools.ping.tab}} ho potřebuje jen tam, kde systém vaší skupině nedovolí posílat ping, jako v Ubuntu 24.04.</p>
+</section>
+
+<section>
+  <h2>V čem se Linux dnes liší</h2>
+  <ul>
+    <li><code>--target</code> čte systémový seznam soketů, takže první výměna nového spojení může projít dřív, než cíl začne platit.</li>
+    <li>Když nástroj nestíhá, jádro nechá pakety projít kolem něj bez poškození a počítadla řeknou, kolik jich bylo.</li>
+    <li>IP fragmenty vždy projdou nedotčené.</li>
+    <li>V Linuxu zastupují podpis kódu kontrolní součty a atestace vydání: říkají, které sestavení soubor vytvořilo, a <a href="../stahnout/">stránka ke stažení</a> ukazuje, jak je ověřit.</li>
+  </ul>
+  <p>Pro trvalé nastavení celého rozhraní už netem ve vašem jádře je a je to správný nástroj. Tento slouží k tomu, abyste chvíli testovali jednu aplikaci.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

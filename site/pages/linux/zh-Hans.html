@@ -1,0 +1,73 @@
+<section class="hero">
+  <h1>在 Linux 上只对一个应用模拟弱网</h1>
+  <p class="lead">在 Linux 上，常见的做法是用 tc 加 netem：在命令行里给整个网络接口加上延迟和丢包。Bean Network Tester 对单个程序造成同样的损伤，既可以用窗口也可以用命令行，并且到时间会自动停止。它的 Linux 版本仍是实验性的，本页说明这意味着什么。</p>
+</section>
+
+<section>
+  <h2>tc netem 命令和这里的对应用法</h2>
+  <p>左边是 netem 命令，右边是这里最接近的命令。请用 <code>sudo</code> 运行，并保留 <code>--target</code> 和 <code>--duration</code>：没有它们，就会像 netem 一样影响整台电脑。</p>
+<pre><code>sudo tc qdisc add dev eth0 root netem delay 100ms 20ms loss 5%
+sudo ./BeanNetworkTester --target firefox --latency 100 --jitter 20 --loss 5 --duration 60</code></pre>
+  <table>
+    <tr><th>netem</th><th>窗口中的设置</th><th>参数</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 100%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 100</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <p>并非所有数值都能一一对应。netem 只延迟离开接口的流量，而本工具捕获两个方向，所以 <code>--latency 100</code> 会让往返时间增加约 200 ms：加上 <code>--filter out</code> 就只延迟出站流量。netem 的速率以比特每秒计，这里的限速以 KB/s 计。每一处差异都在 <a href="../netem-zai-windows-shang/">netem 页面</a>中说明。</p>
+</section>
+
+<section>
+  <h2>为什么不直接用 netem？</h2>
+  <ul>
+    <li><strong>一个程序，而不是整个接口。</strong>netem 会拖慢从 <code>eth0</code> 出去的一切，包括你的 ssh 会话。这里的 <code>--target</code> 按进程名（在 Linux 上不带 <code>.exe</code>：<code>firefox</code>、<code>chrome</code>）、PID、地址或端口选择目标，电脑的其余部分照常工作。</li>
+    <li><strong>两个方向。</strong>netem 只整形出站流量，入站流量需要 ifb 设备和第二套规则。这里下载和上传各有自己的限速。</li>
+    <li><strong>自己收拾干净。</strong>netem 规则会一直存在，直到你删除它。这里的会话在 <code>--duration</code> 之后结束；如果程序被强行结束，它扣住的流量会在约 3 秒后恢复流动。</li>
+    <li><strong>看得到发生了什么。</strong>图表、连接表，以及被延迟、被丢弃和被放行的计数，而不是 <code>tc -s qdisc</code>。</li>
+    <li><strong>运行可以重复。</strong><code>--seed</code> 会重放相同的随机丢包和抖动，<a href="../dingshi-changjing/">定时场景</a>会在指定的秒数改变设置，就像一个由 <code>tc</code> 和 <code>sleep</code> 组成的脚本。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>需要什么</h2>
+  <ul>
+    <li><strong>发布页上的软件包</strong>：一个自带 Python 和 Tk 的 <code>.tar.gz</code>。它在 Ubuntu 24.04 上构建，在 Ubuntu 24.04 和 26.04 上检验，适用于 x86_64，需要 glibc 2.38 或更新版本。</li>
+    <li><strong>内核</strong>：Linux 5.10 或更新版本，并启用 BTF。捕获基于 eBPF。</li>
+    <li><strong>root</strong>，或者 CAP_BPF、CAP_PERFMON、CAP_NET_ADMIN 和 CAP_NET_RAW 这些权能。窗口会在桌面自带的对话框中要求输入管理员密码，命令行需要 <code>sudo</code>，而 <code>--simulate</code> 两者都不需要。</li>
+  </ul>
+<pre><code>tar -xzf BeanNetworkTester-*-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+sudo ./BeanNetworkTester --doctor</code></pre>
+  <p><code>--install-desktop</code> 会把程序加入应用程序菜单，所以运行它时不要加 <code>sudo</code>。<code>--doctor</code> 会列出这台机器还缺什么。</p>
+</section>
+
+<section>
+  <h2>网络工具在 Linux 上也能用</h2>
+  <p>{{app.app.tabs.tools}} 选项卡回答测试前和测试中的问题：{{app.tools.ping.tab}}（带图表的持续 ping）、{{app.tools.nat.tab}}、{{app.tools.portscan.tab}}、{{app.tools.sockets.tab}}、{{app.tools.portcheck.tab}}、{{app.tools.tcphealth.tab}}（内核为每个连接保存的数据，和 <code>ss -ti</code> 显示的一样）以及 {{app.tools.adapters.tab}}（和 <code>ip addr</code>、<code>ip route</code> 显示的一样）。{{app.tools.tcphealth.tab}} 和 {{app.tools.adapters.tab}} 不需要 <code>sudo</code>；{{app.tools.ping.tab}} 只有在系统不允许你的用户组发送 ping 时才需要它，例如 Ubuntu 24.04。</p>
+</section>
+
+<section>
+  <h2>目前 Linux 的不同之处</h2>
+  <ul>
+    <li><code>--target</code> 读取系统的套接字列表，所以一个新连接的第一次交换可能会在目标生效之前通过。</li>
+    <li>当工具跟不上时，内核会让数据包绕过它而不受损伤，计数会显示有多少。</li>
+    <li>IP 分片总是原样通过。</li>
+    <li>在 Linux 上，发布的校验和与证明代替了代码签名：它们说明文件是由哪次构建生成的，<a href="../xiazai/">下载页面</a>说明如何检查它们。</li>
+  </ul>
+  <p>如果要给整个接口做长期配置，netem 已经在你的内核里，它才是合适的工具。本工具用于在一段时间内测试一个应用。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

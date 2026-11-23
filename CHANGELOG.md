@@ -5,6 +5,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Docs
+
+- **The README's feature list names the network tools.** A new line lists what the Tools tab
+  offers: a continuous ping with a chart, jitter and packet loss, a TCP and UDP port scanner, a
+  NAT and TURN check for calls, the sockets of this computer with their programs, a check of
+  which local ports are free, the health of each TCP connection and the network adapters. The
+  "No telemetry" line is now short; what each network tool sends, and when, is still said in
+  the Tools tab's description and in "Privacy: no telemetry". In every language of the README.
+
+- **The README's Linux section names every tool that works there.** NAT and STUN and Port scan
+  work on Linux too, and the list of the Tools tab's tools in that section now says so.
+
 ## [1.1.0] - 2026-11-13
 
 ### Added

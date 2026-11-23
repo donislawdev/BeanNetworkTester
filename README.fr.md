@@ -65,11 +65,11 @@ en a besoin apprendra qu'il existe.
   d'événements.
 - **Exporter en CSV** - les statistiques de la session et un instantané de la table des connexions.
 - **Mode ligne de commande** - scriptable pour la CI, avec des codes de sortie et une sortie JSON.
-- **Aucune télémétrie, n'envoie rien de lui-même** - l'outil Ping ne pingue que l'adresse que
-  vous saisissez, et NAT and STUN envoie quelques requêtes aux deux serveurs que vous saisissez et
-  de petits paquets de test à la propre adresse publique de ce réseau, quand vous appuyez sur Check,
-  et Port scan se connecte aux ports que vous choisissez à l'adresse que vous saisissez, de Scan
-  jusqu'à la fin ou à Stop.
+- **Des outils réseau dans la même fenêtre** - un ping continu avec graphique, gigue et perte de
+  paquets, un scanner de ports TCP et UDP, une vérification du NAT et du TURN pour les appels,
+  chaque socket de cet ordinateur avec le programme qui le tient, une vérification des ports
+  locaux libres, l'état de chaque connexion TCP et les cartes réseau.
+- **Aucune télémétrie, n'envoie rien de lui-même**
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester ajoutant du lag et de la perte de paquets à un ping en direct" width="820">

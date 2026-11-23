@@ -1,0 +1,73 @@
+<section class="hero">
+  <h1>Simulate a bad network on Linux, for one app</h1>
+  <p class="lead">On Linux the usual answer is tc with netem: it adds delay and loss to a whole network interface, from the command line. Bean Network Tester does the same kinds of damage to one program, from a window or from the command line, and stops on its own. Its Linux version is experimental, and this page says what that means.</p>
+</section>
+
+<section>
+  <h2>tc netem commands and what to use here</h2>
+  <p>A netem command and the nearest command here, side by side. Run it with <code>sudo</code>, and keep <code>--target</code> and <code>--duration</code>: without them it affects the whole computer, as netem does.</p>
+<pre><code>sudo tc qdisc add dev eth0 root netem delay 100ms 20ms loss 5%
+sudo ./BeanNetworkTester --target firefox --latency 100 --jitter 20 --loss 5 --duration 60</code></pre>
+  <table>
+    <tr><th>netem</th><th>Setting in the window</th><th>Flag</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 100%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 100</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <p>The numbers do not all carry over one to one. netem delays only what leaves the interface, and this tool captures both directions, so <code>--latency 100</code> adds about 200 ms to a round trip: add <code>--filter out</code> to delay only what leaves. A netem rate is in bits per second, and the speed limit is in KB/s. The <a href="../netem-for-windows/">netem page</a> explains each difference.</p>
+</section>
+
+<section>
+  <h2>Why not just netem?</h2>
+  <ul>
+    <li><strong>One program, not the whole interface.</strong> netem slows everything that leaves <code>eth0</code>, your ssh session included. Here <code>--target</code> picks a process by name (on Linux without <code>.exe</code>: <code>firefox</code>, <code>chrome</code>), a PID, an address or a port, and the rest of the machine keeps working.</li>
+    <li><strong>Both directions.</strong> netem shapes what goes out, and incoming traffic needs an ifb device and a second set of rules. Here download and upload each have their own limit.</li>
+    <li><strong>It cleans up after itself.</strong> A netem rule stays until you delete it. A session here ends after <code>--duration</code>, and if the program is killed, the traffic it was holding flows again after about 3 seconds.</li>
+    <li><strong>You see what happened.</strong> A chart, a connections table and counters of what was delayed, dropped and let through, instead of <code>tc -s qdisc</code>.</li>
+    <li><strong>Runs repeat.</strong> <code>--seed</code> replays the same random loss and jitter, and <a href="../scenarios-over-time/">timed scenarios</a> change the settings at set seconds, the way a script of <code>tc</code> and <code>sleep</code> does.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>What it needs</h2>
+  <ul>
+    <li><strong>The package</strong> from the releases page, a <code>.tar.gz</code> with its own Python and Tk. It is built on Ubuntu 24.04 and checked on Ubuntu 24.04 and 26.04, for x86_64, and needs glibc 2.38 or newer.</li>
+    <li><strong>The kernel</strong>: Linux 5.10 or newer, built with BTF. The capture runs on eBPF.</li>
+    <li><strong>Root</strong>, or the capabilities CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN and CAP_NET_RAW. The window asks for an administrator's password in the desktop's own dialog, the command line needs <code>sudo</code>, and <code>--simulate</code> needs neither.</li>
+  </ul>
+<pre><code>tar -xzf BeanNetworkTester-*-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+sudo ./BeanNetworkTester --doctor</code></pre>
+  <p><code>--install-desktop</code> adds the program to the applications menu, so run it without <code>sudo</code>. <code>--doctor</code> lists what the machine still lacks.</p>
+</section>
+
+<section>
+  <h2>The network tools work on Linux too</h2>
+  <p>The {{app.app.tabs.tools}} tab answers questions before and during a test: {{app.tools.ping.tab}} (a continuous ping with a chart), {{app.tools.nat.tab}}, {{app.tools.portscan.tab}}, {{app.tools.sockets.tab}}, {{app.tools.portcheck.tab}}, {{app.tools.tcphealth.tab}} (what the kernel keeps for each connection, as <code>ss -ti</code> shows it) and {{app.tools.adapters.tab}} (as <code>ip addr</code> and <code>ip route</code> show them). {{app.tools.tcphealth.tab}} and {{app.tools.adapters.tab}} need no <code>sudo</code>, and {{app.tools.ping.tab}} needs it only where the system does not let your group send pings, as on Ubuntu 24.04.</p>
+</section>
+
+<section>
+  <h2>Where Linux differs, today</h2>
+  <ul>
+    <li><code>--target</code> reads the system's list of sockets, so the first exchange of a new connection can pass before the target applies.</li>
+    <li>When the tool cannot keep up, the kernel lets packets go around it unimpaired, and the counters say how many.</li>
+    <li>IP fragments always pass through untouched.</li>
+    <li>There is no code signature on Linux. The release's checksums and attestation say which build produced the file, and the <a href="../download/">download page</a> shows how to check them.</li>
+  </ul>
+  <p>For a permanent setup on a whole interface, netem is already in your kernel and is the right tool. This one is for testing one application for a while.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
