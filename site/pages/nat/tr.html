@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>NAT türüm ne ve bir arama bağlanır mı?</h1>
+  <p class="lead">Görüntülü aramalar, oyunlar ve WebRTC uygulamaları, aradaki yönlendiriciler izin verdiğinde iki cihazı doğrudan bağlar; izin vermediklerinde bir aktarıcıya, yani bir TURN sunucusuna geçer. {{app.app.tabs.tools}} sekmesindeki {{app.tools.nat.tab}} aracı, ağınızın hangi durumda olduğunu birkaç saniyede, doğrudan kendi bilgisayarınızdan söyler.</p>
+</section>
+
+<section>
+  <h2>Nasıl çalıştırılır</h2>
+  <ol>
+    <li>{{app.app.tabs.tools}} sekmesini, ardından {{app.tools.group.network}} ve {{app.tools.nat.tab}} bölümünü açın.</li>
+    <li>Bir STUN sunucusu ve bir TURN sunucusu zaten yazılıdır (Cloudflare'inkiler). Aramalarınız başka sunucular kullanıyorsa kendinizinkileri yazın.</li>
+    <li><strong>{{app.tools.nat.start}}</strong> düğmesine basın. Birkaç saniye sonra tablo dolar ve üstündeki bir satır sonucu sade sözcüklerle özetler.</li>
+  </ol>
+  <p>Siz basana kadar hiçbir şey dışarı gitmez. Bastığınızda araç iki sunucuya birkaç istek ve ağınızın kendi genel adresine küçük test paketleri gönderir, sonra durur.</p>
+</section>
+
+<section>
+  <h2>Satırların anlamı</h2>
+  <table>
+    <tr><th>Satır</th><th>Size ne söyler</th></tr>
+    <tr><td><strong>{{app.tools.nat.row.public}}</strong></td><td>Yönlendiricinin bu bilgisayara verdiği adres ve port ile bilgisayarın kullandığı portu koruyup korumadığı.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.mapping}}</strong></td><td><strong>{{app.tools.nat.result.independent}}</strong>: tek bir soket her sunucu için aynı genel portu alır, bu yüzden başka yönlendiricilerin arkasındaki cihazlar genellikle doğrudan bağlanabilir. <strong>{{app.tools.nat.result.by_address}}</strong> ya da <strong>{{app.tools.nat.result.by_address_port}}</strong>: her sunucu için yeni bir port, bu yüzden bir arama aktarıcıya ihtiyaç duyabilir.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.hairpin_together}}</strong>, <strong>{{app.tools.nat.row.hairpin_first}}</strong></td><td>Bu yönlendiricinin arkasındaki iki cihazın, onun genel adresi üzerinden birbirine ulaşıp ulaşamadığı. Bir taraf önce gönderdikten sonra yolu kapatan bir yönlendirici, böyle bir aramayı yerel ağa ya da bir aktarıcıya bırakır.</td></tr>
+    <tr><td><strong>TURN</strong></td><td>TURN sunucusunun UDP 3478 ve 443, TCP 3478 ve 80, TLS 5349 ve 443 üzerinden yanıt verip vermediği. Sunucudan oturum açmadan bir aktarıcı istenir ve "401, oturum açmak gerekli" yanıtı orada olduğunu gösterir. TLS üzerinden sertifikası, bu bilgisayarın güvendiği kök sertifikalarla denetlenir: güvenilmeyen bir sertifika, yolda TLS'i okuyan bir vekil sunucu ya da güvenlik duvarı anlamına gelebilir.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Görmüş olabileceğiniz NAT türü adları</h2>
+  <p>Eski adlar ilk STUN standardından gelir: full cone, restricted cone, port-restricted cone ve symmetric. Simetrik NAT her sunucu için yeni bir port verendir; üç "cone" türü ise tüm sunucular için tek bir portu korur. "Cone" türlerini birbirinden ayıran filtrelemedir ve bu araç onu sınamaz.</p>
+  <p>Oyun konsolları Open, Moderate ya da Strict gibi kendi kararlarını gösterir. Bu karar eşlemeyi, filtrelemeyi ve yönlendiricinin konsol için port yönlendirip yönlendirmediğini karıştırır; bu yüzden bu satırlar ona bire bir çevrilemez.</p>
+</section>
+
+<section>
+  <h2>Size söylemedikleri</h2>
+  <ul>
+    <li>Yönlendiricinin, bu bilgisayarın hiçbir şey göndermediği bir adresten gelen datagramları içeri alıp almadığı (filtreleme).</li>
+    <li>Arkasında bir NAT daha olduğunda tek bir yönlendirici hakkında herhangi bir şey. Bir sağlayıcının NAT'ı ya da bir VPN arkasında sonuç bütün zinciri anlatır.</li>
+    <li>Yönlendiricide hiçbir şeyi okumaz ve değiştirmez. İki sunucu ağınızın genel adresini görür ve <strong>{{app.tools.nat.copy}}</strong> tabloyu bu adresle birlikte İngilizce kopyalar.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Ardından aramayı kötü bir ağda deneyin</h2>
+  <p>Bir aramanın hangi yolu izlediğini öğrendiğinizde, denetim sayfası gecikmeyi ve kaybı onun yalnızca bir bölümüne yöneltebilir: {{app.fields.call_checks}}, {{app.fields.call_turn_control}} ya da {{app.fields.call_media}}. Böylece bir aramanın, ses ve görüntüyü bozmadan yavaş bir bağlantı denetimine dayanıp dayanmadığını ya da tersini görürsünüz. Hedeflemenin geri kalanı <a href="../tek-uygulamayi-hedefle/">tek uygulamayı hedefle</a> sayfasındadır.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

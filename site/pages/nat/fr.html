@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>Quel est mon type de NAT, et un appel passera-t-il ?</h1>
+  <p class="lead">Les appels vidéo, les jeux et les applications WebRTC relient deux appareils directement quand les routeurs entre eux le permettent, et passent par un relais, un serveur TURN, quand ils ne le permettent pas. L'outil {{app.tools.nat.tab}} de l'onglet {{app.app.tabs.tools}} vous dit en quelques secondes quel cas est celui de votre réseau, depuis votre propre ordinateur.</p>
+</section>
+
+<section>
+  <h2>Comment le lancer</h2>
+  <ol>
+    <li>Ouvrez l'onglet {{app.app.tabs.tools}}, puis {{app.tools.group.network}} et {{app.tools.nat.tab}}.</li>
+    <li>Un serveur STUN et un serveur TURN sont déjà saisis (ceux de Cloudflare). Saisissez les vôtres si vos appels en utilisent d'autres.</li>
+    <li>Appuyez sur <strong>{{app.tools.nat.start}}</strong>. Quelques secondes plus tard, le tableau se remplit, et une ligne au-dessus résume le résultat avec des mots simples.</li>
+  </ol>
+  <p>Rien ne sort avant que vous appuyiez. Ensuite, l'outil envoie quelques requêtes aux deux serveurs et de petits paquets de test à l'adresse publique de votre propre réseau, puis s'arrête.</p>
+</section>
+
+<section>
+  <h2>Ce que veulent dire les lignes</h2>
+  <table>
+    <tr><th>Ligne</th><th>Ce qu'elle vous dit</th></tr>
+    <tr><td><strong>{{app.tools.nat.row.public}}</strong></td><td>L'adresse et le port que le routeur donne à cet ordinateur, et s'il garde le port utilisé par l'ordinateur.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.mapping}}</strong></td><td><strong>{{app.tools.nat.result.independent}}</strong> : un même socket reçoit le même port public pour chaque serveur, donc les appareils derrière d'autres routeurs peuvent en général se connecter directement. <strong>{{app.tools.nat.result.by_address}}</strong> ou <strong>{{app.tools.nat.result.by_address_port}}</strong> : un nouveau port pour chaque serveur, donc un appel peut avoir besoin d'un relais.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.hairpin_together}}</strong>, <strong>{{app.tools.nat.row.hairpin_first}}</strong></td><td>Si deux appareils derrière ce routeur s'atteignent l'un l'autre par son adresse publique. Un routeur qui ferme le chemin après qu'un côté a parlé le premier laisse un tel appel au réseau local ou à un relais.</td></tr>
+    <tr><td><strong>TURN</strong></td><td>Si le serveur TURN répond en UDP sur 3478 et 443, en TCP sur 3478 et 80, et en TLS sur 5349 et 443. On lui demande un relais sans identifiants, et la réponse « 401, identification requise » montre qu'il est bien là. En TLS, son certificat est vérifié par rapport aux certificats racines auxquels cet ordinateur fait confiance : un certificat auquel il ne fait pas confiance peut signaler un proxy ou un pare-feu en chemin qui lit le TLS.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Les noms de types de NAT que vous avez peut-être vus</h2>
+  <p>Les anciens noms viennent de la première norme STUN : full cone, restricted cone, port-restricted cone et symmetric. Un NAT symétrique est celui qui donne un nouveau port pour chaque serveur, et les trois types « cone » gardent un seul port pour tous les serveurs. Ce qui distingue les types « cone », c'est le filtrage, que cet outil ne teste pas.</p>
+  <p>Les consoles de jeu affichent leur propre verdict, comme Open, Moderate ou Strict. Il mêle le mappage, le filtrage et le fait que le routeur redirige ou non des ports pour la console, donc ces lignes ne s'y traduisent pas une pour une.</p>
+</section>
+
+<section>
+  <h2>Ce qu'il ne vous dit pas</h2>
+  <ul>
+    <li>Si le routeur laisse entrer des datagrammes venant d'une adresse à laquelle cet ordinateur n'a rien envoyé (le filtrage).</li>
+    <li>Quoi que ce soit sur un seul routeur quand un autre NAT se trouve derrière. Derrière le NAT d'un fournisseur ou un VPN, le résultat décrit toute la chaîne.</li>
+    <li>Il ne lit et ne modifie rien sur le routeur. Les deux serveurs voient l'adresse publique de votre réseau, et <strong>{{app.tools.nat.copy}}</strong> copie le tableau en anglais, avec cette adresse.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Ensuite, testez l'appel sur un mauvais réseau</h2>
+  <p>Une fois que vous savez par où passe un appel, la page de contrôle peut viser une seule de ses parties avec la latence et les pertes : {{app.fields.call_checks}}, {{app.fields.call_turn_control}} ou {{app.fields.call_media}}. Vous voyez ainsi si un appel survit à une vérification de connexion lente sans abîmer les médias, ou l'inverse. Le reste du ciblage est décrit dans <a href="../cibler-une-application/">cibler une application</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

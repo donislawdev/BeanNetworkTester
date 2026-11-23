@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>Ce tip de NAT am și se va conecta un apel?</h1>
+  <p class="lead">Apelurile video, jocurile și aplicațiile WebRTC leagă două dispozitive direct când routerele dintre ele permit asta, iar când nu, trec printr-un releu, un server TURN. Instrumentul {{app.tools.nat.tab}} din fila {{app.app.tabs.tools}} îți spune în câteva secunde care este cazul rețelei tale, chiar de pe computerul tău.</p>
+</section>
+
+<section>
+  <h2>Cum îl pornești</h2>
+  <ol>
+    <li>Deschide fila {{app.app.tabs.tools}}, apoi {{app.tools.group.network}} și {{app.tools.nat.tab}}.</li>
+    <li>Un server STUN și un server TURN sunt deja completate (cele ale Cloudflare). Scrie-le pe ale tale dacă apelurile tale folosesc altele.</li>
+    <li>Apasă <strong>{{app.tools.nat.start}}</strong>. După câteva secunde tabelul se completează, iar un rând deasupra lui rezumă rezultatul în cuvinte simple.</li>
+  </ol>
+  <p>Nimic nu pleacă până nu apeși. Apoi instrumentul trimite câteva cereri celor două servere și mici pachete de test către adresa publică a propriei tale rețele, după care se oprește.</p>
+</section>
+
+<section>
+  <h2>Ce înseamnă rândurile</h2>
+  <table>
+    <tr><th>Rând</th><th>Ce îți spune</th></tr>
+    <tr><td><strong>{{app.tools.nat.row.public}}</strong></td><td>Adresa și portul pe care routerul le dă acestui computer și dacă păstrează portul folosit de computer.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.mapping}}</strong></td><td><strong>{{app.tools.nat.result.independent}}</strong>: un socket primește același port public pentru fiecare server, așa că dispozitivele din spatele altor routere se pot conecta de obicei direct. <strong>{{app.tools.nat.result.by_address}}</strong> sau <strong>{{app.tools.nat.result.by_address_port}}</strong>: un port nou pentru fiecare server, așa că un apel poate avea nevoie de un releu.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.hairpin_together}}</strong>, <strong>{{app.tools.nat.row.hairpin_first}}</strong></td><td>Dacă două dispozitive din spatele acestui router ajung unul la altul prin adresa lui publică. Un router care închide drumul după ce o parte a trimis prima lasă un astfel de apel rețelei locale sau unui releu.</td></tr>
+    <tr><td><strong>TURN</strong></td><td>Dacă serverul TURN răspunde prin UDP pe 3478 și 443, prin TCP pe 3478 și 80 și prin TLS pe 5349 și 443. I se cere un releu fără autentificare, iar răspunsul „401, este necesară autentificarea” arată că este acolo. Prin TLS certificatul lui este verificat cu certificatele rădăcină în care are încredere acest computer: unul în care nu are încredere poate însemna un proxy sau un firewall pe drum care citește TLS.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Numele tipurilor de NAT pe care poate le-ai văzut</h2>
+  <p>Numele vechi vin din primul standard STUN: full cone, restricted cone, port-restricted cone și symmetric. Un NAT simetric este cel care dă un port nou pentru fiecare server, iar cele trei tipuri „cone” păstrează un singur port pentru toate serverele. Ce deosebește tipurile „cone” este filtrarea, pe care acest instrument nu o testează.</p>
+  <p>Consolele de jocuri arată un verdict propriu, precum Open, Moderate sau Strict. Acesta amestecă maparea, filtrarea și dacă routerul redirecționează porturi pentru consolă, așa că rândurile acestea nu se traduc în el unu la unu.</p>
+</section>
+
+<section>
+  <h2>Ce nu îți spune</h2>
+  <ul>
+    <li>Dacă routerul lasă să intre datagrame de la o adresă căreia acest computer nu i-a trimis nimic (filtrarea).</li>
+    <li>Nimic despre un singur router când în spatele lui mai este un NAT. În spatele NAT-ului unui furnizor sau al unui VPN, rezultatul descrie tot lanțul.</li>
+    <li>Nu citește și nu schimbă nimic pe router. Cele două servere văd adresa publică a rețelei tale, iar <strong>{{app.tools.nat.copy}}</strong> copiază tabelul în engleză, cu acea adresă în el.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Apoi testează apelul pe o rețea proastă</h2>
+  <p>Odată ce știi pe ce drum merge un apel, pagina de control poate îndrepta latența și pierderile spre o singură parte a lui: {{app.fields.call_checks}}, {{app.fields.call_turn_control}} sau {{app.fields.call_media}}. Așa vezi dacă un apel rezistă unei verificări lente a conexiunii fără să strice sunetul și imaginea, sau invers. Restul țintirii este descris în <a href="../tinteste-o-aplicatie/">țintește o aplicație</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

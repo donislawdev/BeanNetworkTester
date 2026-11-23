@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>我的 NAT 是什么类型？通话能接通吗？</h1>
+  <p class="lead">视频通话、游戏和 WebRTC 应用在中间的路由器允许时会让两台设备直接相连，不允许时就改走中继，也就是 TURN 服务器。{{app.app.tabs.tools}} 选项卡上的 {{app.tools.nat.tab}} 工具几秒钟就能告诉你，你的网络属于哪一种情况，而且直接在你自己的电脑上检测。</p>
+</section>
+
+<section>
+  <h2>如何运行</h2>
+  <ol>
+    <li>打开 {{app.app.tabs.tools}} 选项卡，再打开 {{app.tools.group.network}} 和 {{app.tools.nat.tab}}。</li>
+    <li>STUN 服务器和 TURN 服务器已经填好（Cloudflare 的）。如果你的通话用的是别的服务器，就填你自己的。</li>
+    <li>按 <strong>{{app.tools.nat.start}}</strong>。几秒钟后表格会填满，表格上方的一行会用平实的话总结结果。</li>
+  </ol>
+  <p>在你按下按钮之前，什么都不会发出去。按下后，工具会向两个服务器发送少量请求，并向你网络自己的公网地址发送小测试包，然后停止。</p>
+</section>
+
+<section>
+  <h2>各行的含义</h2>
+  <table>
+    <tr><th>行</th><th>它告诉你什么</th></tr>
+    <tr><td><strong>{{app.tools.nat.row.public}}</strong></td><td>路由器分配给这台电脑的地址和端口，以及它是否保留电脑使用的端口。</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.mapping}}</strong></td><td><strong>{{app.tools.nat.result.independent}}</strong>：同一个套接字对每个服务器都得到相同的公网端口，所以其他路由器后面的设备通常可以直接连接。<strong>{{app.tools.nat.result.by_address}}</strong> 或 <strong>{{app.tools.nat.result.by_address_port}}</strong>：每个服务器一个新端口，所以通话可能需要中继。</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.hairpin_together}}</strong>、<strong>{{app.tools.nat.row.hairpin_first}}</strong></td><td>这台路由器后面的两台设备能否通过它的公网地址互相到达。如果一方先发之后路由器就关闭了通路，这样的通话就只能走本地网络或中继。</td></tr>
+    <tr><td><strong>TURN</strong></td><td>TURN 服务器是否在 UDP 3478 和 443、TCP 3478 和 80，以及 TLS 5349 和 443 上响应。工具会在不登录的情况下请求一个中继，回答“401，需要登录”就说明它在。走 TLS 时，会用这台电脑信任的根证书检查服务器证书：不受信任的证书可能意味着途中有读取 TLS 的代理或防火墙。</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>你可能见过的 NAT 类型名称</h2>
+  <p>旧的名称来自第一版 STUN 标准：完全锥形、受限锥形、端口受限锥形和对称型。对称型 NAT 会为每个服务器分配一个新端口，而三种锥形都对所有服务器保持同一个端口。区分这几种锥形的是过滤行为，而本工具不检测过滤。</p>
+  <p>游戏主机会显示自己的判断，例如 Open、Moderate 或 Strict。它综合了映射、过滤以及路由器是否为主机转发端口，所以这些行不能一一对应过去。</p>
+</section>
+
+<section>
+  <h2>它不能告诉你的</h2>
+  <ul>
+    <li>路由器是否放行来自这台电脑从未发送过数据的地址的数据报（过滤）。</li>
+    <li>当后面还有另一层 NAT 时，单独一台路由器的情况。在运营商的 NAT 或 VPN 后面，结果描述的是整条链路。</li>
+    <li>它不读取也不更改路由器上的任何东西。两个服务器能看到你网络的公网地址，<strong>{{app.tools.nat.copy}}</strong> 会把表格以英文复制，其中包含这个地址。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>然后在弱网下测试通话</h2>
+  <p>知道通话走哪条路之后，控制页可以把延迟和丢包只加在其中一部分上：{{app.fields.call_checks}}、{{app.fields.call_turn_control}} 或 {{app.fields.call_media}}。这样你就能看到，在不损坏媒体的情况下，通话能否扛过缓慢的连接检查，反过来也一样。其余的定向方式见<a href="../zhendui-yige-yingyong/">只针对一个应用</a>。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

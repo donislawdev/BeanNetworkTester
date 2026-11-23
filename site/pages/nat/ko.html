@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>내 NAT 유형은 무엇이고, 통화는 연결될까?</h1>
+  <p class="lead">영상 통화, 게임, WebRTC 앱은 사이의 라우터가 허락하면 두 기기를 직접 연결하고, 허락하지 않으면 중계, 즉 TURN 서버로 돌아갑니다. {{app.app.tabs.tools}} 탭의 {{app.tools.nat.tab}} 도구는 내 네트워크가 어느 경우인지 몇 초 만에, 내 컴퓨터에서 바로 알려 줍니다.</p>
+</section>
+
+<section>
+  <h2>실행 방법</h2>
+  <ol>
+    <li>{{app.app.tabs.tools}} 탭을 열고 {{app.tools.group.network}}의 {{app.tools.nat.tab}}을 엽니다.</li>
+    <li>STUN 서버와 TURN 서버가 이미 입력되어 있습니다(Cloudflare의 것). 통화가 다른 서버를 쓴다면 직접 입력하세요.</li>
+    <li><strong>{{app.tools.nat.start}}</strong>를 누릅니다. 몇 초 뒤 표가 채워지고, 그 위의 한 줄이 결과를 쉬운 말로 요약합니다.</li>
+  </ol>
+  <p>누르기 전에는 아무것도 나가지 않습니다. 누르면 도구가 두 서버에 몇 가지 요청을, 내 네트워크 자신의 공인 주소로 작은 테스트 패킷을 보낸 뒤 멈춥니다.</p>
+</section>
+
+<section>
+  <h2>각 행의 의미</h2>
+  <table>
+    <tr><th>행</th><th>알려 주는 것</th></tr>
+    <tr><td><strong>{{app.tools.nat.row.public}}</strong></td><td>라우터가 이 컴퓨터에 주는 주소와 포트, 그리고 컴퓨터가 쓴 포트를 그대로 유지하는지.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.mapping}}</strong></td><td><strong>{{app.tools.nat.result.independent}}</strong>: 한 소켓이 모든 서버에 대해 같은 공인 포트를 받으므로, 다른 라우터 뒤의 기기와 대개 직접 연결됩니다. <strong>{{app.tools.nat.result.by_address}}</strong> 또는 <strong>{{app.tools.nat.result.by_address_port}}</strong>: 서버마다 새 포트를 받으므로, 통화에 중계가 필요할 수 있습니다.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.hairpin_together}}</strong>, <strong>{{app.tools.nat.row.hairpin_first}}</strong></td><td>이 라우터 뒤의 두 기기가 라우터의 공인 주소를 통해 서로에게 닿는지. 한쪽이 먼저 보낸 뒤 길을 닫는 라우터는 그런 통화를 로컬 네트워크나 중계에 맡깁니다.</td></tr>
+    <tr><td><strong>TURN</strong></td><td>TURN 서버가 UDP 3478과 443, TCP 3478과 80, TLS 5349와 443에서 응답하는지. 로그인 없이 중계를 요청하며, "401, 로그인 필요"라는 답이 오면 서버가 거기 있다는 뜻입니다. TLS에서는 이 컴퓨터가 신뢰하는 루트 인증서로 서버 인증서를 확인합니다. 신뢰하지 않는 인증서는 TLS를 읽는 프록시나 방화벽이 중간에 있다는 뜻일 수 있습니다.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>들어 봤을 법한 NAT 유형 이름</h2>
+  <p>옛 이름은 첫 STUN 표준에서 왔습니다: 풀 콘, 제한 콘, 포트 제한 콘, 대칭형. 대칭형 NAT는 서버마다 새 포트를 주는 것이고, 세 가지 콘은 모든 서버에 대해 하나의 포트를 유지합니다. 콘끼리를 가르는 것은 필터링이며, 이 도구는 필터링을 검사하지 않습니다.</p>
+  <p>게임 콘솔은 Open, Moderate, Strict 같은 자체 판정을 보여 줍니다. 이 판정은 매핑, 필터링, 그리고 라우터가 콘솔을 위해 포트를 포워딩하는지를 섞은 것이라, 여기의 행이 그대로 대응하지는 않습니다.</p>
+</section>
+
+<section>
+  <h2>알려 주지 않는 것</h2>
+  <ul>
+    <li>이 컴퓨터가 아무것도 보내지 않은 주소에서 온 데이터그램을 라우터가 들여보내는지(필터링).</li>
+    <li>뒤에 NAT가 하나 더 있을 때 라우터 한 대만의 상태. 통신사의 NAT나 VPN 뒤에서는 결과가 그 경로 전체를 설명합니다.</li>
+    <li>라우터의 어떤 것도 읽거나 바꾸지 않습니다. 두 서버는 내 네트워크의 공인 주소를 보게 되고, <strong>{{app.tools.nat.copy}}</strong>는 그 주소가 들어 있는 표를 영어로 복사합니다.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>그다음 나쁜 네트워크에서 통화 테스트하기</h2>
+  <p>통화가 어떤 길로 가는지 알았다면, 컨트롤 페이지에서 지연과 손실을 그 일부에만 겨눌 수 있습니다: {{app.fields.call_checks}}, {{app.fields.call_turn_control}}, {{app.fields.call_media}}. 이렇게 하면 음성과 영상을 해치지 않고 느린 연결 확인을 통화가 견디는지, 또는 그 반대를 확인할 수 있습니다. 나머지 대상 지정은 <a href="../hanaui-aep-daesang/">앱 하나만 대상으로</a>에서 설명합니다.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

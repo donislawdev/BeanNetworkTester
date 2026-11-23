@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>Qual é o meu tipo de NAT, e uma chamada vai conectar?</h1>
+  <p class="lead">Chamadas de vídeo, jogos e apps WebRTC ligam dois dispositivos diretamente quando os roteadores entre eles permitem, e passam por um relay, um servidor TURN, quando não permitem. A ferramenta {{app.tools.nat.tab}} da aba {{app.app.tabs.tools}} diz em poucos segundos qual é o caso da sua rede, a partir do seu próprio computador.</p>
+</section>
+
+<section>
+  <h2>Como executar</h2>
+  <ol>
+    <li>Abra a aba {{app.app.tabs.tools}}, depois {{app.tools.group.network}} e {{app.tools.nat.tab}}.</li>
+    <li>Um servidor STUN e um servidor TURN já vêm preenchidos (os da Cloudflare). Digite os seus se as suas chamadas usam outros.</li>
+    <li>Aperte <strong>{{app.tools.nat.start}}</strong>. Alguns segundos depois a tabela se preenche, e uma linha acima dela resume o resultado em palavras simples.</li>
+  </ol>
+  <p>Nada sai até você apertar. Então a ferramenta envia algumas solicitações aos dois servidores e pequenos pacotes de teste para o próprio endereço público da sua rede, e para.</p>
+</section>
+
+<section>
+  <h2>O que as linhas significam</h2>
+  <table>
+    <tr><th>Linha</th><th>O que ela diz</th></tr>
+    <tr><td><strong>{{app.tools.nat.row.public}}</strong></td><td>O endereço e a porta que o roteador dá a este computador, e se ele mantém a porta que o computador usou.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.mapping}}</strong></td><td><strong>{{app.tools.nat.result.independent}}</strong>: um mesmo socket recebe a mesma porta pública para cada servidor, então dispositivos atrás de outros roteadores em geral conseguem se conectar diretamente. <strong>{{app.tools.nat.result.by_address}}</strong> ou <strong>{{app.tools.nat.result.by_address_port}}</strong>: uma porta nova para cada servidor, então uma chamada pode precisar de um relay.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.hairpin_together}}</strong>, <strong>{{app.tools.nat.row.hairpin_first}}</strong></td><td>Se dois dispositivos atrás deste roteador alcançam um ao outro pelo endereço público dele. Um roteador que fecha o caminho depois que um lado enviou primeiro deixa essa chamada para a rede local ou para um relay.</td></tr>
+    <tr><td><strong>TURN</strong></td><td>Se o servidor TURN responde por UDP em 3478 e 443, por TCP em 3478 e 80, e por TLS em 5349 e 443. Ele recebe um pedido de relay sem login, e a resposta "401, login necessário" mostra que ele está lá. Por TLS o certificado dele é conferido com os certificados raiz em que este computador confia: um certificado em que ele não confia pode indicar um proxy ou firewall no caminho que lê o TLS.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Os nomes de tipos de NAT que você talvez já tenha visto</h2>
+  <p>Os nomes antigos vêm do primeiro padrão STUN: full cone, restricted cone, port-restricted cone e symmetric. Um NAT simétrico é o que dá uma porta nova para cada servidor, e os três tipos "cone" mantêm uma só porta para todos os servidores. O que separa os tipos "cone" é a filtragem, que esta ferramenta não testa.</p>
+  <p>Consoles de videogame mostram um veredito próprio, como Open, Moderate ou Strict. Ele mistura o mapeamento, a filtragem e se o roteador encaminha portas para o console, então estas linhas não se traduzem nele uma para uma.</p>
+</section>
+
+<section>
+  <h2>O que ela não diz</h2>
+  <ul>
+    <li>Se o roteador deixa entrar datagramas de um endereço para o qual este computador não enviou nada (a filtragem).</li>
+    <li>Nada sobre um roteador sozinho quando há outro NAT atrás dele. Atrás do NAT de um provedor ou de uma VPN, o resultado descreve a cadeia inteira.</li>
+    <li>Ela não lê nem muda nada no roteador. Os dois servidores veem o endereço público da sua rede, e <strong>{{app.tools.nat.copy}}</strong> copia a tabela em inglês, com esse endereço.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Depois, teste a chamada numa rede ruim</h2>
+  <p>Quando você já sabe por onde a chamada passa, a página de controle pode mirar a latência e a perda em uma parte dela: {{app.fields.call_checks}}, {{app.fields.call_turn_control}} ou {{app.fields.call_media}}. Assim você vê se a chamada aguenta uma verificação de conexão lenta sem estragar o áudio e o vídeo, ou o contrário. O resto da escolha de alvos está em <a href="../mirar-em-um-app/">mirar em um app</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
