@@ -1,0 +1,79 @@
+<section class="hero">
+  <h1>Giả lập mất gói từ dòng lệnh</h1>
+  <p class="lead">Cùng một chương trình cũng chạy được mà không cần cửa sổ. Đưa cho nó một tùy chọn bất
+  kỳ là nó làm việc trong console thay cho cửa sổ. Script hay tác vụ CI dùng nó theo cách này.</p>
+</section>
+
+<section>
+  <h2>Cách khởi động</h2>
+  <p>Trên Windows, đó chính là <code>BeanNetworkTester.exe</code> dùng để mở cửa sổ: không có tùy chọn
+  thì nó mở cửa sổ, có bất kỳ tùy chọn nào thì nó chạy trong console và không hiện cửa sổ. Khi dùng
+  bản sao mã nguồn, hãy viết <code>python bean_network_tester.py</code> thay vào đó. Trên Linux,
+  chương trình là <code>./BeanNetworkTester</code> trong thư mục bạn đã giải nén, và việc bắt gói
+  thật cần <code>sudo</code>; <a href="../mo-phong-mang-tren-linux/">Mạng kém trên Linux</a> cho biết
+  nó còn cần gì ở đó.</p>
+  <p>Dòng lệnh luôn dùng tiếng Anh, bất kể cửa sổ đang dùng ngôn ngữ nào, nên thông báo của nó đọc
+  giống nhau trong mọi nhật ký.</p>
+</section>
+
+<section>
+  <h2>Thử trước mà không có rủi ro</h2>
+<pre><code>BeanNetworkTester.exe --simulate --loss 20 --duration 10
+BeanNetworkTester.exe --doctor
+BeanNetworkTester.exe --config thiet-lap-cua-toi.json --dry-run</code></pre>
+  <p>Lệnh đầu chạy trên lưu lượng giả, nên không cần driver hay quyền quản trị và không thể đụng tới
+  mạng. Lệnh thứ hai kiểm tra máy này: quyền mà việc bắt gói cần, driver bắt gói và những gì còn sót
+  lại từ lần chạy trước. Lệnh thứ ba đọc một tệp thiết lập và cho biết nó có hợp lệ không, mà không
+  khởi động gì cả.</p>
+</section>
+
+<section>
+  <h2>Thiết lập lấy từ đâu</h2>
+  <p>Bốn nguồn, nguồn sau ghi đè nguồn trước: giá trị mặc định, tệp thiết lập
+  (<code>--config</code>), hồ sơ có sẵn (<code>--preset</code>) và các cờ trên dòng lệnh.
+  <code>--print-config</code> hiển thị kết quả dưới dạng JSON, còn <code>--save-config</code> ghi nó
+  vào một tệp mà bạn có thể nạp lại, trong cửa sổ hoặc trên dòng lệnh.</p>
+  <p>Mỗi thiết lập trong cửa sổ có cờ riêng, như <code>--loss</code> hay <code>--target</code>.
+  Chúng được liệt kê, kèm tác dụng của từng cái, trên
+  <a href="../bang-tra-cuu/#settings-traffic">trang bảng tra cứu</a>. Các tùy chọn dưới đây là
+  phần còn lại.</p>
+</section>
+
+<section>
+  <h2>Mọi tùy chọn khác</h2>
+  {{page.cli_reference}}
+</section>
+
+<section>
+  <h2>Nó in ra gì</h2>
+  <p>Nhật ký, dành cho người đọc, được ghi ra luồng lỗi chuẩn, mỗi dòng bắt đầu bằng
+  <code>[bean]</code>. Dữ liệu được ghi ra đầu ra chuẩn: vài giây một dòng báo cáo và một bản tóm tắt
+  ở cuối. Với <code>--format json</code>, đầu ra chuẩn chứa mỗi dòng một đối tượng JSON: một đối tượng
+  <code>sample</code> cho mỗi báo cáo và một <code>summary</code> cuối cùng với mã thoát, seed và lệnh
+  để lặp lại lượt chạy.</p>
+<pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Mỗi cách một lượt chạy có thể kết thúc đều có mã thoát riêng, nên pipeline phân biệt được ứng
+  dụng bị lỗi với công cụ không khởi động được. Các mã được liệt kê trên
+  <a href="../bang-tra-cuu/">trang bảng tra cứu</a>.</p>
+</section>
+
+<section>
+  <h2>Ví dụ</h2>
+  <p>Làm xấu mạng của một chương trình trong một phút, không đụng gì khác trên máy:</p>
+<pre><code>BeanNetworkTester.exe --target myapp.exe --latency 200 --loss 2 --duration 60</code></pre>
+  <p>Làm xấu kết nối tới một máy chủ trong hai phút, với đầu ra mà pipeline đọc được, và báo lỗi nếu
+  không bắt được gì:</p>
+<pre><code>BeanNetworkTester.exe --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 120 --format json --fail-on-no-traffic</code></pre>
+  <p>Phát lặp lại trong mười phút một kịch bản có sẵn vốn không tự lặp, và giữ lại một báo cáo để
+  lặp lại lượt chạy:</p>
+<pre><code>BeanNetworkTester.exe --scenario scenarios/upload-drop-midway.json --loop --target myapp.exe --duration 600 --repro-out run.json</code></pre>
+  <p>Có thêm công thức cho pipeline tại
+  <a href="../kiem-thu-mang-trong-ci/">Kiểm thử mạng trong CI</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

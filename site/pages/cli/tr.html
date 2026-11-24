@@ -1,0 +1,79 @@
+<section class="hero">
+  <h1>Komut satırından paket kaybı simülasyonu</h1>
+  <p class="lead">Aynı program penceresi olmadan da çalışır. Ona herhangi bir seçenek verin, pencere
+  yerine konsolda çalışır. Bir betik ya da CI işi onu böyle kullanır.</p>
+</section>
+
+<section>
+  <h2>Nasıl başlar</h2>
+  <p>Windows'ta pencereyi açan aynı <code>BeanNetworkTester.exe</code>'dir: seçeneksiz çalıştırınca
+  pencereyi açar, herhangi bir seçenekle konsolda çalışır ve pencere göstermez. Kaynak kodun bir
+  kopyasından çalıştırırken yerine <code>python bean_network_tester.py</code> yazın. Linux'ta program,
+  açtığınız klasördeki <code>./BeanNetworkTester</code>'dır ve gerçek bir yakalama için
+  <code>sudo</code> gerekir; <a href="../linuxta-ag-simulasyonu/">Linux'ta kötü ağ</a> orada başka
+  nelere ihtiyaç duyduğunu anlatır.</p>
+  <p>Komut satırı, pencerenin dili ne olursa olsun her zaman İngilizce konuşur; böylece mesajları her
+  günlükte aynı okunur.</p>
+</section>
+
+<section>
+  <h2>Önce risksiz deneyin</h2>
+<pre><code>BeanNetworkTester.exe --simulate --loss 20 --duration 10
+BeanNetworkTester.exe --doctor
+BeanNetworkTester.exe --config ayarlarim.json --dry-run</code></pre>
+  <p>İlki uydurma trafikle çalışır; bu yüzden ne sürücüye ne de yönetici haklarına ihtiyaç duyar ve
+  ağa dokunamaz. İkincisi bu bilgisayarı denetler: yakalamanın ihtiyaç duyduğu haklar, yakalama
+  sürücüsü ve önceki bir çalışmadan kalanlar. Üçüncüsü bir ayar dosyasını okur ve hiçbir şey
+  başlatmadan geçerli olup olmadığını söyler.</p>
+</section>
+
+<section>
+  <h2>Ayarlar nereden gelir</h2>
+  <p>Dört kaynak vardır ve her biri bir öncekini geçersiz kılar: varsayılanlar, bir ayar dosyası
+  (<code>--config</code>), hazır bir profil (<code>--preset</code>) ve komut satırındaki seçenekler.
+  <code>--print-config</code> sonucu JSON olarak gösterir, <code>--save-config</code> ise onu,
+  pencerede ya da komut satırında yeniden yükleyebileceğiniz bir dosyaya yazar.</p>
+  <p>Penceredeki her ayarın, <code>--loss</code> ya da <code>--target</code> gibi kendi seçeneği
+  vardır. Her birinin ne yaptığıyla birlikte
+  <a href="../basvuru-tablolari/#settings-traffic">başvuru tabloları sayfasında</a> listelenirler.
+  Aşağıdaki seçenekler geri kalan her şeydir.</p>
+</section>
+
+<section>
+  <h2>Diğer tüm seçenekler</h2>
+  {{page.cli_reference}}
+</section>
+
+<section>
+  <h2>Ne yazdırır</h2>
+  <p>İnsanlar için olan günlük standart hata çıktısına gider ve her satır <code>[bean]</code> ile
+  başlar. Veriler standart çıktıya gider: birkaç saniyede bir rapor satırı ve sonunda bir özet.
+  <code>--format json</code> ile standart çıktı satır başına bir JSON nesnesi taşır: her rapor için
+  bir <code>sample</code> nesnesi ve sonda çıkış kodunu, tohumu ve çalışmayı tekrarlayan komutu
+  içeren bir <code>summary</code>.</p>
+<pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Bir çalışmanın bitebileceği her yolun kendi çıkış kodu vardır; böylece bir işlem hattı, çöken
+  bir uygulamayı başlayamayan bir araçtan ayırabilir. Kodlar
+  <a href="../basvuru-tablolari/">başvuru tabloları sayfasında</a> listelenir.</p>
+</section>
+
+<section>
+  <h2>Örnekler</h2>
+  <p>Bir dakika boyunca yalnızca bir programı bozun, bilgisayardaki başka hiçbir şeyi değil:</p>
+<pre><code>BeanNetworkTester.exe --target myapp.exe --latency 200 --loss 2 --duration 60</code></pre>
+  <p>İki dakika boyunca tek bir sunucuyu bozun, bir işlem hattının okuyabileceği çıktı verin ve hiç
+  trafik yakalanmadıysa hatayla bitirin:</p>
+<pre><code>BeanNetworkTester.exe --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 120 --format json --fail-on-no-traffic</code></pre>
+  <p>Kendiliğinden tekrarlanmayan hazır bir senaryoyu on dakika boyunca döngüde çalın ve çalışmayı
+  tekrarlayan bir rapor saklayın:</p>
+<pre><code>BeanNetworkTester.exe --scenario scenarios/upload-drop-midway.json --loop --target myapp.exe --duration 600 --repro-out run.json</code></pre>
+  <p>İşlem hatları için daha fazla tarif
+  <a href="../ci-icinde-ag-testleri/">CI içinde ağ testleri</a> sayfasındadır.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

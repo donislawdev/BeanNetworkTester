@@ -1,0 +1,79 @@
+<section class="hero">
+  <h1>Simular pérdida de paquetes desde la línea de comandos</h1>
+  <p class="lead">El mismo programa funciona también sin su ventana. Dale cualquier opción y trabaja
+  en la consola en su lugar: así lo usa un script o una tarea de CI.</p>
+</section>
+
+<section>
+  <h2>Cómo arranca</h2>
+  <p>En Windows es el mismo <code>BeanNetworkTester.exe</code> que abre la ventana: sin opciones
+  abre la ventana, y con cualquier opción funciona en la consola y no muestra ninguna ventana. Desde
+  una copia del código fuente, escribe <code>python bean_network_tester.py</code> en su lugar. En
+  Linux el programa es <code>./BeanNetworkTester</code> en la carpeta que descomprimiste, y una
+  captura real necesita <code>sudo</code>; <a href="../simular-red-en-linux/">Red mala en Linux</a>
+  explica qué más necesita allí.</p>
+  <p>La línea de comandos siempre habla en inglés, sea cual sea el idioma de la ventana, para que sus
+  mensajes se lean igual en cualquier registro.</p>
+</section>
+
+<section>
+  <h2>Pruébalo primero sin riesgo</h2>
+<pre><code>BeanNetworkTester.exe --simulate --loss 20 --duration 10
+BeanNetworkTester.exe --doctor
+BeanNetworkTester.exe --config mis-ajustes.json --dry-run</code></pre>
+  <p>La primera funciona con tráfico inventado, así que no necesita controlador ni permisos de
+  administrador y no puede tocar la red. La segunda revisa este equipo: los permisos que necesita
+  una captura, el controlador de captura y los restos de una ejecución anterior. La tercera lee un
+  archivo de ajustes y dice si es válido, sin poner nada en marcha.</p>
+</section>
+
+<section>
+  <h2>De dónde salen los ajustes</h2>
+  <p>Cuatro fuentes, y cada una sustituye a la anterior: los valores por defecto, un archivo de
+  ajustes (<code>--config</code>), un perfil listo (<code>--preset</code>) y las opciones de la línea
+  de comandos. <code>--print-config</code> muestra el resultado en JSON, y <code>--save-config</code>
+  lo escribe en un archivo que puedes volver a cargar, en la ventana o en la línea de comandos.</p>
+  <p>Cada ajuste de la ventana tiene su propia opción, como <code>--loss</code> o
+  <code>--target</code>. Están en la lista, con lo que hace cada uno, de
+  <a href="../tablas-de-referencia/#settings-traffic">la página de tablas de referencia</a>. Las
+  opciones de abajo son todo lo demás.</p>
+</section>
+
+<section>
+  <h2>Todas las demás opciones</h2>
+  {{page.cli_reference}}
+</section>
+
+<section>
+  <h2>Qué muestra</h2>
+  <p>El registro, pensado para personas, va a la salida de error estándar, y cada línea empieza por
+  <code>[bean]</code>. Los datos van a la salida estándar: una línea de informe cada pocos segundos y
+  un resumen al final. Con <code>--format json</code>, la salida estándar lleva un objeto JSON por
+  línea: un objeto <code>sample</code> por cada informe y un <code>summary</code> final con el código
+  de salida, la semilla y el comando que repite la ejecución.</p>
+<pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Cada forma en que puede terminar una ejecución tiene su propio código de salida, así que un
+  pipeline distingue una aplicación que falla de una herramienta que no pudo arrancar. Los códigos
+  están en <a href="../tablas-de-referencia/">la página de tablas de referencia</a>.</p>
+</section>
+
+<section>
+  <h2>Ejemplos</h2>
+  <p>Degradar un solo programa durante un minuto, y nada más en el equipo:</p>
+<pre><code>BeanNetworkTester.exe --target myapp.exe --latency 200 --loss 2 --duration 60</code></pre>
+  <p>Degradar un solo servidor durante dos minutos, con una salida que un pipeline puede leer, y
+  fallar si no se capturó nada:</p>
+<pre><code>BeanNetworkTester.exe --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 120 --format json --fail-on-no-traffic</code></pre>
+  <p>Reproducir en bucle durante diez minutos un escenario listo que no se repite por sí solo, y
+  guardar un informe que repite la ejecución:</p>
+<pre><code>BeanNetworkTester.exe --scenario scenarios/upload-drop-midway.json --loop --target myapp.exe --duration 600 --repro-out run.json</code></pre>
+  <p>Hay más recetas para pipelines en
+  <a href="../pruebas-de-red-en-ci/">Pruebas de red en CI</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

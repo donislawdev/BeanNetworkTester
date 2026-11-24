@@ -1048,6 +1048,81 @@ def settings_reference(app, texts):
     return Raw("".join(blocks))
 
 
+# The command-line options that are not a setting's flag, grouped for the reader. A
+# setting's flag is documented with the setting (``settings_reference``); everything
+# else the parser accepts sits in exactly one group here, or the build fails, so a new
+# option cannot reach the program without reaching this page.
+CLI_GROUPS = (
+    ("program", ("--help", "--version", "--license", "--gui", "--install-desktop",
+                 "--remove-desktop")),
+    ("sources", ("--config", "--preset", "--print-config", "--save-config")),
+    ("run", ("--simulate", "--scenario", "--loop", "--interval", "--log-conns",
+             "--repro-out")),
+    ("output", ("--verbose", "--quiet", "--log-level", "--log-file", "--format")),
+    ("checks", ("--dry-run", "--doctor", "--min-packets", "--fail-on-no-traffic",
+                "--cleanup-driver")),
+)
+
+
+def _long_name(action):
+    return next(o for o in action.option_strings if o.startswith("--"))
+
+
+def cli_options():
+    """The parser's options that are not a setting's flag, by their long name."""
+    flags = {"--" + field.cli for field in fields.FIELD_DEFS if field.cli}
+    return {_long_name(action): action for action in cli.build_arg_parser()._actions
+            if action.option_strings and _long_name(action) not in flags}
+
+
+def _option_values(action, app, texts):
+    if action.choices:
+        values = ", ".join("<code>%s</code>" % html.escape(str(c), quote=True)
+                           for c in action.choices)
+        return explained(texts, "cli.one_of", app).replace("{values}", values)
+    return explained(texts, "cli.switch" if action.nargs == 0 else "cli.value", app)
+
+
+def cli_reference(app, texts):
+    """Every command-line option that is not a setting, from the program's own parser.
+
+    The option names, the values a choice takes and the defaults come from
+    ``cli.build_arg_parser``; the sentence saying what each one does is the site's
+    (``flag.<dest>``), tied to the option's ``--help`` line by ``doc_sources``.
+    """
+    options = cli_options()
+    grouped = [name for _, names in CLI_GROUPS for name in names]
+    missing = sorted(set(options) - set(grouped))
+    unknown = sorted(set(grouped) - set(options))
+    if missing or unknown or len(grouped) != len(set(grouped)):
+        raise SiteError("CLI_GROUPS does not match the parser: not placed %s, not an "
+                        "option %s, or placed twice" % (missing, unknown))
+    blocks = []
+    for group, names in CLI_GROUPS:
+        entries = []
+        for name in names:
+            action = options[name]
+            # The heading is the long name; the line under it repeats it only when
+            # there is a short form to add, such as -v.
+            aliases = [o for o in action.option_strings if o != name]
+            meta = [" ".join("<code>%s</code>" % html.escape(o, quote=True)
+                             for o in aliases + [name])] if aliases else []
+            meta.append(_option_values(action, app, texts))
+            default = action.default
+            if action.nargs != 0 and default not in (None, "", 0, argparse.SUPPRESS):
+                shown = "<code>%s</code>" % html.escape(
+                    _number(default) if isinstance(default, float) else str(default),
+                    quote=True)
+                meta.append(explained(texts, "ref.default", app).replace("{value}", shown))
+            entries.append('<dt id="flag-%s">%s</dt><dd><p class="meta">%s</p><p>%s</p></dd>' % (
+                name[2:], html.escape(name, quote=True),
+                "".join("<span>%s</span>" % part for part in meta),
+                explained(texts, "flag." + action.dest, app)))
+        blocks.append('<h3 class="group" id="options-%s">%s</h3><dl class="settings">%s</dl>'
+                      % (group, explained(texts, "cli.group." + group, app), "".join(entries)))
+    return Raw("".join(blocks))
+
+
 def _fingerprint(parts):
     return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()[:12]
 
@@ -1070,6 +1145,8 @@ def doc_sources(root):
         parts = [app.get("app." + key, "") for key in (field.tip, field.help_body) if key]
         parts.append(helps.get("--" + field.cli, ""))
         out["setting." + field.key] = _fingerprint(parts)
+    for action in cli_options().values():
+        out["flag." + action.dest] = _fingerprint([action.help or ""])
     return out
 
 
@@ -1212,6 +1289,7 @@ def page_context(page, code, registry, texts, home, colours, root, pages):
                                               _root_prefix(registry)),
         "page.preset_table": preset_table(app, texts[code]),
         "page.settings_reference": settings_reference(app, texts[code]),
+        "page.cli_reference": cli_reference(app, texts[code]),
         "page.exit_code_table": exit_code_table(texts[code]),
         "page.scenario_table": scenario_table(root, texts[code]),
         "page.scenario_count": len(scenario_files(root)),

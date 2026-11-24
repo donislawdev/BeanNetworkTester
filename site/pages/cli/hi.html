@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>कमांड लाइन से पैकेट लॉस सिम्युलेट करें</h1>
+  <p class="lead">वही प्रोग्राम अपनी विंडो के बिना भी चलता है। उसे कोई भी विकल्प दें, तो वह विंडो की जगह कंसोल में काम करता है। स्क्रिप्ट या CI जॉब उसे इसी तरह इस्तेमाल करते हैं।</p>
+</section>
+
+<section>
+  <h2>यह कैसे शुरू होता है</h2>
+  <p>Windows पर यह वही <code>BeanNetworkTester.exe</code> है जो विंडो खोलता है: बिना विकल्प के यह विंडो खोलता है, और किसी भी विकल्प के साथ कंसोल में चलता है और कोई विंडो नहीं दिखाता। सोर्स कोड की कॉपी से चलाते समय इसकी जगह <code>python bean_network_tester.py</code> लिखें। Linux पर प्रोग्राम आपके खोले गए फ़ोल्डर में <code>./BeanNetworkTester</code> है, और असली कैप्चर के लिए <code>sudo</code> चाहिए; <a href="../linux-par-network-simulation/">Linux पर ख़राब नेटवर्क</a> बताता है कि वहाँ इसे और क्या चाहिए।</p>
+  <p>विंडो की भाषा चाहे जो हो, कमांड लाइन हमेशा अंग्रेज़ी में बोलती है, ताकि उसके संदेश हर लॉग में एक जैसे पढ़े जाएँ।</p>
+</section>
+
+<section>
+  <h2>पहले बिना जोखिम के आज़माएँ</h2>
+<pre><code>BeanNetworkTester.exe --simulate --loss 20 --duration 10
+BeanNetworkTester.exe --doctor
+BeanNetworkTester.exe --config my-settings.json --dry-run</code></pre>
+  <p>पहला नकली ट्रैफ़िक पर चलता है, इसलिए इसे न ड्राइवर चाहिए न एडमिनिस्ट्रेटर अधिकार, और यह नेटवर्क को छू नहीं सकता। दूसरा इस कंप्यूटर की जाँच करता है: कैप्चर को चाहिए अधिकार, कैप्चर ड्राइवर, और पिछले रन के बचे हुए हिस्से। तीसरा एक सेटिंग फ़ाइल पढ़ता है और बिना कुछ शुरू किए बताता है कि वह सही है या नहीं।</p>
+</section>
+
+<section>
+  <h2>सेटिंग कहाँ से आती हैं</h2>
+  <p>चार स्रोत हैं, और हर अगला पिछले वाले को बदल देता है: डिफ़ॉल्ट मान, एक सेटिंग फ़ाइल (<code>--config</code>), एक तैयार प्रोफ़ाइल (<code>--preset</code>) और कमांड लाइन के फ़्लैग। <code>--print-config</code> नतीजा JSON में दिखाता है, और <code>--save-config</code> उसे एक फ़ाइल में लिखता है जिसे आप विंडो में या कमांड लाइन पर फिर से लोड कर सकते हैं।</p>
+  <p>विंडो की हर सेटिंग का अपना फ़्लैग है, जैसे <code>--loss</code> या <code>--target</code>। वे, हर एक के काम के साथ, <a href="../sandarbh-talika/#settings-traffic">संदर्भ तालिकाओं वाले पेज</a> पर दी गई हैं। नीचे के विकल्प बाक़ी सब हैं।</p>
+</section>
+
+<section>
+  <h2>बाक़ी सभी विकल्प</h2>
+  {{page.cli_reference}}
+</section>
+
+<section>
+  <h2>यह क्या छापता है</h2>
+  <p>लोगों के लिए बना लॉग स्टैंडर्ड एरर पर जाता है, और हर पंक्ति <code>[bean]</code> से शुरू होती है। डेटा स्टैंडर्ड आउटपुट पर जाता है: हर कुछ सेकंड में एक रिपोर्ट पंक्ति और अंत में एक सारांश। <code>--format json</code> के साथ स्टैंडर्ड आउटपुट हर पंक्ति में एक JSON ऑब्जेक्ट देता है: हर रिपोर्ट के लिए एक <code>sample</code> ऑब्जेक्ट, और अंत में एक <code>summary</code> जिसमें एग्ज़िट कोड, सीड और रन दोहराने वाला कमांड होता है।</p>
+<pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>रन ख़त्म होने के हर तरीक़े का अपना एग्ज़िट कोड है, इसलिए पाइपलाइन फ़ेल होते ऐप्लिकेशन और शुरू न हो पाए टूल में फ़र्क़ कर सकती है। कोड <a href="../sandarbh-talika/">संदर्भ तालिकाओं वाले पेज</a> पर दिए गए हैं।</p>
+</section>
+
+<section>
+  <h2>उदाहरण</h2>
+  <p>एक मिनट के लिए सिर्फ़ एक प्रोग्राम का नेटवर्क बिगाड़ें, कंप्यूटर पर और कुछ नहीं:</p>
+<pre><code>BeanNetworkTester.exe --target myapp.exe --latency 200 --loss 2 --duration 60</code></pre>
+  <p>दो मिनट के लिए एक सर्वर का कनेक्शन बिगाड़ें, ऐसे आउटपुट के साथ जिसे पाइपलाइन पढ़ सके, और अगर कुछ भी कैप्चर न हो तो फ़ेल करें:</p>
+<pre><code>BeanNetworkTester.exe --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 120 --format json --fail-on-no-traffic</code></pre>
+  <p>एक तैयार परिदृश्य, जो अपने आप नहीं दोहराता, दस मिनट तक लूप में चलाएँ, और रन दोहराने वाली रिपोर्ट रखें:</p>
+<pre><code>BeanNetworkTester.exe --scenario scenarios/upload-drop-midway.json --loop --target myapp.exe --duration 600 --repro-out run.json</code></pre>
+  <p>पाइपलाइन के और नुस्ख़े <a href="../ci-mein-network-test/">CI में नेटवर्क टेस्ट</a> पर हैं।</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

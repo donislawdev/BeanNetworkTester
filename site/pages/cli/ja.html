@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>コマンドラインでパケットロスを再現する</h1>
+  <p class="lead">同じプログラムをウィンドウなしで動かせます。何かオプションを付ければ、ウィンドウの代わりにコンソールで動きます。スクリプトや CI ジョブはこうして使います。</p>
+</section>
+
+<section>
+  <h2>起動のしかた</h2>
+  <p>Windows では、ウィンドウを開くのと同じ <code>BeanNetworkTester.exe</code> です。オプションなしならウィンドウを開き、何かオプションを付ければコンソールで動いてウィンドウは出しません。ソースコードのコピーから使うときは、代わりに <code>python bean_network_tester.py</code> と書きます。Linux では展開したフォルダーの <code>./BeanNetworkTester</code> がプログラムで、実際のキャプチャには <code>sudo</code> が必要です。ほかに何が必要かは<a href="../linux-de-nettowaku-moni/">Linux で悪いネットワークを再現する</a>にあります。</p>
+  <p>コマンドラインはウィンドウの言語にかかわらず常に英語なので、メッセージはどのログでも同じです。</p>
+</section>
+
+<section>
+  <h2>まずはリスクなしで試す</h2>
+<pre><code>BeanNetworkTester.exe --simulate --loss 20 --duration 10
+BeanNetworkTester.exe --doctor
+BeanNetworkTester.exe --config my-settings.json --dry-run</code></pre>
+  <p>1 つ目は作り物の通信で動くので、ドライバーも管理者権限も不要で、ネットワークには触れません。2 つ目はこのコンピューターを調べます。キャプチャに必要な権限、キャプチャ用ドライバー、以前の実行の残りです。3 つ目は設定ファイルを読み、何も開始せずに、それが正しいかどうかを教えてくれます。</p>
+</section>
+
+<section>
+  <h2>設定はどこから来るか</h2>
+  <p>4 つの出どころがあり、後のものが前のものを上書きします。既定値、設定ファイル（<code>--config</code>）、用意されたプロファイル（<code>--preset</code>）、そしてコマンドラインのフラグです。<code>--print-config</code> は結果を JSON で表示し、<code>--save-config</code> はそれをファイルに書き出します。そのファイルはウィンドウでもコマンドラインでも読み込めます。</p>
+  <p>ウィンドウの設定はどれも、<code>--loss</code> や <code>--target</code> のような自分のフラグを持っています。それぞれの働きとともに<a href="../rifarensu/#settings-traffic">リファレンスのページ</a>に並んでいます。下のオプションはそれ以外のすべてです。</p>
+</section>
+
+<section>
+  <h2>その他のすべてのオプション</h2>
+  {{page.cli_reference}}
+</section>
+
+<section>
+  <h2>何が出力されるか</h2>
+  <p>人が読むためのログは標準エラー出力に出て、各行は <code>[bean]</code> で始まります。データは標準出力に出ます。数秒ごとの報告行と、最後のまとめです。<code>--format json</code> を付けると、標準出力は 1 行に 1 つの JSON オブジェクトになります。報告ごとの <code>sample</code> オブジェクトと、最後の <code>summary</code> で、後者には終了コード、シード、実行を繰り返すコマンドが入ります。</p>
+<pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>実行の終わり方ごとに専用の終了コードがあるので、パイプラインはアプリケーションの失敗と、ツールが起動できなかった場合とを区別できます。コードの一覧は<a href="../rifarensu/">リファレンスのページ</a>にあります。</p>
+</section>
+
+<section>
+  <h2>使用例</h2>
+  <p>1 つのプログラムだけを 1 分間劣化させ、コンピューター上のほかのものには触れない:</p>
+<pre><code>BeanNetworkTester.exe --target myapp.exe --latency 200 --loss 2 --duration 60</code></pre>
+  <p>1 つのサーバーを 2 分間劣化させ、パイプラインが読める形式で出力し、何もキャプチャできなかったら失敗にする:</p>
+<pre><code>BeanNetworkTester.exe --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 120 --format json --fail-on-no-traffic</code></pre>
+  <p>自分では繰り返さない用意済みのシナリオを 10 分間ループ再生し、実行を繰り返せるレポートを残す:</p>
+<pre><code>BeanNetworkTester.exe --scenario scenarios/upload-drop-midway.json --loop --target myapp.exe --duration 600 --repro-out run.json</code></pre>
+  <p>パイプライン向けの使い方は<a href="../ci-nettowaku-tesuto/">CI でのネットワークテスト</a>にもっとあります。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

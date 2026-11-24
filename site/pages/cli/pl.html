@@ -1,0 +1,78 @@
+<section class="hero">
+  <h1>Symulacja utraty pakietów z linii komend</h1>
+  <p class="lead">Ten sam program działa bez okna. Podaj mu dowolną opcję, a zamiast okna pracuje
+  w konsoli. Tak używa go skrypt albo zadanie CI.</p>
+</section>
+
+<section>
+  <h2>Jak to uruchomić</h2>
+  <p>Na Windowsie to ten sam <code>BeanNetworkTester.exe</code>, który otwiera okno: bez opcji
+  otwiera okno, a z dowolną opcją działa w konsoli i okna nie pokazuje. Z kopii kodu źródłowego
+  wpisz w to miejsce <code>python bean_network_tester.py</code>. Na Linuksie program to
+  <code>./BeanNetworkTester</code> w rozpakowanym folderze, a prawdziwy przechwyt potrzebuje
+  <code>sudo</code>; <a href="../symulacja-sieci-w-linuksie/">Zła sieć w Linuksie</a> mówi, czego
+  jeszcze tam potrzebuje.</p>
+  <p>Linia komend zawsze mówi po angielsku, niezależnie od języka okna, więc jej komunikaty brzmią
+  tak samo w każdym logu.</p>
+</section>
+
+<section>
+  <h2>Najpierw spróbuj bez ryzyka</h2>
+<pre><code>BeanNetworkTester.exe --simulate --loss 20 --duration 10
+BeanNetworkTester.exe --doctor
+BeanNetworkTester.exe --config moje-ustawienia.json --dry-run</code></pre>
+  <p>Pierwsza działa na wymyślonym ruchu, więc nie potrzebuje sterownika ani praw administratora
+  i nie może ruszyć sieci. Druga sprawdza ten komputer: prawa, których potrzebuje przechwyt,
+  sterownik przechwytu i pozostałości po wcześniejszym przebiegu. Trzecia czyta plik ustawień
+  i mówi, czy jest poprawny, niczego nie uruchamiając.</p>
+</section>
+
+<section>
+  <h2>Skąd biorą się ustawienia</h2>
+  <p>Cztery źródła, każde nadpisuje poprzednie: wartości domyślne, plik ustawień
+  (<code>--config</code>), gotowy profil (<code>--preset</code>) i flagi w linii komend.
+  <code>--print-config</code> pokazuje wynik jako JSON, a <code>--save-config</code> zapisuje go do
+  pliku, który da się wczytać z powrotem, w oknie albo w linii komend.</p>
+  <p>Każde ustawienie z okna ma własną flagę, na przykład <code>--loss</code> albo
+  <code>--target</code>. Są wypisane, razem z tym, co robią, na
+  <a href="../tabele/#settings-traffic">stronie z tabelami</a>. Opcje poniżej to cała reszta.</p>
+</section>
+
+<section>
+  <h2>Każda pozostała opcja</h2>
+  {{page.cli_reference}}
+</section>
+
+<section>
+  <h2>Co wypisuje</h2>
+  <p>Log, przeznaczony dla ludzi, idzie na standardowe wyjście błędów, a każda linia zaczyna się od
+  <code>[bean]</code>. Dane idą na standardowe wyjście: linia raportu co kilka sekund i podsumowanie
+  na końcu. Z <code>--format json</code> standardowe wyjście niesie jeden obiekt JSON na linię:
+  obiekt <code>sample</code> dla każdego raportu i na końcu <code>summary</code> z kodem wyjścia,
+  ziarnem i komendą, która powtarza przebieg.</p>
+<pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Każdy sposób zakończenia przebiegu ma własny kod wyjścia, więc pipeline odróżni padającą
+  aplikację od narzędzia, które nie mogło wystartować. Kody są wypisane na
+  <a href="../tabele/">stronie z tabelami</a>.</p>
+</section>
+
+<section>
+  <h2>Przykłady</h2>
+  <p>Popsuj jeden program przez minutę i nic więcej na komputerze:</p>
+<pre><code>BeanNetworkTester.exe --target myapp.exe --latency 200 --loss 2 --duration 60</code></pre>
+  <p>Popsuj jeden serwer przez dwie minuty, z wyjściem, które pipeline umie przeczytać, i zakończ
+  błędem, jeśli nic nie zostało przechwycone:</p>
+<pre><code>BeanNetworkTester.exe --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 120 --format json --fail-on-no-traffic</code></pre>
+  <p>Odtwarzaj w pętli przez dziesięć minut gotowy scenariusz, który sam się nie powtarza,
+  i zachowaj raport, który powtarza przebieg:</p>
+<pre><code>BeanNetworkTester.exe --scenario scenarios/upload-drop-midway.json --loop --target myapp.exe --duration 600 --repro-out run.json</code></pre>
+  <p>Więcej przepisów dla pipeline'ów jest na stronie
+  <a href="../testy-sieciowe-w-ci/">Testy sieciowe w CI</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

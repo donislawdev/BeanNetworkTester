@@ -1013,6 +1013,30 @@ def test_every_setting_is_explained_and_every_explanation_names_a_setting():
           not set(fields.FIELDS) - set(written), f"({sorted(set(fields.FIELDS) - set(written))})")
 
 
+def test_every_command_line_option_is_explained_once(tmp_path):
+    """Every option the parser accepts is on the site: a setting's flag on the reference
+    page, everything else once on the command-line page, and no sentence is left for an
+    option the parser no longer has."""
+    options = build_site.cli_options()
+    check("there are options beyond the settings", len(options) >= 20, f"({len(options)})")
+    grouped = [name for _, names in build_site.CLI_GROUPS for name in names]
+    check("each option sits in exactly one group",
+          sorted(grouped) == sorted(options), f"({sorted(set(grouped) ^ set(options))})")
+    dests = {action.dest for action in options.values()}
+    written = {key[len("flag."):] for key in _site_strings("en") if key.startswith("flag.")}
+    check("every option has a sentence and every sentence an option",
+          written == dests, f"({sorted(written ^ dests)})")
+    out, _ = _build(tmp_path, "cli")
+    registry = build_site.load_registry(ROOT)
+    page = next(p for p in build_site.load_pages(ROOT, registry) if p["id"] == "cli")
+    for code in page["codes"]:
+        rel = posixpath.join(page["languages"][code]["dir_path"], "index.html").lstrip("/")
+        text = _read(os.path.join(out, rel.replace("/", os.sep)))
+        for name in options:
+            check(f"{rel}: {name} has its own entry", f'<dt id="flag-{name[2:]}">' in text,
+                  "(missing entry)")
+
+
 def test_every_explanation_was_read_against_the_program_text_it_explains():
     """A site sentence about a setting was checked against what the program says of it.
 

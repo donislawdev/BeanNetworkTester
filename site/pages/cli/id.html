@@ -1,0 +1,80 @@
+<section class="hero">
+  <h1>Simulasikan packet loss dari baris perintah</h1>
+  <p class="lead">Program yang sama juga berjalan tanpa jendelanya. Beri opsi apa saja, dan program
+  bekerja di konsol sebagai gantinya. Begitulah skrip atau job CI memakainya.</p>
+</section>
+
+<section>
+  <h2>Cara memulainya</h2>
+  <p>Di Windows, ini adalah <code>BeanNetworkTester.exe</code> yang sama yang membuka jendela: tanpa
+  opsi ia membuka jendela, dan dengan opsi apa pun ia berjalan di konsol tanpa menampilkan jendela.
+  Dari salinan kode sumber, tulis <code>python bean_network_tester.py</code> sebagai gantinya. Di
+  Linux, programnya adalah <code>./BeanNetworkTester</code> di folder yang Anda ekstrak, dan
+  penangkapan sungguhan memerlukan <code>sudo</code>;
+  <a href="../simulasi-jaringan-di-linux/">Jaringan buruk di Linux</a> menjelaskan apa lagi yang
+  diperlukan di sana.</p>
+  <p>Baris perintah selalu berbahasa Inggris, apa pun bahasa jendelanya, sehingga pesannya terbaca
+  sama di setiap log.</p>
+</section>
+
+<section>
+  <h2>Coba dulu tanpa risiko</h2>
+<pre><code>BeanNetworkTester.exe --simulate --loss 20 --duration 10
+BeanNetworkTester.exe --doctor
+BeanNetworkTester.exe --config pengaturan-saya.json --dry-run</code></pre>
+  <p>Yang pertama berjalan dengan lalu lintas buatan, jadi tidak memerlukan driver maupun hak
+  administrator dan tidak bisa menyentuh jaringan. Yang kedua memeriksa komputer ini: hak yang
+  diperlukan penangkapan, driver penangkapan, dan sisa dari jalannya sebelumnya. Yang ketiga membaca
+  berkas pengaturan dan mengatakan apakah berkas itu valid, tanpa memulai apa pun.</p>
+</section>
+
+<section>
+  <h2>Dari mana pengaturan berasal</h2>
+  <p>Empat sumber, masing-masing menimpa yang sebelumnya: nilai bawaan, berkas pengaturan
+  (<code>--config</code>), profil siap pakai (<code>--preset</code>), dan opsi di baris perintah.
+  <code>--print-config</code> menampilkan hasilnya sebagai JSON, dan <code>--save-config</code>
+  menuliskannya ke berkas yang bisa Anda muat lagi, di jendela atau di baris perintah.</p>
+  <p>Setiap pengaturan di jendela punya opsinya sendiri, seperti <code>--loss</code> atau
+  <code>--target</code>. Semuanya tercantum, beserta fungsinya, di
+  <a href="../tabel-referensi/#settings-traffic">halaman tabel referensi</a>. Opsi di bawah ini
+  adalah sisanya.</p>
+</section>
+
+<section>
+  <h2>Semua opsi lainnya</h2>
+  {{page.cli_reference}}
+</section>
+
+<section>
+  <h2>Apa yang dicetaknya</h2>
+  <p>Log, yang ditujukan untuk manusia, masuk ke standard error, dan setiap barisnya diawali
+  <code>[bean]</code>. Data masuk ke standard output: satu baris laporan setiap beberapa detik dan
+  ringkasan di akhir. Dengan <code>--format json</code>, standard output membawa satu objek JSON per
+  baris: objek <code>sample</code> untuk setiap laporan dan <code>summary</code> terakhir dengan kode
+  keluar, seed, dan perintah yang mengulang jalannya.</p>
+<pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Setiap cara sebuah jalannya berakhir punya kode keluarnya sendiri, sehingga pipeline bisa
+  membedakan aplikasi yang gagal dari alat yang tidak bisa dimulai. Kodenya tercantum di
+  <a href="../tabel-referensi/">halaman tabel referensi</a>.</p>
+</section>
+
+<section>
+  <h2>Contoh</h2>
+  <p>Ganggu satu program selama satu menit, dan tidak ada yang lain di komputer:</p>
+<pre><code>BeanNetworkTester.exe --target myapp.exe --latency 200 --loss 2 --duration 60</code></pre>
+  <p>Ganggu satu server selama dua menit, dengan keluaran yang bisa dibaca pipeline, dan gagal jika
+  tidak ada yang tertangkap sama sekali:</p>
+<pre><code>BeanNetworkTester.exe --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 120 --format json --fail-on-no-traffic</code></pre>
+  <p>Putar berulang selama sepuluh menit skenario siap pakai yang tidak berulang dengan sendirinya,
+  dan simpan laporan yang mengulang jalannya:</p>
+<pre><code>BeanNetworkTester.exe --scenario scenarios/upload-drop-midway.json --loop --target myapp.exe --duration 600 --repro-out run.json</code></pre>
+  <p>Resep lain untuk pipeline ada di
+  <a href="../uji-jaringan-di-ci/">Uji jaringan di CI</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

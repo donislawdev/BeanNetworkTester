@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>从命令行模拟丢包</h1>
+  <p class="lead">同一个程序也可以不打开窗口运行。只要给它任意一个选项，它就会在控制台中工作，脚本和 CI 任务就是这样使用它的。</p>
+</section>
+
+<section>
+  <h2>如何启动</h2>
+  <p>在 Windows 上，它就是打开窗口的那个 <code>BeanNetworkTester.exe</code>：不带选项时打开窗口，带上任意选项时在控制台中运行，不显示窗口。如果使用源代码副本，请改写为 <code>python bean_network_tester.py</code>。在 Linux 上，程序是解压目录中的 <code>./BeanNetworkTester</code>，真正的捕获需要 <code>sudo</code>；<a href="../linux-ruowang-moni/">在 Linux 上模拟弱网</a> 说明了它在那里还需要什么。</p>
+  <p>无论窗口使用哪种语言，命令行始终使用英语，因此它的消息在任何日志中都一样。</p>
+</section>
+
+<section>
+  <h2>先在没有风险的情况下试一试</h2>
+<pre><code>BeanNetworkTester.exe --simulate --loss 20 --duration 10
+BeanNetworkTester.exe --doctor
+BeanNetworkTester.exe --config my-settings.json --dry-run</code></pre>
+  <p>第一条命令使用模拟的流量运行，因此不需要驱动，也不需要管理员权限，不会影响网络。第二条检查这台电脑：捕获所需的权限、捕获驱动，以及之前运行留下的残留。第三条读取一个设置文件并告诉你它是否有效，不会启动任何东西。</p>
+</section>
+
+<section>
+  <h2>设置从哪里来</h2>
+  <p>有四个来源，后一个覆盖前一个：默认值、设置文件（<code>--config</code>）、现成的配置方案（<code>--preset</code>）以及命令行上的参数。<code>--print-config</code> 以 JSON 显示最终结果，<code>--save-config</code> 把它写入一个文件，之后可以在窗口或命令行中再次加载。</p>
+  <p>窗口中的每项设置都有自己的参数，例如 <code>--loss</code> 或 <code>--target</code>。它们连同各自的作用列在<a href="../cankao-biao/#settings-traffic">参考表页面</a>上。下面的选项是其余全部。</p>
+</section>
+
+<section>
+  <h2>其他所有选项</h2>
+  {{page.cli_reference}}
+</section>
+
+<section>
+  <h2>它会输出什么</h2>
+  <p>给人看的日志写到标准错误输出，每行以 <code>[bean]</code> 开头。数据写到标准输出：每隔几秒一行报告，结束时一份汇总。使用 <code>--format json</code> 时，标准输出每行一个 JSON 对象：每次报告一个 <code>sample</code> 对象，最后一个 <code>summary</code>，其中包含退出码、种子和可重复这次运行的命令。</p>
+<pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>每种结束方式都有自己的退出码，因此流水线可以区分是应用程序出错还是工具没能启动。退出码列在<a href="../cankao-biao/">参考表页面</a>上。</p>
+</section>
+
+<section>
+  <h2>示例</h2>
+  <p>让一个程序的网络变差一分钟，电脑上的其他一切不受影响：</p>
+<pre><code>BeanNetworkTester.exe --target myapp.exe --latency 200 --loss 2 --duration 60</code></pre>
+  <p>让一台服务器的网络变差两分钟，输出流水线能读取的格式，如果什么都没有捕获到就以失败结束：</p>
+<pre><code>BeanNetworkTester.exe --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 120 --format json --fail-on-no-traffic</code></pre>
+  <p>把一个本身不重复的现成场景循环播放十分钟，并保存一份可以重复这次运行的报告：</p>
+<pre><code>BeanNetworkTester.exe --scenario scenarios/upload-drop-midway.json --loop --target myapp.exe --duration 600 --repro-out run.json</code></pre>
+  <p>更多流水线用法见<a href="../ci-wangluo-ceshi/">CI 中的网络测试</a>。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
