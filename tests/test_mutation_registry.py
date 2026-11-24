@@ -1642,8 +1642,8 @@ MUTATIONS = [
         # A translation merged into lang/ would change the pages and never redeploy.
         "label": "site: the workflow stops watching the program's language files",
         "file": ".github/workflows/pages.yml",
-        "old": '      - "lang/**"\n      - "beantester/appinfo.py"',
-        "new": '      - "beantester/appinfo.py"',
+        "old": '      - "lang/**"\n      - "bean.png"',
+        "new": '      - "bean.png"',
         "test": "test_the_workflow_rebuilds_when_any_source_of_the_page_changes",
     },
     {

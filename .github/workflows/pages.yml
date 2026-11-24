@@ -21,7 +21,12 @@ on:
       - "site/**"
       - "tools/build_site.py"
       - "tests/test_site.py"
-      - "beantester/gui/theme.py"
+      # The program itself: the reference tables and the command-line page are
+      # generated from its registries (profiles, settings, exit codes, the argument
+      # parser), and the palette comes from its theme. Those modules import others, so
+      # the whole package rather than a list of files that would have to follow every
+      # import.
+      - "beantester/**"
       # The site reads the shipped scenario corpus for the table on the scenarios
       # page, so editing a scenario changes the site. Without this line the page would
       # keep serving the previous list and look like a page nobody edited.
@@ -32,7 +37,6 @@ on:
       # that reads that file, and the build prints which languages still fall back to
       # the default one.
       - "lang/**"
-      - "beantester/appinfo.py"
       - "bean.png"
       - "docs/demo.gif"
       - "docs/og-image.png"

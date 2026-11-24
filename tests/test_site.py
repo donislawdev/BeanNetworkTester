@@ -1348,8 +1348,50 @@ def test_the_workflow_rebuilds_when_any_source_of_the_page_changes(tmp_path):
     # words from them, so a translation merged into `lang/` changes the published pages.
     if '"lang"' in builder_text:
         needed.append("lang/**")
+    # And the program modules the generator imports: the reference tables are read out
+    # of them, so a new profile, setting or exit code changes the site. They were
+    # missing from the filter while the theme was in it, so such a change reached the
+    # live page only with the next edit under site/.
+    program = _program_modules(builder_text)
+    check("the generator's program imports are found", "beantester/presets.py" in program,
+          f"(found {program})")
+    needed += program
+    patterns = _filter_patterns(text)
     for path in needed:
-        check(f"the paths filter covers {path}", f'"{path}"' in text, "(missing)")
+        check(f"the paths filter covers {path}",
+              any(_glob_covers(pattern, path) for pattern in patterns), f"(filter {patterns})")
+
+
+def _program_modules(builder_text):
+    """The ``beantester`` modules ``build_site.py`` imports, as repository paths."""
+    import ast
+    found = []
+    for node in ast.walk(ast.parse(builder_text)):
+        if isinstance(node, ast.ImportFrom) and node.module == "beantester":
+            found += ["beantester/%s.py" % alias.name for alias in node.names]
+    return sorted(found)
+
+
+def _filter_patterns(text):
+    """The patterns under the push trigger's ``paths:``."""
+    block = text.split("paths:", 1)[1].split("workflow_dispatch:", 1)[0]
+    return re.findall(r'-\s*"([^"]+)"', block)
+
+
+def _glob_covers(pattern, path):
+    """Whether a paths-filter pattern matches ``path``: ``**`` crosses folders, ``*``
+    stays inside one, as GitHub reads them."""
+    rx = (re.escape(pattern).replace(r"\*\*", "\0").replace(r"\*", "[^/]*")
+          .replace("\0", ".*"))
+    return re.fullmatch(rx, path) is not None
+
+
+def test_the_paths_filter_reader_can_say_no():
+    """Canary for the check above: a reader that matched everything would pass it."""
+    check("** crosses folders", _glob_covers("beantester/**", "beantester/gui/theme.py"))
+    check("* stays in one folder", not _glob_covers("beantester/*.py", "beantester/gui/theme.py"))
+    check("another folder is not covered", not _glob_covers("site/**", "beantester/fields.py"))
+    check("a plain path covers only itself", not _glob_covers("bean.png", "docs/bean.png"))
 
 
 def test_only_the_job_that_deploys_may_write_to_pages():
