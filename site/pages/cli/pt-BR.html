@@ -1,0 +1,79 @@
+<section class="hero">
+  <h1>Simular perda de pacotes pela linha de comando</h1>
+  <p class="lead">O mesmo programa também roda sem a janela. Passe qualquer opção e ele trabalha no
+  console no lugar dela: é assim que um script ou um job de CI o usa.</p>
+</section>
+
+<section>
+  <h2>Como ele inicia</h2>
+  <p>No Windows é o mesmo <code>BeanNetworkTester.exe</code> que abre a janela: sem opções ele abre
+  a janela, e com qualquer opção roda no console e não mostra janela nenhuma. A partir de uma cópia
+  do código-fonte, escreva <code>python bean_network_tester.py</code> no lugar. No Linux o programa é
+  <code>./BeanNetworkTester</code> na pasta que você descompactou, e uma captura real precisa de
+  <code>sudo</code>; <a href="../simular-rede-no-linux/">Rede ruim no Linux</a> diz do que mais ele
+  precisa lá.</p>
+  <p>A linha de comando fala sempre em inglês, seja qual for o idioma da janela, para que as
+  mensagens sejam lidas do mesmo jeito em qualquer log.</p>
+</section>
+
+<section>
+  <h2>Experimente primeiro sem risco</h2>
+<pre><code>BeanNetworkTester.exe --simulate --loss 20 --duration 10
+BeanNetworkTester.exe --doctor
+BeanNetworkTester.exe --config minhas-configuracoes.json --dry-run</code></pre>
+  <p>O primeiro roda com tráfego inventado, então não precisa de driver nem de direitos de
+  administrador e não pode mexer na rede. O segundo verifica este computador: os direitos de que uma
+  captura precisa, o driver de captura e as sobras de uma execução anterior. O terceiro lê um arquivo
+  de configurações e diz se ele é válido, sem iniciar nada.</p>
+</section>
+
+<section>
+  <h2>De onde vêm as configurações</h2>
+  <p>Quatro fontes, cada uma substituindo a anterior: os valores padrão, um arquivo de configurações
+  (<code>--config</code>), um perfil pronto (<code>--preset</code>) e as opções da linha de comando.
+  <code>--print-config</code> mostra o resultado em JSON, e <code>--save-config</code> grava em um
+  arquivo que você pode carregar de novo, na janela ou na linha de comando.</p>
+  <p>Cada configuração da janela tem sua própria opção, como <code>--loss</code> ou
+  <code>--target</code>. Elas estão listadas, com o que cada uma faz, na
+  <a href="../tabelas-de-referencia/#settings-traffic">página de tabelas de referência</a>. As
+  opções abaixo são todo o resto.</p>
+</section>
+
+<section>
+  <h2>Todas as outras opções</h2>
+  {{page.cli_reference}}
+</section>
+
+<section>
+  <h2>O que ele mostra</h2>
+  <p>O log, feito para pessoas, vai para a saída de erro padrão, e cada linha começa com
+  <code>[bean]</code>. Os dados vão para a saída padrão: uma linha de relatório a cada poucos
+  segundos e um resumo no fim. Com <code>--format json</code>, a saída padrão leva um objeto JSON por
+  linha: um objeto <code>sample</code> para cada relatório e um <code>summary</code> final com o
+  código de saída, a semente e o comando que repete a execução.</p>
+<pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Cada jeito de uma execução terminar tem seu próprio código de saída, então um pipeline
+  diferencia um aplicativo que falha de uma ferramenta que não conseguiu iniciar. Os códigos estão na
+  <a href="../tabelas-de-referencia/">página de tabelas de referência</a>.</p>
+</section>
+
+<section>
+  <h2>Exemplos</h2>
+  <p>Degradar um único programa por um minuto, e nada mais no computador:</p>
+<pre><code>BeanNetworkTester.exe --target myapp.exe --latency 200 --loss 2 --duration 60</code></pre>
+  <p>Degradar um único servidor por dois minutos, com uma saída que um pipeline consegue ler, e
+  falhar se nada tiver sido capturado:</p>
+<pre><code>BeanNetworkTester.exe --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 120 --format json --fail-on-no-traffic</code></pre>
+  <p>Tocar em loop por dez minutos um cenário pronto que não se repete sozinho, e guardar um
+  relatório que repete a execução:</p>
+<pre><code>BeanNetworkTester.exe --scenario scenarios/upload-drop-midway.json --loop --target myapp.exe --duration 600 --repro-out run.json</code></pre>
+  <p>Há mais receitas para pipelines em
+  <a href="../testes-de-rede-no-ci/">Testes de rede no CI</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

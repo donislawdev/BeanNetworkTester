@@ -25,13 +25,38 @@
 </section>
 
 <section>
+  <h2>Każdy klucz, jaki może mieć plik scenariusza</h2>
+  {{page.scenario_reference}}
+  <p>Nazwy w <code>settings</code> są takie same jak w zapisanym pliku ustawień, a
+  <a href="../tabele/#settings-traffic">strona z tabelami</a> wymienia każdą z wartościami, jakie
+  przyjmuje. Krok nie zmieni tych ustawień, bo sesja bierze je tylko przy starcie albo czytają je
+  tylko tabele okna. Krok, który ustawia któreś z nich, i tak się wczyta, a log powie, że niczego nie
+  zmienił:</p>
+  {{page.scenario_not_live}}
+</section>
+
+<section>
+  <h2>Sprawdzane przy wczytaniu</h2>
+  <p>Błąd wskazuje swój krok, zanim cokolwiek ruszy: nieznane ustawienie, klucz albo akcja, wartość
+  spoza zakresu, krok, który nic nie robi, lista pusta albo za długa. Literówka w kluczu byłaby
+  inaczej cicha, a plik, który się wczytuje, ale nie robi tego, co mówi, wygląda jak narzędzie, które
+  go ignoruje. <code>--dry-run</code> sprawdza scenariusz bez ładowania sterownika, więc to tani krok
+  w pipeline:</p>
+<pre><code>BeanNetworkTester.exe --scenario moj-scenariusz.json --dry-run</code></pre>
+  <p>Kroki nakłada zegar, który tyka co dziesiątą część sekundy, więc czas z ułamkiem jest
+  dotrzymany mniej więcej z taką dokładnością.</p>
+</section>
+
+<section>
   <h2>Z programem dostajesz {{page.scenario_count}} gotowych scenariuszy</h2>
-  <p>W katalogu <code>scenarios</code> obok pliku wykonywalnego. Odczytane z tych plików, więc to
-  jest to, co naprawdę masz:</p>
+  <p>Leżą w folderze programu: w <code>_internal\scenarios</code> w paczce zip, instalatorze,
+  WinGet, Chocolatey i paczce dla Linuksa, a w <code>scenarios</code> w kopii kodu źródłowego. Tam
+  otwiera się okno wyboru pliku, a w linii komend
+  <code>--scenario scenarios/cafe-wifi.json</code> znajduje gotowy scenariusz z dowolnego folderu.
+  Ta tabela jest czytana z tych plików, więc pokazuje to, co naprawdę masz:</p>
   {{page.scenario_table}}
-  <p>To zwykły tekst - otwórz jeden, zmień liczbę, zapisz. Nazwy mówią, co odtwarzają: zatłoczoną
-  kawiarnię, łącze mobilne spadające z LTE na 3G, wysyłanie, które umiera w połowie, przeciążony
-  serwer, DNS, który przestaje odpowiadać.</p>
+  <p>To zwykły tekst JSON. Żeby któryś zmienić, skopiuj go w swoje miejsce, popraw liczbę i wczytaj
+  swoją kopię.</p>
 </section>
 
 <section>

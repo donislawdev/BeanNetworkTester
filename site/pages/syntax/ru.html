@@ -1,0 +1,149 @@
+<section class="hero">
+  <h1>Синтаксис фильтров: имена, PID, диапазоны IP, CIDR и порты</h1>
+  <p class="lead">Один небольшой язык нацеливает инструмент на программы, адреса и порты. Он
+  работает одинаково в окне и в командной строке, а каждый пример на этой странице проверен
+  собственным разборщиком программы.</p>
+</section>
+
+<section>
+  <h2>Где он используется</h2>
+  <p>В окне: поле целевого процесса, поля адреса и порта в разделах {{app.frames.destination}}
+  и {{app.frames.block}} и два поля размера данных. В командной строке: <code>--target</code>,
+  <code>--dst-ip</code>, <code>--dst-port</code>, <code>--block-ip</code>,
+  <code>--block-port</code>, <code>--payload-udp</code> и <code>--payload-tcp</code>. Пустое поле
+  означает всё.</p>
+</section>
+
+<section>
+  <h2>Кирпичики</h2>
+  <table>
+    <tr><th>Пишите</th><th>Значит</th><th>Пример</th></tr>
+    <tr><td><code>a,b,c</code></td><td>список: подходит любой элемент</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>диапазон, оба конца включены</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>сравнение, для чисел и адресов</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>исключить это</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>подстановочный знак: любая последовательность символов или один символ</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>регулярное выражение, регистр не важен</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>блок CIDR, только для адресов</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>Пробелы вокруг запятых игнорируются, как и пустое место между двумя запятыми.
+  <code>!</code>, после которого ничего нет, считается ошибкой:
+  <code data-kind="port-wrong">80,!</code> отклоняется.</p>
+</section>
+
+<section>
+  <h2>Как сочетаются элементы</h2>
+  <p>Элементы без <code>!</code> складываются: значение подходит, если подходит любой из них или
+  если их нет вовсе. Элементы с <code>!</code> затем вычитают. Порядок не важен, поэтому
+  <code data-kind="port">80,!53</code> и <code data-kind="port">!53,80</code> означают одно и
+  то же.</p>
+  <table>
+    <tr><th>Пишите</th><th>Подходит</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>только порт 443</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>всё, кроме 53, потому что складывать нечего</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>всё, кроме 53 и 443</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>от 1000 до 2000 без 1500</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80, 443, от 8000 до 8100 и всё выше 9000, кроме 8080</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Программы</h2>
+  <p>Элемент - это имя или PID, и одно поле может их смешивать. Обычное имя подходит в любом месте
+  имени программы без учёта регистра, поэтому <code data-kind="process">chrome</code> ловит
+  <code>chrome.exe</code> и <code>chromedriver.exe</code>. Число, диапазон или сравнение - это PID.
+  Подстановочные знаки и <code>re:</code> сравниваются с именем. Сравнение с именем, например
+  <code data-kind="process-wrong">&gt;chrome</code>, отклоняется, а не молча ничего не находит.</p>
+  <table>
+    <tr><th>Пишите</th><th>Подходит</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>любая программа с chrome.exe в имени</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome, но не chromedriver</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>две программы сразу</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>один PID</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>каждый PID из этого диапазона</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>имя, начинающееся с firefox</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>ровно chrome.exe или firefox.exe</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>имя и PID в одном поле</td></tr>
+  </table>
+  <p>Пакет несёт адреса и порты, но никогда не имя программы, поэтому инструмент находит локальные
+  порты, которые держит каждая подходящая программа, нацеливается на них и следит за новыми
+  соединениями, которые она открывает. Несколько портов делят сразу несколько программ (mDNS 5353,
+  SSDP 1900, DHCP 67 и 68). На них действует принцип всё или ничего, и журнал говорит, что из
+  двух.</p>
+</section>
+
+<section>
+  <h2>Адреса</h2>
+  <p>Работают и IPv4, и IPv6, и одно поле может их смешивать: правило для одного семейства никогда
+  не подходит к адресу другого. Как записан адрес, не важно, поэтому
+  <code>2001:0db8:0000:0000:0000:0000:0000:0001</code> и <code>2001:db8::1</code> - один и тот же
+  адрес.</p>
+  <table>
+    <tr><th>Пишите</th><th>Подходит</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>два адреса</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>диапазон с дыркой</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>вся подсеть</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>та же подсеть через подстановочный знак</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>любой адрес, кроме 8.8.8.8</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>подсеть IPv6</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>IPv4 и IPv6 в одном поле</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Порты</h2>
+  <p>Порты идут от 0 до 65535; <code data-kind="port-wrong">99999</code> отклоняется, а не
+  пропускается. Поля размера данных принимают тот же синтаксис, считая в байтах данных.</p>
+  <table>
+    <tr><th>Пишите</th><th>Подходит</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>диапазон, оба конца включены</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>высокие порты</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>привилегированные порты</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>смесь</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Регулярные выражения</h2>
+  <p>Элемент становится регулярным выражением только с <code>re:</code> в начале, поэтому точка в
+  <code>chrome.exe</code> остаётся точкой. Шаблон не учитывает регистр и может совпасть в любом
+  месте текста; чтобы совпадал весь текст, используйте <code>^</code> и <code>$</code>. Запятой
+  внутри шаблона нужна обратная косая черта, потому что запятая разделяет элементы:
+  <code data-kind="process">re:^ch.{1\,8}e\.exe$</code> работает. Без черты
+  <code>re:^ch.{1,8}e\.exe$</code> разрезается по запятой на два элемента, которые оба загружаются
+  и подходят к чему-то другому.</p>
+  <p>Повтор внутри повтора, например <code data-kind="process-wrong">re:^(\w+)+$</code>, отклоняется
+  как слишком медленный: на одном почти подходящем имени он может занять секунды, а адрес
+  проверяется на каждом пакете. Напишите повтор один раз:
+  <code data-kind="process">re:^\w+$</code>.</p>
+</section>
+
+<section>
+  <h2>Подводные камни</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> ловит chromedriver, а
+    <code data-kind="process">chrome.exe</code> нет: обычное имя - это кусок имени.</li>
+    <li><code data-kind="process">chrome*</code> тоже ловит chromedriver. Чтобы попасть ровно в одну
+    программу, пишите <code data-kind="process">re:^chrome\.exe$</code>.</li>
+    <li><code data-kind="port">8*</code> в поле порта - подстановочный знак по цифрам, поэтому он
+    ловит 8, 80, 8080 и 8443, но не 443. Почти всегда имелся в виду диапазон вроде
+    <code data-kind="port">8000-8999</code>.</li>
+    <li><code data-kind="port">!53</code> охватывает и трафик без порта, например ping, потому что
+    пакет ping не является портом 53.</li>
+    <li>Адрес и порт, заданные вместе, должны совпасть оба. Для одного или другого сделайте два
+    запуска.</li>
+    <li><code data-kind="port-wrong">2000-1000</code>, диапазон, записанный задом наперёд,
+    отклоняется.</li>
+    <li>Подстановочный знак - не регулярное выражение: в <code>re:chrome*</code> звёздочка повторяет
+    букву e.</li>
+  </ul>
+  <p>Каждая ошибка сообщается сразу: поле в окне становится красным, а под ним появляется причина,
+  командная строка же завершается понятным сообщением.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,149 @@
+<section class="hero">
+  <h1>Sintaxe de filtros: nomes, PIDs, faixas de IP, CIDR e portas</h1>
+  <p class="lead">Uma pequena linguagem mira a ferramenta em programas, endereços e portas. Ela
+  funciona do mesmo jeito na janela e na linha de comando, e cada exemplo desta página é verificado
+  pelo próprio analisador do programa.</p>
+</section>
+
+<section>
+  <h2>Onde ela é usada</h2>
+  <p>Na janela: o campo do processo alvo, os campos de endereço e porta em
+  {{app.frames.destination}} e em {{app.frames.block}}, e os dois campos de tamanho de dados. Na
+  linha de comando: <code>--target</code>, <code>--dst-ip</code>, <code>--dst-port</code>,
+  <code>--block-ip</code>, <code>--block-port</code>, <code>--payload-udp</code> e
+  <code>--payload-tcp</code>. Um campo vazio significa tudo.</p>
+</section>
+
+<section>
+  <h2>As peças</h2>
+  <table>
+    <tr><th>Escreva</th><th>Significa</th><th>Exemplo</th></tr>
+    <tr><td><code>a,b,c</code></td><td>uma lista: basta um deles</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>uma faixa, com as duas pontas</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>uma comparação, para números e endereços</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>deixe isto de fora</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>um curinga: qualquer sequência de caracteres, ou um só</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>uma expressão regular, sem diferenciar maiúsculas</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>um bloco CIDR, só para endereços</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>Espaços em volta das vírgulas são ignorados, assim como um espaço vazio entre duas vírgulas. Um
+  <code>!</code> sem nada depois é um erro: <code data-kind="port-wrong">80,!</code> é
+  recusado.</p>
+</section>
+
+<section>
+  <h2>Como os termos se combinam</h2>
+  <p>Os termos sem <code>!</code> se somam: um valor bate se algum deles bater, ou se não houver
+  nenhum. Os termos com <code>!</code> depois tiram. A ordem não importa, então
+  <code data-kind="port">80,!53</code> e <code data-kind="port">!53,80</code> são a mesma
+  coisa.</p>
+  <table>
+    <tr><th>Escreva</th><th>Bate com</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>só a porta 443</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>tudo menos 53, já que não há nada para somar</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>tudo menos 53 e 443</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>de 1000 a 2000, sem 1500</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80, 443, de 8000 a 8100 e tudo acima de 9000, menos 8080</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Programas</h2>
+  <p>Um termo é um nome ou um PID, e um campo pode misturar os dois. Um nome simples bate em
+  qualquer parte do nome do programa, sem diferenciar maiúsculas, então
+  <code data-kind="process">chrome</code> pega <code>chrome.exe</code> e
+  <code>chromedriver.exe</code>. Um número sozinho, uma faixa ou uma comparação é um PID. Curingas e
+  <code>re:</code> valem para o nome. Uma comparação com um nome, como
+  <code data-kind="process-wrong">&gt;chrome</code>, é recusada em vez de não bater com nada.</p>
+  <table>
+    <tr><th>Escreva</th><th>Bate com</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>todo programa com chrome.exe no nome</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>o Chrome, mas não o chromedriver</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>dois programas de uma vez</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>um PID</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>todos os PIDs dessa faixa</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>um nome que começa com firefox</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>exatamente chrome.exe ou firefox.exe</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>um nome e um PID no mesmo campo</td></tr>
+  </table>
+  <p>Um pacote leva endereços e portas, nunca o nome de um programa, então a ferramenta descobre as
+  portas locais que cada programa que bate ocupa, mira nelas e acompanha as novas conexões que ele
+  abre. Algumas portas são compartilhadas por vários programas ao mesmo tempo (mDNS 5353, SSDP 1900,
+  DHCP 67 e 68). Nelas é tudo ou nada, e o log diz qual dos dois.</p>
+</section>
+
+<section>
+  <h2>Endereços</h2>
+  <p>IPv4 e IPv6 funcionam, e um campo pode misturar os dois: uma regra de uma família nunca bate com
+  um endereço da outra. O jeito de escrever o endereço não importa, então
+  <code>2001:0db8:0000:0000:0000:0000:0000:0001</code> e <code>2001:db8::1</code> são o mesmo
+  endereço.</p>
+  <table>
+    <tr><th>Escreva</th><th>Bate com</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>dois endereços</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>uma faixa com um buraco</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>uma sub-rede inteira</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>a mesma sub-rede, por curinga</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>todos os endereços menos 8.8.8.8</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>uma sub-rede IPv6</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>IPv4 e IPv6 no mesmo campo</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Portas</h2>
+  <p>As portas vão de 0 a 65535; <code data-kind="port-wrong">99999</code> é recusado em vez de
+  pulado. Os campos de tamanho de dados usam a mesma sintaxe, contada em bytes de dados.</p>
+  <table>
+    <tr><th>Escreva</th><th>Bate com</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>uma faixa, com as duas pontas</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>as portas altas</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>as portas privilegiadas</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>uma mistura</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Expressões regulares</h2>
+  <p>Um termo só é uma expressão regular com <code>re:</code> na frente, então um ponto em
+  <code>chrome.exe</code> continua sendo um ponto. O padrão não diferencia maiúsculas e pode bater em
+  qualquer parte do texto; use <code>^</code> e <code>$</code> para bater com o todo. Uma vírgula
+  dentro de um padrão precisa de uma barra invertida, porque a vírgula separa os termos:
+  <code data-kind="process">re:^ch.{1\,8}e\.exe$</code> funciona. Sem a barra,
+  <code>re:^ch.{1,8}e\.exe$</code> é cortado na vírgula em dois termos que carregam os dois e batem
+  com outra coisa.</p>
+  <p>Uma repetição dentro de outra, como <code data-kind="process-wrong">re:^(\w+)+$</code>, é
+  recusada por ser lenta demais: pode levar segundos com um único nome que quase bate, e um endereço
+  é verificado em cada pacote. Escreva a repetição uma vez:
+  <code data-kind="process">re:^\w+$</code>.</p>
+</section>
+
+<section>
+  <h2>Armadilhas comuns</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> pega o chromedriver, e
+    <code data-kind="process">chrome.exe</code> não: um nome simples é um pedaço do nome.</li>
+    <li><code data-kind="process">chrome*</code> também pega o chromedriver. Para exatamente um
+    programa, escreva <code data-kind="process">re:^chrome\.exe$</code>.</li>
+    <li><code data-kind="port">8*</code> num campo de porta é um curinga sobre os dígitos, então pega
+    8, 80, 8080 e 8443, mas não 443. Quase sempre você queria uma faixa como
+    <code data-kind="port">8000-8999</code>.</li>
+    <li><code data-kind="port">!53</code> também cobre tráfego sem porta nenhuma, como o ping,
+    porque um pacote de ping não é a porta 53.</li>
+    <li>Um endereço e uma porta definidos juntos precisam bater os dois. Para um ou outro, faça duas
+    execuções.</li>
+    <li><code data-kind="port-wrong">2000-1000</code>, uma faixa escrita ao contrário, é
+    recusada.</li>
+    <li>Um curinga não é uma expressão regular: em <code>re:chrome*</code> a estrela repete a letra
+    e.</li>
+  </ul>
+  <p>Todo erro é avisado na hora: o campo da janela fica vermelho com o motivo embaixo, e a linha de
+  comando termina com uma mensagem legível.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

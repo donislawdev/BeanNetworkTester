@@ -1,0 +1,138 @@
+{
+  "id": "cli",
+  "order": 85,
+  "languages": {
+    "en": {
+      "slug": "command-line",
+      "link_text": "Command line",
+      "title": "Simulate packet loss from the command line",
+      "description": "Add packet loss, lag and speed limits from a command prompt, a script or a CI job: how it starts, where settings come from, and every option explained."
+    },
+    "pl": {
+      "slug": "linia-komend",
+      "link_text": "Linia komend",
+      "title": "Symulacja utraty pakietów z linii komend",
+      "description": "Utrata pakietów, opóźnienie i limit prędkości z wiersza poleceń, skryptu albo CI: jak to uruchomić, skąd biorą się ustawienia i co robi każda opcja."
+    },
+    "zh-Hans": {
+      "slug": "minglinghang",
+      "link_text": "命令行",
+      "title": "从命令行模拟丢包",
+      "description": "在命令提示符、脚本或 CI 任务中加入丢包、延迟和限速：如何启动、设置从哪里来，以及每个选项的说明。"
+    },
+    "ja": {
+      "slug": "komando-rain",
+      "link_text": "コマンドライン",
+      "title": "コマンドラインでパケットロスを再現する",
+      "description": "コマンドプロンプトやスクリプト、CI からパケットロス・遅延・速度制限を加える方法。起動のしかた、設定の読み込み元、全オプションの説明。"
+    },
+    "de": {
+      "slug": "befehlszeile",
+      "link_text": "Befehlszeile",
+      "title": "Paketverlust per Befehlszeile simulieren",
+      "description": "Paketverlust, Verzögerung und Tempolimit aus der Eingabeaufforderung, einem Skript oder CI: Start, Herkunft der Einstellungen und jede Option erklärt."
+    },
+    "fr": {
+      "slug": "ligne-de-commande",
+      "link_text": "Ligne de commande",
+      "title": "Simuler la perte de paquets en ligne de commande",
+      "description": "Ajouter perte de paquets, latence et limite de débit depuis une invite de commande, un script ou une CI : démarrage, réglages et chaque option."
+    },
+    "es": {
+      "slug": "linea-de-comandos",
+      "link_text": "Línea de comandos",
+      "title": "Simular pérdida de paquetes desde la línea de comandos",
+      "description": "Añade pérdida de paquetes, latencia y límite de velocidad desde el símbolo del sistema, un script o CI: cómo se inicia, los ajustes y cada opción."
+    },
+    "pt-BR": {
+      "slug": "linha-de-comando",
+      "link_text": "Linha de comando",
+      "title": "Simular perda de pacotes pela linha de comando",
+      "description": "Adicione perda de pacotes, atraso e limite de velocidade pelo prompt de comando, um script ou CI: como iniciar, as configurações e cada opção."
+    },
+    "it": {
+      "slug": "riga-di-comando",
+      "link_text": "Riga di comando",
+      "title": "Simulare la perdita di pacchetti da riga di comando",
+      "description": "Aggiungi perdita di pacchetti, ritardo e limiti di velocità dal prompt dei comandi, da uno script o dalla CI: avvio, impostazioni e ogni opzione."
+    },
+    "id": {
+      "slug": "baris-perintah",
+      "link_text": "Baris perintah",
+      "title": "Simulasikan packet loss dari baris perintah",
+      "description": "Tambahkan packet loss, lag, dan batas kecepatan dari command prompt, skrip, atau CI: cara memulai, asal pengaturan, dan penjelasan setiap opsi."
+    },
+    "ru": {
+      "slug": "komandnaya-stroka",
+      "link_text": "Командная строка",
+      "title": "Имитация потери пакетов из командной строки",
+      "description": "Потеря пакетов, задержка и ограничение скорости из командной строки, скрипта или CI: как запустить, откуда берутся настройки и каждый параметр."
+    },
+    "tr": {
+      "slug": "komut-satiri",
+      "link_text": "Komut satırı",
+      "title": "Komut satırından paket kaybı simülasyonu",
+      "description": "Komut isteminden, bir betikten ya da CI'dan paket kaybı, gecikme ve hız sınırı ekleyin: nasıl başlar, ayarlar nereden gelir ve her seçenek."
+    },
+    "cs": {
+      "slug": "prikazovy-radek",
+      "link_text": "Příkazový řádek",
+      "title": "Simulace ztráty paketů z příkazového řádku",
+      "description": "Ztráta paketů, zpoždění a omezení rychlosti z příkazového řádku, skriptu nebo CI: jak spustit, odkud se berou nastavení a co dělá každý přepínač."
+    },
+    "vi": {
+      "slug": "dong-lenh",
+      "link_text": "Dòng lệnh",
+      "title": "Giả lập mất gói từ dòng lệnh",
+      "description": "Thêm mất gói, độ trễ và giới hạn tốc độ từ command prompt, script hoặc CI: cách khởi động, thiết lập lấy từ đâu và giải thích từng tùy chọn."
+    },
+    "hi": {
+      "slug": "kamand-lain",
+      "link_text": "कमांड लाइन",
+      "title": "कमांड लाइन से पैकेट लॉस सिम्युलेट करें",
+      "description": "कमांड प्रॉम्प्ट, स्क्रिप्ट या CI से पैकेट लॉस, देरी और गति सीमा जोड़ें: कैसे शुरू करें, सेटिंग कहाँ से आती हैं, और हर विकल्प की व्याख्या।"
+    },
+    "ko": {
+      "slug": "myeongnyeongjul",
+      "link_text": "명령줄",
+      "title": "명령줄에서 패킷 손실 시뮬레이션",
+      "description": "명령 프롬프트, 스크립트, CI에서 패킷 손실, 지연, 속도 제한을 거는 방법: 시작 방법, 설정 출처, 모든 옵션 설명."
+    },
+    "ar": {
+      "slug": "satr-al-awamir",
+      "link_text": "سطر الأوامر",
+      "title": "محاكاة فقد الحزم من سطر الأوامر",
+      "description": "أضف فقد الحزم والتأخير وحد السرعة من موجه الأوامر أو سكربت أو CI: كيف يبدأ، ومن أين تأتي الإعدادات، وشرح كل خيار."
+    },
+    "ro": {
+      "slug": "linia-de-comanda",
+      "link_text": "Linia de comandă",
+      "title": "Simularea pierderii de pachete din linia de comandă",
+      "description": "Adaugă pierdere de pachete, întârziere și limită de viteză din Command Prompt, un script sau CI: pornirea, setările și fiecare opțiune explicată."
+    },
+    "nl": {
+      "slug": "opdrachtregel",
+      "link_text": "Opdrachtregel",
+      "title": "Pakketverlies simuleren vanaf de opdrachtregel",
+      "description": "Voeg pakketverlies, vertraging en snelheidslimieten toe vanaf de opdrachtprompt, een script of CI: hoe het start, de instellingen en elke optie."
+    },
+    "zh-Hant": {
+      "slug": "minglinglie",
+      "link_text": "命令列",
+      "title": "從命令列模擬封包遺失",
+      "description": "在命令提示字元、指令碼或 CI 中加入封包遺失、延遲和限速：如何啟動、設定從哪裡來，以及每個選項的說明。"
+    },
+    "uk": {
+      "slug": "komandnyi-riadok",
+      "link_text": "Командний рядок",
+      "title": "Імітація втрати пакетів з командного рядка",
+      "description": "Втрата пакетів, затримка й обмеження швидкості з командного рядка, скрипта або CI: як запустити, звідки беруться налаштування і кожен параметр."
+    },
+    "th": {
+      "slug": "banthat-kham-sang",
+      "link_text": "บรรทัดคำสั่ง",
+      "title": "จำลองแพ็กเก็ตสูญหายจากบรรทัดคำสั่ง",
+      "description": "เพิ่มแพ็กเก็ตสูญหาย ความหน่วง และจำกัดความเร็วจาก command prompt สคริปต์ หรือ CI: วิธีเริ่ม ที่มาของการตั้งค่า และคำอธิบายทุกตัวเลือก"
+    }
+  }
+}

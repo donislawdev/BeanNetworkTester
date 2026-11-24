@@ -20,10 +20,38 @@
 </section>
 
 <section>
+  <h2>Ogni chiave che un file di scenario può contenere</h2>
+  {{page.scenario_reference}}
+  <p>I nomi dentro <code>settings</code> sono gli stessi di un file di impostazioni salvato, e la
+  <a href="../tabelle-di-riferimento/#settings-traffic">pagina delle tabelle di riferimento</a> li
+  elenca tutti con i valori che accettano. Un passo non può cambiare queste impostazioni, perché una
+  sessione le prende solo all'avvio o le leggono solo le tabelle della finestra. Un passo che ne
+  imposta una si carica lo stesso, e il registro dice che non ha cambiato nulla:</p>
+  {{page.scenario_not_live}}
+</section>
+
+<section>
+  <h2>Controllato al caricamento</h2>
+  <p>Un errore indica il suo passo prima che parta qualsiasi cosa: un'impostazione, una chiave o
+  un'azione sconosciute, un valore fuori intervallo, un passo che non fa nulla, un elenco vuoto o
+  troppo lungo. Altrimenti una chiave scritta male passerebbe in silenzio, e un file che si carica ma
+  non fa quello che dice sembra uno strumento che lo ignora. <code>--dry-run</code> controlla uno
+  scenario senza caricare il driver, quindi è un passo economico in una pipeline:</p>
+<pre><code>BeanNetworkTester.exe --scenario mio-scenario.json --dry-run</code></pre>
+  <p>I passi vengono applicati da un timer che scatta ogni decimo di secondo, quindi un tempo con i
+  decimali viene rispettato più o meno con quella precisione.</p>
+</section>
+
+<section>
   <h2>{{page.scenario_count}} scenari pronti sono inclusi nel programma</h2>
-  <p>Nella cartella <code>scenarios</code> accanto all’eseguibile. Letti da quei file, quindi questo è ciò che hai davvero:</p>
+  <p>Si trovano nella cartella del programma: sotto <code>_internal\scenarios</code> nello zip,
+  nell'installer, in WinGet, in Chocolatey e nel pacchetto Linux, e sotto <code>scenarios</code> in
+  una copia del codice sorgente. La finestra di scelta del file si apre lì, e dalla riga di comando
+  <code>--scenario scenarios/cafe-wifi.json</code> trova uno scenario pronto da qualsiasi cartella.
+  Questa tabella è letta da quei file, quindi è quello che hai davvero:</p>
   {{page.scenario_table}}
-  <p>Sono testo semplice: ne apri uno, cambi un numero, salvi. I nomi dicono cosa riproducono: un bar affollato, una connessione mobile che passa da LTE a 3G, un upload che muore a metà, un server che si sovraccarica, un DNS che smette di rispondere.</p>
+  <p>Sono normale testo JSON. Per cambiarne uno, copialo in un posto tuo, modifica un numero e carica
+  la tua copia.</p>
 </section>
 
 <section>

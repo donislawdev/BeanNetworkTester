@@ -20,10 +20,38 @@
 </section>
 
 <section>
+  <h2>Cada clave que puede tener un archivo de escenario</h2>
+  {{page.scenario_reference}}
+  <p>Los nombres dentro de <code>settings</code> son los mismos que en un archivo de ajustes guardado,
+  y la <a href="../tablas-de-referencia/#settings-traffic">página de tablas de referencia</a> los
+  enumera todos con los valores que admiten. Un paso no puede cambiar estos ajustes, porque una sesión
+  solo los toma al arrancar o solo los leen las tablas de la ventana. Un paso que fija alguno se carga
+  igualmente, y el registro dice que no cambió nada:</p>
+  {{page.scenario_not_live}}
+</section>
+
+<section>
+  <h2>Se comprueba al cargar</h2>
+  <p>Un error señala su paso antes de que nada se ponga en marcha: un ajuste, una clave o una acción
+  desconocidos, un valor fuera de rango, un paso que no hace nada, una lista vacía o demasiado larga.
+  Si no, una clave mal escrita pasaría en silencio, y un archivo que se carga pero no hace lo que dice
+  parece una herramienta que lo ignora. <code>--dry-run</code> comprueba un escenario sin cargar el
+  controlador, así que es un paso barato en un pipeline:</p>
+<pre><code>BeanNetworkTester.exe --scenario mi-escenario.json --dry-run</code></pre>
+  <p>Los pasos los aplica un temporizador que marca cada décima de segundo, así que un tiempo con
+  decimales se respeta más o menos con esa precisión.</p>
+</section>
+
+<section>
   <h2>{{page.scenario_count}} escenarios listos para usar vienen con el programa</h2>
-  <p>En la carpeta <code>scenarios</code> junto al ejecutable. Leídos de esos archivos, así que esto es lo que realmente tienes:</p>
+  <p>Están en la carpeta del programa: en <code>_internal\scenarios</code> en el zip, el instalador,
+  WinGet, Chocolatey y el paquete de Linux, y en <code>scenarios</code> en una copia del código
+  fuente. El diálogo de archivos de la ventana se abre ahí, y en la línea de comandos
+  <code>--scenario scenarios/cafe-wifi.json</code> encuentra uno listo desde cualquier carpeta. Esta
+  tabla se lee de esos archivos, así que es lo que de verdad tienes:</p>
   {{page.scenario_table}}
-  <p>Son texto corriente: abre uno, cambia un número, guarda. Los nombres dicen lo que reproducen: una cafetería llena, una conexión móvil que cae de LTE a 3G, una subida que muere a medias, un servidor que se sobrecarga, un DNS que deja de responder.</p>
+  <p>Son texto JSON normal. Para cambiar uno, cópialo a un sitio tuyo, cambia un número y carga tu
+  copia.</p>
 </section>
 
 <section>

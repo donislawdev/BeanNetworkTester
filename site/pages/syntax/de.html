@@ -1,0 +1,150 @@
+<section class="hero">
+  <h1>Filtersyntax: Namen, PIDs, IP-Bereiche, CIDR und Ports</h1>
+  <p class="lead">Eine kleine Sprache richtet das Werkzeug auf Programme, Adressen und Ports. Sie
+  funktioniert im Fenster und in der Befehlszeile gleich, und jedes Beispiel auf dieser Seite wird
+  mit dem eigenen Parser des Programms geprüft.</p>
+</section>
+
+<section>
+  <h2>Wo sie gilt</h2>
+  <p>Im Fenster: das Feld für den Zielprozess, die Adress- und Portfelder unter
+  {{app.frames.destination}} und unter {{app.frames.block}} sowie die beiden Felder für die
+  Datengröße. In der Befehlszeile: <code>--target</code>, <code>--dst-ip</code>,
+  <code>--dst-port</code>, <code>--block-ip</code>, <code>--block-port</code>,
+  <code>--payload-udp</code> und <code>--payload-tcp</code>. Ein leeres Feld heißt alles.</p>
+</section>
+
+<section>
+  <h2>Bausteine</h2>
+  <table>
+    <tr><th>Schreibe</th><th>Bedeutet</th><th>Beispiel</th></tr>
+    <tr><td><code>a,b,c</code></td><td>eine Liste: einer davon genügt</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>ein Bereich, beide Enden eingeschlossen</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>ein Vergleich, für Zahlen und Adressen</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>das hier auslassen</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>ein Platzhalter: beliebig viele Zeichen oder genau eines</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>ein regulärer Ausdruck, Groß- und Kleinschreibung egal</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>ein CIDR-Block, nur für Adressen</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>Leerzeichen um Kommas werden ignoriert, ebenso eine leere Stelle zwischen zwei Kommas. Ein
+  <code>!</code>, auf das nichts folgt, ist ein Fehler: <code data-kind="port-wrong">80,!</code>
+  wird abgelehnt.</p>
+</section>
+
+<section>
+  <h2>Wie sich Einträge verbinden</h2>
+  <p>Die Einträge ohne <code>!</code> zählen zusammen: Ein Wert passt, wenn einer davon passt oder
+  wenn es keinen gibt. Die Einträge mit <code>!</code> nehmen danach etwas weg. Die Reihenfolge ist
+  egal, also sind <code data-kind="port">80,!53</code> und <code data-kind="port">!53,80</code>
+  dasselbe.</p>
+  <table>
+    <tr><th>Schreibe</th><th>Passt auf</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>nur Port 443</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>alles außer 53, da nichts zusammenzuzählen ist</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>alles außer 53 und 443</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>1000 bis 2000, ohne 1500</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80, 443, 8000 bis 8100 und alles über 9000, außer 8080</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Programme</h2>
+  <p>Ein Eintrag ist ein Name oder eine PID, und ein Feld darf beides mischen. Ein einfacher Name
+  passt an jeder Stelle des Programmnamens, ohne auf Groß- und Kleinschreibung zu achten, also
+  erfasst <code data-kind="process">chrome</code> sowohl <code>chrome.exe</code> als auch
+  <code>chromedriver.exe</code>. Eine bloße Zahl, ein Bereich oder ein Vergleich ist eine PID.
+  Platzhalter und <code>re:</code> passen auf den Namen. Ein Vergleich auf einen Namen, etwa
+  <code data-kind="process-wrong">&gt;chrome</code>, wird abgelehnt, statt auf nichts zu passen.</p>
+  <table>
+    <tr><th>Schreibe</th><th>Passt auf</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>jedes Programm mit chrome.exe im Namen</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome, aber nicht chromedriver</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>zwei Programme auf einmal</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>eine PID</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>jede PID in diesem Bereich</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>ein Name, der mit firefox beginnt</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>genau chrome.exe oder firefox.exe</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>ein Name und eine PID in einem Feld</td></tr>
+  </table>
+  <p>Ein Paket trägt Adressen und Ports, nie den Namen eines Programms. Deshalb ermittelt das
+  Werkzeug die lokalen Ports, die jedes passende Programm belegt, zielt auf diese und verfolgt die
+  neuen Verbindungen, die es öffnet. Einige Ports teilen sich mehrere Programme gleichzeitig (mDNS
+  5353, SSDP 1900, DHCP 67 und 68). Dort heißt es alles oder nichts, und das Protokoll sagt,
+  welches von beiden.</p>
+</section>
+
+<section>
+  <h2>Adressen</h2>
+  <p>IPv4 und IPv6 funktionieren beide, und ein Feld darf sie mischen: Eine Regel für die eine
+  Familie passt nie auf eine Adresse der anderen. Wie eine Adresse geschrieben ist, spielt keine
+  Rolle, also sind <code>2001:0db8:0000:0000:0000:0000:0000:0001</code> und <code>2001:db8::1</code>
+  dieselbe Adresse.</p>
+  <table>
+    <tr><th>Schreibe</th><th>Passt auf</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>zwei Adressen</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>ein Bereich mit Lücke</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>ein ganzes Subnetz</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>dasselbe Subnetz per Platzhalter</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>jede Adresse außer 8.8.8.8</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>ein IPv6-Subnetz</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>IPv4 und IPv6 in einem Feld</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Ports</h2>
+  <p>Ports reichen von 0 bis 65535; <code data-kind="port-wrong">99999</code> wird abgelehnt statt
+  übersprungen. Die Felder für die Datengröße nehmen dieselbe Syntax, gezählt in Bytes Daten.</p>
+  <table>
+    <tr><th>Schreibe</th><th>Passt auf</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>ein Bereich, beide Enden eingeschlossen</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>die hohen Ports</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>die privilegierten Ports</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>eine Mischung</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Reguläre Ausdrücke</h2>
+  <p>Ein Eintrag ist nur mit <code>re:</code> davor ein regulärer Ausdruck, also bleibt ein Punkt in
+  <code>chrome.exe</code> ein Punkt. Das Muster achtet nicht auf Groß- und Kleinschreibung und darf
+  überall im Text passen; mit <code>^</code> und <code>$</code> passt es auf das Ganze. Ein Komma im
+  Muster braucht einen Backslash, weil ein Komma Einträge trennt:
+  <code data-kind="process">re:^ch.{1\,8}e\.exe$</code> funktioniert. Ohne Backslash wird
+  <code>re:^ch.{1,8}e\.exe$</code> am Komma in zwei Einträge geschnitten, die beide geladen werden
+  und auf etwas anderes passen.</p>
+  <p>Eine Wiederholung in einer Wiederholung, etwa <code data-kind="process-wrong">re:^(\w+)+$</code>,
+  wird als zu langsam abgelehnt: Sie kann bei einem fast passenden Namen Sekunden brauchen, und eine
+  Adresse wird bei jedem Paket geprüft. Schreibe die Wiederholung einmal:
+  <code data-kind="process">re:^\w+$</code>.</p>
+</section>
+
+<section>
+  <h2>Stolperfallen</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> erfasst chromedriver, <code data-kind="process">chrome.exe</code>
+    nicht: Ein einfacher Name ist ein Stück des Namens.</li>
+    <li><code data-kind="process">chrome*</code> erfasst ebenfalls chromedriver. Für genau ein
+    Programm schreibe <code data-kind="process">re:^chrome\.exe$</code>.</li>
+    <li><code data-kind="port">8*</code> in einem Portfeld ist ein Platzhalter auf die Ziffern, erfasst
+    also 8, 80, 8080 und 8443, aber nicht 443. Gemeint ist fast immer ein Bereich wie
+    <code data-kind="port">8000-8999</code>.</li>
+    <li><code data-kind="port">!53</code> umfasst auch Verkehr ganz ohne Port, etwa Ping, denn ein
+    Ping-Paket ist nicht Port 53.</li>
+    <li>Sind Adresse und Port beide gesetzt, müssen beide passen. Für das eine oder das andere mache
+    zwei Läufe.</li>
+    <li><code data-kind="port-wrong">2000-1000</code>, ein rückwärts geschriebener Bereich, wird
+    abgelehnt.</li>
+    <li>Ein Platzhalter ist kein regulärer Ausdruck: In <code>re:chrome*</code> wiederholt der Stern
+    den Buchstaben e.</li>
+  </ul>
+  <p>Jeder Fehler wird sofort gemeldet: Das Feld im Fenster wird rot und zeigt den Grund darunter,
+  und die Befehlszeile endet mit einer verständlichen Meldung.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

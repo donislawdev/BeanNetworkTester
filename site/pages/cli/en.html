@@ -1,0 +1,78 @@
+<section class="hero">
+  <h1>Simulate packet loss from the command line</h1>
+  <p class="lead">The same program runs without its window. Give it any option and it works in the
+  console instead, which is how a script or a CI job uses it.</p>
+</section>
+
+<section>
+  <h2>How it starts</h2>
+  <p>On Windows it is the same <code>BeanNetworkTester.exe</code> that opens the window: with no
+  options it opens the window, and with any option it runs in the console and shows no window. From a
+  copy of the source code, write <code>python bean_network_tester.py</code> in its place. On Linux the
+  program is <code>./BeanNetworkTester</code> in the folder you unpacked, and a real capture needs
+  <code>sudo</code>; <a href="../simulate-network-on-linux/">Bad network on Linux</a> says what else
+  it needs there.</p>
+  <p>The command line always speaks English, whatever the language of the window, so its messages
+  read the same in every log.</p>
+</section>
+
+<section>
+  <h2>Try it without risk first</h2>
+<pre><code>BeanNetworkTester.exe --simulate --loss 20 --duration 10
+BeanNetworkTester.exe --doctor
+BeanNetworkTester.exe --config my-settings.json --dry-run</code></pre>
+  <p>The first runs on made-up traffic, so it needs no driver and no administrator rights and
+  cannot touch the network. The second checks this computer: the rights a capture needs, the
+  capture driver, and leftovers from an earlier run. The third reads a settings file and says
+  whether it is valid, without starting anything.</p>
+</section>
+
+<section>
+  <h2>Where the settings come from</h2>
+  <p>Four sources, each one overriding the one before: the defaults, a settings file
+  (<code>--config</code>), a ready profile (<code>--preset</code>) and the flags on the command line.
+  <code>--print-config</code> shows the result as JSON, and <code>--save-config</code> writes it to a
+  file you can load again, in the window or on the command line.</p>
+  <p>Every setting in the window has a flag of its own, such as <code>--loss</code> or
+  <code>--target</code>. They are listed, with what each one does, on
+  <a href="../reference/#settings-traffic">the reference page</a>. The options below are
+  everything else.</p>
+</section>
+
+<section>
+  <h2>Every other option</h2>
+  {{page.cli_reference}}
+</section>
+
+<section>
+  <h2>What it prints</h2>
+  <p>The log, meant for people, goes to standard error, each line starting with
+  <code>[bean]</code>. Data goes to standard output: a report line every few seconds and a summary at
+  the end. With <code>--format json</code>, standard output carries one JSON object per line: a
+  <code>sample</code> object for each report, and a final <code>summary</code> with the exit code,
+  the seed and the command that repeats the run.</p>
+<pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Each way a run can end has its own exit code, so a pipeline can tell a failing application
+  from a tool that could not start. The codes are listed on
+  <a href="../reference/">the reference page</a>.</p>
+</section>
+
+<section>
+  <h2>Examples</h2>
+  <p>Impair one program for a minute, and nothing else on the computer:</p>
+<pre><code>BeanNetworkTester.exe --target myapp.exe --latency 200 --loss 2 --duration 60</code></pre>
+  <p>Impair one server for two minutes, with output a pipeline can read, and fail if nothing was
+  captured at all:</p>
+<pre><code>BeanNetworkTester.exe --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 120 --format json --fail-on-no-traffic</code></pre>
+  <p>Play a ready scenario that does not repeat by itself in a loop for ten minutes, and keep a
+  report that repeats the run:</p>
+<pre><code>BeanNetworkTester.exe --scenario scenarios/upload-drop-midway.json --loop --target myapp.exe --duration 600 --repro-out run.json</code></pre>
+  <p>More recipes for pipelines are on <a href="../network-tests-in-ci/">Network tests in CI</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

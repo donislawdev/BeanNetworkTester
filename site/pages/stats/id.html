@@ -1,0 +1,61 @@
+<section class="hero">
+  <h1>Penjelasan statistik, koneksi, dan file CSV</h1>
+  <p class="lead">Apa yang dihitung setiap penghitung di tab {{app.app.tabs.statistics}}, apa isi
+  setiap kolom di tab {{app.app.tabs.connections}}, dan apa yang ada di setiap file CSV yang disimpan
+  program. Nama-nama dan kolom CSV dibaca dari program saat halaman ini dibuat.</p>
+</section>
+
+<section>
+  <h2>Penghitung di tab {{app.app.tabs.statistics}}</h2>
+  <p>Unduhan, unggahan, dan antrean menunjukkan apa yang sedang terjadi saat ini; semua penghitung
+  lain menjumlahkan sejak sesi dimulai. Masing-masing juga punya kolom di CSV statistik, yang
+  disebutkan di bawah.</p>
+  {{page.counter_reference}}
+  <p>{{app.stats.overflow}}, {{app.stats.shutdown_dropped}}, dan {{app.stats.send_failed}} adalah
+  paket yang hilang oleh alat itu sendiri, bukan gangguan yang Anda minta. Ketiganya menjaga hitungan
+  paket yang terlihat, terkirim, dan dibuang tetap jujur, tetapi bukan bagian dari kehilangan
+  efektif: jika salah satunya di atas nol, sebagian kehilangan yang Anda ukur berasal dari alat. Klik
+  kanan pada sebuah nilai untuk menyalinnya, atau gunakan {{app.buttons.copy_counters}} untuk
+  menyalin setiap baris seperti yang tampil di layar, berguna untuk laporan bug.</p>
+</section>
+
+<section>
+  <h2>Kolom di tab {{app.app.tabs.connections}}</h2>
+  <p>Satu baris per koneksi, setiap kolom bisa diurutkan lewat judulnya, dan setiap judul membawa
+  penjelasan yang sama sebagai tooltip.</p>
+  {{page.column_reference}}
+</section>
+
+<section>
+  <h2>Ke mana file CSV disimpan</h2>
+  <p>{{app.buttons.export_csv}} di tab {{app.app.tabs.statistics}} menambahkan satu baris ke sebuah
+  file di folder Anda sendiri: <code>%LOCALAPPDATA%\BeanNetworkTester</code> di Windows,
+  <code>~/.config/BeanNetworkTester</code> untuk paket Linux, dan folder proyek saat dijalankan dari
+  kode sumber. Atur <code>BEAN_DATA_DIR</code> untuk menyimpannya di tempat lain. Setiap baris berisi
+  waktu, apakah penangkapan dipersempit, lalu penghitung-penghitung, dengan nama yang disebutkan di
+  atas.</p>
+  <p>Ekspor tabel, {{app.buttons.export_conns}} atau {{app.tools.sockets.export}} di alat-alat,
+  menanyakan tempat menyimpan dan menawarkan nama yang berisi tanggal dan jam, sehingga ekspor kedua
+  tidak menimpa yang pertama. Log menyebutkan jalur lengkap setiap file yang disimpan program.</p>
+</section>
+
+<section>
+  <h2>CSV koneksi</h2>
+  <p>Baris yang sama dengan tabel, tetapi nama kolomnya ditulis lengkap di tempat tabel
+  menyingkatnya, dan ukuran selalu dalam byte, tidak pernah dalam satuan yang dipilih layar. Dua
+  kolom terakhir sengaja diletakkan setelah yang lain, agar pembaca yang mengambil kolom menurut
+  posisinya tidak terkecoh.</p>
+  {{page.conn_csv_table}}
+</section>
+
+<section>
+  <h2>Ekspor dari alat-alat</h2>
+  {{page.tool_csv_columns}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>Statistiky, spojení a soubory CSV vysvětlené</h1>
+  <p class="lead">Co počítá každé počítadlo na kartě {{app.app.tabs.statistics}}, co obsahuje každý
+  sloupec karty {{app.app.tabs.connections}} a co je v každém souboru CSV, který program ukládá.
+  Názvy a sloupce CSV se při sestavení této stránky čtou přímo z programu.</p>
+</section>
+
+<section>
+  <h2>Počítadla na kartě {{app.app.tabs.statistics}}</h2>
+  <p>Stahování, odesílání a fronta ukazují, co se děje právě teď; všechna ostatní počítadla sčítají
+  od začátku relace. Každé má také sloupec v CSV statistik, uvedený níže.</p>
+  {{page.counter_reference}}
+  <p>{{app.stats.overflow}}, {{app.stats.shutdown_dropped}} a {{app.stats.send_failed}} jsou
+  pakety, které ztratil samotný nástroj, ne poškozování, o které jste žádali. Udržují poctivý účet
+  viděných, doručených a zahozených paketů, ale nepatří do skutečné ztráty: je-li kterékoli z nich
+  nad nulou, část ztráty, kterou měříte, jde na vrub nástroje. Kliknutím pravým tlačítkem na hodnotu
+  ji zkopírujete a {{app.buttons.copy_counters}} zkopíruje každý řádek tak, jak vypadá na obrazovce,
+  což se hodí do hlášení chyby.</p>
+</section>
+
+<section>
+  <h2>Sloupce karty {{app.app.tabs.connections}}</h2>
+  <p>Jeden řádek na spojení, každý sloupec se řadí podle svého záhlaví a každé záhlaví nese stejné
+  vysvětlení jako popisek.</p>
+  {{page.column_reference}}
+</section>
+
+<section>
+  <h2>Kam se ukládají soubory CSV</h2>
+  <p>{{app.buttons.export_csv}} na kartě {{app.app.tabs.statistics}} přidá řádek do jednoho souboru
+  ve vaší vlastní složce: <code>%LOCALAPPDATA%\BeanNetworkTester</code> ve Windows,
+  <code>~/.config/BeanNetworkTester</code> u balíčku pro Linux a složka projektu při spuštění ze
+  zdrojového kódu. Nastavte <code>BEAN_DATA_DIR</code>, chcete-li ho mít jinde. Každý řádek obsahuje
+  čas, zda bylo zachytávání zúžené, a pak počítadla pod názvy uvedenými výše.</p>
+  <p>Export tabulky, {{app.buttons.export_conns}} nebo {{app.tools.sockets.export}} v nástrojích, se
+  zeptá, kam uložit, a nabídne název s datem a časem, aby druhý export nenahradil první. Protokol
+  uvádí úplnou cestu ke každému souboru, který program uloží.</p>
+</section>
+
+<section>
+  <h2>CSV spojení</h2>
+  <p>Stejné řádky jako v tabulce, ale názvy sloupců vypisují celé to, co tabulka zkracuje, a
+  velikosti jsou vždy v bajtech, nikdy v jednotce, kterou zvolila obrazovka. Poslední dva sloupce
+  jsou schválně až za ostatními, aby čtenáře, který bere sloupce podle pozice, nezmátly.</p>
+  {{page.conn_csv_table}}
+</section>
+
+<section>
+  <h2>Exporty nástrojů</h2>
+  {{page.tool_csv_columns}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

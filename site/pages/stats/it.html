@@ -1,0 +1,60 @@
+<section class="hero">
+  <h1>Statistiche, connessioni e file CSV spiegati</h1>
+  <p class="lead">Che cosa conta ogni contatore della scheda {{app.app.tabs.statistics}}, che cosa
+  contiene ogni colonna della scheda {{app.app.tabs.connections}} e che cosa c’è in ogni file CSV che
+  il programma salva. I nomi e le colonne CSV vengono letti dal programma quando questa pagina viene
+  generata.</p>
+</section>
+
+<section>
+  <h2>I contatori della scheda {{app.app.tabs.statistics}}</h2>
+  <p>Download, upload e la coda mostrano che cosa succede in questo momento; tutti gli altri
+  contatori sommano dall’inizio della sessione. Ognuno ha anche una colonna nel CSV delle
+  statistiche, indicata qui sotto.</p>
+  {{page.counter_reference}}
+  <p>{{app.stats.overflow}}, {{app.stats.shutdown_dropped}} e {{app.stats.send_failed}} sono
+  pacchetti che ha perso lo strumento stesso, non il degrado che hai chiesto. Tengono esatti i conti
+  di pacchetti visti, consegnati e scartati, ma non fanno parte della perdita effettiva: se uno di
+  loro è sopra zero, una parte della perdita che misuri è dello strumento. Un clic destro su un
+  valore lo copia, e {{app.buttons.copy_counters}} copia ogni riga così come appare sullo schermo,
+  comodo per una segnalazione di bug.</p>
+</section>
+
+<section>
+  <h2>Le colonne della scheda {{app.app.tabs.connections}}</h2>
+  <p>Una riga per connessione, ogni colonna si ordina dalla sua intestazione e ogni intestazione
+  porta la stessa spiegazione come suggerimento.</p>
+  {{page.column_reference}}
+</section>
+
+<section>
+  <h2>Dove vanno i file CSV</h2>
+  <p>{{app.buttons.export_csv}} nella scheda {{app.app.tabs.statistics}} aggiunge una riga a un file
+  nella tua cartella: <code>%LOCALAPPDATA%\BeanNetworkTester</code> su Windows,
+  <code>~/.config/BeanNetworkTester</code> con il pacchetto Linux e la cartella del progetto quando
+  lo avvii dal codice sorgente. Imposta <code>BEAN_DATA_DIR</code> per tenerlo altrove. Ogni riga
+  contiene l’ora, se la cattura era ristretta e poi i contatori, con i nomi indicati sopra.</p>
+  <p>L’esportazione di una tabella, {{app.buttons.export_conns}} o {{app.tools.sockets.export}} negli
+  strumenti, chiede dove salvare e propone un nome con data e ora, così una seconda esportazione non
+  sostituisce la prima. Il log indica il percorso completo di ogni file che il programma salva.</p>
+</section>
+
+<section>
+  <h2>Il CSV delle connessioni</h2>
+  <p>Le stesse righe della tabella, ma i nomi delle colonne scrivono per intero ciò che la tabella
+  abbrevia, e le dimensioni sono sempre in byte, mai nell’unità scelta dallo schermo. Le ultime due
+  colonne vengono dopo le altre apposta, così chi legge le colonne per posizione non si confonde.</p>
+  {{page.conn_csv_table}}
+</section>
+
+<section>
+  <h2>Le esportazioni degli strumenti</h2>
+  {{page.tool_csv_columns}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

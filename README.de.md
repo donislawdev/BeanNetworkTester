@@ -764,6 +764,9 @@ re:^ch.{1\,8}e\.exe$          correct - {1,8} with a backslash before the comma
 re:^ch.{1,8}e\.exe$           WRONG - it is split into "re:^ch.{1" and "8}e\.exe$"
 ```
 
+Beide Hälften sind gültige Muster, daher warnt nichts: Das Feld passt dann stillschweigend auf
+etwas anderes.
+
 ### Fälle, über die man stolpert
 
 * **`chrome` erfasst auch `chromedriver`, `chrome.exe` dagegen nicht.** Ein bloßer Name ist eine
@@ -781,8 +784,9 @@ re:^ch.{1,8}e\.exe$           WRONG - it is split into "re:^ch.{1" and "8}e\.exe
 * **`!53` deckt auch Datenverkehr ohne Port ab** (z. B. ICMP/Ping). „Alles außer 53“ bedeutet
   wörtlich „alles, was nicht Port 53 ist“, und ein ICMP-Paket ist nicht Port 53. Wenn Sie nur
   TCP/UDP wollen, grenzen Sie den **Traffic filter** ein.
-* **Ein leerer Term ist ein Fehler** und nicht „alles“: `80,,443` und `80,!` werden abgelehnt. Ein
-  leeres **gesamtes Feld** bedeutet „alles“.
+* **`80,!` ist ein Fehler**: Ein `!` braucht etwas dahinter. Eine leere Stelle zwischen zwei
+  Kommas wird übersprungen, `80,,443` wird also als `80,443` gelesen. Ein leeres **gesamtes Feld**
+  bedeutet „alles“.
 * **IP und Port werden mit AND verknüpft.** `IP=10.0.0.0/8` + `port=443` bedeutet „Datenverkehr zum
   Netz 10.x **und gleichzeitig** auf Port 443“. Sie wollen „entweder/oder“? Lassen Sie das andere
   Feld leer und machen Sie zwei Durchläufe.

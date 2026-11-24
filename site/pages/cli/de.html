@@ -1,0 +1,81 @@
+<section class="hero">
+  <h1>Paketverlust per Befehlszeile simulieren</h1>
+  <p class="lead">Dasselbe Programm läuft auch ohne Fenster. Gib ihm irgendeine Option, und es arbeitet
+  stattdessen in der Konsole. So nutzt es ein Skript oder ein CI-Job.</p>
+</section>
+
+<section>
+  <h2>Wie es startet</h2>
+  <p>Unter Windows ist es dieselbe <code>BeanNetworkTester.exe</code>, die das Fenster öffnet: ohne
+  Optionen öffnet sie das Fenster, mit irgendeiner Option läuft sie in der Konsole und zeigt kein
+  Fenster. Aus einer Kopie des Quellcodes schreibst du stattdessen
+  <code>python bean_network_tester.py</code>. Unter Linux ist das Programm
+  <code>./BeanNetworkTester</code> im entpackten Ordner, und ein echtes Abfangen braucht
+  <code>sudo</code>; <a href="../netzwerk-simulieren-unter-linux/">Schlechtes Netz unter Linux</a>
+  sagt, was es dort sonst noch braucht.</p>
+  <p>Die Befehlszeile spricht immer Englisch, egal in welcher Sprache das Fenster ist, damit ihre
+  Meldungen in jedem Protokoll gleich lauten.</p>
+</section>
+
+<section>
+  <h2>Erst ohne Risiko ausprobieren</h2>
+<pre><code>BeanNetworkTester.exe --simulate --loss 20 --duration 10
+BeanNetworkTester.exe --doctor
+BeanNetworkTester.exe --config meine-einstellungen.json --dry-run</code></pre>
+  <p>Der erste läuft mit erfundenem Verkehr, braucht also keinen Treiber und keine
+  Administratorrechte und kann das Netz nicht berühren. Der zweite prüft diesen Computer: die
+  Rechte, die das Abfangen braucht, den Abfangtreiber und Reste eines früheren Laufs. Der dritte
+  liest eine Einstellungsdatei und sagt, ob sie gültig ist, ohne etwas zu starten.</p>
+</section>
+
+<section>
+  <h2>Woher die Einstellungen kommen</h2>
+  <p>Vier Quellen, jede überschreibt die vorige: die Standardwerte, eine Einstellungsdatei
+  (<code>--config</code>), ein fertiges Profil (<code>--preset</code>) und die Optionen in der
+  Befehlszeile. <code>--print-config</code> zeigt das Ergebnis als JSON, und
+  <code>--save-config</code> schreibt es in eine Datei, die du wieder laden kannst, im Fenster oder
+  in der Befehlszeile.</p>
+  <p>Jede Einstellung im Fenster hat eine eigene Option, etwa <code>--loss</code> oder
+  <code>--target</code>. Sie stehen, mit dem, was sie tun, auf der
+  <a href="../referenztabellen/#settings-traffic">Seite mit den Referenztabellen</a>. Die Optionen
+  unten sind alles Übrige.</p>
+</section>
+
+<section>
+  <h2>Jede weitere Option</h2>
+  {{page.cli_reference}}
+</section>
+
+<section>
+  <h2>Was es ausgibt</h2>
+  <p>Das Protokoll, gedacht für Menschen, geht auf die Standardfehlerausgabe, jede Zeile beginnt
+  mit <code>[bean]</code>. Daten gehen auf die Standardausgabe: alle paar Sekunden eine Berichtszeile
+  und am Ende eine Zusammenfassung. Mit <code>--format json</code> trägt die Standardausgabe ein
+  JSON-Objekt pro Zeile: ein <code>sample</code>-Objekt für jeden Bericht und am Ende eine
+  <code>summary</code> mit dem Exit-Code, dem Seed und dem Befehl, der den Lauf wiederholt.</p>
+<pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Jede Art, wie ein Lauf enden kann, hat ihren eigenen Exit-Code, sodass eine Pipeline eine
+  fehlschlagende Anwendung von einem Werkzeug unterscheiden kann, das nicht starten konnte. Die
+  Codes stehen auf der <a href="../referenztabellen/">Seite mit den Referenztabellen</a>.</p>
+</section>
+
+<section>
+  <h2>Beispiele</h2>
+  <p>Ein Programm eine Minute lang stören und sonst nichts auf dem Computer:</p>
+<pre><code>BeanNetworkTester.exe --target myapp.exe --latency 200 --loss 2 --duration 60</code></pre>
+  <p>Einen Server zwei Minuten lang stören, mit einer Ausgabe, die eine Pipeline lesen kann, und
+  mit Fehler enden, wenn gar nichts abgefangen wurde:</p>
+<pre><code>BeanNetworkTester.exe --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 120 --format json --fail-on-no-traffic</code></pre>
+  <p>Ein fertiges Szenario, das sich nicht von selbst wiederholt, zehn Minuten lang in Schleife
+  abspielen und einen Bericht behalten, der den Lauf wiederholt:</p>
+<pre><code>BeanNetworkTester.exe --scenario scenarios/upload-drop-midway.json --loop --target myapp.exe --duration 600 --repro-out run.json</code></pre>
+  <p>Mehr Rezepte für Pipelines stehen unter
+  <a href="../netzwerktests-in-ci/">Netzwerktests in CI</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

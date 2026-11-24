@@ -1,0 +1,81 @@
+<section class="hero">
+  <h1>Pakketverlies simuleren vanaf de opdrachtregel</h1>
+  <p class="lead">Hetzelfde programma draait ook zonder venster. Geef het een willekeurige optie en het
+  werkt in plaats daarvan in de console. Zo gebruikt een script of een CI-taak het.</p>
+</section>
+
+<section>
+  <h2>Hoe het start</h2>
+  <p>Op Windows is het dezelfde <code>BeanNetworkTester.exe</code> die het venster opent: zonder
+  opties opent hij het venster, met een willekeurige optie draait hij in de console en toont hij geen
+  venster. Vanuit een kopie van de broncode schrijf je in plaats daarvan
+  <code>python bean_network_tester.py</code>. Op Linux is het programma
+  <code>./BeanNetworkTester</code> in de map die je hebt uitgepakt, en een echte opvang heeft
+  <code>sudo</code> nodig; <a href="../netwerk-simuleren-op-linux/">Slecht netwerk op Linux</a>
+  vertelt wat het daar verder nodig heeft.</p>
+  <p>De opdrachtregel spreekt altijd Engels, in welke taal het venster ook staat, zodat de meldingen
+  in elk logboek hetzelfde luiden.</p>
+</section>
+
+<section>
+  <h2>Probeer het eerst zonder risico</h2>
+<pre><code>BeanNetworkTester.exe --simulate --loss 20 --duration 10
+BeanNetworkTester.exe --doctor
+BeanNetworkTester.exe --config mijn-instellingen.json --dry-run</code></pre>
+  <p>De eerste draait op verzonnen verkeer, dus hij heeft geen stuurprogramma en geen
+  beheerdersrechten nodig en kan het netwerk niet raken. De tweede controleert deze computer: de
+  rechten die een opvang nodig heeft, het opvangstuurprogramma en restanten van een eerdere run. De
+  derde leest een instellingenbestand en zegt of het geldig is, zonder iets te starten.</p>
+</section>
+
+<section>
+  <h2>Waar de instellingen vandaan komen</h2>
+  <p>Vier bronnen, en elke bron gaat voor de vorige: de standaardwaarden, een instellingenbestand
+  (<code>--config</code>), een kant-en-klaar profiel (<code>--preset</code>) en de opties op de
+  opdrachtregel. <code>--print-config</code> toont het resultaat als JSON, en
+  <code>--save-config</code> schrijft het naar een bestand dat je opnieuw kunt laden, in het venster of
+  op de opdrachtregel.</p>
+  <p>Elke instelling in het venster heeft een eigen optie, zoals <code>--loss</code> of
+  <code>--target</code>. Ze staan, met wat elk doet, op
+  <a href="../referentietabellen/#settings-traffic">de pagina met referentietabellen</a>. De opties
+  hieronder zijn al het andere.</p>
+</section>
+
+<section>
+  <h2>Alle andere opties</h2>
+  {{page.cli_reference}}
+</section>
+
+<section>
+  <h2>Wat het afdrukt</h2>
+  <p>Het logboek, bedoeld voor mensen, gaat naar de standaardfoutuitvoer, en elke regel begint met
+  <code>[bean]</code>. Gegevens gaan naar de standaarduitvoer: om de paar seconden een rapportregel en
+  aan het eind een samenvatting. Met <code>--format json</code> bevat de standaarduitvoer één
+  JSON-object per regel: een <code>sample</code>-object voor elk rapport en een laatste
+  <code>summary</code> met de exitcode, de seed en de opdracht die de run herhaalt.</p>
+<pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Elke manier waarop een run kan eindigen heeft een eigen exitcode, zodat een pipeline een falende
+  applicatie onderscheidt van een hulpmiddel dat niet kon starten. De codes staan op
+  <a href="../referentietabellen/">de pagina met referentietabellen</a>.</p>
+</section>
+
+<section>
+  <h2>Voorbeelden</h2>
+  <p>Eén programma een minuut lang verstoren, en verder niets op de computer:</p>
+<pre><code>BeanNetworkTester.exe --target myapp.exe --latency 200 --loss 2 --duration 60</code></pre>
+  <p>De verbinding met één server twee minuten lang verstoren, met uitvoer die een pipeline kan
+  lezen, en falen als er helemaal niets is opgevangen:</p>
+<pre><code>BeanNetworkTester.exe --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 120 --format json --fail-on-no-traffic</code></pre>
+  <p>Een kant-en-klaar scenario dat zichzelf niet herhaalt tien minuten lang in een lus afspelen, en
+  een rapport bewaren dat de run herhaalt:</p>
+<pre><code>BeanNetworkTester.exe --scenario scenarios/upload-drop-midway.json --loop --target myapp.exe --duration 600 --repro-out run.json</code></pre>
+  <p>Meer recepten voor pipelines staan op
+  <a href="../netwerktests-in-ci/">Netwerktests in CI</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

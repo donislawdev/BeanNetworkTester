@@ -5,7 +5,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Fixed
+
+- **The `--preset` example in `--help` works.** It showed `--preset 3g`, which the program
+  refuses as an unknown preset. It now shows `--preset presets.3g`. A preset is given by its id,
+  such as `presets.3g`, or by its name in any language of the window, such as "3G network".
+
 ### Docs
+
+- **The README's "Filter syntax" chapter says what the parser does.** An empty place between two
+  commas is skipped, so `80,,443` is read as `80,443`. Only a `!` with nothing after it, as in
+  `80,!`, is refused. A comma left without a backslash in a `re:` pattern splits it into two
+  patterns that both load, with no warning. In every language of the README.
 
 - **The README's feature list names the network tools.** A new line lists what the Tools tab
   offers: a continuous ping with a chart, jitter and packet loss, a TCP and UDP port scanner, a

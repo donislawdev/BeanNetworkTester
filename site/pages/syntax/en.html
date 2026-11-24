@@ -1,0 +1,144 @@
+<section class="hero">
+  <h1>Filter syntax: names, PIDs, IP ranges, CIDR and ports</h1>
+  <p class="lead">One small language aims the tool at programs, addresses and ports. It works the
+  same in the window and on the command line, and every example on this page is checked against
+  the program's own parser.</p>
+</section>
+
+<section>
+  <h2>Where it is used</h2>
+  <p>In the window: the target process field, the address and port fields under
+  {{app.frames.destination}} and under {{app.frames.block}}, and the two payload size fields. On
+  the command line: <code>--target</code>,
+  <code>--dst-ip</code>, <code>--dst-port</code>, <code>--block-ip</code>,
+  <code>--block-port</code>, <code>--payload-udp</code> and <code>--payload-tcp</code>. An empty
+  field means everything.</p>
+</section>
+
+<section>
+  <h2>Building blocks</h2>
+  <table>
+    <tr><th>Write</th><th>It means</th><th>Example</th></tr>
+    <tr><td><code>a,b,c</code></td><td>a list: any of them matches</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>a range, both ends included</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>a comparison, for numbers and addresses</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>leave this out</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>a wildcard: any run of characters, or one character</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>a regular expression, case doesn't matter</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>a CIDR block, addresses only</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>Spaces around commas are ignored, and so is an empty place between two commas. A
+  <code>!</code> with nothing after it is a mistake: <code data-kind="port-wrong">80,!</code> is
+  refused.</p>
+</section>
+
+<section>
+  <h2>How terms combine</h2>
+  <p>The terms without <code>!</code> add up: a value matches when any of them matches, or when
+  there are none. The terms with <code>!</code> then take away. The order does not matter, so
+  <code data-kind="port">80,!53</code> and <code data-kind="port">!53,80</code> are the same.</p>
+  <table>
+    <tr><th>Write</th><th>It matches</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>port 443 only</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>everything except 53, since there is nothing to add up</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>everything except 53 and 443</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>1000 to 2000, without 1500</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80, 443, 8000 to 8100 and everything above 9000, except 8080</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Programs</h2>
+  <p>A term is a name or a PID, and one field may mix them. A plain name matches anywhere in the
+  program's name, without regard to case, so <code data-kind="process">chrome</code> catches
+  <code>chrome.exe</code> and <code>chromedriver.exe</code>. A bare number, a range or a comparison
+  is a PID. Wildcards and <code>re:</code> match the name. A comparison on a name, such as
+  <code data-kind="process-wrong">&gt;chrome</code>, is refused rather than matching nothing.</p>
+  <table>
+    <tr><th>Write</th><th>It matches</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>every program with chrome.exe in its name</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome, but not chromedriver</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>two programs at once</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>one PID</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>every PID in that range</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>a name that starts with firefox</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>exactly chrome.exe or firefox.exe</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>a name and a PID in one field</td></tr>
+  </table>
+  <p>A packet carries addresses and ports, never a program's name, so the tool finds the local
+  ports each matching program holds and aims at those, and follows the new connections it opens.
+  A few ports are shared by several programs at once (mDNS 5353, SSDP 1900, DHCP 67 and 68). On
+  those it is all or nothing, and the log says which.</p>
+</section>
+
+<section>
+  <h2>Addresses</h2>
+  <p>IPv4 and IPv6 both work, and one field may mix them: a rule for one family never matches an
+  address of the other. How an address is written does not matter, so
+  <code>2001:0db8:0000:0000:0000:0000:0000:0001</code> and <code>2001:db8::1</code> are the same
+  address.</p>
+  <table>
+    <tr><th>Write</th><th>It matches</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>two addresses</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>a range with a hole</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>a whole subnet</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>the same subnet, by wildcard</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>every address except 8.8.8.8</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>an IPv6 subnet</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>IPv4 and IPv6 in one field</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Ports</h2>
+  <p>Ports go from 0 to 65535; <code data-kind="port-wrong">99999</code> is refused rather than
+  skipped. The payload size fields take the same syntax, counted in bytes of data.</p>
+  <table>
+    <tr><th>Write</th><th>It matches</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>a range, both ends included</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>the high ports</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>the privileged ports</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>a mix</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Regular expressions</h2>
+  <p>A term is a regular expression only with <code>re:</code> in front, so a dot in
+  <code>chrome.exe</code> stays a dot. The pattern ignores case and may match anywhere in the text;
+  use <code>^</code> and <code>$</code> to match the whole of it. A comma inside a pattern needs a
+  backslash, because a comma separates terms: <code data-kind="process">re:^ch.{1\,8}e\.exe$</code>
+  works. Without the backslash, <code>re:^ch.{1,8}e\.exe$</code> is cut at the comma into two
+  terms that both load and match something else.</p>
+  <p>A repeat inside a repeat, such as <code data-kind="process-wrong">re:^(\w+)+$</code>, is
+  refused as too slow: it can take seconds on one name that almost matches, and an address is
+  checked on every packet. Write the repeat once: <code data-kind="process">re:^\w+$</code>.</p>
+</section>
+
+<section>
+  <h2>Cases that catch people out</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> catches chromedriver, and
+    <code data-kind="process">chrome.exe</code> does not: a plain name is a piece of the name.</li>
+    <li><code data-kind="process">chrome*</code> also catches chromedriver. For exactly one program,
+    write <code data-kind="process">re:^chrome\.exe$</code>.</li>
+    <li><code data-kind="port">8*</code> in a port field is a wildcard on the digits, so it catches
+    8, 80, 8080 and 8443, but not 443. You almost always meant a range such as
+    <code data-kind="port">8000-8999</code>.</li>
+    <li><code data-kind="port">!53</code> also covers traffic with no port at all, such as ping,
+    because a ping packet is not port 53.</li>
+    <li>An address and a port set together must both match. For one or the other, use two runs.</li>
+    <li><code data-kind="port-wrong">2000-1000</code>, a range written backwards, is refused.</li>
+    <li>A wildcard is not a regular expression: in <code>re:chrome*</code> the star repeats the
+    letter e.</li>
+  </ul>
+  <p>Every mistake is reported at once: the field in the window turns red with the reason under it,
+  and the command line stops with a readable message.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

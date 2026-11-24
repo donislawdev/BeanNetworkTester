@@ -1,0 +1,147 @@
+<section class="hero">
+  <h1>Filtre söz dizimi: adlar, PID, IP aralıkları, CIDR ve portlar</h1>
+  <p class="lead">Küçük bir dil, aracı programlara, adreslere ve portlara yöneltir. Pencerede ve
+  komut satırında aynı şekilde çalışır ve bu sayfadaki her örnek programın kendi ayrıştırıcısıyla
+  denetlenir.</p>
+</section>
+
+<section>
+  <h2>Nerede kullanılır</h2>
+  <p>Pencerede: hedef işlem alanı, {{app.frames.destination}} ve {{app.frames.block}} altındaki adres
+  ve port alanları ile iki veri boyutu alanı. Komut satırında: <code>--target</code>,
+  <code>--dst-ip</code>, <code>--dst-port</code>, <code>--block-ip</code>,
+  <code>--block-port</code>, <code>--payload-udp</code> ve <code>--payload-tcp</code>. Boş bir alan
+  her şey demektir.</p>
+</section>
+
+<section>
+  <h2>Yapı taşları</h2>
+  <table>
+    <tr><th>Yazın</th><th>Anlamı</th><th>Örnek</th></tr>
+    <tr><td><code>a,b,c</code></td><td>bir liste: herhangi biri eşleşirse yeter</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>bir aralık, iki uç da dahil</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>bir karşılaştırma, sayılar ve adresler için</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>bunu dışarıda bırak</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>joker karakter: herhangi bir karakter dizisi ya da tek karakter</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>büyük küçük harf ayırmayan bir düzenli ifade</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>bir CIDR bloğu, yalnızca adresler için</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>Virgüllerin çevresindeki boşluklar yok sayılır, iki virgül arasındaki boş yer de öyle. Ardından
+  hiçbir şey gelmeyen bir <code>!</code> hatadır: <code data-kind="port-wrong">80,!</code>
+  reddedilir.</p>
+</section>
+
+<section>
+  <h2>Terimler nasıl birleşir</h2>
+  <p><code>!</code> olmayan terimler toplanır: bir değer, bunlardan biri eşleşirse ya da hiç yoksa
+  eşleşir. <code>!</code> olan terimler ardından çıkarır. Sıra önemli değildir, yani
+  <code data-kind="port">80,!53</code> ile <code data-kind="port">!53,80</code> aynıdır.</p>
+  <table>
+    <tr><th>Yazın</th><th>Eşleşir</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>yalnızca port 443</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>53 dışındaki her şey, çünkü toplanacak bir şey yok</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>53 ve 443 dışındaki her şey</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>1000 ile 2000 arası, 1500 hariç</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80, 443, 8000 ile 8100 arası ve 9000'in üstündeki her şey, 8080 hariç</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Programlar</h2>
+  <p>Bir terim bir ad ya da bir PID'dir ve bir alan ikisini karıştırabilir. Düz bir ad, büyük
+  küçük harfe bakılmadan program adının herhangi bir yerinde eşleşir; bu yüzden
+  <code data-kind="process">chrome</code> hem <code>chrome.exe</code> hem
+  <code>chromedriver.exe</code> yakalar. Tek başına bir sayı, bir aralık ya da bir karşılaştırma
+  PID'dir. Joker karakterler ve <code>re:</code> ada uygulanır. Bir ad üzerinde karşılaştırma, örneğin
+  <code data-kind="process-wrong">&gt;chrome</code>, hiçbir şeyle eşleşmemek yerine reddedilir.</p>
+  <table>
+    <tr><th>Yazın</th><th>Eşleşir</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>adında chrome.exe geçen her program</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome, ama chromedriver değil</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>aynı anda iki program</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>tek bir PID</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>o aralıktaki her PID</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>firefox ile başlayan bir ad</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>tam olarak chrome.exe ya da firefox.exe</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>tek alanda bir ad ve bir PID</td></tr>
+  </table>
+  <p>Bir paket adres ve port taşır, asla bir programın adını taşımaz. Bu yüzden araç, eşleşen her
+  programın tuttuğu yerel portları bulur, onları hedefler ve açtığı yeni bağlantıları izler. Birkaç
+  port aynı anda birden çok program tarafından paylaşılır (mDNS 5353, SSDP 1900, DHCP 67 ve 68).
+  Bunlarda ya hepsi ya hiçbiri geçerlidir ve günlük hangisi olduğunu söyler.</p>
+</section>
+
+<section>
+  <h2>Adresler</h2>
+  <p>IPv4 ve IPv6 ikisi de çalışır ve bir alan ikisini karıştırabilir: bir ailenin kuralı diğer
+  ailenin adresiyle asla eşleşmez. Bir adresin nasıl yazıldığı önemli değildir; bu yüzden
+  <code>2001:0db8:0000:0000:0000:0000:0000:0001</code> ile <code>2001:db8::1</code> aynı
+  adrestir.</p>
+  <table>
+    <tr><th>Yazın</th><th>Eşleşir</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>iki adres</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>içinde bir boşluk olan bir aralık</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>bütün bir alt ağ</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>aynı alt ağ, joker karakterle</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>8.8.8.8 dışındaki her adres</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>bir IPv6 alt ağı</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>tek alanda IPv4 ve IPv6</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Portlar</h2>
+  <p>Portlar 0 ile 65535 arasındadır; <code data-kind="port-wrong">99999</code> atlanmak yerine
+  reddedilir. Veri boyutu alanları aynı söz dizimini alır, veri baytı olarak sayılır.</p>
+  <table>
+    <tr><th>Yazın</th><th>Eşleşir</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>bir aralık, iki uç da dahil</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>yüksek portlar</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>ayrıcalıklı portlar</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>bir karışım</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Düzenli ifadeler</h2>
+  <p>Bir terim yalnızca önünde <code>re:</code> varsa düzenli ifadedir; bu yüzden
+  <code>chrome.exe</code> içindeki nokta nokta olarak kalır. Desen büyük küçük harf ayırmaz ve
+  metnin herhangi bir yerinde eşleşebilir; tamamıyla eşleşmesi için <code>^</code> ve
+  <code>$</code> kullanın. Desen içindeki virgülün önüne ters eğik çizgi gerekir, çünkü virgül
+  terimleri ayırır: <code data-kind="process">re:^ch.{1\,8}e\.exe$</code> çalışır. Ters eğik çizgi
+  olmadan <code>re:^ch.{1,8}e\.exe$</code> virgülden iki terime bölünür; ikisi de yüklenir ve başka
+  bir şeyle eşleşir.</p>
+  <p>Tekrar içinde tekrar, örneğin <code data-kind="process-wrong">re:^(\w+)+$</code>, çok yavaş
+  olduğu için reddedilir: neredeyse eşleşen tek bir adda saniyeler sürebilir ve bir adres her pakette
+  denetlenir. Tekrarı bir kez yazın: <code data-kind="process">re:^\w+$</code>.</p>
+</section>
+
+<section>
+  <h2>Sık düşülen tuzaklar</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> chromedriver'ı yakalar,
+    <code data-kind="process">chrome.exe</code> ise yakalamaz: düz bir ad, adın bir parçasıdır.</li>
+    <li><code data-kind="process">chrome*</code> de chromedriver'ı yakalar. Tam olarak tek bir program
+    için <code data-kind="process">re:^chrome\.exe$</code> yazın.</li>
+    <li>Port alanındaki <code data-kind="port">8*</code> rakamlar üzerinde bir joker karakterdir;
+    8, 80, 8080 ve 8443'ü yakalar ama 443'ü yakalamaz. Neredeyse her zaman kastedilen
+    <code data-kind="port">8000-8999</code> gibi bir aralıktır.</li>
+    <li><code data-kind="port">!53</code>, ping gibi hiç portu olmayan trafiği de kapsar, çünkü bir
+    ping paketi port 53 değildir.</li>
+    <li>Birlikte ayarlanan adres ve port ikisi de eşleşmelidir. Biri ya da diğeri için iki ayrı
+    çalıştırma yapın.</li>
+    <li>Ters yazılmış bir aralık olan <code data-kind="port-wrong">2000-1000</code>
+    reddedilir.</li>
+    <li>Joker karakter düzenli ifade değildir: <code>re:chrome*</code> içinde yıldız e harfini
+    tekrarlar.</li>
+  </ul>
+  <p>Her hata hemen bildirilir: penceredeki alan kırmızıya döner ve altında nedeni görünür, komut
+  satırı ise okunabilir bir iletiyle durur.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

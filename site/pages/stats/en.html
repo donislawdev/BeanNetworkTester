@@ -1,0 +1,57 @@
+<section class="hero">
+  <h1>Statistics, connections and CSV files explained</h1>
+  <p class="lead">What every counter on the {{app.app.tabs.statistics}} tab counts, what every
+  column of the {{app.app.tabs.connections}} tab holds, and what is in each CSV file the program
+  saves. The names and the CSV columns are read from the program when this page is built.</p>
+</section>
+
+<section>
+  <h2>The counters on the {{app.app.tabs.statistics}} tab</h2>
+  <p>Download, upload and the queue show what is happening right now; every other counter adds up
+  from the start of the session. Each one also has a column in the statistics CSV, named below.</p>
+  {{page.counter_reference}}
+  <p>{{app.stats.overflow}}, {{app.stats.shutdown_dropped}} and {{app.stats.send_failed}} are
+  packets the tool itself lost, not the damage you asked for. They keep the arithmetic of seen, delivered and dropped honest, but they
+  are not part of the effective loss: any of them above zero means part of the loss you measure is
+  the tool's. Right-click a value to copy it, or use {{app.buttons.copy_counters}} to copy every row
+  as it reads on screen, which is handy for a bug report.</p>
+</section>
+
+<section>
+  <h2>The columns of the {{app.app.tabs.connections}} tab</h2>
+  <p>One row per connection, every column sortable by its header, and each header carries the same
+  explanation as a tooltip.</p>
+  {{page.column_reference}}
+</section>
+
+<section>
+  <h2>Where the CSV files go</h2>
+  <p>{{app.buttons.export_csv}} on the {{app.app.tabs.statistics}} tab adds a row to one file in your
+  own folder: <code>%LOCALAPPDATA%\BeanNetworkTester</code> on Windows,
+  <code>~/.config/BeanNetworkTester</code> for the Linux package, and the project folder when run
+  from source. Set <code>BEAN_DATA_DIR</code> to keep it somewhere else. Each row holds the time,
+  whether the capture was narrowed, and then the counters, under the names given above.</p>
+  <p>A table's export, {{app.buttons.export_conns}} or {{app.tools.sockets.export}} in the tools,
+  asks where to save, and offers a name with the date and time in it, so a second export does not
+  replace the first. The log names the full path of every file the program saves.</p>
+</section>
+
+<section>
+  <h2>The connections CSV</h2>
+  <p>The same rows as the table, but the column names spell out what the table shortens, and sizes
+  are always in bytes, never in the unit the screen picked. The last two columns come after the
+  rest on purpose, so a reader that takes columns by position is not thrown off by them.</p>
+  {{page.conn_csv_table}}
+</section>
+
+<section>
+  <h2>The exports of the tools</h2>
+  {{page.tool_csv_columns}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

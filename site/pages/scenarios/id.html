@@ -20,10 +20,38 @@
 </section>
 
 <section>
+  <h2>Setiap kunci yang bisa dimuat berkas skenario</h2>
+  {{page.scenario_reference}}
+  <p>Nama di dalam <code>settings</code> sama dengan di berkas pengaturan yang disimpan, dan
+  <a href="../tabel-referensi/#settings-traffic">halaman tabel referensi</a> mencantumkan semuanya
+  beserta nilai yang diterima. Sebuah langkah tidak bisa mengubah pengaturan berikut, karena sesi
+  hanya membacanya saat dimulai, atau hanya tabel di jendela yang membacanya. Langkah yang mengatur
+  salah satunya tetap dimuat, dan log menyebutkan bahwa langkah itu tidak mengubah apa pun:</p>
+  {{page.scenario_not_live}}
+</section>
+
+<section>
+  <h2>Diperiksa saat dimuat</h2>
+  <p>Kesalahan menunjuk langkahnya sebelum apa pun berjalan: pengaturan, kunci, atau aksi yang tidak
+  dikenal, nilai di luar rentang, langkah yang tidak melakukan apa-apa, daftar yang kosong atau terlalu
+  panjang. Kalau tidak, salah ketik pada kunci akan lolos diam-diam, dan berkas yang termuat tetapi
+  tidak melakukan yang tertulis terlihat seperti alat yang mengabaikannya. <code>--dry-run</code>
+  memeriksa skenario tanpa memuat driver, jadi ini langkah murah di pipeline:</p>
+<pre><code>BeanNetworkTester.exe --scenario skenario-saya.json --dry-run</code></pre>
+  <p>Langkah diterapkan oleh pewaktu yang berdetak setiap sepersepuluh detik, jadi waktu dengan
+  pecahan dipatuhi kira-kira dengan ketelitian itu.</p>
+</section>
+
+<section>
   <h2>{{page.scenario_count}} skenario siap pakai disertakan bersama program</h2>
-  <p>Di folder <code>scenarios</code> di samping file eksekusi. Dibaca dari file-file itu, jadi inilah yang benar-benar Anda miliki:</p>
+  <p>Semuanya ada di folder program: di <code>_internal\scenarios</code> pada zip, penginstal,
+  WinGet, Chocolatey, dan paket Linux, serta di <code>scenarios</code> pada salinan kode sumber.
+  Dialog berkas di jendela terbuka di sana, dan di baris perintah
+  <code>--scenario scenarios/cafe-wifi.json</code> menemukan skenario siap pakai dari folder mana
+  pun. Tabel ini dibaca dari berkas-berkas itu, jadi inilah yang benar-benar Anda miliki:</p>
   {{page.scenario_table}}
-  <p>Isinya teks biasa: buka satu, ubah satu angka, simpan. Namanya menyebutkan apa yang direproduksi: kafe yang ramai, koneksi seluler yang turun dari LTE ke 3G, unggahan yang mati di tengah jalan, server yang kelebihan beban, DNS yang berhenti menjawab.</p>
+  <p>Semuanya teks JSON biasa. Untuk mengubah salah satunya, salin ke tempat Anda sendiri, ubah sebuah
+  angka, lalu muat salinan Anda.</p>
 </section>
 
 <section>

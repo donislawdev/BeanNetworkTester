@@ -1070,6 +1070,8 @@ re:^ch.{1\,8}e\.exe$          correct - {1,8} with a backslash before the comma
 re:^ch.{1,8}e\.exe$           WRONG - it is split into "re:^ch.{1" and "8}e\.exe$"
 ```
 
+Both halves are valid patterns, so nothing warns you: the field quietly matches something else.
+
 ### Cases that trip people up
 
 * **`chrome` also catches `chromedriver`, but `chrome.exe` does not.** A bare name is a *substring*:
@@ -1087,8 +1089,8 @@ re:^ch.{1,8}e\.exe$           WRONG - it is split into "re:^ch.{1" and "8}e\.exe
 * **`!53` also covers traffic with no port** (e.g. ICMP/ping). "Everything except 53" literally
   means "everything that is not port 53", and an ICMP packet is not port 53. If you want only
   TCP/UDP, narrow the **Traffic filter**.
-* **An empty term is an error**, not "everything": `80,,443` and `80,!` are rejected. An empty
-  **whole field** means "everything".
+* **`80,!` is an error**: a `!` needs something after it. An empty place between two commas is
+  skipped, so `80,,443` reads as `80,443`. An empty **whole field** means "everything".
 * **IP and port combine with AND.** `IP=10.0.0.0/8` + `port=443` means "traffic to the 10.x network
   **and at the same time** on port 443". Want "either/or"? Leave the other field empty and do two
   runs.

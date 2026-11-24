@@ -1,0 +1,151 @@
+<section class="hero">
+  <h1>Sintassi dei filtri: nomi, PID, intervalli IP, CIDR e porte</h1>
+  <p class="lead">Un piccolo linguaggio punta lo strumento su programmi, indirizzi e porte. Funziona
+  allo stesso modo nella finestra e dalla riga di comando, e ogni esempio di questa pagina è
+  verificato dall'analizzatore del programma stesso.</p>
+</section>
+
+<section>
+  <h2>Dove si usa</h2>
+  <p>Nella finestra: il campo del processo bersaglio, i campi di indirizzo e porta sotto
+  {{app.frames.destination}} e sotto {{app.frames.block}}, e i due campi della dimensione dei dati.
+  Dalla riga di comando: <code>--target</code>, <code>--dst-ip</code>, <code>--dst-port</code>,
+  <code>--block-ip</code>, <code>--block-port</code>, <code>--payload-udp</code> e
+  <code>--payload-tcp</code>. Un campo vuoto significa tutto.</p>
+</section>
+
+<section>
+  <h2>I mattoncini</h2>
+  <table>
+    <tr><th>Scrivi</th><th>Significa</th><th>Esempio</th></tr>
+    <tr><td><code>a,b,c</code></td><td>un elenco: ne basta uno</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>un intervallo, estremi inclusi</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>un confronto, per numeri e indirizzi</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>lascia fuori questo</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>un carattere jolly: una serie qualsiasi di caratteri, o uno solo</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>un'espressione regolare, senza distinguere maiuscole</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>un blocco CIDR, solo per gli indirizzi</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>Gli spazi intorno alle virgole vengono ignorati, e così uno spazio vuoto tra due virgole. Un
+  <code>!</code> senza nulla dopo è un errore: <code data-kind="port-wrong">80,!</code> viene
+  rifiutato.</p>
+</section>
+
+<section>
+  <h2>Come si combinano i termini</h2>
+  <p>I termini senza <code>!</code> si sommano: un valore corrisponde se corrisponde uno di essi, o
+  se non ce n'è nessuno. I termini con <code>!</code> poi tolgono. L'ordine non conta, quindi
+  <code data-kind="port">80,!53</code> e <code data-kind="port">!53,80</code> sono la stessa
+  cosa.</p>
+  <table>
+    <tr><th>Scrivi</th><th>Corrisponde a</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>solo la porta 443</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>tutto tranne 53, perché non c'è niente da sommare</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>tutto tranne 53 e 443</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>da 1000 a 2000, senza 1500</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80, 443, da 8000 a 8100 e tutto sopra 9000, tranne 8080</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Programmi</h2>
+  <p>Un termine è un nome o un PID, e un campo può mescolarli. Un nome semplice corrisponde in
+  qualsiasi punto del nome del programma, senza distinguere maiuscole, quindi
+  <code data-kind="process">chrome</code> prende <code>chrome.exe</code> e
+  <code>chromedriver.exe</code>. Un numero da solo, un intervallo o un confronto è un PID. I
+  caratteri jolly e <code>re:</code> valgono per il nome. Un confronto su un nome, come
+  <code data-kind="process-wrong">&gt;chrome</code>, viene rifiutato invece di non corrispondere a
+  niente.</p>
+  <table>
+    <tr><th>Scrivi</th><th>Corrisponde a</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>ogni programma con chrome.exe nel nome</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome, ma non chromedriver</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>due programmi insieme</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>un PID</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>ogni PID in quell'intervallo</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>un nome che comincia con firefox</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>esattamente chrome.exe o firefox.exe</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>un nome e un PID nello stesso campo</td></tr>
+  </table>
+  <p>Un pacchetto porta indirizzi e porte, mai il nome di un programma, quindi lo strumento trova le
+  porte locali occupate da ogni programma che corrisponde, punta su quelle e segue le nuove
+  connessioni che apre. Alcune porte sono condivise da più programmi insieme (mDNS 5353, SSDP 1900,
+  DHCP 67 e 68). Lì è tutto o niente, e il registro dice quale dei due.</p>
+</section>
+
+<section>
+  <h2>Indirizzi</h2>
+  <p>Funzionano IPv4 e IPv6, e un campo può mescolarli: una regola di una famiglia non corrisponde
+  mai a un indirizzo dell'altra. Il modo in cui è scritto un indirizzo non conta, quindi
+  <code>2001:0db8:0000:0000:0000:0000:0000:0001</code> e <code>2001:db8::1</code> sono lo stesso
+  indirizzo.</p>
+  <table>
+    <tr><th>Scrivi</th><th>Corrisponde a</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>due indirizzi</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>un intervallo con un buco</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>un'intera sottorete</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>la stessa sottorete, con il carattere jolly</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>ogni indirizzo tranne 8.8.8.8</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>una sottorete IPv6</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>IPv4 e IPv6 nello stesso campo</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Porte</h2>
+  <p>Le porte vanno da 0 a 65535; <code data-kind="port-wrong">99999</code> viene rifiutato invece di
+  essere saltato. I campi della dimensione dei dati usano la stessa sintassi, contata in byte di
+  dati.</p>
+  <table>
+    <tr><th>Scrivi</th><th>Corrisponde a</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>un intervallo, estremi inclusi</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>le porte alte</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>le porte privilegiate</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>un misto</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Espressioni regolari</h2>
+  <p>Un termine è un'espressione regolare solo con <code>re:</code> davanti, quindi un punto in
+  <code>chrome.exe</code> resta un punto. Il modello non distingue maiuscole e può corrispondere in
+  qualsiasi punto del testo; usa <code>^</code> e <code>$</code> per farlo corrispondere a tutto.
+  Una virgola dentro un modello ha bisogno di una barra rovesciata, perché la virgola separa i
+  termini: <code data-kind="process">re:^ch.{1\,8}e\.exe$</code> funziona. Senza la barra,
+  <code>re:^ch.{1,8}e\.exe$</code> viene tagliato alla virgola in due termini che si caricano
+  entrambi e corrispondono ad altro.</p>
+  <p>Una ripetizione dentro una ripetizione, come
+  <code data-kind="process-wrong">re:^(\w+)+$</code>, viene rifiutata perché troppo lenta: può
+  richiedere secondi su un solo nome che corrisponde quasi, e un indirizzo viene controllato a ogni
+  pacchetto. Scrivi la ripetizione una volta sola: <code data-kind="process">re:^\w+$</code>.</p>
+</section>
+
+<section>
+  <h2>Trappole comuni</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> prende chromedriver, e
+    <code data-kind="process">chrome.exe</code> no: un nome semplice è un pezzo del nome.</li>
+    <li><code data-kind="process">chrome*</code> prende anche chromedriver. Per un solo programma
+    esatto, scrivi <code data-kind="process">re:^chrome\.exe$</code>.</li>
+    <li><code data-kind="port">8*</code> in un campo di porta è un carattere jolly sulle cifre, quindi
+    prende 8, 80, 8080 e 8443, ma non 443. Quasi sempre volevi un intervallo come
+    <code data-kind="port">8000-8999</code>.</li>
+    <li><code data-kind="port">!53</code> copre anche il traffico senza porta, come il ping, perché un
+    pacchetto di ping non è la porta 53.</li>
+    <li>Un indirizzo e una porta impostati insieme devono corrispondere entrambi. Per l'uno o
+    l'altro, fai due esecuzioni.</li>
+    <li><code data-kind="port-wrong">2000-1000</code>, un intervallo scritto al contrario, viene
+    rifiutato.</li>
+    <li>Un carattere jolly non è un'espressione regolare: in <code>re:chrome*</code> la stella ripete
+    la lettera e.</li>
+  </ul>
+  <p>Ogni errore viene segnalato subito: il campo della finestra diventa rosso con il motivo sotto,
+  e la riga di comando si ferma con un messaggio leggibile.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

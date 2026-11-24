@@ -1,0 +1,108 @@
+<section class="hero">
+  <h1>फ़िल्टर सिंटैक्स: नाम, PID, IP रेंज, CIDR और पोर्ट</h1>
+  <p class="lead">एक छोटी-सी भाषा टूल को प्रोग्राम, पतों और पोर्ट पर निशाना साधने देती है। यह विंडो और कमांड लाइन में एक जैसी काम करती है, और इस पेज का हर उदाहरण प्रोग्राम के अपने पार्सर से जाँचा गया है।</p>
+</section>
+
+<section>
+  <h2>यह कहाँ इस्तेमाल होती है</h2>
+  <p>विंडो में: लक्ष्य प्रोसेस का फ़ील्ड, {{app.frames.destination}} और {{app.frames.block}} के नीचे पते और पोर्ट के फ़ील्ड, और डेटा आकार के दो फ़ील्ड। कमांड लाइन पर: <code>--target</code>, <code>--dst-ip</code>, <code>--dst-port</code>, <code>--block-ip</code>, <code>--block-port</code>, <code>--payload-udp</code> और <code>--payload-tcp</code>। ख़ाली फ़ील्ड का मतलब है सब कुछ।</p>
+</section>
+
+<section>
+  <h2>बुनियादी हिस्से</h2>
+  <table>
+    <tr><th>लिखें</th><th>मतलब</th><th>उदाहरण</th></tr>
+    <tr><td><code>a,b,c</code></td><td>सूची: कोई भी एक मेल खाए तो काफ़ी</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>रेंज, दोनों सिरे शामिल</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>तुलना, संख्याओं और पतों के लिए</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>इसे बाहर रखें</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>वाइल्डकार्ड: कोई भी अक्षर-श्रृंखला, या एक अक्षर</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>रेगुलर एक्सप्रेशन, छोटे-बड़े अक्षर में फ़र्क़ नहीं</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>CIDR ब्लॉक, केवल पतों के लिए</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>कॉमा के आसपास की ख़ाली जगह अनदेखी होती है, और दो कॉमा के बीच की ख़ाली जगह भी। ऐसा <code>!</code> जिसके बाद कुछ न हो, ग़लती है: <code data-kind="port-wrong">80,!</code> अस्वीकार किया जाता है।</p>
+</section>
+
+<section>
+  <h2>पद कैसे मिलते हैं</h2>
+  <p>बिना <code>!</code> वाले पद जुड़ते हैं: कोई मान तब मेल खाता है जब उनमें से कोई भी मेल खाए, या जब ऐसा कोई पद हो ही नहीं। <code>!</code> वाले पद फिर घटाते हैं। क्रम मायने नहीं रखता, इसलिए <code data-kind="port">80,!53</code> और <code data-kind="port">!53,80</code> एक ही हैं।</p>
+  <table>
+    <tr><th>लिखें</th><th>मेल खाता है</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>सिर्फ़ पोर्ट 443</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>53 को छोड़कर सब, क्योंकि जोड़ने को कुछ नहीं</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>53 और 443 को छोड़कर सब</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>1000 से 2000 तक, 1500 के बिना</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80, 443, 8000 से 8100 तक और 9000 से ऊपर सब, 8080 को छोड़कर</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>प्रोग्राम</h2>
+  <p>पद एक नाम या PID होता है, और एक फ़ील्ड दोनों मिला सकता है। सादा नाम प्रोग्राम के नाम में कहीं भी, छोटे-बड़े अक्षर का फ़र्क़ किए बिना मेल खाता है, इसलिए <code data-kind="process">chrome</code> <code>chrome.exe</code> और <code>chromedriver.exe</code> दोनों पकड़ता है। अकेली संख्या, रेंज या तुलना PID है। वाइल्डकार्ड और <code>re:</code> नाम पर लागू होते हैं। नाम पर तुलना, जैसे <code data-kind="process-wrong">&gt;chrome</code>, कुछ भी मेल न खाने के बजाय अस्वीकार की जाती है।</p>
+  <table>
+    <tr><th>लिखें</th><th>मेल खाता है</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>नाम में chrome.exe वाला हर प्रोग्राम</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome, पर chromedriver नहीं</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>एक साथ दो प्रोग्राम</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>एक PID</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>उस रेंज का हर PID</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>firefox से शुरू होने वाला नाम</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>ठीक chrome.exe या firefox.exe</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>एक फ़ील्ड में नाम और PID</td></tr>
+  </table>
+  <p>पैकेट पते और पोर्ट ले जाता है, प्रोग्राम का नाम कभी नहीं, इसलिए टूल हर मेल खाने वाले प्रोग्राम के लोकल पोर्ट ढूँढता है, उन्हें निशाना बनाता है और उसके खोले नए कनेक्शन पर नज़र रखता है। कुछ पोर्ट एक साथ कई प्रोग्राम साझा करते हैं (mDNS 5353, SSDP 1900, DHCP 67 और 68)। उन पर सब या कुछ नहीं लागू होता है, और लॉग बताता है कि कौन-सा।</p>
+</section>
+
+<section>
+  <h2>पते</h2>
+  <p>IPv4 और IPv6 दोनों काम करते हैं, और एक फ़ील्ड दोनों मिला सकता है: एक परिवार का नियम दूसरे परिवार के पते से कभी मेल नहीं खाता। पता कैसे लिखा गया है, इससे फ़र्क़ नहीं पड़ता, इसलिए <code>2001:0db8:0000:0000:0000:0000:0000:0001</code> और <code>2001:db8::1</code> एक ही पता हैं।</p>
+  <table>
+    <tr><th>लिखें</th><th>मेल खाता है</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>दो पते</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>बीच में छेद वाली रेंज</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>पूरा सबनेट</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>वही सबनेट, वाइल्डकार्ड से</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>8.8.8.8 को छोड़कर हर पता</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>एक IPv6 सबनेट</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>एक फ़ील्ड में IPv4 और IPv6</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>पोर्ट</h2>
+  <p>पोर्ट 0 से 65535 तक होते हैं; <code data-kind="port-wrong">99999</code> छोड़ा नहीं जाता, अस्वीकार किया जाता है। डेटा आकार के फ़ील्ड यही सिंटैक्स लेते हैं, डेटा के बाइट में गिनकर।</p>
+  <table>
+    <tr><th>लिखें</th><th>मेल खाता है</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>रेंज, दोनों सिरे शामिल</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>ऊँचे पोर्ट</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>विशेषाधिकार वाले पोर्ट</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>मिश्रण</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>रेगुलर एक्सप्रेशन</h2>
+  <p>कोई पद रेगुलर एक्सप्रेशन तभी होता है जब उसके आगे <code>re:</code> हो, इसलिए <code>chrome.exe</code> में बिंदु बिंदु ही रहता है। पैटर्न छोटे-बड़े अक्षर में फ़र्क़ नहीं करता और टेक्स्ट में कहीं भी मेल खा सकता है; पूरे टेक्स्ट से मेल के लिए <code>^</code> और <code>$</code> लगाएँ। पैटर्न के अंदर कॉमा के आगे बैकस्लैश चाहिए, क्योंकि कॉमा पदों को अलग करता है: <code data-kind="process">re:^ch.{1\,8}e\.exe$</code> काम करता है। बैकस्लैश के बिना <code>re:^ch.{1,8}e\.exe$</code> कॉमा पर दो पदों में कट जाता है, जो दोनों लोड होते हैं और कुछ और ही मिलाते हैं।</p>
+  <p>दोहराव के अंदर दोहराव, जैसे <code data-kind="process-wrong">re:^(\w+)+$</code>, बहुत धीमा होने के कारण अस्वीकार किया जाता है: लगभग मेल खाते एक नाम पर यह सेकंड ले सकता है, और पते की जाँच हर पैकेट पर होती है। दोहराव एक बार लिखें: <code data-kind="process">re:^\w+$</code>।</p>
+</section>
+
+<section>
+  <h2>आम ग़लतियाँ</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> chromedriver को पकड़ता है, और <code data-kind="process">chrome.exe</code> नहीं: सादा नाम नाम का एक टुकड़ा होता है।</li>
+    <li><code data-kind="process">chrome*</code> भी chromedriver को पकड़ता है। ठीक एक प्रोग्राम के लिए <code data-kind="process">re:^chrome\.exe$</code> लिखें।</li>
+    <li>पोर्ट फ़ील्ड में <code data-kind="port">8*</code> अंकों पर वाइल्डकार्ड है, इसलिए यह 8, 80, 8080 और 8443 पकड़ता है, पर 443 नहीं। आप लगभग हमेशा <code data-kind="port">8000-8999</code> जैसी रेंज चाहते थे।</li>
+    <li><code data-kind="port">!53</code> बिना पोर्ट वाले ट्रैफ़िक को भी शामिल करता है, जैसे पिंग, क्योंकि पिंग पैकेट पोर्ट 53 नहीं है।</li>
+    <li>साथ में सेट किए गए पता और पोर्ट दोनों मेल खाने चाहिए। किसी एक के लिए दो बार चलाएँ।</li>
+    <li>उलटी लिखी रेंज <code data-kind="port-wrong">2000-1000</code> अस्वीकार की जाती है।</li>
+    <li>वाइल्डकार्ड रेगुलर एक्सप्रेशन नहीं है: <code>re:chrome*</code> में तारा अक्षर e को दोहराता है।</li>
+  </ul>
+  <p>हर ग़लती तुरंत बताई जाती है: विंडो का फ़ील्ड लाल हो जाता है और उसके नीचे कारण दिखता है, और कमांड लाइन एक पढ़ने लायक़ संदेश के साथ रुकती है।</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

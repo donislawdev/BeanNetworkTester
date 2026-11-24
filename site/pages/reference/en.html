@@ -1,7 +1,7 @@
 <section class="hero">
   <h1>Profiles, settings and exit codes</h1>
-  <p class="lead">Three tables, none of them typed by hand. They are generated from the program's own
-  registries when this page is built, so they cannot say something the program does not.</p>
+  <p class="lead">The names, flags, ranges and numbers on this page are not typed by hand. They are
+  read from the program when the page is built, so they cannot disagree with it.</p>
 </section>
 
 <section>
@@ -15,10 +15,11 @@
 </section>
 
 <section>
-  <h2>Every setting, and the flag that sets it</h2>
-  <p>The window and the command line take the same settings. This is the whole list, with the unit
-  and the range each one accepts.</p>
-  {{page.settings_table}}
+  <h2>Every setting, and how to set it</h2>
+  <p>The window, the command line, a saved settings file and a scenario all take the same settings.
+  Each one is listed under the part of the window it sits in, with its command-line flag, its name
+  in a file, the values it takes and when a change reaches a session that is already running.</p>
+  {{page.settings_reference}}
 </section>
 
 <section>

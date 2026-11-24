@@ -68,6 +68,12 @@ def _sandbox(base):
     # The scenarios page reads the shipped corpus, so a sandbox without it is not a
     # copy of the real inputs.
     shutil.copytree(os.path.join(ROOT, "scenarios"), os.path.join(root, "scenarios"))
+    # The statistics page reads the window's counter grid, its connection columns and
+    # the CSV headers from their source files.
+    for relpath in (build_site.STATS_PAGE, build_site.CONNS_PAGE, build_site.CSV_EXPORT):
+        target = os.path.join(root, relpath.replace("/", os.sep))
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copyfile(os.path.join(ROOT, relpath.replace("/", os.sep)), target)
     for asset in build_site.load_registry(ROOT).get("assets", []):
         target = os.path.join(root, asset["source"].replace("/", os.sep))
         os.makedirs(os.path.dirname(target), exist_ok=True)
@@ -915,6 +921,11 @@ def test_the_reference_tables_are_generated_from_the_registries(tmp_path):
             if getattr(field, "cli", None):
                 check(f"{rel}: --{field.cli} is in the table",
                       f"<code>--{field.cli}</code>" in text, "(missing row)")
+            check(f"{rel}: {field.key} has its own entry to link to",
+                  f'<dt id="setting-{field.key}">' in text, "(missing entry)")
+        # A range is written the way a reader types it: "%g" printed the speed limit's
+        # upper bound as 1e+07.
+        check(f"{rel}: no range in scientific notation", "e+0" not in text, "(1e+07?)")
         for name, value in vars(exitcodes).items():
             if name.isupper() and isinstance(value, int):
                 check(f"{rel}: exit code {value} is in the table", f"<td>{value}</td>" in text,
@@ -984,6 +995,218 @@ def test_every_exit_code_has_a_sentence_in_every_language():
         for name in names:
             key = "exit.%s" % name.lower()
             check(f"{code}: {key} has a sentence", strings.get(key, "").strip(), "(missing)")
+
+
+def _site_strings(code):
+    import json as jsonlib
+    return jsonlib.load(open(os.path.join(SITE, "i18n", "%s.json" % code), encoding="utf-8"))
+
+
+def test_every_setting_is_explained_and_every_explanation_names_a_setting():
+    """The reference page says what each setting does, and only settings that exist.
+
+    A new field fails the build until it has a sentence (``explained`` raises); this
+    is the other direction: a field that was removed or renamed must not leave its
+    sentence behind, translated 22 times and read by nothing.
+    """
+    from beantester import fields
+    strings = _site_strings("en")
+    written = sorted(key[len("setting."):] for key in strings if key.startswith("setting."))
+    check("there are explanations to compare", len(written) >= 40, f"({len(written)})")
+    check("every explanation names a setting the program has",
+          not set(written) - set(fields.FIELDS), f"({sorted(set(written) - set(fields.FIELDS))})")
+    check("every setting has an explanation",
+          not set(fields.FIELDS) - set(written), f"({sorted(set(fields.FIELDS) - set(written))})")
+
+
+def test_every_command_line_option_is_explained_once(tmp_path):
+    """Every option the parser accepts is on the site: a setting's flag on the reference
+    page, everything else once on the command-line page, and no sentence is left for an
+    option the parser no longer has."""
+    options = build_site.cli_options()
+    check("there are options beyond the settings", len(options) >= 20, f"({len(options)})")
+    grouped = [name for _, names in build_site.CLI_GROUPS for name in names]
+    check("each option sits in exactly one group",
+          sorted(grouped) == sorted(options), f"({sorted(set(grouped) ^ set(options))})")
+    dests = {action.dest for action in options.values()}
+    written = {key[len("flag."):] for key in _site_strings("en") if key.startswith("flag.")}
+    check("every option has a sentence and every sentence an option",
+          written == dests, f"({sorted(written ^ dests)})")
+    out, _ = _build(tmp_path, "cli")
+    registry = build_site.load_registry(ROOT)
+    page = next(p for p in build_site.load_pages(ROOT, registry) if p["id"] == "cli")
+    for code in page["codes"]:
+        rel = posixpath.join(page["languages"][code]["dir_path"], "index.html").lstrip("/")
+        text = _read(os.path.join(out, rel.replace("/", os.sep)))
+        for name in options:
+            check(f"{rel}: {name} has its own entry", f'<dt id="flag-{name[2:]}">' in text,
+                  "(missing entry)")
+
+
+_EXAMPLE = re.compile(r'<code data-kind="(process|ip|port)(-wrong)?">(.*?)</code>', re.S)
+
+
+def _example_verdicts(text):
+    """``(kind, expression, meant_to_fail, error)`` for every marked example in a page:
+    ``error`` is the parser's message, or ``None`` when the expression parses."""
+    from beantester import matchers
+    kinds = {"process": (matchers.KIND_PROCESS, None), "ip": (matchers.KIND_IP, None),
+             "port": (matchers.KIND_INT, (0, 65535))}
+    out = []
+    for kind, wrong, raw in _EXAMPLE.findall(text):
+        expression = html.unescape(raw)
+        matcher_kind, bounds = kinds[kind]
+        try:
+            matchers.validate_matcher(expression, matcher_kind, bounds=bounds)
+            error = None
+        except ValueError as exc:
+            error = str(exc)
+        out.append((kind, expression, bool(wrong), error))
+    return out
+
+
+def test_every_syntax_example_says_what_the_parser_does():
+    """An example of the filter syntax is checked against the program's parser, on every
+    language's page: one shown as working must parse, one shown as a mistake must be
+    refused. Prose about syntax rots silently, and an example the program refuses sends
+    a reader looking for a fault in their own typing."""
+    canary = _example_verdicts('<code data-kind="port">80,!</code>'
+                               '<code data-kind="ip-wrong">10.0.0.1</code>')
+    check("canary: a broken example and a working 'mistake' are both caught",
+          [(c[2], c[3] is None) for c in canary] == [(False, False), (True, True)], f"({canary})")
+    pages = sorted(glob.glob(os.path.join(SITE, "pages", "syntax", "*.html")))
+    check("the syntax page exists in every language", len(pages) == 22, f"({len(pages)})")
+    for path in pages:
+        verdicts = _example_verdicts(_read(path))
+        check(f"{os.path.basename(path)}: there are examples to check", len(verdicts) >= 30,
+              f"({len(verdicts)})")
+        for kind, expression, meant_to_fail, error in verdicts:
+            if meant_to_fail:
+                check(f"{os.path.basename(path)}: {expression!r} ({kind}) is refused",
+                      error is not None, "(the parser accepts it)")
+            else:
+                check(f"{os.path.basename(path)}: {expression!r} ({kind}) parses",
+                      error is None, f"({error})")
+
+
+def test_every_counter_column_and_csv_column_is_explained():
+    """The statistics page explains every counter of the window's grid, every column of
+    the Connections tab and every column of the connections CSV, and no sentence is left
+    for one that is gone. The registries are read from source, as the builder reads them."""
+    cells = (build_site._literal(ROOT, build_site.STATS_PAGE, "CELLS")
+             + build_site._literal(ROOT, build_site.STATS_PAGE, "OVERLOAD_CELLS"))
+    columns = build_site._literal(ROOT, build_site.CONNS_PAGE, "COLUMNS")
+    header = build_site._literal(ROOT, build_site.CSV_EXPORT, "CONN_CSV_HEADER")
+    strings = _site_strings("en")
+    counters = {k[len("counter."):] for k in strings if k.startswith("counter.")}
+    written = {k[len("column."):] for k in strings if k.startswith("column.")}
+    own = {k[len("csv.conn."):] for k in strings if k.startswith("csv.conn.")}
+    check("every counter, and no other", counters == {c[0] for c in cells},
+          f"({sorted(counters ^ {c[0] for c in cells})})")
+    check("every column, and no other", written == set(columns), f"({sorted(written ^ set(columns))})")
+    mapped = set(build_site.CONN_CSV_TABLE_COLUMN)
+    check("the CSV map names only real CSV and table columns",
+          mapped <= set(header) and set(build_site.CONN_CSV_TABLE_COLUMN.values()) <= set(columns),
+          f"({sorted(mapped - set(header))})")
+    check("every CSV column is a table column or has its own sentence, never both",
+          own == set(header) - mapped, f"({sorted(own ^ (set(header) - mapped))})")
+
+
+def test_every_scenario_key_action_and_shipped_file_is_explained():
+    """The scenarios page explains each key and action the validator accepts and says
+    what each shipped file reproduces; a sentence left for a key, an action or a file
+    that is gone fails here, since the build only notices the missing ones."""
+    from beantester import scenario
+    strings = _site_strings("en")
+    keys = {k[len("scenario.key."):] for k in strings if k.startswith("scenario.key.")}
+    actions = {k[len("scenario.action."):] for k in strings if k.startswith("scenario.action.")}
+    files = {k[len("scenario.file."):] for k in strings if k.startswith("scenario.file.")}
+    shipped = {name[:-len(".json")] for name in build_site.scenario_files(ROOT)}
+    check("every key the validator accepts, and no other",
+          keys == set(scenario.FILE_KEYS) | set(scenario.STEP_KEYS), f"({sorted(keys)})")
+    check("every action, and no other", actions == set(scenario.ACTIONS), f"({sorted(actions)})")
+    check("every shipped file, and no other", files == shipped, f"({sorted(files ^ shipped)})")
+
+
+def test_every_explanation_was_read_against_the_program_text_it_explains():
+    """A site sentence about a setting was checked against what the program says of it.
+
+    The program describes each setting three times (tooltip, help sheet, ``--help``);
+    the site describes it a fourth time, in 22 languages. When the program's English
+    changes, the setting has probably changed, and nothing else would notice that the
+    site still describes the old one. ``site/doc-sources.json`` records the program text
+    each sentence was last read against.
+    """
+    import json as jsonlib
+    recorded = jsonlib.load(open(os.path.join(ROOT, build_site.DOC_SOURCES), encoding="utf-8"))
+    current = build_site.doc_sources(ROOT)
+    changed = sorted(key for key in current if recorded.get(key) != current[key])
+    gone = sorted(set(recorded) - set(current))
+    check("the program's text is the one the site sentences were read against",
+          not changed and not gone,
+          f"(changed: {changed}; no longer in the program: {gone}. Re-read those sentences "
+          f"in site/i18n/*.json, in every language, then run "
+          f"python tools/build_site.py --stamp-sources)")
+
+
+def test_the_explanation_fingerprint_moves_with_the_program_text(tmp_path):
+    """Canary for the check above: a changed tooltip changes that setting's fingerprint
+    and no other, and a fingerprint that never moved would let every change through."""
+    import json as jsonlib
+    os.makedirs(os.path.join(str(tmp_path), "lang"))
+    shutil.copytree(os.path.join(ROOT, "scenarios"), os.path.join(str(tmp_path), "scenarios"))
+    for relpath in (build_site.STATS_PAGE, build_site.CONNS_PAGE):
+        target = os.path.join(str(tmp_path), relpath.replace("/", os.sep))
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copyfile(os.path.join(ROOT, relpath.replace("/", os.sep)), target)
+    strings = jsonlib.load(open(os.path.join(ROOT, "lang", "en.json"), encoding="utf-8"))
+    path = os.path.join(str(tmp_path), "lang", "en.json")
+    with open(path, "w", encoding="utf-8") as handle:
+        jsonlib.dump(strings, handle)
+    before = build_site.doc_sources(str(tmp_path))
+    check("the copy reads like the real tree", before == build_site.doc_sources(ROOT))
+    strings["tips.loss"] = strings["tips.loss"] + " Changed."
+    with open(path, "w", encoding="utf-8") as handle:
+        jsonlib.dump(strings, handle)
+    shipped = os.path.join(str(tmp_path), "scenarios", "cafe-wifi.json")
+    with open(shipped, "a", encoding="utf-8") as handle:
+        handle.write("\n")
+    # A literal read from the window's source, edited between two calls on the same
+    # root: a reader that kept the first answer would miss the change.
+    stats = os.path.join(str(tmp_path), build_site.STATS_PAGE.replace("/", os.sep))
+    with open(stats, encoding="utf-8", newline="") as handle:
+        source = handle.read()
+    with open(stats, "w", encoding="utf-8", newline="") as handle:
+        handle.write(source.replace('"tips.stat_seen"', '"tips.stat_queue"', 1))
+    after = build_site.doc_sources(str(tmp_path))
+    moved = sorted(key for key in before if before[key] != after[key])
+    check("only what changed moves",
+          moved == ["counter.seen", "scenario.file.cafe-wifi", "setting.loss"], f"({moved})")
+
+
+def _english_copies(english, translated, shortest=40):
+    """Keys whose translation is still the English sentence. Short texts may match on
+    purpose (the site's name, "Code", "Pages"), so only sentences count."""
+    return sorted(key for key, value in translated.items()
+                  if key != "_meta" and value == english.get(key) and len(value) >= shortest)
+
+
+def test_no_translation_is_left_as_the_english_sentence():
+    """A language forgotten after ``internal_tools/site_i18n.py fill`` would ship in English.
+
+    The fill copies new keys into every translation so the build stays green while the
+    translations are written, and every other check passes on a copy.
+    """
+    check("canary: a copied sentence is found",
+          _english_copies({"k": "A sentence long enough to be a sentence."},
+                          {"k": "A sentence long enough to be a sentence."}) == ["k"])
+    registry = build_site.load_registry(ROOT)
+    english = _site_strings(registry["default_language"])
+    for code in build_site.language_codes(registry):
+        if code == registry["default_language"]:
+            continue
+        left = _english_copies(english, _site_strings(code))
+        check(f"{code}: every sentence is translated", not left, f"(still English: {left[:6]})")
 
 
 def test_the_footer_names_the_accounts_and_carries_no_brand_mark(tmp_path):
@@ -1175,6 +1398,14 @@ def test_the_scenario_count_is_the_number_of_files_that_ship(tmp_path):
     root = _sandbox(tmp_path / "one_more")
     shutil.copyfile(os.path.join(root, "scenarios", "cafe-wifi.json"),
                     os.path.join(root, "scenarios", "zzz-one-more.json"))
+    # A shipped file needs its sentence in every language, or the build refuses it.
+    import json as jsonlib
+    for path in glob.glob(os.path.join(root, "site", "i18n", "*.json")):
+        with open(path, encoding="utf-8") as handle:
+            strings = jsonlib.load(handle)
+        strings["scenario.file.zzz-one-more"] = "One more scenario, for this test."
+        with open(path, "w", encoding="utf-8") as handle:
+            jsonlib.dump(strings, handle, ensure_ascii=False)
     out = str(tmp_path / "one-more-out")
     build_site.build(root, out)
     en = _read(os.path.join(out, "scenarios-over-time", "index.html"))
@@ -1348,8 +1579,74 @@ def test_the_workflow_rebuilds_when_any_source_of_the_page_changes(tmp_path):
     # words from them, so a translation merged into `lang/` changes the published pages.
     if '"lang"' in builder_text:
         needed.append("lang/**")
-    for path in needed:
-        check(f"the paths filter covers {path}", f'"{path}"' in text, "(missing)")
+    # And the program modules the generator imports: the reference tables are read out
+    # of them, so a new profile, setting or exit code changes the site. They were
+    # missing from the filter while the theme was in it, so such a change reached the
+    # live page only with the next edit under site/.
+    program = _program_modules(builder_text)
+    check("the generator's program imports are found", "beantester/presets.py" in program,
+          f"(found {program})")
+    needed += program
+    # The window's sources read as text for the statistics page count the same way.
+    needed += [build_site.STATS_PAGE, build_site.CONNS_PAGE, build_site.CSV_EXPORT]
+    patterns = _filter_patterns(text)
+    for entry in needed:
+        files = _files_behind(entry)
+        check(f"{entry} stands for files in the repository", files, "(none found)")
+        missing = [path for path in files
+                   if not any(_glob_covers(pattern, path) for pattern in patterns)]
+        check(f"the paths filter covers {entry}", not missing,
+              f"(not covered: {missing[:5]}, filter {patterns})")
+
+
+def _files_behind(entry, root=ROOT):
+    """A required input as the files it stands for: a folder's ``/**`` becomes every file
+    under it. Matching the glob string itself would let ``site/*`` pass for ``site/**``,
+    because ``**`` holds no slash for ``*`` to stop at."""
+    if not entry.endswith("/**"):
+        return [entry] if os.path.isfile(os.path.join(root, entry)) else []
+    found = []
+    for folder, dirs, names in os.walk(os.path.join(root, entry[:-len("/**")])):
+        dirs[:] = [name for name in dirs if name != "__pycache__"]
+        found += [os.path.relpath(os.path.join(folder, name), root).replace(os.sep, "/")
+                  for name in names]
+    return sorted(found)
+
+
+def _program_modules(builder_text):
+    """The ``beantester`` modules ``build_site.py`` imports, as repository paths."""
+    import ast
+    found = []
+    for node in ast.walk(ast.parse(builder_text)):
+        if isinstance(node, ast.ImportFrom) and node.module == "beantester":
+            found += ["beantester/%s.py" % alias.name for alias in node.names]
+    return sorted(found)
+
+
+def _filter_patterns(text):
+    """The patterns under the push trigger's ``paths:``."""
+    block = text.split("paths:", 1)[1].split("workflow_dispatch:", 1)[0]
+    return re.findall(r'-\s*"([^"]+)"', block)
+
+
+def _glob_covers(pattern, path):
+    """Whether a paths-filter pattern matches ``path``: ``**`` crosses folders, ``*``
+    stays inside one, as GitHub reads them."""
+    rx = (re.escape(pattern).replace(r"\*\*", "\0").replace(r"\*", "[^/]*")
+          .replace("\0", ".*"))
+    return re.fullmatch(rx, path) is not None
+
+
+def test_the_paths_filter_reader_can_say_no():
+    """Canary for the check above: a reader that matched everything would pass it."""
+    check("** crosses folders", _glob_covers("beantester/**", "beantester/gui/theme.py"))
+    check("* stays in one folder", not _glob_covers("beantester/*.py", "beantester/gui/theme.py"))
+    check("another folder is not covered", not _glob_covers("site/**", "beantester/fields.py"))
+    check("a plain path covers only itself", not _glob_covers("bean.png", "docs/bean.png"))
+    nested = "site/pages/syntax/en.html"
+    check("a folder stands for the files under it", nested in _files_behind("site/**"))
+    check("site/* does not cover a nested page", not _glob_covers("site/*", nested))
+    check("site/** does", _glob_covers("site/**", nested))
 
 
 def test_only_the_job_that_deploys_may_write_to_pages():

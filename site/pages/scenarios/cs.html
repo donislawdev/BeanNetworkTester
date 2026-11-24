@@ -20,10 +20,38 @@
 </section>
 
 <section>
+  <h2>Každý klíč, který může mít soubor scénáře</h2>
+  {{page.scenario_reference}}
+  <p>Názvy v <code>settings</code> jsou stejné jako v uloženém souboru nastavení a
+  <a href="../referencni-tabulky/#settings-traffic">stránka s referenčními tabulkami</a> vypisuje
+  každý s hodnotami, které přijímá. Krok tato nastavení změnit nemůže, protože relace je bere jen při
+  startu nebo je čtou jen tabulky okna. Krok, který některé z nich nastaví, se přesto načte a protokol
+  řekne, že nic nezměnil:</p>
+  {{page.scenario_not_live}}
+</section>
+
+<section>
+  <h2>Kontroluje se při načtení</h2>
+  <p>Chyba ukáže na svůj krok dřív, než se cokoli spustí: neznámé nastavení, klíč nebo akce, hodnota
+  mimo rozsah, krok, který nic nedělá, prázdný nebo příliš dlouhý seznam. Jinak by překlep v klíči
+  prošel potichu a soubor, který se načte, ale nedělá, co říká, vypadá jako nástroj, který ho
+  přehlíží. <code>--dry-run</code> zkontroluje scénář bez načtení ovladače, takže je to levný krok
+  v pipeline:</p>
+<pre><code>BeanNetworkTester.exe --scenario muj-scenar.json --dry-run</code></pre>
+  <p>Kroky uplatňuje časovač, který tiká každou desetinu sekundy, takže čas s desetinnou částí se
+  dodrží zhruba s touto přesností.</p>
+</section>
+
+<section>
   <h2>Hotové scénáře v programu: {{page.scenario_count}}</h2>
-  <p>Ve složce <code>scenarios</code> vedle spustitelného souboru. Čteno z těchto souborů, takže je to to, co skutečně máte:</p>
+  <p>Leží ve složce programu: v <code>_internal\scenarios</code> v zipu, instalátoru, WinGet,
+  Chocolatey a balíčku pro Linux, a v <code>scenarios</code> v kopii zdrojového kódu. Otevírá se tam
+  dialog pro výběr souboru a na příkazovém řádku <code>--scenario scenarios/cafe-wifi.json</code>
+  najde hotový scénář z libovolné složky. Tato tabulka se čte z těch souborů, takže ukazuje, co
+  opravdu máte:</p>
   {{page.scenario_table}}
-  <p>Jsou to obyčejné textové soubory: otevřete jeden, změňte číslo, uložte. Názvy říkají, co reprodukují: přeplněnou kavárnu, mobilní spojení klesající z LTE na 3G, odesílání, které zemře v půlce, přetížený server, DNS, které přestane odpovídat.</p>
+  <p>Je to obyčejný text JSON. Chcete-li některý změnit, zkopírujte ho na vlastní místo, upravte číslo
+  a načtěte svou kopii.</p>
 </section>
 
 <section>

@@ -1,0 +1,138 @@
+{
+  "id": "syntax",
+  "order": 86,
+  "languages": {
+    "en": {
+      "slug": "filter-syntax",
+      "link_text": "Filter syntax",
+      "title": "Filter syntax: names, PIDs, IP ranges, CIDR and ports",
+      "description": "How to aim the tool at programs, addresses and ports: lists, ranges, CIDR, wildcards, re: patterns and ! exclusions, with every example checked."
+    },
+    "pl": {
+      "slug": "skladnia-filtrow",
+      "link_text": "Składnia filtrów",
+      "title": "Składnia filtrów: nazwy, PID-y, zakresy IP, CIDR i porty",
+      "description": "Jak celować w programy, adresy i porty: listy, zakresy, CIDR, symbole wieloznaczne, wzorce re: i wykluczenia !, z każdym przykładem sprawdzonym."
+    },
+    "zh-Hans": {
+      "slug": "guolv-yufa",
+      "link_text": "过滤语法",
+      "title": "过滤语法：名称、PID、IP 范围、CIDR 和端口",
+      "description": "如何让工具针对程序、地址和端口：列表、范围、CIDR、通配符、re: 模式和 ! 排除，每个示例都经过检查。"
+    },
+    "ja": {
+      "slug": "firuta-koubun",
+      "link_text": "フィルターの書き方",
+      "title": "フィルターの書き方：名前・PID・IP 範囲・CIDR・ポート",
+      "description": "プログラム、アドレス、ポートを狙う書き方：リスト、範囲、CIDR、ワイルドカード、re: パターン、! による除外。例はすべて確認済み。"
+    },
+    "de": {
+      "slug": "filtersyntax",
+      "link_text": "Filtersyntax",
+      "title": "Filtersyntax: Namen, PIDs, IP-Bereiche, CIDR und Ports",
+      "description": "So zielst du auf Programme, Adressen und Ports: Listen, Bereiche, CIDR, Platzhalter, re:-Muster und Ausschlüsse mit !, jedes Beispiel geprüft."
+    },
+    "fr": {
+      "slug": "syntaxe-des-filtres",
+      "link_text": "Syntaxe des filtres",
+      "title": "Syntaxe des filtres : noms, PID, plages IP, CIDR et ports",
+      "description": "Viser des programmes, des adresses et des ports : listes, plages, CIDR, jokers, motifs re: et exclusions avec !, chaque exemple vérifié."
+    },
+    "es": {
+      "slug": "sintaxis-de-filtros",
+      "link_text": "Sintaxis de filtros",
+      "title": "Sintaxis de filtros: nombres, PID, rangos IP, CIDR y puertos",
+      "description": "Cómo apuntar a programas, direcciones y puertos: listas, rangos, CIDR, comodines, patrones re: y exclusiones con !, con cada ejemplo comprobado."
+    },
+    "pt-BR": {
+      "slug": "sintaxe-de-filtros",
+      "link_text": "Sintaxe de filtros",
+      "title": "Sintaxe de filtros: nomes, PIDs, faixas de IP, CIDR e portas",
+      "description": "Como mirar em programas, endereços e portas: listas, faixas, CIDR, curingas, padrões re: e exclusões com !, com cada exemplo verificado."
+    },
+    "it": {
+      "slug": "sintassi-dei-filtri",
+      "link_text": "Sintassi dei filtri",
+      "title": "Sintassi dei filtri: nomi, PID, intervalli IP, CIDR e porte",
+      "description": "Come mirare a programmi, indirizzi e porte: elenchi, intervalli, CIDR, caratteri jolly, modelli re: ed esclusioni con !, ogni esempio verificato."
+    },
+    "id": {
+      "slug": "sintaks-filter",
+      "link_text": "Sintaks filter",
+      "title": "Sintaks filter: nama, PID, rentang IP, CIDR, dan port",
+      "description": "Cara membidik program, alamat, dan port: daftar, rentang, CIDR, wildcard, pola re:, dan pengecualian dengan !, setiap contoh sudah diperiksa."
+    },
+    "ru": {
+      "slug": "sintaksis-filtrov",
+      "link_text": "Синтаксис фильтров",
+      "title": "Синтаксис фильтров: имена, PID, диапазоны IP, CIDR и порты",
+      "description": "Как нацелить инструмент на программы, адреса и порты: списки, диапазоны, CIDR, шаблоны, re: и исключения через !, каждый пример проверен."
+    },
+    "tr": {
+      "slug": "filtre-soz-dizimi",
+      "link_text": "Filtre söz dizimi",
+      "title": "Filtre söz dizimi: adlar, PID, IP aralıkları, CIDR ve portlar",
+      "description": "Programları, adresleri ve portları hedefleme: listeler, aralıklar, CIDR, joker karakterler, re: desenleri ve ! dışlamaları, her örnek denetlendi."
+    },
+    "cs": {
+      "slug": "syntaxe-filtru",
+      "link_text": "Syntaxe filtrů",
+      "title": "Syntaxe filtrů: názvy, PID, rozsahy IP, CIDR a porty",
+      "description": "Jak mířit na programy, adresy a porty: seznamy, rozsahy, CIDR, zástupné znaky, vzory re: a vyloučení pomocí !, každý příklad ověřený."
+    },
+    "vi": {
+      "slug": "cu-phap-bo-loc",
+      "link_text": "Cú pháp bộ lọc",
+      "title": "Cú pháp bộ lọc: tên, PID, khoảng IP, CIDR và cổng",
+      "description": "Cách nhắm vào chương trình, địa chỉ và cổng: danh sách, khoảng, CIDR, ký tự đại diện, mẫu re: và loại trừ bằng !, mọi ví dụ đều được kiểm tra."
+    },
+    "hi": {
+      "slug": "filter-syntax-niyam",
+      "link_text": "फ़िल्टर सिंटैक्स",
+      "title": "फ़िल्टर सिंटैक्स: नाम, PID, IP रेंज, CIDR और पोर्ट",
+      "description": "प्रोग्राम, पते और पोर्ट को निशाना कैसे बनाएँ: सूचियाँ, रेंज, CIDR, वाइल्डकार्ड, re: पैटर्न और ! से बाहर करना, हर उदाहरण जाँचा हुआ।"
+    },
+    "ko": {
+      "slug": "pilteo-munbeop",
+      "link_text": "필터 문법",
+      "title": "필터 문법: 이름, PID, IP 범위, CIDR, 포트",
+      "description": "프로그램, 주소, 포트를 겨냥하는 방법: 목록, 범위, CIDR, 와일드카드, re: 패턴, ! 제외. 모든 예제를 확인했습니다."
+    },
+    "ar": {
+      "slug": "sighat-almurashihat",
+      "link_text": "صيغة المرشحات",
+      "title": "صيغة المرشحات: الأسماء وPID ونطاقات IP وCIDR والمنافذ",
+      "description": "كيف تستهدف البرامج والعناوين والمنافذ: القوائم والنطاقات وCIDR وأحرف البدل وأنماط re: والاستبعاد بـ !، مع فحص كل مثال."
+    },
+    "ro": {
+      "slug": "sintaxa-filtrelor",
+      "link_text": "Sintaxa filtrelor",
+      "title": "Sintaxa filtrelor: nume, PID-uri, intervale IP, CIDR și porturi",
+      "description": "Cum țintești programe, adrese și porturi: liste, intervale, CIDR, caractere wildcard, modele re: și excluderi cu !, fiecare exemplu verificat."
+    },
+    "nl": {
+      "slug": "filtersyntaxis",
+      "link_text": "Filtersyntaxis",
+      "title": "Filtersyntaxis: namen, PID's, IP-bereiken, CIDR en poorten",
+      "description": "Zo richt je op programma's, adressen en poorten: lijsten, bereiken, CIDR, jokertekens, re:-patronen en uitsluitingen met !, elk voorbeeld gecontroleerd."
+    },
+    "zh-Hant": {
+      "slug": "guolv-yufa",
+      "link_text": "篩選語法",
+      "title": "篩選語法：名稱、PID、IP 範圍、CIDR 和連接埠",
+      "description": "如何讓工具針對程式、位址和連接埠：清單、範圍、CIDR、萬用字元、re: 模式和 ! 排除，每個範例都經過檢查。"
+    },
+    "uk": {
+      "slug": "syntaksys-filtriv",
+      "link_text": "Синтаксис фільтрів",
+      "title": "Синтаксис фільтрів: імена, PID, діапазони IP, CIDR і порти",
+      "description": "Як націлити інструмент на програми, адреси й порти: списки, діапазони, CIDR, шаблони, re: і виключення через !, кожен приклад перевірено."
+    },
+    "th": {
+      "slug": "waiyakon-tua-krong",
+      "link_text": "ไวยากรณ์ตัวกรอง",
+      "title": "ไวยากรณ์ตัวกรอง: ชื่อ PID ช่วง IP CIDR และพอร์ต",
+      "description": "วิธีเล็งไปที่โปรแกรม ที่อยู่ และพอร์ต: รายการ ช่วง CIDR ไวลด์การ์ด รูปแบบ re: และการยกเว้นด้วย ! ทุกตัวอย่างผ่านการตรวจแล้ว"
+    }
+  }
+}

@@ -1,0 +1,108 @@
+<section class="hero">
+  <h1>필터 문법: 이름, PID, IP 범위, CIDR, 포트</h1>
+  <p class="lead">작은 언어 하나로 도구가 프로그램, 주소, 포트를 겨냥합니다. 창과 명령줄에서 똑같이 동작하며, 이 페이지의 모든 예제는 프로그램 자체의 파서로 확인했습니다.</p>
+</section>
+
+<section>
+  <h2>어디에서 쓰는가</h2>
+  <p>창에서는 대상 프로세스 칸, {{app.frames.destination}}과 {{app.frames.block}} 아래의 주소 칸과 포트 칸, 그리고 데이터 크기 칸 두 개입니다. 명령줄에서는 <code>--target</code>, <code>--dst-ip</code>, <code>--dst-port</code>, <code>--block-ip</code>, <code>--block-port</code>, <code>--payload-udp</code>, <code>--payload-tcp</code>입니다. 빈 칸은 모두를 뜻합니다.</p>
+</section>
+
+<section>
+  <h2>기본 구성 요소</h2>
+  <table>
+    <tr><th>쓰는 법</th><th>뜻</th><th>예</th></tr>
+    <tr><td><code>a,b,c</code></td><td>목록: 아무거나 하나만 맞으면 됨</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>범위, 양 끝 포함</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>비교, 숫자와 주소에 사용</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>이것은 빼기</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>와일드카드: 임의의 문자열, 또는 한 글자</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>정규식, 대소문자 구분 없음</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>CIDR 블록, 주소에만 사용</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>쉼표 주위의 공백은 무시되며, 두 쉼표 사이의 빈자리도 무시됩니다. 뒤에 아무것도 없는 <code>!</code>는 잘못이며, <code data-kind="port-wrong">80,!</code>는 거부됩니다.</p>
+</section>
+
+<section>
+  <h2>항목이 결합되는 방식</h2>
+  <p><code>!</code>가 없는 항목은 더해집니다. 그중 하나라도 맞거나, 그런 항목이 하나도 없으면 값이 맞습니다. <code>!</code>가 붙은 항목은 그다음에 뺍니다. 순서는 상관없으므로 <code data-kind="port">80,!53</code>과 <code data-kind="port">!53,80</code>은 같습니다.</p>
+  <table>
+    <tr><th>쓰는 법</th><th>맞는 것</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>포트 443만</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>더할 항목이 없으므로 53을 뺀 모두</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>53과 443을 뺀 모두</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>1000부터 2000까지, 1500은 제외</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80, 443, 8000부터 8100까지, 9000보다 큰 모두, 단 8080은 제외</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>프로그램</h2>
+  <p>항목은 이름이나 PID이며, 한 칸에 섞어 쓸 수 있습니다. 일반 이름은 프로그램 이름의 어느 위치에서든 대소문자 구분 없이 맞으므로 <code data-kind="process">chrome</code>은 <code>chrome.exe</code>와 <code>chromedriver.exe</code>를 모두 잡습니다. 숫자만, 범위, 비교는 PID입니다. 와일드카드와 <code>re:</code>는 이름에 적용됩니다. <code data-kind="process-wrong">&gt;chrome</code>처럼 이름에 비교를 쓰면, 아무것도 맞지 않는 대신 거부됩니다.</p>
+  <table>
+    <tr><th>쓰는 법</th><th>맞는 것</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>이름에 chrome.exe가 들어간 모든 프로그램</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome, 단 chromedriver는 제외</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>두 프로그램 동시에</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>PID 하나</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>그 범위의 모든 PID</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>firefox로 시작하는 이름</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>정확히 chrome.exe 또는 firefox.exe</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>한 칸에 이름과 PID</td></tr>
+  </table>
+  <p>패킷은 주소와 포트를 담을 뿐 프로그램 이름은 담지 않으므로, 도구는 맞는 프로그램마다 그 프로그램이 가진 로컬 포트를 찾아 겨냥하고, 새로 여는 연결도 따라갑니다. 몇몇 포트는 여러 프로그램이 동시에 함께 씁니다(mDNS 5353, SSDP 1900, DHCP 67과 68). 그런 포트에서는 전부 아니면 전무이며, 어느 쪽인지 로그에 나옵니다.</p>
+</section>
+
+<section>
+  <h2>주소</h2>
+  <p>IPv4와 IPv6 모두 쓸 수 있고 한 칸에 섞을 수 있습니다. 한 계열의 규칙은 다른 계열의 주소와 절대 맞지 않습니다. 주소를 어떻게 쓰는지는 상관없으므로 <code>2001:0db8:0000:0000:0000:0000:0000:0001</code>과 <code>2001:db8::1</code>은 같은 주소입니다.</p>
+  <table>
+    <tr><th>쓰는 법</th><th>맞는 것</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>주소 두 개</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>구멍이 하나 있는 범위</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>서브넷 전체</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>같은 서브넷을 와일드카드로</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>8.8.8.8을 뺀 모든 주소</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>IPv6 서브넷</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>한 칸에 IPv4와 IPv6</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>포트</h2>
+  <p>포트는 0부터 65535까지이며, <code data-kind="port-wrong">99999</code>는 건너뛰지 않고 거부됩니다. 데이터 크기 칸도 같은 문법을 쓰며, 데이터 바이트 수로 셉니다.</p>
+  <table>
+    <tr><th>쓰는 법</th><th>맞는 것</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>범위, 양 끝 포함</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>높은 포트</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>특권 포트</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>조합</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>정규식</h2>
+  <p>항목은 앞에 <code>re:</code>가 있을 때만 정규식이므로, <code>chrome.exe</code>의 점은 그대로 점입니다. 패턴은 대소문자를 구분하지 않고 텍스트의 어디에서든 맞을 수 있으며, 전체와 맞추려면 <code>^</code>와 <code>$</code>를 씁니다. 쉼표는 항목을 나누므로 패턴 안의 쉼표에는 백슬래시가 필요합니다. <code data-kind="process">re:^ch.{1\,8}e\.exe$</code>는 동작합니다. 백슬래시가 없으면 <code>re:^ch.{1,8}e\.exe$</code>는 쉼표에서 두 항목으로 잘리고, 둘 다 불러와져서 다른 것과 맞습니다.</p>
+  <p><code data-kind="process-wrong">re:^(\w+)+$</code>처럼 반복 안의 반복은 너무 느려서 거부됩니다. 거의 맞는 이름 하나에 몇 초가 걸릴 수 있는데, 주소는 패킷마다 확인되기 때문입니다. 반복은 한 번만 쓰세요: <code data-kind="process">re:^\w+$</code>.</p>
+</section>
+
+<section>
+  <h2>헷갈리기 쉬운 경우</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code>은 chromedriver를 잡지만 <code data-kind="process">chrome.exe</code>는 잡지 않습니다. 일반 이름은 이름의 일부이기 때문입니다.</li>
+    <li><code data-kind="process">chrome*</code>도 chromedriver를 잡습니다. 정확히 프로그램 하나만 겨냥하려면 <code data-kind="process">re:^chrome\.exe$</code>라고 쓰세요.</li>
+    <li>포트 칸의 <code data-kind="port">8*</code>은 숫자에 대한 와일드카드라서 8, 80, 8080, 8443은 잡지만 443은 잡지 않습니다. 대개는 <code data-kind="port">8000-8999</code> 같은 범위를 뜻했을 것입니다.</li>
+    <li><code data-kind="port">!53</code>은 ping처럼 포트가 아예 없는 트래픽도 포함합니다. ping 패킷은 포트 53이 아니기 때문입니다.</li>
+    <li>주소와 포트를 함께 설정하면 둘 다 맞아야 합니다. 둘 중 하나만이라면 두 번 나누어 실행하세요.</li>
+    <li>거꾸로 쓴 범위 <code data-kind="port-wrong">2000-1000</code>은 거부됩니다.</li>
+    <li>와일드카드는 정규식이 아닙니다. <code>re:chrome*</code>에서 별표는 글자 e의 반복입니다.</li>
+  </ul>
+  <p>모든 실수는 바로 알려 줍니다. 창에서는 칸이 빨갛게 바뀌고 그 아래에 이유가 나오며, 명령줄은 읽기 쉬운 메시지와 함께 멈춥니다.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

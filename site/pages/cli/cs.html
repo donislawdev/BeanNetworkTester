@@ -1,0 +1,79 @@
+<section class="hero">
+  <h1>Simulace ztráty paketů z příkazového řádku</h1>
+  <p class="lead">Stejný program běží i bez okna. Dejte mu jakýkoli přepínač a místo okna pracuje
+  v konzoli. Tak ho používá skript nebo úloha CI.</p>
+</section>
+
+<section>
+  <h2>Jak se spouští</h2>
+  <p>Ve Windows je to stejný <code>BeanNetworkTester.exe</code>, který otevírá okno: bez přepínačů
+  otevře okno, s jakýmkoli přepínačem běží v konzoli a okno neukáže. Z kopie zdrojového kódu napište
+  místo něj <code>python bean_network_tester.py</code>. V Linuxu je program
+  <code>./BeanNetworkTester</code> v rozbalené složce a skutečné zachytávání potřebuje
+  <code>sudo</code>; <a href="../simulace-site-v-linuxu/">Špatná síť v Linuxu</a> říká, co tam
+  ještě potřebuje.</p>
+  <p>Příkazový řádek mluví vždy anglicky, ať je okno v jakémkoli jazyce, takže jeho zprávy zní
+  v každém protokolu stejně.</p>
+</section>
+
+<section>
+  <h2>Nejdřív to zkuste bez rizika</h2>
+<pre><code>BeanNetworkTester.exe --simulate --loss 20 --duration 10
+BeanNetworkTester.exe --doctor
+BeanNetworkTester.exe --config moje-nastaveni.json --dry-run</code></pre>
+  <p>První běží na vymyšleném provozu, takže nepotřebuje ovladač ani práva správce a nemůže sáhnout
+  na síť. Druhý prověří tento počítač: práva, která zachytávání potřebuje, ovladač zachytávání
+  a zbytky po dřívějším běhu. Třetí přečte soubor nastavení a řekne, jestli je platný, aniž by
+  cokoli spustil.</p>
+</section>
+
+<section>
+  <h2>Odkud se berou nastavení</h2>
+  <p>Čtyři zdroje, každý přepisuje předchozí: výchozí hodnoty, soubor nastavení
+  (<code>--config</code>), hotový profil (<code>--preset</code>) a přepínače na příkazovém řádku.
+  <code>--print-config</code> ukáže výsledek jako JSON a <code>--save-config</code> ho zapíše do
+  souboru, který můžete znovu načíst, v okně i na příkazovém řádku.</p>
+  <p>Každé nastavení z okna má vlastní přepínač, například <code>--loss</code> nebo
+  <code>--target</code>. Jsou vypsané i s tím, co dělají, na
+  <a href="../referencni-tabulky/#settings-traffic">stránce s referenčními tabulkami</a>.
+  Přepínače níže jsou všechno ostatní.</p>
+</section>
+
+<section>
+  <h2>Všechny ostatní přepínače</h2>
+  {{page.cli_reference}}
+</section>
+
+<section>
+  <h2>Co vypisuje</h2>
+  <p>Protokol, určený lidem, jde na standardní chybový výstup a každý řádek začíná
+  <code>[bean]</code>. Data jdou na standardní výstup: řádek hlášení každých pár sekund a souhrn na
+  konci. S <code>--format json</code> nese standardní výstup jeden objekt JSON na řádek: objekt
+  <code>sample</code> pro každé hlášení a na konci <code>summary</code> s návratovým kódem,
+  semínkem a příkazem, který běh zopakuje.</p>
+<pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Každý způsob, jak může běh skončit, má vlastní návratový kód, takže pipeline odliší padající
+  aplikaci od nástroje, který se nemohl spustit. Kódy jsou vypsané na
+  <a href="../referencni-tabulky/">stránce s referenčními tabulkami</a>.</p>
+</section>
+
+<section>
+  <h2>Příklady</h2>
+  <p>Poškodit na minutu jeden program a nic jiného na počítači:</p>
+<pre><code>BeanNetworkTester.exe --target myapp.exe --latency 200 --loss 2 --duration 60</code></pre>
+  <p>Poškodit na dvě minuty jeden server, s výstupem, který pipeline přečte, a skončit chybou, když
+  se nic nezachytilo:</p>
+<pre><code>BeanNetworkTester.exe --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 120 --format json --fail-on-no-traffic</code></pre>
+  <p>Deset minut přehrávat ve smyčce hotový scénář, který se sám neopakuje, a ponechat si hlášení,
+  které běh zopakuje:</p>
+<pre><code>BeanNetworkTester.exe --scenario scenarios/upload-drop-midway.json --loop --target myapp.exe --duration 600 --repro-out run.json</code></pre>
+  <p>Další recepty pro pipeline jsou na stránce
+  <a href="../sitove-testy-v-ci/">Síťové testy v CI</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1642,8 +1642,18 @@ MUTATIONS = [
         # A translation merged into lang/ would change the pages and never redeploy.
         "label": "site: the workflow stops watching the program's language files",
         "file": ".github/workflows/pages.yml",
-        "old": '      - "lang/**"\n      - "beantester/appinfo.py"',
-        "new": '      - "beantester/appinfo.py"',
+        "old": '      - "lang/**"\n      - "bean.png"',
+        "new": '      - "bean.png"',
+        "test": "test_the_workflow_rebuilds_when_any_source_of_the_page_changes",
+    },
+    {
+        # The reference tables, the command-line page and the statistics page are read
+        # out of program modules; with only the two old files watched, a new setting,
+        # option or counter would reach the live site only with the next site/ edit.
+        "label": "site: the workflow watches two program files instead of the package",
+        "file": ".github/workflows/pages.yml",
+        "old": '      - "beantester/**"',
+        "new": '      - "beantester/gui/theme.py"\n      - "beantester/appinfo.py"',
         "test": "test_the_workflow_rebuilds_when_any_source_of_the_page_changes",
     },
     {

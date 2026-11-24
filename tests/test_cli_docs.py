@@ -166,3 +166,40 @@ def test_the_examples_name_whatever_this_build_is_called():
             check("--help: no unexpanded prog token", "%(prog)s" not in text)
     finally:
         cli_module.program_name = original
+
+
+def test_every_help_example_is_accepted(tmp_path, monkeypatch):
+    """An example in --help is a line people copy, so the program has to accept it.
+
+    MEASURED 2026-11-24: ``--preset 3g`` stood in the examples and the CLI refused it
+    as an unknown preset - it takes ``presets.3g`` or a translated name. The tests
+    above read the examples as text and never ran one. Each line runs here with
+    ``--dry-run``, which checks every value and starts nothing.
+    """
+    import io
+    import shlex
+
+    import beantester.cli as cli_module
+    from beantester import exitcodes
+
+    monkeypatch.chdir(tmp_path)
+
+    def dry_run(argv):
+        err = io.StringIO()
+        code = cli_module.run_cli(argv + ["--dry-run"], out=io.StringIO(), err=err)
+        return code, err.getvalue().strip()
+
+    # Canary: the line that was in the examples is refused, so a run that accepted
+    # everything could not pass the loop below.
+    check("canary: the old preset example is refused",
+          dry_run(["--preset", "3g"])[0] != exitcodes.OK)
+    prog = cli_module.program_name()
+    text = cli_module.build_arg_parser().format_help()
+    examples = text.split("Examples:")[1].split("options:")[0]
+    lines = [line.strip() for line in examples.splitlines()
+             if line.strip().startswith(prog + " ")]
+    check("--help: the examples were found", len(lines) >= 4, f"({lines})")
+    for line in lines:
+        code, err = dry_run(shlex.split(line)[1:])
+        check(f"--help example is accepted: {line}", code == exitcodes.OK,
+              f"(exit {code}: {err[-300:]})")

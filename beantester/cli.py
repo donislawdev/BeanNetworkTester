@@ -122,7 +122,7 @@ Examples:
       impair one destination. Narrow beats broad: the rest of the
       machine, including this shell, keeps working.
 
-  %(prog)s --preset 3g --duration 60 --format json --repro-out run.json
+  %(prog)s --preset presets.3g --duration 60 --format json --repro-out run.json
       a named link profile, machine-readable output, and a report that
       carries the command needed to repeat the run.
 

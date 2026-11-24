@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>จำลองแพ็กเก็ตสูญหายจากบรรทัดคำสั่ง</h1>
+  <p class="lead">โปรแกรมเดียวกันทำงานได้โดยไม่ต้องเปิดหน้าต่าง ใส่ตัวเลือกใดก็ได้ แล้วมันจะทำงานในคอนโซลแทนหน้าต่าง สคริปต์หรืองาน CI ใช้งานมันแบบนี้</p>
+</section>
+
+<section>
+  <h2>วิธีเริ่มทำงาน</h2>
+  <p>บน Windows ก็คือ <code>BeanNetworkTester.exe</code> ตัวเดียวกับที่เปิดหน้าต่าง: ไม่มีตัวเลือกจะเปิดหน้าต่าง และเมื่อมีตัวเลือกใดก็ตามจะทำงานในคอนโซลโดยไม่แสดงหน้าต่าง หากใช้สำเนาซอร์สโค้ด ให้เขียน <code>python bean_network_tester.py</code> แทน บน Linux โปรแกรมคือ <code>./BeanNetworkTester</code> ในโฟลเดอร์ที่คุณแตกไฟล์ไว้ และการดักจับจริงต้องใช้ <code>sudo</code> หน้า <a href="../jamlong-khrueakhai-bon-linux/">เครือข่ายแย่บน Linux</a> บอกว่าที่นั่นต้องใช้อะไรอีกบ้าง</p>
+  <p>บรรทัดคำสั่งใช้ภาษาอังกฤษเสมอ ไม่ว่าหน้าต่างจะเป็นภาษาใด ข้อความของมันจึงอ่านเหมือนกันในทุกบันทึก</p>
+</section>
+
+<section>
+  <h2>ลองแบบไม่มีความเสี่ยงก่อน</h2>
+<pre><code>BeanNetworkTester.exe --simulate --loss 20 --duration 10
+BeanNetworkTester.exe --doctor
+BeanNetworkTester.exe --config my-settings.json --dry-run</code></pre>
+  <p>คำสั่งแรกทำงานกับทราฟฟิกจำลอง จึงไม่ต้องใช้ไดรเวอร์หรือสิทธิ์ผู้ดูแลระบบ และแตะต้องเครือข่ายไม่ได้ คำสั่งที่สองตรวจคอมพิวเตอร์เครื่องนี้: สิทธิ์ที่การดักจับต้องใช้ ไดรเวอร์ดักจับ และสิ่งที่หลงเหลือจากการทำงานครั้งก่อน คำสั่งที่สามอ่านไฟล์การตั้งค่าและบอกว่าถูกต้องหรือไม่ โดยไม่เริ่มอะไรเลย</p>
+</section>
+
+<section>
+  <h2>การตั้งค่ามาจากไหน</h2>
+  <p>มีสี่แหล่ง แต่ละแหล่งเขียนทับแหล่งก่อนหน้า: ค่าเริ่มต้น ไฟล์การตั้งค่า (<code>--config</code>) โปรไฟล์สำเร็จรูป (<code>--preset</code>) และแฟล็กบนบรรทัดคำสั่ง <code>--print-config</code> แสดงผลลัพธ์เป็น JSON และ <code>--save-config</code> เขียนลงไฟล์ที่คุณโหลดกลับมาได้ ทั้งในหน้าต่างและบนบรรทัดคำสั่ง</p>
+  <p>การตั้งค่าทุกรายการในหน้าต่างมีแฟล็กของตัวเอง เช่น <code>--loss</code> หรือ <code>--target</code> รายการเหล่านี้พร้อมหน้าที่ของแต่ละตัวอยู่ใน<a href="../tarang-ang-ing/#settings-traffic">หน้าตารางอ้างอิง</a> ตัวเลือกด้านล่างคือที่เหลือทั้งหมด</p>
+</section>
+
+<section>
+  <h2>ตัวเลือกอื่นทั้งหมด</h2>
+  {{page.cli_reference}}
+</section>
+
+<section>
+  <h2>มันพิมพ์อะไรออกมา</h2>
+  <p>บันทึกสำหรับคนอ่านจะไปที่ช่องข้อผิดพลาดมาตรฐาน และทุกบรรทัดขึ้นต้นด้วย <code>[bean]</code> ข้อมูลจะไปที่เอาต์พุตมาตรฐาน: บรรทัดรายงานทุก ๆ ไม่กี่วินาที และสรุปตอนท้าย เมื่อใช้ <code>--format json</code> เอาต์พุตมาตรฐานจะมีอ็อบเจ็กต์ JSON บรรทัดละหนึ่งตัว: อ็อบเจ็กต์ <code>sample</code> สำหรับแต่ละรายงาน และ <code>summary</code> ตอนท้ายที่มีรหัสออก seed และคำสั่งที่ทำซ้ำการทำงานนั้น</p>
+<pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>การทำงานจบได้แต่ละแบบมีรหัสออกของตัวเอง ไปป์ไลน์จึงแยกได้ว่าแอปพลิเคชันล้มเหลวหรือเครื่องมือเริ่มไม่ได้ รหัสทั้งหมดอยู่ใน<a href="../tarang-ang-ing/">หน้าตารางอ้างอิง</a></p>
+</section>
+
+<section>
+  <h2>ตัวอย่าง</h2>
+  <p>ทำให้เครือข่ายของโปรแกรมเดียวแย่ลงหนึ่งนาที โดยไม่แตะอย่างอื่นบนคอมพิวเตอร์:</p>
+<pre><code>BeanNetworkTester.exe --target myapp.exe --latency 200 --loss 2 --duration 60</code></pre>
+  <p>ทำให้การเชื่อมต่อกับเซิร์ฟเวอร์เดียวแย่ลงสองนาที พร้อมเอาต์พุตที่ไปป์ไลน์อ่านได้ และให้ล้มเหลวหากไม่ได้ดักจับอะไรเลย:</p>
+<pre><code>BeanNetworkTester.exe --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 120 --format json --fail-on-no-traffic</code></pre>
+  <p>เล่นวนสถานการณ์จำลองสำเร็จรูปที่ไม่วนซ้ำเองเป็นเวลาสิบนาที และเก็บรายงานที่ทำซ้ำการทำงานนั้นไว้:</p>
+<pre><code>BeanNetworkTester.exe --scenario scenarios/upload-drop-midway.json --loop --target myapp.exe --duration 600 --repro-out run.json</code></pre>
+  <p>สูตรเพิ่มเติมสำหรับไปป์ไลน์อยู่ที่<a href="../thotsop-khrueakhai-nai-ci/">การทดสอบเครือข่ายใน CI</a></p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

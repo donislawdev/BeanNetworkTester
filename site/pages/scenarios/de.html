@@ -20,10 +20,40 @@
 </section>
 
 <section>
+  <h2>Jeder Schlüssel, den eine Szenariodatei haben kann</h2>
+  {{page.scenario_reference}}
+  <p>Die Namen unter <code>settings</code> sind dieselben wie in einer gespeicherten
+  Einstellungsdatei, und die <a href="../referenztabellen/#settings-traffic">Seite mit den
+  Referenztabellen</a> listet jeden mit den Werten, die er annimmt. Diese Einstellungen kann ein
+  Schritt nicht ändern, weil eine Sitzung sie nur beim Start übernimmt oder nur die Tabellen des
+  Fensters sie lesen. Ein Schritt, der eine davon setzt, wird trotzdem geladen, und das Protokoll
+  sagt, dass er nichts geändert hat:</p>
+  {{page.scenario_not_live}}
+</section>
+
+<section>
+  <h2>Beim Laden geprüft</h2>
+  <p>Ein Fehler nennt seinen Schritt, bevor irgendetwas läuft: eine unbekannte Einstellung, ein
+  unbekannter Schlüssel oder eine unbekannte Aktion, ein Wert außerhalb des Bereichs, ein Schritt,
+  der nichts tut, eine leere oder zu lange Liste. Ein vertippter Schlüssel bliebe sonst still, und eine
+  Datei, die lädt, aber nicht tut, was sie sagt, sieht aus wie ein Werkzeug, das sie ignoriert.
+  <code>--dry-run</code> prüft ein Szenario, ohne den Treiber zu laden, und ist damit ein günstiger
+  Schritt in einer Pipeline:</p>
+<pre><code>BeanNetworkTester.exe --scenario mein-szenario.json --dry-run</code></pre>
+  <p>Schritte setzt ein Zeitgeber, der jede Zehntelsekunde tickt, also wird eine Zeit mit
+  Nachkommastellen etwa so genau eingehalten.</p>
+</section>
+
+<section>
   <h2>{{page.scenario_count}} fertige Szenarien werden mit dem Programm mitgeliefert</h2>
-  <p>Im Ordner <code>scenarios</code> neben der ausführbaren Datei. Aus diesen Dateien gelesen, also ist das, was du tatsächlich hast:</p>
+  <p>Sie liegen im Ordner des Programms: unter <code>_internal\scenarios</code> im Zip, im
+  Installer, bei WinGet, Chocolatey und im Linux-Paket, und unter <code>scenarios</code> in einer
+  Kopie des Quellcodes. Der Dateidialog des Fensters öffnet sich dort, und in der Befehlszeile findet
+  <code>--scenario scenarios/cafe-wifi.json</code> ein fertiges Szenario aus jedem Ordner. Diese
+  Tabelle wird aus diesen Dateien gelesen, zeigt also, was du wirklich hast:</p>
   {{page.scenario_table}}
-  <p>Sie sind gewöhnlicher Text: eines öffnen, eine Zahl ändern, speichern. Die Namen sagen, was sie nachbilden: ein überfülltes Café, eine Mobilfunkverbindung, die von LTE auf 3G fällt, einen Upload, der auf halbem Weg stirbt, einen überlasteten Server, DNS, das nicht mehr antwortet.</p>
+  <p>Es ist gewöhnlicher JSON-Text. Um eines zu ändern, kopiere es an einen eigenen Ort, ändere eine
+  Zahl und lade deine Kopie.</p>
 </section>
 
 <section>

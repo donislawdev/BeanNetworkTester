@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>محاكاة فقد الحزم من سطر الأوامر</h1>
+  <p class="lead">البرنامج نفسه يعمل أيضًا دون نافذته. أعطه أي خيار فيعمل في وحدة التحكم بدل النافذة، وهكذا يستخدمه سكربت أو مهمة CI.</p>
+</section>
+
+<section>
+  <h2>كيف يبدأ</h2>
+  <p>في Windows هو <code>BeanNetworkTester.exe</code> نفسه الذي يفتح النافذة: دون خيارات يفتح النافذة، ومع أي خيار يعمل في وحدة التحكم ولا يعرض أي نافذة. عند التشغيل من نسخة من الشيفرة المصدرية اكتب بدلًا منه <code>python bean_network_tester.py</code>. في Linux البرنامج هو <code>./BeanNetworkTester</code> في المجلد الذي فككت ضغطه، والالتقاط الحقيقي يحتاج إلى <code>sudo</code>؛ وتشرح صفحة <a href="../muhakat-alshabaka-ala-linux/">شبكة سيئة على Linux</a> ما يحتاجه أيضًا هناك.</p>
+  <p>يتحدث سطر الأوامر الإنجليزية دائمًا، أيًّا كانت لغة النافذة، لذلك تُقرأ رسائله بالطريقة نفسها في كل سجل.</p>
+</section>
+
+<section>
+  <h2>جرّبه أولًا دون مخاطرة</h2>
+<pre><code>BeanNetworkTester.exe --simulate --loss 20 --duration 10
+BeanNetworkTester.exe --doctor
+BeanNetworkTester.exe --config my-settings.json --dry-run</code></pre>
+  <p>الأول يعمل على حركة مرور مصطنعة، فلا يحتاج إلى برنامج تشغيل ولا إلى صلاحيات المسؤول ولا يستطيع لمس الشبكة. الثاني يفحص هذا الحاسوب: الصلاحيات التي يحتاجها الالتقاط، وبرنامج تشغيل الالتقاط، وبقايا تشغيل سابق. الثالث يقرأ ملف إعدادات ويقول إن كان صالحًا، دون أن يبدأ أي شيء.</p>
+</section>
+
+<section>
+  <h2>من أين تأتي الإعدادات</h2>
+  <p>أربعة مصادر، كل منها يتجاوز ما قبله: القيم الافتراضية، وملف إعدادات (<code>--config</code>)، وإعداد مسبق جاهز (<code>--preset</code>)، والخيارات في سطر الأوامر. يعرض <code>--print-config</code> النتيجة بصيغة JSON، ويكتبها <code>--save-config</code> في ملف يمكنك تحميله مجددًا، في النافذة أو في سطر الأوامر.</p>
+  <p>لكل إعداد في النافذة خيار خاص به، مثل <code>--loss</code> أو <code>--target</code>. وهي مدرجة، مع ما يفعله كل منها، في <a href="../jadawil-marjiya/#settings-traffic">صفحة الجداول المرجعية</a>. الخيارات أدناه هي كل ما عدا ذلك.</p>
+</section>
+
+<section>
+  <h2>كل الخيارات الأخرى</h2>
+  {{page.cli_reference}}
+</section>
+
+<section>
+  <h2>ما الذي يطبعه</h2>
+  <p>السجل، الموجّه إلى الناس، يذهب إلى مخرج الأخطاء القياسي، ويبدأ كل سطر فيه بـ <code>[bean]</code>. أما البيانات فتذهب إلى المخرج القياسي: سطر تقرير كل بضع ثوانٍ وملخص في النهاية. مع <code>--format json</code> يحمل المخرج القياسي كائن JSON واحدًا في كل سطر: كائن <code>sample</code> لكل تقرير، و<code>summary</code> أخير فيه رمز الخروج والبذرة والأمر الذي يكرر التشغيل.</p>
+<pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>لكل طريقة ينتهي بها التشغيل رمز خروج خاص بها، لذلك يميّز خط الإنتاج بين تطبيق يفشل وأداة لم تستطع البدء. الرموز مدرجة في <a href="../jadawil-marjiya/">صفحة الجداول المرجعية</a>.</p>
+</section>
+
+<section>
+  <h2>أمثلة</h2>
+  <p>أفسد شبكة برنامج واحد لمدة دقيقة، ولا شيء غيره على الحاسوب:</p>
+<pre><code>BeanNetworkTester.exe --target myapp.exe --latency 200 --loss 2 --duration 60</code></pre>
+  <p>أفسد الاتصال بخادم واحد لمدة دقيقتين، بمخرجات يستطيع خط الإنتاج قراءتها، وافشل إن لم يُلتقط شيء على الإطلاق:</p>
+<pre><code>BeanNetworkTester.exe --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 120 --format json --fail-on-no-traffic</code></pre>
+  <p>شغّل في حلقة لمدة عشر دقائق سيناريو جاهزًا لا يتكرر من تلقاء نفسه، واحتفظ بتقرير يكرر التشغيل:</p>
+<pre><code>BeanNetworkTester.exe --scenario scenarios/upload-drop-midway.json --loop --target myapp.exe --duration 600 --repro-out run.json</code></pre>
+  <p>وصفات أخرى لخطوط الإنتاج في صفحة <a href="../ikhtibar-alshabaka-fi-ci/">اختبارات الشبكة في CI</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

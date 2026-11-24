@@ -20,10 +20,38 @@
 </section>
 
 <section>
+  <h2>Elke sleutel die een scenariobestand kan bevatten</h2>
+  {{page.scenario_reference}}
+  <p>De namen onder <code>settings</code> zijn dezelfde als in een opgeslagen instellingenbestand, en
+  de <a href="../referentietabellen/#settings-traffic">pagina met referentietabellen</a> noemt ze
+  allemaal met de waarden die ze aannemen. Een stap kan deze instellingen niet veranderen, omdat een
+  sessie ze alleen bij het starten neemt of alleen de tabellen van het venster ze lezen. Een stap die
+  er een instelt, wordt toch geladen, en het logboek zegt dat hij niets veranderde:</p>
+  {{page.scenario_not_live}}
+</section>
+
+<section>
+  <h2>Gecontroleerd bij het laden</h2>
+  <p>Een fout noemt zijn stap voordat er iets draait: een onbekende instelling, sleutel of actie, een
+  waarde buiten het bereik, een stap die niets doet, een lege of te lange lijst. Anders zou een
+  verkeerd gespelde sleutel stil voorbijgaan, en een bestand dat laadt maar niet doet wat het zegt,
+  lijkt op een hulpmiddel dat het negeert. <code>--dry-run</code> controleert een scenario zonder het
+  stuurprogramma te laden, dus het is een goedkope stap in een pipeline:</p>
+<pre><code>BeanNetworkTester.exe --scenario mijn-scenario.json --dry-run</code></pre>
+  <p>Stappen worden toegepast door een timer die elke tiende seconde tikt, dus een tijd met een
+  breuk wordt ongeveer zo nauwkeurig gehaald.</p>
+</section>
+
+<section>
   <h2>Kant-en-klare scenario’s in het programma: {{page.scenario_count}}</h2>
-  <p>In de map <code>scenarios</code> naast het uitvoerbare bestand. Uit die bestanden gelezen, dus dit is wat je echt hebt:</p>
+  <p>Ze staan in de map van het programma: onder <code>_internal\scenarios</code> in de zip, het
+  installatieprogramma, WinGet, Chocolatey en het Linux-pakket, en onder <code>scenarios</code> in een
+  kopie van de broncode. Het bestandsvenster van het programma opent daar, en op de opdrachtregel
+  vindt <code>--scenario scenarios/cafe-wifi.json</code> een kant-en-klaar scenario vanuit elke map.
+  Deze tabel wordt uit die bestanden gelezen, dus het is wat je echt hebt:</p>
   {{page.scenario_table}}
-  <p>Het zijn gewone tekstbestanden: open er een, wijzig een getal, sla op. De namen zeggen wat ze nabootsen: een drukke koffiebar, een mobiele verbinding die van LTE naar 3G zakt, een upload die halverwege sterft, een overbelaste server, DNS die niet meer antwoordt.</p>
+  <p>Het is gewone JSON-tekst. Om er een te veranderen, kopieer je het naar een eigen plek, pas je een
+  getal aan en laad je je kopie.</p>
 </section>
 
 <section>

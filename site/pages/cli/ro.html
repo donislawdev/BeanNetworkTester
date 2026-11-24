@@ -1,0 +1,79 @@
+<section class="hero">
+  <h1>Simularea pierderii de pachete din linia de comandă</h1>
+  <p class="lead">Același program rulează și fără fereastra lui. Dă-i orice opțiune și lucrează în
+  consolă în locul ferestrei. Așa îl folosește un script sau un job CI.</p>
+</section>
+
+<section>
+  <h2>Cum pornește</h2>
+  <p>Pe Windows este același <code>BeanNetworkTester.exe</code> care deschide fereastra: fără opțiuni
+  deschide fereastra, iar cu orice opțiune rulează în consolă și nu arată nicio fereastră. Dintr-o
+  copie a codului sursă, scrie în locul lui <code>python bean_network_tester.py</code>. Pe Linux
+  programul este <code>./BeanNetworkTester</code> din folderul dezarhivat, iar o captură reală are
+  nevoie de <code>sudo</code>; <a href="../simulare-retea-pe-linux/">Rețea proastă pe Linux</a> spune
+  de ce mai are nevoie acolo.</p>
+  <p>Linia de comandă vorbește mereu în engleză, indiferent de limba ferestrei, ca mesajele ei să se
+  citească la fel în orice jurnal.</p>
+</section>
+
+<section>
+  <h2>Încearcă mai întâi fără risc</h2>
+<pre><code>BeanNetworkTester.exe --simulate --loss 20 --duration 10
+BeanNetworkTester.exe --doctor
+BeanNetworkTester.exe --config setarile-mele.json --dry-run</code></pre>
+  <p>Prima rulează pe trafic inventat, deci nu are nevoie de driver sau de drepturi de administrator
+  și nu poate atinge rețeaua. A doua verifică acest computer: drepturile de care are nevoie o
+  captură, driverul de captură și resturile unei rulări anterioare. A treia citește un fișier de
+  setări și spune dacă e valid, fără să pornească nimic.</p>
+</section>
+
+<section>
+  <h2>De unde vin setările</h2>
+  <p>Patru surse, fiecare o înlocuiește pe cea dinainte: valorile implicite, un fișier de setări
+  (<code>--config</code>), un profil gata făcut (<code>--preset</code>) și opțiunile din linia de
+  comandă. <code>--print-config</code> arată rezultatul ca JSON, iar <code>--save-config</code> îl
+  scrie într-un fișier pe care îl poți încărca din nou, în fereastră sau în linia de comandă.</p>
+  <p>Fiecare setare din fereastră are propria opțiune, cum ar fi <code>--loss</code> sau
+  <code>--target</code>. Sunt enumerate, cu ce face fiecare, pe
+  <a href="../tabele-de-referinta/#settings-traffic">pagina tabelelor de referință</a>. Opțiunile de
+  mai jos sunt tot restul.</p>
+</section>
+
+<section>
+  <h2>Toate celelalte opțiuni</h2>
+  {{page.cli_reference}}
+</section>
+
+<section>
+  <h2>Ce afișează</h2>
+  <p>Jurnalul, gândit pentru oameni, merge la ieșirea standard de erori, iar fiecare linie începe cu
+  <code>[bean]</code>. Datele merg la ieșirea standard: o linie de raport la câteva secunde și un
+  rezumat la final. Cu <code>--format json</code>, ieșirea standard poartă câte un obiect JSON pe
+  linie: un obiect <code>sample</code> pentru fiecare raport și un <code>summary</code> final cu
+  codul de ieșire, sămânța și comanda care repetă rularea.</p>
+<pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>Fiecare fel în care se poate încheia o rulare are propriul cod de ieșire, așa că un pipeline
+  deosebește o aplicație care eșuează de un instrument care nu a putut porni. Codurile sunt pe
+  <a href="../tabele-de-referinta/">pagina tabelelor de referință</a>.</p>
+</section>
+
+<section>
+  <h2>Exemple</h2>
+  <p>Strică rețeaua unui singur program timp de un minut și nimic altceva de pe computer:</p>
+<pre><code>BeanNetworkTester.exe --target myapp.exe --latency 200 --loss 2 --duration 60</code></pre>
+  <p>Strică legătura cu un singur server timp de două minute, cu o ieșire pe care un pipeline o poate
+  citi, și eșuează dacă nu s-a capturat nimic:</p>
+<pre><code>BeanNetworkTester.exe --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 120 --format json --fail-on-no-traffic</code></pre>
+  <p>Redă în buclă timp de zece minute un scenariu gata făcut care nu se repetă singur și păstrează
+  un raport care repetă rularea:</p>
+<pre><code>BeanNetworkTester.exe --scenario scenarios/upload-drop-midway.json --loop --target myapp.exe --duration 600 --repro-out run.json</code></pre>
+  <p>Mai multe rețete pentru pipeline-uri sunt pe
+  <a href="../teste-retea-in-ci/">Teste de rețea în CI</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

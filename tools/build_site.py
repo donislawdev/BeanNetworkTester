@@ -38,6 +38,8 @@ must never do is succeed quietly.
 """
 import argparse
 import ast
+import functools
+import hashlib
 import html
 import json
 import os
@@ -52,9 +54,12 @@ from urllib.parse import urlsplit
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from beantester import appinfo, exitcodes, fields, presets          # noqa: E402
+from beantester import (appinfo, cli, exitcodes, fields, filters,  # noqa: E402
+                        presets, scenario, settings)
 
 SITE_DIR = "site"
+# What the site's explanations were last checked against (``doc_sources``).
+DOC_SOURCES = os.path.join(SITE_DIR, "doc-sources.json")
 DEFAULT_OUT = os.path.join("build", "site")
 THEME_FILE = os.path.join("beantester", "gui", "theme.py")
 
@@ -917,29 +922,351 @@ def preset_table(app, texts):
     return Raw("<table>%s</table>" % "".join(rows))
 
 
-def settings_table(app, texts):
-    """Every setting that has a command-line flag, from ``fields.FIELD_DEFS``.
+def _number(value):
+    """A number as a reader writes it: ``10000000``, not the ``1e+07`` of ``%g``."""
+    return "%d" % value if float(value).is_integer() else "%g" % value
 
-    The flag names, units and ranges come from the registry the program validates
-    against, and the label comes from the language file, so this table says the same
-    thing as the form and as ``--help`` without being a third copy of either.
+
+# The window puts a colon after a field's label; a heading does not take one. The
+# second is the full-width colon of the Chinese window.
+_LABEL_COLONS = ":" + chr(0xFF1A)
+
+
+def _program_label(text):
+    return text.rstrip().rstrip(_LABEL_COLONS).rstrip()
+
+
+def explained(texts, key, app):
+    """A site sentence as HTML, with the program's own words put in.
+
+    A sentence may name a button or a part of the window through ``{{app.<key>}}``,
+    the same placeholder the page bodies use, so a German page names the button the
+    German reader will find on screen, which is the English one while the program has
+    no German. A placeholder the program does not have is an error, not a blank.
     """
-    heads = [texts["table.flag"], texts["table.setting"], texts["table.unit"],
-             texts["table.range"]]
-    rows = ["<tr>%s</tr>" % "".join("<th>%s</th>" % html.escape(h, quote=True) for h in heads)]
-    for field in fields.FIELD_DEFS:
-        if not getattr(field, "cli", None):
+    if key not in texts:
+        raise SiteError("the site has no sentence %r: add it to every site/i18n/*.json" % key)
+    text = html.escape(texts[key], quote=True)
+
+    def program_word(match):
+        name = match.group(1)
+        if not name.startswith("app.") or name not in app:
+            raise SiteError("%r names %r, which the program has no text for" % (key, name))
+        return html.escape(app[name], quote=True)
+    return PLACEHOLDER_RE.sub(program_word, text)
+
+
+def _setting_values(field, app, texts, syntax_url=""):
+    """What a setting accepts, read from the registry it is validated against; an
+    expression links to the page that explains the syntax, when there is one."""
+    kind = field.kind
+    words = {fields.BOOL: "ref.switch", fields.SCHEDULE: "ref.schedule",
+             fields.SEED: "ref.seed", fields.CHOICE: "ref.choice"}
+    if kind in words:
+        return explained(texts, words[kind], app)
+    unit = app.get("app." + field.unit_key, field.unit) if field.unit_key else field.unit
+    bounds = field.bounds
+    span = "%s - %s" % (_number(bounds[0]), _number(bounds[1])) if bounds else ""
+    parts = [html.escape(p, quote=True) for p in (unit, span) if p]
+    if kind == fields.EXPR:
+        words = explained(texts, "ref.expression", app)
+        if syntax_url:
+            words = '<a href="%s">%s</a>' % (html.escape(syntax_url, quote=True), words)
+        parts.insert(0, words)
+    return ", ".join(parts)
+
+
+def _setting_default(field, app, texts):
+    """The default when it is something other than "off", or ``""``."""
+    value = settings.DEFAULT_SETTINGS.get(field.key)
+    if value in (None, "", False, 0, -1):
+        return ""
+    if isinstance(value, str):
+        shown = "<code>%s</code>" % html.escape(value, quote=True)
+    else:
+        unit = app.get("app." + field.unit_key, field.unit) if field.unit_key else field.unit
+        shown = html.escape(" ".join(p for p in (_number(value), unit) if p), quote=True)
+    return explained(texts, "ref.default", app).replace("{value}", shown)
+
+
+def _setting_when(field, app, texts):
+    """When a change reaches a session that is running, from the registry's flags."""
+    if field.ui_only:
+        return explained(texts, "ref.when.view", app)
+    if field.start_only:
+        return explained(texts, "ref.when.start", app)
+    return explained(texts, "ref.when.live", app)
+
+
+def _setting_choices(field, app):
+    """The values of a dropdown, each with the words the window shows for it."""
+    if field.key != "filter":
+        raise SiteError("no list of values for the dropdown %r: teach settings_reference "
+                        "where its choices live" % field.key)
+    items = ["<li><code>%s</code> %s</li>" % (html.escape(key, quote=True),
+                                              html.escape(app["app." + label], quote=True))
+             for key, label, _ in filters.FILTER_DEFS]
+    return '<ul class="choices">%s</ul>' % "".join(items)
+
+
+def settings_reference(app, texts, syntax_url=""):
+    """Every setting, under the part of the window it sits in, from ``fields``.
+
+    The label, the flag, the name in a file, the values, the default and when a change
+    takes effect all come from the registry the program validates against, so this
+    says the same thing as the form and as ``--help`` without being a third copy of
+    either. Only the sentence saying what each setting does is the site's own
+    (``setting.<key>``), and ``doc_sources`` ties it to the program's text about the
+    same setting.
+    """
+    placed = set()
+    blocks = []
+    for section in fields.SECTIONS:
+        if not section.fields:
             continue
-        label = app.get("app." + field.label, field.key)
-        unit = app.get("app." + field.unit_key, field.unit) if getattr(
-            field, "unit_key", None) else (field.unit or "")
-        bounds = getattr(field, "bounds", None)
-        span = "%g - %g" % bounds if bounds else "-"
-        cells = ["<code>--%s</code>" % html.escape(field.cli, quote=True),
-                 html.escape(label, quote=True), html.escape(unit or "-", quote=True),
-                 html.escape(span, quote=True)]
-        rows.append("<tr>%s</tr>" % "".join("<td>%s</td>" % c for c in cells))
+        head = '<h3 class="group" id="settings-%s">%s</h3>' % (
+            section.id, html.escape(app["app." + section.label], quote=True))
+        if section.surface == "settings":
+            head += '<p class="where">%s</p>' % explained(texts, "ref.settings_window", app)
+        entries = []
+        for key in section.fields:
+            field = fields.FIELDS[key]
+            placed.add(key)
+            meta = ["<code>--%s</code>" % html.escape(field.cli, quote=True),
+                    explained(texts, "ref.in_file", app).replace(
+                        "{name}", "<code>%s</code>" % html.escape(key, quote=True)),
+                    _setting_values(field, app, texts, syntax_url),
+                    _setting_when(field, app, texts),
+                    _setting_default(field, app, texts)]
+            body = '<p class="meta">%s</p><p>%s</p>' % (
+                "".join("<span>%s</span>" % part for part in meta if part),
+                explained(texts, "setting." + key, app))
+            if field.kind == fields.CHOICE:
+                body += _setting_choices(field, app)
+            entries.append('<dt id="setting-%s">%s</dt><dd>%s</dd>' % (
+                key, html.escape(_program_label(app["app." + field.label]), quote=True), body))
+        blocks.append('%s<dl class="settings">%s</dl>' % (head, "".join(entries)))
+    missing = [f.key for f in fields.FIELD_DEFS if f.key not in placed]
+    if missing:
+        raise SiteError("settings in no section of the window, so missing from the "
+                        "reference: %s" % ", ".join(missing))
+    return Raw("".join(blocks))
+
+
+# The command-line options that are not a setting's flag, grouped for the reader. A
+# setting's flag is documented with the setting (``settings_reference``); everything
+# else the parser accepts sits in exactly one group here, or the build fails, so a new
+# option cannot reach the program without reaching this page.
+CLI_GROUPS = (
+    ("program", ("--help", "--version", "--license", "--gui", "--install-desktop",
+                 "--remove-desktop")),
+    ("sources", ("--config", "--preset", "--print-config", "--save-config")),
+    ("run", ("--simulate", "--scenario", "--loop", "--interval", "--log-conns",
+             "--repro-out")),
+    ("output", ("--verbose", "--quiet", "--log-level", "--log-file", "--format")),
+    ("checks", ("--dry-run", "--doctor", "--min-packets", "--fail-on-no-traffic",
+                "--cleanup-driver")),
+)
+
+
+def _long_name(action):
+    return next(o for o in action.option_strings if o.startswith("--"))
+
+
+def cli_options():
+    """The parser's options that are not a setting's flag, by their long name."""
+    flags = {"--" + field.cli for field in fields.FIELD_DEFS if field.cli}
+    return {_long_name(action): action for action in cli.build_arg_parser()._actions
+            if action.option_strings and _long_name(action) not in flags}
+
+
+def _option_values(action, app, texts):
+    if action.choices:
+        values = ", ".join("<code>%s</code>" % html.escape(str(c), quote=True)
+                           for c in action.choices)
+        return explained(texts, "cli.one_of", app).replace("{values}", values)
+    return explained(texts, "cli.switch" if action.nargs == 0 else "cli.value", app)
+
+
+def cli_reference(app, texts):
+    """Every command-line option that is not a setting, from the program's own parser.
+
+    The option names, the values a choice takes and the defaults come from
+    ``cli.build_arg_parser``; the sentence saying what each one does is the site's
+    (``flag.<dest>``), tied to the option's ``--help`` line by ``doc_sources``.
+    """
+    options = cli_options()
+    grouped = [name for _, names in CLI_GROUPS for name in names]
+    missing = sorted(set(options) - set(grouped))
+    unknown = sorted(set(grouped) - set(options))
+    if missing or unknown or len(grouped) != len(set(grouped)):
+        raise SiteError("CLI_GROUPS does not match the parser: not placed %s, not an "
+                        "option %s, or placed twice" % (missing, unknown))
+    blocks = []
+    for group, names in CLI_GROUPS:
+        entries = []
+        for name in names:
+            action = options[name]
+            # The heading is the long name; the line under it repeats it only when
+            # there is a short form to add, such as -v.
+            aliases = [o for o in action.option_strings if o != name]
+            meta = [" ".join("<code>%s</code>" % html.escape(o, quote=True)
+                             for o in aliases + [name])] if aliases else []
+            meta.append(_option_values(action, app, texts))
+            default = action.default
+            if action.nargs != 0 and default not in (None, "", 0, argparse.SUPPRESS):
+                shown = "<code>%s</code>" % html.escape(
+                    _number(default) if isinstance(default, float) else str(default),
+                    quote=True)
+                meta.append(explained(texts, "ref.default", app).replace("{value}", shown))
+            entries.append('<dt id="flag-%s">%s</dt><dd><p class="meta">%s</p><p>%s</p></dd>' % (
+                name[2:], html.escape(name, quote=True),
+                "".join("<span>%s</span>" % part for part in meta),
+                explained(texts, "flag." + action.dest, app)))
+        blocks.append('<h3 class="group" id="options-%s">%s</h3><dl class="settings">%s</dl>'
+                      % (group, explained(texts, "cli.group." + group, app), "".join(entries)))
+    return Raw("".join(blocks))
+
+
+@functools.lru_cache(maxsize=None)
+def _literal(root, relpath, name):
+    """A module-level literal of the program, read from its source rather than imported:
+    the window's modules import Tk, which the site build must not need. Cached for one
+    build, since every page of every language asks; ``build`` and ``doc_sources`` empty
+    the cache on entry, so a second call in the same process reads an edited source."""
+    tree = ast.parse(_read_text(os.path.join(root, relpath)))
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == name for t in node.targets):
+            return ast.literal_eval(node.value)
+    raise SiteError("%s has no literal %s" % (relpath, name))
+
+
+STATS_PAGE = "beantester/gui/pages/stats.py"
+CONNS_PAGE = "beantester/gui/pages/conns.py"
+CSV_EXPORT = "beantester/gui/csv_export.py"
+
+# Each column of the connections CSV, by the table column it is the unabbreviated
+# form of. A CSV column with no table column here needs its own sentence
+# (``csv.conn.<name>``), or the build fails: a column added to the file cannot reach
+# the site undocumented.
+CONN_CSV_TABLE_COLUMN = {
+    "process": "proc", "pid": "pid", "proto": "proto", "remote_ip": "remote_ip",
+    "remote_port": "remote_port", "local_port": "local_port", "packets": "packets",
+    "impaired": "scoped", "dropped": "dropped", "delivered_down_bytes": "down",
+    "delivered_up_bytes": "up", "delivered_total_bytes": "kb",
+    "captured_down_bytes": "down_seen", "captured_up_bytes": "up_seen",
+    "avg_bytes": "avg", "duration_s": "dur", "idle_s": "idle", "ice": "ice"}
+
+
+def counter_reference(root, app, texts):
+    """Every counter on the Statistics tab, from the window's own grid (``CELLS`` and the
+    driver's ``OVERLOAD_CELLS``): its label, its column in the statistics CSV and a
+    sentence ``counter.<key>``."""
+    cells = _literal(root, STATS_PAGE, "CELLS") + _literal(root, STATS_PAGE, "OVERLOAD_CELLS")
+    csv_names = _literal(root, CSV_EXPORT, "CSV_COLUMNS")
+    entries = []
+    for key, label, unit, _tip in cells:
+        meta = [explained(texts, "csv.in_file", app).replace(
+            "{name}", "<code>%s</code>" % html.escape(csv_names.get(key, key), quote=True))]
+        if unit:
+            meta.insert(0, html.escape(unit, quote=True))
+        entries.append('<dt id="counter-%s">%s</dt><dd><p class="meta">%s</p><p>%s</p></dd>' % (
+            key, html.escape(_program_label(app["app." + label]), quote=True),
+            "".join("<span>%s</span>" % part for part in meta),
+            explained(texts, "counter." + key, app)))
+    return Raw('<dl class="settings">%s</dl>' % "".join(entries))
+
+
+def column_reference(root, app, texts):
+    """Every column of the Connections tab, from its registry: the header the window
+    shows and a sentence ``column.<key>``."""
+    columns = _literal(root, CONNS_PAGE, "COLUMNS")
+    entries = "".join('<dt id="column-%s">%s</dt><dd><p>%s</p></dd>' % (
+        key, html.escape(app["app." + label], quote=True),
+        explained(texts, "column." + key, app)) for key, label in columns.items())
+    return Raw('<dl class="settings">%s</dl>' % entries)
+
+
+def conn_csv_table(root, app, texts):
+    """The connections CSV, column by column, from ``CONN_CSV_HEADER``: the table column
+    each one spells out, or its own sentence."""
+    header = _literal(root, CSV_EXPORT, "CONN_CSV_HEADER")
+    columns = _literal(root, CONNS_PAGE, "COLUMNS")
+    heads = [texts["table.csv_column"], texts["table.meaning"]]
+    rows = ["<tr>%s</tr>" % "".join("<th>%s</th>" % html.escape(h, quote=True) for h in heads)]
+    for name in header:
+        column = CONN_CSV_TABLE_COLUMN.get(name)
+        if column:
+            meaning = explained(texts, "csv.same_as_column", app).replace(
+                "{column}", '<a href="#column-%s">%s</a>' % (
+                    column, html.escape(app["app." + columns[column]], quote=True)))
+        else:
+            meaning = explained(texts, "csv.conn." + name, app)
+        rows.append("<tr><td><code>%s</code></td><td>%s</td></tr>"
+                    % (html.escape(name, quote=True), meaning))
     return Raw("<table>%s</table>" % "".join(rows))
+
+
+def tool_csv_columns(root, app, texts):
+    """The columns of the three Tools exports, read from their headers."""
+    blocks = []
+    for kind, literal, tab in (("sockets", "SOCKETS_CSV_HEADER", "tools.sockets.tab"),
+                               ("ports", "PORTS_CSV_HEADER", "tools.portcheck.tab"),
+                               ("scan", "PORT_SCAN_CSV_HEADER", "tools.portscan.tab")):
+        names = ", ".join("<code>%s</code>" % html.escape(n, quote=True)
+                          for n in _literal(root, CSV_EXPORT, literal))
+        blocks.append("<dt>%s</dt><dd><p>%s</p><p>%s</p></dd>" % (
+            html.escape(app["app." + tab], quote=True),
+            explained(texts, "csv." + kind, app), names))
+    return Raw('<dl class="settings">%s</dl>' % "".join(blocks))
+
+
+def _fingerprint(parts):
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()[:12]
+
+
+def doc_sources(root):
+    """A fingerprint of the program's own English text behind each site explanation.
+
+    A sentence on the site that says what a setting does is a second description of
+    it, next to the program's tooltip, its help sheet and its ``--help`` line. When
+    one of those changes, the setting probably changed, and the site sentence, in
+    every language, has to be read again. ``DOC_SOURCES`` records what the sentences
+    were last checked against; ``test_site`` compares, and ``--stamp-sources``
+    records again once they have been read.
+    """
+    _literal.cache_clear()
+    app = load_app_strings(root, "en")
+    helps = {option: action.help or "" for action in cli.build_arg_parser()._actions
+             for option in action.option_strings}
+    out = {}
+    for field in fields.FIELD_DEFS:
+        parts = [app.get("app." + key, "") for key in (field.tip, field.help_body) if key]
+        parts.append(helps.get("--" + field.cli, ""))
+        out["setting." + field.key] = _fingerprint(parts)
+    for action in cli_options().values():
+        out["flag." + action.dest] = _fingerprint([action.help or ""])
+    for key, label, _unit, tip in (_literal(root, STATS_PAGE, "CELLS")
+                                   + _literal(root, STATS_PAGE, "OVERLOAD_CELLS")):
+        out["counter." + key] = _fingerprint([app.get("app." + label, ""),
+                                              app.get("app." + tip, "")])
+    for key, tip in _literal(root, CONNS_PAGE, "COLUMN_TIPS").items():
+        out["column." + key] = _fingerprint([app.get("app." + tip, "")])
+    # A shipped scenario's sentence says what the file reproduces: an edit to the file
+    # may change that.
+    for name in scenario_files(root):
+        with open(os.path.join(root, "scenarios", name), "rb") as handle:
+            out["scenario.file." + name[:-len(".json")]] = hashlib.sha256(
+                handle.read().replace(b"\r\n", b"\n")).hexdigest()[:12]
+    return out
+
+
+def stamp_doc_sources(root):
+    """Record what the site's explanations were checked against (see ``doc_sources``)."""
+    data = doc_sources(root)
+    _write(root, DOC_SOURCES, json.dumps(data, indent=2, sort_keys=True) + "\n")
+    return data
 
 
 def exit_code_table(texts):
@@ -991,8 +1318,8 @@ def scenario_table(root, texts):
     """
     folder = os.path.join(root, "scenarios")
     files = scenario_files(root)
-    heads = [texts["table.scenario"], texts["table.steps"], texts["table.length"],
-             texts["table.repeats"]]
+    heads = [texts["table.scenario"], texts["table.reproduces"], texts["table.steps"],
+             texts["table.length"], texts["table.repeats"]]
     rows = ["<tr>%s</tr>" % "".join("<th>%s</th>" % html.escape(h, quote=True) for h in heads)]
     for name in files:
         data = _read_json(os.path.join(folder, name))
@@ -1000,11 +1327,50 @@ def scenario_table(root, texts):
         if not steps:
             raise SiteError("scenarios/%s has no steps" % name)
         last = max(int(step.get("at", 0)) for step in steps)
-        rows.append("<tr><td><code>%s</code></td><td>%d</td><td>%d s</td><td>%s</td></tr>"
-                    % (html.escape(name, quote=True), len(steps), last,
-                       html.escape(texts["table.yes"] if data.get("loop") else texts["table.no"],
-                                   quote=True)))
+        about = "scenario.file." + name[:-len(".json")]
+        if about not in texts:
+            raise SiteError("the site has no sentence for scenarios/%s: add %r" % (name, about))
+        rows.append("<tr><td><code>%s</code></td><td>%s</td><td>%d</td><td>%d s</td><td>%s</td>"
+                    "</tr>" % (html.escape(name, quote=True),
+                               html.escape(texts[about], quote=True), len(steps), last,
+                               html.escape(texts["table.yes"] if data.get("loop")
+                                           else texts["table.no"], quote=True)))
     return Raw("<table>%s</table>" % "".join(rows))
+
+
+def scenario_reference(app, texts):
+    """Every key a scenario file may hold and every action a step may take, from
+    ``scenario``: a key or an action the validator gains appears here, and fails the
+    build until it has a sentence (``scenario.key.<key>``, ``scenario.action.<name>``).
+    The limits in the sentences come from the same module."""
+    numbers = {"{max_steps}": str(scenario.MAX_STEPS),
+               "{max_action}": _number(scenario.MAX_ACTION_S)}
+
+    def sentence(key):
+        text = explained(texts, key, app)
+        for marker, value in numbers.items():
+            text = text.replace(marker, value)
+        return text
+
+    groups = (("file", scenario.FILE_KEYS, "scenario.key."),
+              ("step", scenario.STEP_KEYS, "scenario.key."),
+              ("actions", scenario.ACTIONS, "scenario.action."))
+    blocks = []
+    for group, names, prefix in groups:
+        entries = "".join('<dt id="scenario-%s"><code>%s</code></dt><dd><p>%s</p></dd>'
+                          % (name, html.escape(name, quote=True), sentence(prefix + name))
+                          for name in names)
+        blocks.append('<h3 class="group" id="scenario-%s-keys">%s</h3><dl class="settings">%s</dl>'
+                      % (group, explained(texts, "scenario.group." + group, app), entries))
+    return Raw("".join(blocks))
+
+
+def scenario_not_live(app):
+    """The settings a scenario step cannot change, by the names the window shows."""
+    names = [_program_label(app["app." + fields.FIELDS[key].label])
+             for key in sorted(settings.NOT_APPLIED_LIVE)]
+    return Raw("<ul>%s</ul>" % "".join("<li>%s</li>" % html.escape(n, quote=True)
+                                         for n in names))
 
 
 def social_links(registry, texts):
@@ -1049,6 +1415,10 @@ def page_context(page, code, registry, texts, home, colours, root, pages):
     repo = registry["repo_url"].rstrip("/")
     context = dict(texts[code])
     app = load_app_strings(root, program_language(root, registry, code))
+    # The reference page links each expression field to the syntax page, in this language.
+    syntax = next((p for p in pages if p["id"] == "syntax"), None)
+    syntax_url = (_relative_url(entry["dir_path"], syntax["languages"][code]["dir_path"])
+                  if syntax and code in syntax["languages"] else "")
     _merge(context, app, "program strings [%s]" % code)
     _merge(context, {
         "site.base_url": registry["base_url"],
@@ -1073,9 +1443,16 @@ def page_context(page, code, registry, texts, home, colours, root, pages):
                                               texts[code]["nav.language"],
                                               _root_prefix(registry)),
         "page.preset_table": preset_table(app, texts[code]),
-        "page.settings_table": settings_table(app, texts[code]),
+        "page.settings_reference": settings_reference(app, texts[code], syntax_url),
+        "page.cli_reference": cli_reference(app, texts[code]),
         "page.exit_code_table": exit_code_table(texts[code]),
         "page.scenario_table": scenario_table(root, texts[code]),
+        "page.scenario_reference": scenario_reference(app, texts[code]),
+        "page.scenario_not_live": scenario_not_live(app),
+        "page.counter_reference": counter_reference(root, app, texts[code]),
+        "page.column_reference": column_reference(root, app, texts[code]),
+        "page.conn_csv_table": conn_csv_table(root, app, texts[code]),
+        "page.tool_csv_columns": tool_csv_columns(root, app, texts[code]),
         "page.scenario_count": len(scenario_files(root)),
         "page.direction": _language(registry, code).get("direction", "ltr"),
         "page.social_links": social_links(registry, texts[code]),
@@ -1126,6 +1503,7 @@ def _prune(out, written):
 
 def build(root=ROOT, out=None):
     """Generate the whole site. Returns the relative paths written, sorted."""
+    _literal.cache_clear()
     out = out or os.path.join(root, DEFAULT_OUT)
     if os.path.isdir(out) and os.listdir(out) and not os.path.isfile(
             os.path.join(out, "index.html")):
@@ -1196,7 +1574,14 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Build the Bean Network Tester website.")
     parser.add_argument("--out", default=None,
                         help="output directory (default: %s)" % DEFAULT_OUT)
+    parser.add_argument("--stamp-sources", action="store_true",
+                        help="record the program texts the site's explanations were "
+                             "checked against (%s), after re-reading the sentences "
+                             "test_site named, in every language" % DOC_SOURCES)
     args = parser.parse_args(argv)
+    if args.stamp_sources:
+        print("recorded %d sources in %s" % (len(stamp_doc_sources(ROOT)), DOC_SOURCES))
+        return 0
     try:
         written = build(ROOT, args.out)
     except SiteError as exc:

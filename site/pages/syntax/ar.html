@@ -1,0 +1,108 @@
+<section class="hero">
+  <h1>صيغة المرشحات: الأسماء وPID ونطاقات IP وCIDR والمنافذ</h1>
+  <p class="lead">لغة صغيرة واحدة توجّه الأداة نحو البرامج والعناوين والمنافذ. تعمل بالطريقة نفسها في النافذة وفي سطر الأوامر، وكل مثال في هذه الصفحة مفحوص بمحلل البرنامج نفسه.</p>
+</section>
+
+<section>
+  <h2>أين تُستخدم</h2>
+  <p>في النافذة: حقل العملية المستهدفة، وحقلا العنوان والمنفذ تحت {{app.frames.destination}} وتحت {{app.frames.block}}، وحقلا حجم البيانات. وفي سطر الأوامر: <code>--target</code> و<code>--dst-ip</code> و<code>--dst-port</code> و<code>--block-ip</code> و<code>--block-port</code> و<code>--payload-udp</code> و<code>--payload-tcp</code>. الحقل الفارغ يعني كل شيء.</p>
+</section>
+
+<section>
+  <h2>اللبنات الأساسية</h2>
+  <table>
+    <tr><th>اكتب</th><th>المعنى</th><th>مثال</th></tr>
+    <tr><td><code>a,b,c</code></td><td>قائمة: يكفي أن يطابق أي منها</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>نطاق، يشمل الطرفين</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>مقارنة، للأرقام والعناوين</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>استبعد هذا</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>حرف بدل: أي سلسلة من الأحرف، أو حرف واحد</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>تعبير نمطي، دون تمييز حالة الأحرف</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>كتلة CIDR، للعناوين فقط</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>تُتجاهل المسافات حول الفواصل، وكذلك المكان الفارغ بين فاصلتين. أما <code>!</code> الذي لا يليه شيء فهو خطأ: <code data-kind="port-wrong">80,!</code> مرفوض.</p>
+</section>
+
+<section>
+  <h2>كيف تتجمع العناصر</h2>
+  <p>العناصر التي بلا <code>!</code> تُجمع: تطابق القيمة إذا طابق أي منها، أو إذا لم يوجد أي منها. ثم تطرح العناصر التي معها <code>!</code>. الترتيب لا يهم، لذلك <code data-kind="port">80,!53</code> و<code data-kind="port">!53,80</code> متطابقان.</p>
+  <table>
+    <tr><th>اكتب</th><th>يطابق</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>المنفذ 443 فقط</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>كل شيء عدا 53، إذ لا شيء يُجمع</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>كل شيء عدا 53 و443</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>من 1000 إلى 2000، دون 1500</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80 و443 ومن 8000 إلى 8100 وكل ما فوق 9000، عدا 8080</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>البرامج</h2>
+  <p>العنصر اسم أو PID، ويمكن أن يخلط الحقل الواحد بينهما. الاسم العادي يطابق في أي موضع من اسم البرنامج دون تمييز حالة الأحرف، لذلك يلتقط <code data-kind="process">chrome</code> كلًّا من <code>chrome.exe</code> و<code>chromedriver.exe</code>. الرقم وحده أو النطاق أو المقارنة يعني PID. أحرف البدل و<code>re:</code> تطابق الاسم. المقارنة على اسم، مثل <code data-kind="process-wrong">&gt;chrome</code>، تُرفض بدل أن لا تطابق شيئًا.</p>
+  <table>
+    <tr><th>اكتب</th><th>يطابق</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>كل برنامج في اسمه chrome.exe</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome، لكن ليس chromedriver</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>برنامجان معًا</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>PID واحد</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>كل PID في ذلك النطاق</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>اسم يبدأ بـ firefox</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>chrome.exe أو firefox.exe بالضبط</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>اسم وPID في حقل واحد</td></tr>
+  </table>
+  <p>تحمل الحزمة عناوين ومنافذ، ولا تحمل اسم برنامج أبدًا، لذلك تبحث الأداة عن المنافذ المحلية التي يشغلها كل برنامج مطابق، وتستهدفها، وتتابع الاتصالات الجديدة التي يفتحها. بعض المنافذ تتشاركها برامج عدة في وقت واحد (mDNS 5353 وSSDP 1900 وDHCP 67 و68). عليها يكون الأمر كله أو لا شيء، ويقول السجل أيهما.</p>
+</section>
+
+<section>
+  <h2>العناوين</h2>
+  <p>يعمل IPv4 وIPv6 كلاهما، ويمكن أن يخلط الحقل الواحد بينهما: قاعدة إحدى العائلتين لا تطابق أبدًا عنوانًا من الأخرى. طريقة كتابة العنوان لا تهم، لذلك <code>2001:0db8:0000:0000:0000:0000:0000:0001</code> و<code>2001:db8::1</code> عنوان واحد.</p>
+  <table>
+    <tr><th>اكتب</th><th>يطابق</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>عنوانان</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>نطاق فيه ثغرة</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>شبكة فرعية كاملة</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>الشبكة الفرعية نفسها بحرف بدل</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>كل عنوان عدا 8.8.8.8</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>شبكة فرعية IPv6</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>IPv4 وIPv6 في حقل واحد</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>المنافذ</h2>
+  <p>تمتد المنافذ من 0 إلى 65535؛ و<code data-kind="port-wrong">99999</code> يُرفض بدل أن يُتخطى. حقلا حجم البيانات يقبلان الصيغة نفسها، محسوبة ببايتات البيانات.</p>
+  <table>
+    <tr><th>اكتب</th><th>يطابق</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>نطاق، يشمل الطرفين</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>المنافذ العالية</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>المنافذ ذات الامتياز</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>مزيج</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>التعابير النمطية</h2>
+  <p>لا يكون العنصر تعبيرًا نمطيًا إلا إذا سبقه <code>re:</code>، لذلك تبقى النقطة في <code>chrome.exe</code> نقطة. لا يميّز النمط حالة الأحرف ويمكن أن يطابق في أي موضع من النص؛ استخدم <code>^</code> و<code>$</code> لمطابقة النص كله. الفاصلة داخل النمط تحتاج إلى شرطة مائلة عكسية، لأن الفاصلة تفصل العناصر: <code data-kind="process">re:^ch.{1\,8}e\.exe$</code> يعمل. ومن دون الشرطة يُقطع <code>re:^ch.{1,8}e\.exe$</code> عند الفاصلة إلى عنصرين يُحمَّل كلاهما ويطابقان شيئًا آخر.</p>
+  <p>التكرار داخل التكرار، مثل <code data-kind="process-wrong">re:^(\w+)+$</code>، يُرفض لأنه بطيء جدًا: قد يستغرق ثوانيَ على اسم واحد يكاد يطابق، والعنوان يُفحص في كل حزمة. اكتب التكرار مرة واحدة: <code data-kind="process">re:^\w+$</code>.</p>
+</section>
+
+<section>
+  <h2>أخطاء شائعة</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> يلتقط chromedriver، أما <code data-kind="process">chrome.exe</code> فلا: الاسم العادي جزء من الاسم.</li>
+    <li><code data-kind="process">chrome*</code> يلتقط chromedriver أيضًا. لبرنامج واحد بالضبط اكتب <code data-kind="process">re:^chrome\.exe$</code>.</li>
+    <li><code data-kind="port">8*</code> في حقل المنفذ حرف بدل على الأرقام، فيلتقط 8 و80 و8080 و8443، لكن ليس 443. غالبًا كنت تقصد نطاقًا مثل <code data-kind="port">8000-8999</code>.</li>
+    <li><code data-kind="port">!53</code> يشمل أيضًا حركة المرور التي بلا منفذ، مثل ping، لأن حزمة ping ليست المنفذ 53.</li>
+    <li>العنوان والمنفذ المضبوطان معًا يجب أن يطابقا كلاهما. لأحدهما أو الآخر شغّل مرتين.</li>
+    <li>النطاق المكتوب بالعكس <code data-kind="port-wrong">2000-1000</code> مرفوض.</li>
+    <li>حرف البدل ليس تعبيرًا نمطيًا: في <code>re:chrome*</code> تكرر النجمة الحرف e.</li>
+  </ul>
+  <p>يُبلَّغ عن كل خطأ فورًا: يتحول الحقل في النافذة إلى الأحمر ويظهر السبب تحته، ويتوقف سطر الأوامر برسالة مقروءة.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

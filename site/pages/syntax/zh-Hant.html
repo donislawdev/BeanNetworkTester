@@ -1,0 +1,108 @@
+<section class="hero">
+  <h1>篩選語法：名稱、PID、IP 範圍、CIDR 和連接埠</h1>
+  <p class="lead">一種小小的語言讓工具針對程式、位址和連接埠。它在視窗和命令列中的用法完全一樣，本頁上的每個範例都由程式自己的剖析器檢查過。</p>
+</section>
+
+<section>
+  <h2>在哪裡使用</h2>
+  <p>在視窗中：目標處理程序欄位、{{app.frames.destination}}和{{app.frames.block}}下的位址與連接埠欄位，以及兩個資料長度欄位。在命令列中：<code>--target</code>、<code>--dst-ip</code>、<code>--dst-port</code>、<code>--block-ip</code>、<code>--block-port</code>、<code>--payload-udp</code> 和 <code>--payload-tcp</code>。欄位留空表示全部。</p>
+</section>
+
+<section>
+  <h2>基本寫法</h2>
+  <table>
+    <tr><th>寫法</th><th>意思</th><th>範例</th></tr>
+    <tr><td><code>a,b,c</code></td><td>清單：任一項符合即可</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>範圍，包含兩端</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>比較，用於數字和位址</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>排除這一項</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>萬用字元：任意一串字元，或一個字元</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>規則運算式，不分大小寫</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>CIDR 區段，只用於位址</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>逗號兩側的空格會被忽略，兩個逗號之間的空位也會被忽略。<code>!</code> 後面什麼都沒有則是錯誤：<code data-kind="port-wrong">80,!</code> 會被拒絕。</p>
+</section>
+
+<section>
+  <h2>各項如何組合</h2>
+  <p>不帶 <code>!</code> 的項相加：只要其中任一項符合，或者根本沒有這樣的項，值就符合。帶 <code>!</code> 的項隨後把符合的去掉。順序無關，所以 <code data-kind="port">80,!53</code> 與 <code data-kind="port">!53,80</code> 相同。</p>
+  <table>
+    <tr><th>寫法</th><th>符合</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>只有 443 連接埠</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>53 以外的一切，因為沒有要相加的項</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>53 和 443 以外的一切</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>1000 到 2000，不含 1500</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80、443、8000 到 8100 以及 9000 以上的一切，但不含 8080</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>程式</h2>
+  <p>一項可以是名稱或 PID，一個欄位中可以混用。一般名稱會在程式名稱的任何位置比對，不分大小寫，所以 <code data-kind="process">chrome</code> 會符合 <code>chrome.exe</code> 和 <code>chromedriver.exe</code>。單獨的數字、範圍或比較表示 PID。萬用字元和 <code>re:</code> 比對名稱。對名稱做比較（例如 <code data-kind="process-wrong">&gt;chrome</code>）會被拒絕，而不是什麼都不符合。</p>
+  <table>
+    <tr><th>寫法</th><th>符合</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>名稱中含有 chrome.exe 的所有程式</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome，但不含 chromedriver</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>同時兩個程式</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>一個 PID</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>該範圍內的所有 PID</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>以 firefox 開頭的名稱</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>恰好是 chrome.exe 或 firefox.exe</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>一個欄位中同時寫名稱和 PID</td></tr>
+  </table>
+  <p>封包只攜帶位址和連接埠，從不攜帶程式名稱，所以工具會找出每個符合的程式占用的本機連接埠並針對這些連接埠，同時追蹤它新開啟的連線。少數連接埠會被多個程式同時共用（mDNS 5353、SSDP 1900、DHCP 67 和 68）。在這些連接埠上只能全有或全無，記錄中會說明是哪一種。</p>
+</section>
+
+<section>
+  <h2>位址</h2>
+  <p>IPv4 和 IPv6 都支援，一個欄位中可以混用：針對一種位址族的規則永遠不會符合另一種位址族的位址。位址的寫法無關緊要，所以 <code>2001:0db8:0000:0000:0000:0000:0000:0001</code> 和 <code>2001:db8::1</code> 是同一個位址。</p>
+  <table>
+    <tr><th>寫法</th><th>符合</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>兩個位址</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>中間挖掉一個的範圍</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>整個子網路</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>同一個子網路，用萬用字元表示</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>8.8.8.8 以外的所有位址</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>一個 IPv6 子網路</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>一個欄位中同時有 IPv4 和 IPv6</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>連接埠</h2>
+  <p>連接埠範圍是 0 到 65535；<code data-kind="port-wrong">99999</code> 會被拒絕，而不是被略過。資料長度欄位使用相同的語法，以資料位元組數計算。</p>
+  <table>
+    <tr><th>寫法</th><th>符合</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>範圍，包含兩端</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>高位連接埠</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>特權連接埠</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>混合寫法</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>規則運算式</h2>
+  <p>只有前面加上 <code>re:</code> 的項才是規則運算式，所以 <code>chrome.exe</code> 中的點仍然是點。模式不分大小寫，可以在文字的任何位置符合；要符合整段文字，請使用 <code>^</code> 和 <code>$</code>。模式中的逗號需要加反斜線，因為逗號用來分隔各項：<code data-kind="process">re:^ch.{1\,8}e\.exe$</code> 可以正常使用。如果不加反斜線，<code>re:^ch.{1,8}e\.exe$</code> 會在逗號處被切成兩項，兩項都能載入，但符合的是別的東西。</p>
+  <p>重複裡面再套重複，例如 <code data-kind="process-wrong">re:^(\w+)+$</code>，會因為太慢而被拒絕：遇到一個幾乎符合的名稱就可能耗費數秒，而位址在每個封包上都要檢查。請只寫一次重複：<code data-kind="process">re:^\w+$</code>。</p>
+</section>
+
+<section>
+  <h2>容易踩的坑</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> 會符合 chromedriver，而 <code data-kind="process">chrome.exe</code> 不會：一般名稱只是名稱的一部分。</li>
+    <li><code data-kind="process">chrome*</code> 也會符合 chromedriver。要恰好符合一個程式，請寫 <code data-kind="process">re:^chrome\.exe$</code>。</li>
+    <li>連接埠欄位中的 <code data-kind="port">8*</code> 是針對數字文字的萬用字元，所以它符合 8、80、8080 和 8443，但不符合 443。你幾乎總是想要一個範圍，例如 <code data-kind="port">8000-8999</code>。</li>
+    <li><code data-kind="port">!53</code> 也包括完全沒有連接埠的流量，例如 ping，因為 ping 封包不是 53 連接埠。</li>
+    <li>同時設定了位址和連接埠時，兩者都必須符合。如果只想滿足其中之一，請分兩次執行。</li>
+    <li>倒著寫的範圍 <code data-kind="port-wrong">2000-1000</code> 會被拒絕。</li>
+    <li>萬用字元不是規則運算式：在 <code>re:chrome*</code> 中，星號重複的是字母 e。</li>
+  </ul>
+  <p>每個錯誤都會立即回報：視窗中的欄位變紅，並在下方顯示原因；命令列則以一則易讀的訊息結束。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

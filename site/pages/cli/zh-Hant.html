@@ -1,0 +1,54 @@
+<section class="hero">
+  <h1>從命令列模擬封包遺失</h1>
+  <p class="lead">同一個程式也可以不開視窗執行。只要給它任何一個選項，它就會在主控台中工作，指令碼和 CI 工作就是這樣使用它的。</p>
+</section>
+
+<section>
+  <h2>如何啟動</h2>
+  <p>在 Windows 上，它就是開啟視窗的那個 <code>BeanNetworkTester.exe</code>：不帶選項時開啟視窗，帶上任何選項時在主控台中執行，不顯示視窗。如果使用原始碼副本，請改寫為 <code>python bean_network_tester.py</code>。在 Linux 上，程式是解壓縮資料夾中的 <code>./BeanNetworkTester</code>，真正的擷取需要 <code>sudo</code>；<a href="../linux-ruowang-moni/">在 Linux 上模擬弱網</a> 說明了它在那裡還需要什麼。</p>
+  <p>無論視窗使用哪種語言，命令列一律使用英文，因此它的訊息在任何記錄中都一樣。</p>
+</section>
+
+<section>
+  <h2>先在沒有風險的情況下試試看</h2>
+<pre><code>BeanNetworkTester.exe --simulate --loss 20 --duration 10
+BeanNetworkTester.exe --doctor
+BeanNetworkTester.exe --config my-settings.json --dry-run</code></pre>
+  <p>第一個指令使用模擬的流量執行，因此不需要驅動程式，也不需要系統管理員權限，不會影響網路。第二個檢查這台電腦：擷取所需的權限、擷取驅動程式，以及先前執行留下的殘留。第三個讀取一個設定檔並告訴你它是否有效，不會啟動任何東西。</p>
+</section>
+
+<section>
+  <h2>設定從哪裡來</h2>
+  <p>有四個來源，後一個覆蓋前一個：預設值、設定檔（<code>--config</code>）、現成的設定組合（<code>--preset</code>）以及命令列上的參數。<code>--print-config</code> 以 JSON 顯示最後結果，<code>--save-config</code> 則把它寫入一個檔案，之後可以在視窗或命令列中再次載入。</p>
+  <p>視窗中的每項設定都有自己的參數，例如 <code>--loss</code> 或 <code>--target</code>。它們連同各自的作用列在<a href="../cankao-biao/#settings-traffic">參考表頁面</a>上。下面的選項是其餘全部。</p>
+</section>
+
+<section>
+  <h2>其他所有選項</h2>
+  {{page.cli_reference}}
+</section>
+
+<section>
+  <h2>它會輸出什麼</h2>
+  <p>給人看的記錄寫到標準錯誤輸出，每一行以 <code>[bean]</code> 開頭。資料寫到標準輸出：每隔幾秒一行報告，結束時一份摘要。使用 <code>--format json</code> 時，標準輸出每行一個 JSON 物件：每次報告一個 <code>sample</code> 物件，最後一個 <code>summary</code>，其中包含結束代碼、種子和可重複這次執行的指令。</p>
+<pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
+  <p>每種結束方式都有自己的結束代碼，因此管線可以分辨是應用程式出錯還是工具沒能啟動。結束代碼列在<a href="../cankao-biao/">參考表頁面</a>上。</p>
+</section>
+
+<section>
+  <h2>範例</h2>
+  <p>讓一個程式的網路變差一分鐘，電腦上的其他一切不受影響：</p>
+<pre><code>BeanNetworkTester.exe --target myapp.exe --latency 200 --loss 2 --duration 60</code></pre>
+  <p>讓與一台伺服器的連線變差兩分鐘，輸出管線能讀取的格式，如果什麼都沒擷取到就以失敗結束：</p>
+<pre><code>BeanNetworkTester.exe --dst-ip 10.0.0.5 --dst-port 443 --loss 5 --duration 120 --format json --fail-on-no-traffic</code></pre>
+  <p>把一個本身不會重複的現成情境循環播放十分鐘，並保存一份可以重複這次執行的報告：</p>
+<pre><code>BeanNetworkTester.exe --scenario scenarios/upload-drop-midway.json --loop --target myapp.exe --duration 600 --repro-out run.json</code></pre>
+  <p>更多管線用法請見<a href="../ci-wangluo-ceshi/">CI 中的網路測試</a>。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

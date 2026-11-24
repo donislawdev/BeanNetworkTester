@@ -1,0 +1,148 @@
+<section class="hero">
+  <h1>Sintaks filter: nama, PID, rentang IP, CIDR, dan port</h1>
+  <p class="lead">Satu bahasa kecil membidikkan alat ini ke program, alamat, dan port. Bahasa ini
+  bekerja sama di jendela dan di baris perintah, dan setiap contoh di halaman ini diperiksa dengan
+  parser program itu sendiri.</p>
+</section>
+
+<section>
+  <h2>Di mana dipakai</h2>
+  <p>Di jendela: kolom proses sasaran, kolom alamat dan port di {{app.frames.destination}} dan di
+  {{app.frames.block}}, serta dua kolom ukuran data. Di baris perintah: <code>--target</code>,
+  <code>--dst-ip</code>, <code>--dst-port</code>, <code>--block-ip</code>,
+  <code>--block-port</code>, <code>--payload-udp</code>, dan <code>--payload-tcp</code>. Kolom
+  kosong berarti semuanya.</p>
+</section>
+
+<section>
+  <h2>Bagian-bagian dasar</h2>
+  <table>
+    <tr><th>Tulis</th><th>Artinya</th><th>Contoh</th></tr>
+    <tr><td><code>a,b,c</code></td><td>daftar: cukup salah satunya cocok</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>rentang, kedua ujung termasuk</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>perbandingan, untuk angka dan alamat</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>kecualikan ini</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>wildcard: rangkaian karakter apa pun, atau satu karakter</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>ekspresi reguler, huruf besar kecil tidak dibedakan</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>blok CIDR, hanya untuk alamat</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>Spasi di sekitar koma diabaikan, begitu juga tempat kosong di antara dua koma.
+  <code>!</code> tanpa apa pun sesudahnya adalah kesalahan: <code data-kind="port-wrong">80,!</code>
+  ditolak.</p>
+</section>
+
+<section>
+  <h2>Cara istilah digabungkan</h2>
+  <p>Istilah tanpa <code>!</code> dijumlahkan: sebuah nilai cocok bila salah satunya cocok, atau
+  bila tidak ada sama sekali. Istilah dengan <code>!</code> lalu mengurangi. Urutan tidak penting,
+  jadi <code data-kind="port">80,!53</code> dan <code data-kind="port">!53,80</code> sama saja.</p>
+  <table>
+    <tr><th>Tulis</th><th>Cocok dengan</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>hanya port 443</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>semua kecuali 53, karena tidak ada yang dijumlahkan</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>semua kecuali 53 dan 443</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>1000 sampai 2000, tanpa 1500</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80, 443, 8000 sampai 8100, dan semua di atas 9000, kecuali 8080</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Program</h2>
+  <p>Sebuah istilah adalah nama atau PID, dan satu kolom boleh mencampurnya. Nama biasa cocok di
+  bagian mana pun dari nama program, tanpa membedakan huruf besar kecil, jadi
+  <code data-kind="process">chrome</code> menangkap <code>chrome.exe</code> dan
+  <code>chromedriver.exe</code>. Angka saja, rentang, atau perbandingan adalah PID. Wildcard dan
+  <code>re:</code> mencocokkan nama. Perbandingan pada nama, seperti
+  <code data-kind="process-wrong">&gt;chrome</code>, ditolak alih-alih tidak cocok dengan apa
+  pun.</p>
+  <table>
+    <tr><th>Tulis</th><th>Cocok dengan</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>setiap program dengan chrome.exe di namanya</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome, tetapi bukan chromedriver</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>dua program sekaligus</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>satu PID</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>setiap PID dalam rentang itu</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>nama yang diawali firefox</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>tepat chrome.exe atau firefox.exe</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>nama dan PID dalam satu kolom</td></tr>
+  </table>
+  <p>Paket membawa alamat dan port, tidak pernah nama program, jadi alat ini mencari port lokal yang
+  dipegang setiap program yang cocok, membidik port itu, dan mengikuti koneksi baru yang dibukanya.
+  Beberapa port dipakai bersama oleh beberapa program sekaligus (mDNS 5353, SSDP 1900, DHCP 67 dan
+  68). Di port itu berlaku semua atau tidak sama sekali, dan log menyebutkan yang mana.</p>
+</section>
+
+<section>
+  <h2>Alamat</h2>
+  <p>IPv4 dan IPv6 sama-sama berfungsi, dan satu kolom boleh mencampurnya: aturan untuk satu
+  keluarga tidak pernah cocok dengan alamat dari keluarga lain. Cara menulis alamat tidak penting,
+  jadi <code>2001:0db8:0000:0000:0000:0000:0000:0001</code> dan <code>2001:db8::1</code> adalah
+  alamat yang sama.</p>
+  <table>
+    <tr><th>Tulis</th><th>Cocok dengan</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>dua alamat</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>rentang dengan satu lubang</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>seluruh subnet</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>subnet yang sama, dengan wildcard</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>semua alamat kecuali 8.8.8.8</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>subnet IPv6</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>IPv4 dan IPv6 dalam satu kolom</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Port</h2>
+  <p>Port berkisar dari 0 sampai 65535; <code data-kind="port-wrong">99999</code> ditolak, bukan
+  dilewati. Kolom ukuran data memakai sintaks yang sama, dihitung dalam byte data.</p>
+  <table>
+    <tr><th>Tulis</th><th>Cocok dengan</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>rentang, kedua ujung termasuk</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>port tinggi</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>port istimewa</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>campuran</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Ekspresi reguler</h2>
+  <p>Sebuah istilah hanya menjadi ekspresi reguler bila diawali <code>re:</code>, jadi titik dalam
+  <code>chrome.exe</code> tetap titik. Pola tidak membedakan huruf besar kecil dan boleh cocok di
+  bagian mana pun dari teks; pakai <code>^</code> dan <code>$</code> agar cocok dengan keseluruhan.
+  Koma di dalam pola memerlukan garis miring terbalik, karena koma memisahkan istilah:
+  <code data-kind="process">re:^ch.{1\,8}e\.exe$</code> berfungsi. Tanpa garis miring,
+  <code>re:^ch.{1,8}e\.exe$</code> dipotong di koma menjadi dua istilah yang keduanya termuat dan
+  cocok dengan hal lain.</p>
+  <p>Pengulangan di dalam pengulangan, seperti <code data-kind="process-wrong">re:^(\w+)+$</code>,
+  ditolak karena terlalu lambat: bisa makan waktu beberapa detik pada satu nama yang hampir cocok,
+  dan sebuah alamat diperiksa pada setiap paket. Tulis pengulangannya sekali saja:
+  <code data-kind="process">re:^\w+$</code>.</p>
+</section>
+
+<section>
+  <h2>Jebakan yang sering terjadi</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> menangkap chromedriver, sedangkan
+    <code data-kind="process">chrome.exe</code> tidak: nama biasa adalah sepotong nama.</li>
+    <li><code data-kind="process">chrome*</code> juga menangkap chromedriver. Untuk tepat satu
+    program, tulis <code data-kind="process">re:^chrome\.exe$</code>.</li>
+    <li><code data-kind="port">8*</code> di kolom port adalah wildcard pada digit, jadi menangkap 8,
+    80, 8080, dan 8443, tetapi tidak 443. Hampir selalu yang dimaksud adalah rentang seperti
+    <code data-kind="port">8000-8999</code>.</li>
+    <li><code data-kind="port">!53</code> juga mencakup lalu lintas tanpa port sama sekali, seperti
+    ping, karena paket ping bukan port 53.</li>
+    <li>Alamat dan port yang diatur bersamaan harus sama-sama cocok. Untuk salah satunya saja,
+    jalankan dua kali.</li>
+    <li><code data-kind="port-wrong">2000-1000</code>, rentang yang ditulis terbalik, ditolak.</li>
+    <li>Wildcard bukan ekspresi reguler: dalam <code>re:chrome*</code> bintang mengulang huruf
+    e.</li>
+  </ul>
+  <p>Setiap kesalahan langsung dilaporkan: kolom di jendela menjadi merah dengan alasannya di bawah,
+  dan baris perintah berhenti dengan pesan yang mudah dibaca.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

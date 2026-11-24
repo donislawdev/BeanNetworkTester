@@ -20,10 +20,38 @@
 </section>
 
 <section>
+  <h2>Bir senaryo dosyasının içerebileceği her anahtar</h2>
+  {{page.scenario_reference}}
+  <p><code>settings</code> altındaki adlar, kaydedilmiş bir ayar dosyasındakilerle aynıdır ve
+  <a href="../basvuru-tablolari/#settings-traffic">başvuru tabloları sayfası</a> her birini aldığı
+  değerlerle listeler. Bir adım şu ayarları değiştiremez, çünkü oturum onları yalnızca başlarken alır
+  ya da onları yalnızca pencerenin tabloları okur. Bunlardan birini ayarlayan bir adım yine de
+  yüklenir ve günlük hiçbir şeyi değiştirmediğini söyler:</p>
+  {{page.scenario_not_live}}
+</section>
+
+<section>
+  <h2>Yüklenirken denetlenir</h2>
+  <p>Bir hata, hiçbir şey çalışmadan önce adımını gösterir: bilinmeyen bir ayar, anahtar ya da
+  eylem, aralık dışında bir değer, hiçbir şey yapmayan bir adım, boş ya da çok uzun bir liste. Yoksa
+  yanlış yazılmış bir anahtar sessizce geçer ve yüklenen ama yazdığını yapmayan bir dosya, onu yok
+  sayan bir araç gibi görünür. <code>--dry-run</code> bir senaryoyu sürücüyü yüklemeden denetler, bu
+  yüzden bir işlem hattında ucuz bir adımdır:</p>
+<pre><code>BeanNetworkTester.exe --scenario senaryom.json --dry-run</code></pre>
+  <p>Adımları saniyenin onda birinde bir tıklayan bir zamanlayıcı uygular; bu yüzden ondalıklı bir
+  zaman aşağı yukarı bu kesinlikle tutulur.</p>
+</section>
+
+<section>
   <h2>{{page.scenario_count}} hazır senaryo programla birlikte gelir</h2>
-  <p>Çalıştırılabilir dosyanın yanındaki <code>scenarios</code> klasöründe. Bu dosyalardan okunur, yani gerçekten elinizde olan budur:</p>
+  <p>Programın klasöründedirler: zip, kurulum programı, WinGet, Chocolatey ve Linux paketinde
+  <code>_internal\scenarios</code> altında, kaynak kodun bir kopyasında ise <code>scenarios</code>
+  altında. Pencerenin dosya iletişim kutusu orada açılır ve komut satırında
+  <code>--scenario scenarios/cafe-wifi.json</code> herhangi bir klasörden hazır bir senaryoyu bulur.
+  Bu tablo o dosyalardan okunur, yani gerçekten elinizde olanı gösterir:</p>
   {{page.scenario_table}}
-  <p>Bunlar sıradan metindir: birini açın, bir sayıyı değiştirin, kaydedin. Adları neyi yeniden ürettiklerini söyler: kalabalık bir kafe, LTE’den 3G’ye düşen bir mobil bağlantı, yarı yolda ölen bir yükleme, aşırı yüklenen bir sunucu, yanıt vermeyi bırakan DNS.</p>
+  <p>Bunlar sıradan JSON metinleridir. Birini değiştirmek için kendi yerinize kopyalayın, bir sayıyı
+  düzenleyin ve kopyanızı yükleyin.</p>
 </section>
 
 <section>
