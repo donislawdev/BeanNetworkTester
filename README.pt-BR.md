@@ -728,6 +728,9 @@ re:^ch.{1\,8}e\.exe$          correct - {1,8} with a backslash before the comma
 re:^ch.{1,8}e\.exe$           WRONG - it is split into "re:^ch.{1" and "8}e\.exe$"
 ```
 
+As duas metades são padrões válidos, então nenhum aviso aparece: o campo passa a
+corresponder, em silêncio, a outra coisa.
+
 ### Casos que costumam confundir
 
 * **`chrome` também pega `chromedriver`, mas `chrome.exe` não.** Um nome puro é uma *substring*: o
@@ -745,8 +748,8 @@ re:^ch.{1,8}e\.exe$           WRONG - it is split into "re:^ch.{1" and "8}e\.exe
 * **`!53` também cobre o tráfego sem porta** (por exemplo, ICMP/ping). "Tudo, exceto 53" significa,
   literalmente, "tudo o que não é a porta 53", e um pacote ICMP não é a porta 53. Se você quer
   apenas TCP/UDP, restrinja o **Traffic filter**.
-* **Um termo vazio é um erro**, e não "tudo": `80,,443` e `80,!` são rejeitados. Um **campo inteiro**
-  vazio significa "tudo".
+* **`80,!` é um erro**: um `!` precisa de algo depois dele. Um espaço vazio entre duas vírgulas é
+  ignorado, então `80,,443` é lido como `80,443`. Um **campo inteiro** vazio significa "tudo".
 * **IP e porta se combinam com AND.** `IP=10.0.0.0/8` + `port=443` significa "tráfego para a rede
   10.x **e ao mesmo tempo** na porta 443". Quer "um ou outro"? Deixe o outro campo vazio e faça duas
   execuções.
