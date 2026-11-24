@@ -20,10 +20,38 @@
 </section>
 
 <section>
+  <h2>Cada chave que um arquivo de cenário pode ter</h2>
+  {{page.scenario_reference}}
+  <p>Os nomes dentro de <code>settings</code> são os mesmos de um arquivo de configurações salvo, e a
+  <a href="../tabelas-de-referencia/#settings-traffic">página de tabelas de referência</a> lista
+  todos com os valores que aceitam. Um passo não consegue mudar estas configurações, porque a sessão
+  só as lê ao iniciar ou só as tabelas da janela as leem. Um passo que define alguma delas carrega
+  mesmo assim, e o log diz que ele não mudou nada:</p>
+  {{page.scenario_not_live}}
+</section>
+
+<section>
+  <h2>Verificado ao carregar</h2>
+  <p>Um erro aponta o seu passo antes de qualquer coisa rodar: uma configuração, chave ou ação
+  desconhecida, um valor fora da faixa, um passo que não faz nada, uma lista vazia ou longa demais.
+  Senão, uma chave digitada errada passaria em silêncio, e um arquivo que carrega mas não faz o que
+  diz parece uma ferramenta que o ignora. <code>--dry-run</code> verifica um cenário sem carregar o
+  driver, o que o torna um passo barato num pipeline:</p>
+<pre><code>BeanNetworkTester.exe --scenario meu-cenario.json --dry-run</code></pre>
+  <p>Os passos são aplicados por um temporizador que bate a cada décimo de segundo, então um tempo
+  com fração é respeitado mais ou menos com essa precisão.</p>
+</section>
+
+<section>
   <h2>{{page.scenario_count}} cenários prontos acompanham o programa</h2>
-  <p>Na pasta <code>scenarios</code> ao lado do executável. Lidos desses arquivos, então isto é o que você realmente tem:</p>
+  <p>Eles ficam na pasta do programa: em <code>_internal\scenarios</code> no zip, no instalador, no
+  WinGet, no Chocolatey e no pacote para Linux, e em <code>scenarios</code> numa cópia do
+  código-fonte. A janela de escolha de arquivo da janela abre ali, e na linha de comando
+  <code>--scenario scenarios/cafe-wifi.json</code> encontra um pronto a partir de qualquer pasta.
+  Esta tabela é lida desses arquivos, então é o que você realmente tem:</p>
   {{page.scenario_table}}
-  <p>São texto comum: abra um, mude um número, salve. Os nomes dizem o que reproduzem: uma cafeteria lotada, uma conexão móvel caindo de LTE para 3G, um upload que morre no meio, um servidor que fica sobrecarregado, um DNS que para de responder.</p>
+  <p>São texto JSON comum. Para mudar um, copie-o para um lugar seu, altere um número e carregue a sua
+  cópia.</p>
 </section>
 
 <section>

@@ -1037,6 +1037,22 @@ def test_every_command_line_option_is_explained_once(tmp_path):
                   "(missing entry)")
 
 
+def test_every_scenario_key_action_and_shipped_file_is_explained():
+    """The scenarios page explains each key and action the validator accepts and says
+    what each shipped file reproduces; a sentence left for a key, an action or a file
+    that is gone fails here, since the build only notices the missing ones."""
+    from beantester import scenario
+    strings = _site_strings("en")
+    keys = {k[len("scenario.key."):] for k in strings if k.startswith("scenario.key.")}
+    actions = {k[len("scenario.action."):] for k in strings if k.startswith("scenario.action.")}
+    files = {k[len("scenario.file."):] for k in strings if k.startswith("scenario.file.")}
+    shipped = {name[:-len(".json")] for name in build_site.scenario_files(ROOT)}
+    check("every key the validator accepts, and no other",
+          keys == set(scenario.FILE_KEYS) | set(scenario.STEP_KEYS), f"({sorted(keys)})")
+    check("every action, and no other", actions == set(scenario.ACTIONS), f"({sorted(actions)})")
+    check("every shipped file, and no other", files == shipped, f"({sorted(files ^ shipped)})")
+
+
 def test_every_explanation_was_read_against_the_program_text_it_explains():
     """A site sentence about a setting was checked against what the program says of it.
 
@@ -1063,6 +1079,7 @@ def test_the_explanation_fingerprint_moves_with_the_program_text(tmp_path):
     and no other, and a fingerprint that never moved would let every change through."""
     import json as jsonlib
     os.makedirs(os.path.join(str(tmp_path), "lang"))
+    shutil.copytree(os.path.join(ROOT, "scenarios"), os.path.join(str(tmp_path), "scenarios"))
     strings = jsonlib.load(open(os.path.join(ROOT, "lang", "en.json"), encoding="utf-8"))
     path = os.path.join(str(tmp_path), "lang", "en.json")
     with open(path, "w", encoding="utf-8") as handle:
@@ -1072,9 +1089,13 @@ def test_the_explanation_fingerprint_moves_with_the_program_text(tmp_path):
     strings["tips.loss"] = strings["tips.loss"] + " Changed."
     with open(path, "w", encoding="utf-8") as handle:
         jsonlib.dump(strings, handle)
+    shipped = os.path.join(str(tmp_path), "scenarios", "cafe-wifi.json")
+    with open(shipped, "a", encoding="utf-8") as handle:
+        handle.write("\n")
     after = build_site.doc_sources(str(tmp_path))
     moved = sorted(key for key in before if before[key] != after[key])
-    check("only the changed setting moves", moved == ["setting.loss"], f"({moved})")
+    check("only what changed moves", moved == ["scenario.file.cafe-wifi", "setting.loss"],
+          f"({moved})")
 
 
 def _english_copies(english, translated, shortest=40):
@@ -1291,6 +1312,14 @@ def test_the_scenario_count_is_the_number_of_files_that_ship(tmp_path):
     root = _sandbox(tmp_path / "one_more")
     shutil.copyfile(os.path.join(root, "scenarios", "cafe-wifi.json"),
                     os.path.join(root, "scenarios", "zzz-one-more.json"))
+    # A shipped file needs its sentence in every language, or the build refuses it.
+    import json as jsonlib
+    for path in glob.glob(os.path.join(root, "site", "i18n", "*.json")):
+        with open(path, encoding="utf-8") as handle:
+            strings = jsonlib.load(handle)
+        strings["scenario.file.zzz-one-more"] = "One more scenario, for this test."
+        with open(path, "w", encoding="utf-8") as handle:
+            jsonlib.dump(strings, handle, ensure_ascii=False)
     out = str(tmp_path / "one-more-out")
     build_site.build(root, out)
     en = _read(os.path.join(out, "scenarios-over-time", "index.html"))

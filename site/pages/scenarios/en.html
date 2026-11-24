@@ -25,13 +25,38 @@
 </section>
 
 <section>
+  <h2>Every key a scenario file can hold</h2>
+  {{page.scenario_reference}}
+  <p>The names under <code>settings</code> are the same as in a saved settings file, and the
+  <a href="../reference/#settings-traffic">reference page</a> lists every one with the values it
+  takes. A step cannot change these, because a session takes them only when it starts, or only
+  the window's tables read them. A step that sets one still loads, and the log says it changed
+  nothing:</p>
+  {{page.scenario_not_live}}
+</section>
+
+<section>
+  <h2>Checked when it loads</h2>
+  <p>A mistake names its step before anything runs: an unknown setting, key or action, a value out
+  of range, a step that does nothing, a list that is empty or too long. A misspelled key would
+  otherwise be silent, and a file that loads but does not do what it says looks like a tool that
+  ignores it. <code>--dry-run</code> checks a scenario without loading the driver, which makes it a
+  cheap step in a pipeline:</p>
+<pre><code>BeanNetworkTester.exe --scenario my-scenario.json --dry-run</code></pre>
+  <p>Steps are applied by a timer that ticks every tenth of a second, so a time with a fraction
+  is honoured to about that much.</p>
+</section>
+
+<section>
   <h2>{{page.scenario_count}} ready-made scenarios ship with the program</h2>
-  <p>In the <code>scenarios</code> folder next to the executable. Read from those files, so this is
-  what you actually have:</p>
+  <p>They are in the program's folder: under <code>_internal\scenarios</code> in the zip, the
+  installer, WinGet, Chocolatey and the Linux package, and in <code>scenarios</code> in a copy of the
+  source code. The window's file dialog opens there, and on the command line
+  <code>--scenario scenarios/cafe-wifi.json</code> finds a ready one from any folder. This table is
+  read from those files, so it is what you actually have:</p>
   {{page.scenario_table}}
-  <p>They are ordinary text - open one, change a number, save. The names say what they reproduce:
-  a crowded cafe, a mobile connection dropping from LTE to 3G, an upload that dies half way, a
-  server that gets overloaded, DNS that stops answering.</p>
+  <p>They are ordinary JSON text. To change one, copy it somewhere of your own, edit a number and
+  load your copy.</p>
 </section>
 
 <section>

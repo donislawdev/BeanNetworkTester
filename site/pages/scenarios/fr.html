@@ -20,10 +20,39 @@
 </section>
 
 <section>
+  <h2>Chaque clé qu’un fichier de scénario peut contenir</h2>
+  {{page.scenario_reference}}
+  <p>Les noms sous <code>settings</code> sont les mêmes que dans un fichier de réglages enregistré,
+  et <a href="../tableaux-de-reference/#settings-traffic">la page des tableaux de référence</a> les
+  liste tous avec les valeurs qu’ils acceptent. Une étape ne peut pas changer ces réglages-ci, car une
+  session ne les prend qu’au démarrage, ou seuls les tableaux de la fenêtre les lisent. Une étape qui
+  en définit un se charge quand même, et le journal dit qu’elle n’a rien changé :</p>
+  {{page.scenario_not_live}}
+</section>
+
+<section>
+  <h2>Vérifié au chargement</h2>
+  <p>Une erreur désigne son étape avant que quoi que ce soit ne démarre : un réglage, une clé ou une
+  action inconnus, une valeur hors plage, une étape qui ne fait rien, une liste vide ou trop longue.
+  Sinon une clé mal orthographiée passerait en silence, et un fichier qui se charge mais ne fait pas
+  ce qu’il dit ressemble à un outil qui l’ignore. <code>--dry-run</code> vérifie un scénario sans
+  charger le pilote, ce qui en fait une étape peu coûteuse dans un pipeline :</p>
+<pre><code>BeanNetworkTester.exe --scenario mon-scenario.json --dry-run</code></pre>
+  <p>Les étapes sont appliquées par un minuteur qui bat tous les dixièmes de seconde, donc un temps
+  avec une fraction est respecté à peu près à cette précision.</p>
+</section>
+
+<section>
   <h2>{{page.scenario_count}} scénarios prêts à l’emploi sont fournis avec le programme</h2>
-  <p>Dans le dossier <code>scenarios</code> à côté de l’exécutable. Lus depuis ces fichiers, c’est donc bien ce que vous avez réellement :</p>
+  <p>Ils se trouvent dans le dossier du programme : sous <code>_internal\scenarios</code> dans le
+  zip, l’installeur, WinGet, Chocolatey et le paquet Linux, et sous <code>scenarios</code> dans une
+  copie du code source. La boîte de dialogue de fichier de la fenêtre s’ouvre là, et en ligne de
+  commande <code>--scenario scenarios/cafe-wifi.json</code> trouve un scénario prêt depuis
+  n’importe quel dossier. Ce tableau est lu dans ces fichiers, il montre donc ce que vous avez
+  vraiment :</p>
   {{page.scenario_table}}
-  <p>Ce sont de simples fichiers texte : ouvrez-en un, changez un nombre, enregistrez. Les noms disent ce qu’ils reproduisent : un café bondé, une connexion mobile qui passe de la LTE à la 3G, un envoi qui meurt à mi-chemin, un serveur qui se surcharge, un DNS qui ne répond plus.</p>
+  <p>Ce sont des textes JSON ordinaires. Pour en modifier un, copiez-le dans un endroit à vous,
+  changez un nombre et chargez votre copie.</p>
 </section>
 
 <section>

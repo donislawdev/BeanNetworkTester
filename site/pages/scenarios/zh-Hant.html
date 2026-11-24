@@ -20,10 +20,24 @@
 </section>
 
 <section>
+  <h2>情境檔中可以有的每個鍵</h2>
+  {{page.scenario_reference}}
+  <p><code>settings</code> 中的名稱與儲存的設定檔相同，<a href="../cankao-biao/#settings-traffic">參考表頁面</a>列出了每一個及其可接受的值。步驟無法改變下列設定，因為工作階段只在啟動時讀取它們，或者只有視窗的表格會讀取它們。設定了其中某項的步驟仍會載入，記錄中會說明它沒有改變任何東西：</p>
+  {{page.scenario_not_live}}
+</section>
+
+<section>
+  <h2>載入時就會檢查</h2>
+  <p>錯誤會在任何東西執行之前指出它所在的步驟：不明的設定、鍵或動作，超出範圍的值，什麼都不做的步驟，空的或過長的清單。否則拼錯的鍵會悄無聲息，而一個能載入卻不照所寫去做的檔案，看起來就像工具忽略了它。<code>--dry-run</code> 可以在不載入驅動程式的情況下檢查情境，因此適合當作管線中低成本的一步：</p>
+<pre><code>BeanNetworkTester.exe --scenario my-scenario.json --dry-run</code></pre>
+  <p>步驟由每十分之一秒走一次的計時器套用，因此帶小數的時間大約精確到這個程度。</p>
+</section>
+
+<section>
   <h2>{{page.scenario_count}} 個現成場景隨程式一起提供</h2>
-  <p>位於可執行檔案旁邊的 <code>scenarios</code> 資料夾中。這是從那些檔案裡讀出來的，所以你實際擁有的就是這些：</p>
+  <p>它們位於程式所在的資料夾中：在 zip、安裝程式、WinGet、Chocolatey 和 Linux 套件中是 <code>_internal\scenarios</code>，在原始碼副本中是 <code>scenarios</code>。視窗的檔案對話方塊會開啟這裡，在命令列中 <code>--scenario scenarios/cafe-wifi.json</code> 可以從任何資料夾找到現成的情境。這張表是從這些檔案讀取的，所以就是你實際擁有的內容：</p>
   {{page.scenario_table}}
-  <p>它們就是普通文字：開啟一個，改一個數字，儲存。名稱說明了它們重現什麼：擁擠的咖啡館、從 LTE 掉到 3G 的行動連線、傳到一半就中斷的上傳、過載的伺服器，以及不再回應的 DNS。</p>
+  <p>它們是一般的 JSON 文字。要修改某個情境，請把它複製到你自己的位置，改一個數字，然後載入你的副本。</p>
 </section>
 
 <section>

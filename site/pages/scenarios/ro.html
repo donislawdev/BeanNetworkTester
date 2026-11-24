@@ -20,10 +20,38 @@
 </section>
 
 <section>
+  <h2>Fiecare cheie pe care o poate avea un fișier de scenariu</h2>
+  {{page.scenario_reference}}
+  <p>Numele din <code>settings</code> sunt aceleași ca într-un fișier de setări salvat, iar
+  <a href="../tabele-de-referinta/#settings-traffic">pagina tabelelor de referință</a> le enumeră pe
+  toate cu valorile pe care le acceptă. Un pas nu poate schimba aceste setări, pentru că o sesiune le
+  ia doar la pornire sau le citesc doar tabelele ferestrei. Un pas care setează una dintre ele se
+  încarcă totuși, iar jurnalul spune că nu a schimbat nimic:</p>
+  {{page.scenario_not_live}}
+</section>
+
+<section>
+  <h2>Verificat la încărcare</h2>
+  <p>O greșeală își arată pasul înainte să pornească ceva: o setare, o cheie sau o acțiune necunoscută,
+  o valoare în afara intervalului, un pas care nu face nimic, o listă goală sau prea lungă. Altfel o
+  cheie scrisă greșit ar trece în tăcere, iar un fișier care se încarcă dar nu face ce spune arată ca
+  un instrument care îl ignoră. <code>--dry-run</code> verifică un scenariu fără să încarce driverul,
+  deci e un pas ieftin într-un pipeline:</p>
+<pre><code>BeanNetworkTester.exe --scenario scenariul-meu.json --dry-run</code></pre>
+  <p>Pașii sunt aplicați de un temporizator care bate la fiecare zecime de secundă, așa că un timp cu
+  zecimale este respectat cam cu această precizie.</p>
+</section>
+
+<section>
   <h2>Scenarii gata făcute în program: {{page.scenario_count}}</h2>
-  <p>În folderul <code>scenarios</code> de lângă executabil. Citite din acele fișiere, deci asta ai de fapt:</p>
+  <p>Se află în folderul programului: în <code>_internal\scenarios</code> în zip, programul de
+  instalare, WinGet, Chocolatey și pachetul Linux, și în <code>scenarios</code> într-o copie a codului
+  sursă. Dialogul de fișiere al ferestrei se deschide acolo, iar în linia de comandă
+  <code>--scenario scenarios/cafe-wifi.json</code> găsește un scenariu gata făcut din orice folder.
+  Tabelul acesta este citit din acele fișiere, deci arată ce ai cu adevărat:</p>
   {{page.scenario_table}}
-  <p>Sunt fișiere text obișnuite: deschide unul, schimbă o cifră, salvează. Numele spun ce reproduc: o cafenea aglomerată, o conexiune mobilă care scade de la LTE la 3G, o încărcare care moare la jumătate, un server supraîncărcat, un DNS care nu mai răspunde.</p>
+  <p>Sunt text JSON obișnuit. Ca să schimbi unul, copiază-l într-un loc al tău, modifică un număr și
+  încarcă-ți copia.</p>
 </section>
 
 <section>

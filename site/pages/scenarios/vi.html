@@ -20,10 +20,38 @@
 </section>
 
 <section>
+  <h2>Mọi khóa mà tệp kịch bản có thể chứa</h2>
+  {{page.scenario_reference}}
+  <p>Tên trong <code>settings</code> giống như trong tệp thiết lập đã lưu, và
+  <a href="../bang-tra-cuu/#settings-traffic">trang bảng tra cứu</a> liệt kê từng tên kèm các giá trị
+  mà nó nhận. Một bước không thể đổi các thiết lập sau, vì phiên chỉ đọc chúng lúc khởi động, hoặc chỉ
+  các bảng trong cửa sổ đọc chúng. Bước nào đặt một trong số đó vẫn được nạp, và nhật ký cho biết nó
+  không thay đổi gì:</p>
+  {{page.scenario_not_live}}
+</section>
+
+<section>
+  <h2>Được kiểm tra khi nạp</h2>
+  <p>Lỗi chỉ ra bước của nó trước khi bất cứ thứ gì chạy: thiết lập, khóa hoặc hành động không biết,
+  giá trị ngoài khoảng, bước không làm gì, danh sách rỗng hoặc quá dài. Nếu không, một khóa gõ sai sẽ
+  lọt qua trong im lặng, và một tệp nạp được nhưng không làm đúng như đã viết trông như công cụ đang
+  phớt lờ nó. <code>--dry-run</code> kiểm tra kịch bản mà không nạp driver, nên đây là một bước rẻ
+  trong pipeline:</p>
+<pre><code>BeanNetworkTester.exe --scenario kich-ban-cua-toi.json --dry-run</code></pre>
+  <p>Các bước được áp dụng bởi một bộ hẹn giờ đếm mỗi một phần mười giây, nên thời gian có phần lẻ được
+  tuân theo với độ chính xác cỡ đó.</p>
+</section>
+
+<section>
   <h2>Số kịch bản có sẵn trong chương trình: {{page.scenario_count}}</h2>
-  <p>Trong thư mục <code>scenarios</code> cạnh tệp thực thi. Được đọc từ chính các tệp đó, nên đây là những gì bạn thực sự có:</p>
+  <p>Chúng nằm trong thư mục chương trình: trong <code>_internal\scenarios</code> ở bản zip, bộ cài,
+  WinGet, Chocolatey và gói Linux, và trong <code>scenarios</code> ở bản sao mã nguồn. Hộp thoại chọn
+  tệp của cửa sổ mở ở đó, và trên dòng lệnh <code>--scenario scenarios/cafe-wifi.json</code> tìm được
+  kịch bản có sẵn từ bất kỳ thư mục nào. Bảng này được đọc từ các tệp đó, nên đó là những gì bạn thực
+  sự có:</p>
   {{page.scenario_table}}
-  <p>Chúng là tệp văn bản thường: mở một tệp, đổi một con số, lưu. Tên cho biết chúng tái hiện gì: một quán cà phê đông người, kết nối di động tụt từ LTE xuống 3G, một lần tải lên chết giữa chừng, một máy chủ bị quá tải, DNS không còn trả lời.</p>
+  <p>Chúng là văn bản JSON thông thường. Muốn đổi một kịch bản, hãy sao chép nó sang chỗ của bạn, sửa
+  một con số rồi nạp bản sao của bạn.</p>
 </section>
 
 <section>

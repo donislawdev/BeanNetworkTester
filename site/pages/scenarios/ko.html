@@ -20,10 +20,24 @@
 </section>
 
 <section>
+  <h2>시나리오 파일에 쓸 수 있는 모든 키</h2>
+  {{page.scenario_reference}}
+  <p><code>settings</code> 안의 이름은 저장한 설정 파일과 같으며, <a href="../chamjo-pyo/#settings-traffic">참조 표 페이지</a>에 받는 값과 함께 모두 나와 있습니다. 다음 설정은 단계에서 바꿀 수 없습니다. 세션이 시작할 때만 읽거나, 창의 표만 읽기 때문입니다. 이 중 하나를 설정한 단계도 불러오기는 되지만, 아무것도 바꾸지 않았다고 로그에 나옵니다.</p>
+  {{page.scenario_not_live}}
+</section>
+
+<section>
+  <h2>불러올 때 확인됩니다</h2>
+  <p>실수는 무엇이든 실행되기 전에 해당 단계를 가리킵니다. 알 수 없는 설정·키·동작, 범위를 벗어난 값, 아무것도 하지 않는 단계, 비어 있거나 너무 긴 목록입니다. 그렇지 않으면 키의 오타는 조용히 넘어가고, 불러와지지만 적힌 대로 하지 않는 파일은 도구가 무시하는 것처럼 보입니다. <code>--dry-run</code>은 드라이버를 불러오지 않고 시나리오를 확인하므로 파이프라인에서 가벼운 단계가 됩니다.</p>
+<pre><code>BeanNetworkTester.exe --scenario my-scenario.json --dry-run</code></pre>
+  <p>단계는 0.1초마다 도는 타이머가 적용하므로, 소수점이 있는 시간은 대략 그 정도 정확도로 지켜집니다.</p>
+</section>
+
+<section>
   <h2>프로그램에 포함된 준비된 시나리오 수: {{page.scenario_count}}</h2>
-  <p>실행 파일 옆 <code>scenarios</code> 폴더에 있습니다. 그 파일들에서 읽은 것이므로 실제로 가진 것은 이것입니다:</p>
+  <p>프로그램 폴더에 있습니다. zip, 설치 프로그램, WinGet, Chocolatey, Linux 패키지에서는 <code>_internal\scenarios</code>에, 소스 코드 사본에서는 <code>scenarios</code>에 있습니다. 창의 파일 대화 상자가 그곳을 열고, 명령줄에서는 <code>--scenario scenarios/cafe-wifi.json</code>으로 어느 폴더에서든 미리 만든 시나리오를 찾습니다. 이 표는 그 파일들에서 읽으므로 실제로 가진 것과 같습니다.</p>
   {{page.scenario_table}}
-  <p>평범한 텍스트 파일이므로 하나를 열고, 숫자를 바꾸고, 저장하면 됩니다. 이름이 무엇을 재현하는지 말해 줍니다. 붐비는 카페, LTE에서 3G로 떨어지는 모바일 연결, 도중에 죽는 업로드, 과부하가 걸린 서버, 응답을 멈추는 DNS입니다.</p>
+  <p>모두 평범한 JSON 텍스트입니다. 바꾸려면 자기 위치로 복사하고 숫자를 고친 뒤 그 사본을 불러오세요.</p>
 </section>
 
 <section>

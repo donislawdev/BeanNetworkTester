@@ -54,7 +54,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from beantester import (appinfo, cli, exitcodes, fields, filters,  # noqa: E402
-                        presets, settings)
+                        presets, scenario, settings)
 
 SITE_DIR = "site"
 # What the site's explanations were last checked against (``doc_sources``).
@@ -1147,6 +1147,12 @@ def doc_sources(root):
         out["setting." + field.key] = _fingerprint(parts)
     for action in cli_options().values():
         out["flag." + action.dest] = _fingerprint([action.help or ""])
+    # A shipped scenario's sentence says what the file reproduces: an edit to the file
+    # may change that.
+    for name in scenario_files(root):
+        with open(os.path.join(root, "scenarios", name), "rb") as handle:
+            out["scenario.file." + name[:-len(".json")]] = hashlib.sha256(
+                handle.read().replace(b"\r\n", b"\n")).hexdigest()[:12]
     return out
 
 
@@ -1206,8 +1212,8 @@ def scenario_table(root, texts):
     """
     folder = os.path.join(root, "scenarios")
     files = scenario_files(root)
-    heads = [texts["table.scenario"], texts["table.steps"], texts["table.length"],
-             texts["table.repeats"]]
+    heads = [texts["table.scenario"], texts["table.reproduces"], texts["table.steps"],
+             texts["table.length"], texts["table.repeats"]]
     rows = ["<tr>%s</tr>" % "".join("<th>%s</th>" % html.escape(h, quote=True) for h in heads)]
     for name in files:
         data = _read_json(os.path.join(folder, name))
@@ -1215,11 +1221,50 @@ def scenario_table(root, texts):
         if not steps:
             raise SiteError("scenarios/%s has no steps" % name)
         last = max(int(step.get("at", 0)) for step in steps)
-        rows.append("<tr><td><code>%s</code></td><td>%d</td><td>%d s</td><td>%s</td></tr>"
-                    % (html.escape(name, quote=True), len(steps), last,
-                       html.escape(texts["table.yes"] if data.get("loop") else texts["table.no"],
-                                   quote=True)))
+        about = "scenario.file." + name[:-len(".json")]
+        if about not in texts:
+            raise SiteError("the site has no sentence for scenarios/%s: add %r" % (name, about))
+        rows.append("<tr><td><code>%s</code></td><td>%s</td><td>%d</td><td>%d s</td><td>%s</td>"
+                    "</tr>" % (html.escape(name, quote=True),
+                               html.escape(texts[about], quote=True), len(steps), last,
+                               html.escape(texts["table.yes"] if data.get("loop")
+                                           else texts["table.no"], quote=True)))
     return Raw("<table>%s</table>" % "".join(rows))
+
+
+def scenario_reference(app, texts):
+    """Every key a scenario file may hold and every action a step may take, from
+    ``scenario``: a key or an action the validator gains appears here, and fails the
+    build until it has a sentence (``scenario.key.<key>``, ``scenario.action.<name>``).
+    The limits in the sentences come from the same module."""
+    numbers = {"{max_steps}": str(scenario.MAX_STEPS),
+               "{max_action}": _number(scenario.MAX_ACTION_S)}
+
+    def sentence(key):
+        text = explained(texts, key, app)
+        for marker, value in numbers.items():
+            text = text.replace(marker, value)
+        return text
+
+    groups = (("file", scenario.FILE_KEYS, "scenario.key."),
+              ("step", scenario.STEP_KEYS, "scenario.key."),
+              ("actions", scenario.ACTIONS, "scenario.action."))
+    blocks = []
+    for group, names, prefix in groups:
+        entries = "".join('<dt id="scenario-%s"><code>%s</code></dt><dd><p>%s</p></dd>'
+                          % (name, html.escape(name, quote=True), sentence(prefix + name))
+                          for name in names)
+        blocks.append('<h3 class="group" id="scenario-%s-keys">%s</h3><dl class="settings">%s</dl>'
+                      % (group, explained(texts, "scenario.group." + group, app), entries))
+    return Raw("".join(blocks))
+
+
+def scenario_not_live(app):
+    """The settings a scenario step cannot change, by the names the window shows."""
+    names = [_program_label(app["app." + fields.FIELDS[key].label])
+             for key in sorted(settings.NOT_APPLIED_LIVE)]
+    return Raw("<ul>%s</ul>" % "".join("<li>%s</li>" % html.escape(n, quote=True)
+                                         for n in names))
 
 
 def social_links(registry, texts):
@@ -1292,6 +1337,8 @@ def page_context(page, code, registry, texts, home, colours, root, pages):
         "page.cli_reference": cli_reference(app, texts[code]),
         "page.exit_code_table": exit_code_table(texts[code]),
         "page.scenario_table": scenario_table(root, texts[code]),
+        "page.scenario_reference": scenario_reference(app, texts[code]),
+        "page.scenario_not_live": scenario_not_live(app),
         "page.scenario_count": len(scenario_files(root)),
         "page.direction": _language(registry, code).get("direction", "ltr"),
         "page.social_links": social_links(registry, texts[code]),
