@@ -1647,6 +1647,16 @@ MUTATIONS = [
         "test": "test_the_workflow_rebuilds_when_any_source_of_the_page_changes",
     },
     {
+        # The reference tables, the command-line page and the statistics page are read
+        # out of program modules; with only the two old files watched, a new setting,
+        # option or counter would reach the live site only with the next site/ edit.
+        "label": "site: the workflow watches two program files instead of the package",
+        "file": ".github/workflows/pages.yml",
+        "old": '      - "beantester/**"',
+        "new": '      - "beantester/gui/theme.py"\n      - "beantester/appinfo.py"',
+        "test": "test_the_workflow_rebuilds_when_any_source_of_the_page_changes",
+    },
+    {
         # The wrong side of a list in Arabic, and a skip link that makes the page scroll.
         "label": "site: a list indents from the left again",
         "file": "site/assets/style.css",

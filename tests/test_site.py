@@ -1171,10 +1171,17 @@ def test_the_explanation_fingerprint_moves_with_the_program_text(tmp_path):
     shipped = os.path.join(str(tmp_path), "scenarios", "cafe-wifi.json")
     with open(shipped, "a", encoding="utf-8") as handle:
         handle.write("\n")
+    # A literal read from the window's source, edited between two calls on the same
+    # root: a reader that kept the first answer would miss the change.
+    stats = os.path.join(str(tmp_path), build_site.STATS_PAGE.replace("/", os.sep))
+    with open(stats, encoding="utf-8", newline="") as handle:
+        source = handle.read()
+    with open(stats, "w", encoding="utf-8", newline="") as handle:
+        handle.write(source.replace('"tips.stat_seen"', '"tips.stat_queue"', 1))
     after = build_site.doc_sources(str(tmp_path))
     moved = sorted(key for key in before if before[key] != after[key])
-    check("only what changed moves", moved == ["scenario.file.cafe-wifi", "setting.loss"],
-          f"({moved})")
+    check("only what changed moves",
+          moved == ["counter.seen", "scenario.file.cafe-wifi", "setting.loss"], f"({moved})")
 
 
 def _english_copies(english, translated, shortest=40):
@@ -1580,10 +1587,30 @@ def test_the_workflow_rebuilds_when_any_source_of_the_page_changes(tmp_path):
     check("the generator's program imports are found", "beantester/presets.py" in program,
           f"(found {program})")
     needed += program
+    # The window's sources read as text for the statistics page count the same way.
+    needed += [build_site.STATS_PAGE, build_site.CONNS_PAGE, build_site.CSV_EXPORT]
     patterns = _filter_patterns(text)
-    for path in needed:
-        check(f"the paths filter covers {path}",
-              any(_glob_covers(pattern, path) for pattern in patterns), f"(filter {patterns})")
+    for entry in needed:
+        files = _files_behind(entry)
+        check(f"{entry} stands for files in the repository", files, "(none found)")
+        missing = [path for path in files
+                   if not any(_glob_covers(pattern, path) for pattern in patterns)]
+        check(f"the paths filter covers {entry}", not missing,
+              f"(not covered: {missing[:5]}, filter {patterns})")
+
+
+def _files_behind(entry, root=ROOT):
+    """A required input as the files it stands for: a folder's ``/**`` becomes every file
+    under it. Matching the glob string itself would let ``site/*`` pass for ``site/**``,
+    because ``**`` holds no slash for ``*`` to stop at."""
+    if not entry.endswith("/**"):
+        return [entry] if os.path.isfile(os.path.join(root, entry)) else []
+    found = []
+    for folder, dirs, names in os.walk(os.path.join(root, entry[:-len("/**")])):
+        dirs[:] = [name for name in dirs if name != "__pycache__"]
+        found += [os.path.relpath(os.path.join(folder, name), root).replace(os.sep, "/")
+                  for name in names]
+    return sorted(found)
 
 
 def _program_modules(builder_text):
@@ -1616,6 +1643,10 @@ def test_the_paths_filter_reader_can_say_no():
     check("* stays in one folder", not _glob_covers("beantester/*.py", "beantester/gui/theme.py"))
     check("another folder is not covered", not _glob_covers("site/**", "beantester/fields.py"))
     check("a plain path covers only itself", not _glob_covers("bean.png", "docs/bean.png"))
+    nested = "site/pages/syntax/en.html"
+    check("a folder stands for the files under it", nested in _files_behind("site/**"))
+    check("site/* does not cover a nested page", not _glob_covers("site/*", nested))
+    check("site/** does", _glob_covers("site/**", nested))
 
 
 def test_only_the_job_that_deploys_may_write_to_pages():

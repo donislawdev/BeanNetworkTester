@@ -1131,8 +1131,9 @@ def cli_reference(app, texts):
 @functools.lru_cache(maxsize=None)
 def _literal(root, relpath, name):
     """A module-level literal of the program, read from its source rather than imported:
-    the window's modules import Tk, which the site build must not need. Cached: every
-    page of every language asks, and the answer cannot change during one build."""
+    the window's modules import Tk, which the site build must not need. Cached for one
+    build, since every page of every language asks; ``build`` and ``doc_sources`` empty
+    the cache on entry, so a second call in the same process reads an edited source."""
     tree = ast.parse(_read_text(os.path.join(root, relpath)))
     for node in tree.body:
         if isinstance(node, ast.Assign) and any(
@@ -1235,6 +1236,7 @@ def doc_sources(root):
     were last checked against; ``test_site`` compares, and ``--stamp-sources``
     records again once they have been read.
     """
+    _literal.cache_clear()
     app = load_app_strings(root, "en")
     helps = {option: action.help or "" for action in cli.build_arg_parser()._actions
              for option in action.option_strings}
@@ -1501,6 +1503,7 @@ def _prune(out, written):
 
 def build(root=ROOT, out=None):
     """Generate the whole site. Returns the relative paths written, sorted."""
+    _literal.cache_clear()
     out = out or os.path.join(root, DEFAULT_OUT)
     if os.path.isdir(out) and os.listdir(out) and not os.path.isfile(
             os.path.join(out, "index.html")):
