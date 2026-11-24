@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>Quais portas de outro computador respondem?</h1>
+  <p class="lead">Um scanner de portas pergunta a um computador, porta por porta, se algo responde ali. A ferramenta {{app.tools.portscan.tab}} da aba {{app.app.tabs.tools}} faz isso por TCP e UDP, numa janela, no Windows e no Linux, e diz em palavras simples o que o resultado significa. Faça varredura só em computadores que você tem permissão para testar: softwares de segurança e administradores de rede conseguem ver uma varredura.</p>
+</section>
+
+<section>
+  <h2>Como fazer uma varredura</h2>
+  <ol>
+    <li>Abra a aba {{app.app.tabs.tools}}, depois {{app.tools.group.network}} e {{app.tools.portscan.tab}}.</li>
+    <li>Digite o endereço ou o nome do computador e as portas do jeito que você digita na página de controle: <code>22</code>, <code>80, 443</code> ou <code>8000-8100</code>. Ou preencha com <strong>{{app.tools.portscan.common}}</strong> (serviços comuns e servidores de desenvolvimento), <strong>{{app.tools.portscan.well_known}}</strong> ou <strong>{{app.tools.portscan.all}}</strong>.</li>
+    <li>Marque <strong>{{app.tools.portscan.tcp}}</strong>, <strong>{{app.tools.portscan.udp}}</strong> ou os dois e aperte <strong>{{app.tools.portscan.scan}}</strong>. <strong>{{app.tools.portscan.stop}}</strong> termina antes, com as portas que já foram perguntadas.</li>
+  </ol>
+  <p>Portas vizinhas com a mesma resposta dividem uma linha, ao lado do serviço que a porta costuma ter, e uma linha acima da tabela diz o que o resultado significa.</p>
+</section>
+
+<section>
+  <h2>O que cada resposta significa</h2>
+  <table>
+    <tr><th>Resposta</th><th>Significado</th></tr>
+    <tr><td><strong>{{app.tools.portscan.state.open}}</strong></td><td>No TCP, um programa aceita conexões na porta. No UDP, um serviço respondeu à solicitação.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.closed}}</strong></td><td>O computador respondeu que nada escuta ali.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.silent}}</strong></td><td>Nada voltou a tempo. No TCP, em geral um firewall descartou a solicitação. No UDP a porta também pode estar aberta: um serviço que não entende a solicitação fica calado.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.unreachable}}</strong></td><td>O sistema diz que o computador não está lá: está desligado, ou esse não é o endereço dele.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.denied}}</strong></td><td>Este computador se recusou a enviar a solicitação.</td></tr>
+  </table>
+  <p>No Windows, uma porta UDP fechada aparece como {{app.tools.portscan.state.closed}} só quando o programa roda como administrador. O firewall do Windows esconde essa mensagem dos programas, e com direitos de administrador a ferramenta a lê de uma cópia do tráfego de rede. Sem eles, portas UDP fechadas aparecem como {{app.tools.portscan.state.silent}}.</p>
+</section>
+
+<section>
+  <h2>O que ela envia, e com que rapidez</h2>
+  <ul>
+    <li>No TCP, uma conexão fechada na hora, sem nada enviado nela. No UDP, uma solicitação de verdade para DNS, NTP, NetBIOS, mDNS e SSDP, e um datagrama vazio para qualquer outra porta.</li>
+    <li>Um computador numa rede à qual este está ligado é perguntado sobre 256 portas de cada vez, com 1 s para cada uma. Um atrás de um roteador, sobre 32 de cada vez, no máximo 20 novas por segundo, com 3 s para cada uma, para não encher a tabela de conexões do roteador. Uma varredura que pode levar mais de cinco minutos pergunta antes.</li>
+    <li>Quando 64 portas aparecem como {{app.tools.portscan.state.unreachable}} e nenhuma outra respondeu, o computador não está lá, e a varredura para de perguntar a ele.</li>
+    <li>Quando só algumas portas não responderam e o resto sim, essas poucas são perguntadas mais uma vez, mais devagar.</li>
+  </ul>
+  <p><strong>{{app.tools.portscan.copy}}</strong> copia a tabela em inglês, e <strong>{{app.tools.portscan.export}}</strong> grava as linhas num arquivo CSV.</p>
+</section>
+
+<section>
+  <h2>Uma porta, pelo console</h2>
+  <p>Para conferir uma única porta TCP, o PowerShell e a maioria dos sistemas Linux já têm o necessário:</p>
+<pre><code>Test-NetConnection example.com -Port 443
+nc -zv example.com 443</code></pre>
+  <p>Para versões de serviços ou o sistema do outro lado, a ferramenta é o nmap. Esta responde à pergunta anterior: quais portas respondem, afinal, por TCP e UDP, sem mais nada para instalar.</p>
+</section>
+
+<section>
+  <h2>É uma porta deste computador?</h2>
+  <p>Se a pergunta é qual programa deste computador está usando uma porta, ou por que um servidor não consegue abrir uma, veja <a href="../qual-programa-usa-uma-porta/">qual programa usa uma porta</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

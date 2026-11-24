@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>另一台电脑的哪些端口有响应？</h1>
+  <p class="lead">端口扫描器会逐个端口地询问一台电脑，看那里是否有东西响应。{{app.app.tabs.tools}} 选项卡上的 {{app.tools.portscan.tab}} 工具通过 TCP 和 UDP 完成这件事，在窗口中操作，适用于 Windows 和 Linux，并用平实的话说明结果的含义。只扫描你有权测试的电脑：安全软件和网络管理员能看到扫描。</p>
+</section>
+
+<section>
+  <h2>如何进行扫描</h2>
+  <ol>
+    <li>打开 {{app.app.tabs.tools}} 选项卡，再打开 {{app.tools.group.network}} 和 {{app.tools.portscan.tab}}。</li>
+    <li>输入那台电脑的地址或名称，以及端口，写法和控制页上一样：<code>22</code>、<code>80, 443</code> 或 <code>8000-8100</code>。也可以用 <strong>{{app.tools.portscan.common}}</strong>（常见服务和开发服务器）、<strong>{{app.tools.portscan.well_known}}</strong> 或 <strong>{{app.tools.portscan.all}}</strong> 来填写。</li>
+    <li>勾选 <strong>{{app.tools.portscan.tcp}}</strong>、<strong>{{app.tools.portscan.udp}}</strong> 或两者，然后按 <strong>{{app.tools.portscan.scan}}</strong>。<strong>{{app.tools.portscan.stop}}</strong> 会提前结束扫描，只保留已经问过的端口。</li>
+  </ol>
+  <p>相邻且结果相同的端口合为一行，旁边是该端口通常承载的服务，表格上方的一行会说明结果的含义。</p>
+</section>
+
+<section>
+  <h2>各种结果的含义</h2>
+  <table>
+    <tr><th>结果</th><th>含义</th></tr>
+    <tr><td><strong>{{app.tools.portscan.state.open}}</strong></td><td>TCP 上有程序在该端口接受连接。UDP 上有服务回复了请求。</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.closed}}</strong></td><td>那台电脑表示该端口上没有程序在监听。</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.silent}}</strong></td><td>在规定时间内没有任何回应。在 TCP 上通常是防火墙丢弃了请求。在 UDP 上端口也可能是开放的：不理解该请求的服务会保持沉默。</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.unreachable}}</strong></td><td>系统表示那台电脑不在：它已关机，或者这不是它的地址。</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.denied}}</strong></td><td>这台电脑拒绝发送该请求。</td></tr>
+  </table>
+  <p>在 Windows 上，只有程序以管理员身份运行时，关闭的 UDP 端口才会显示为 {{app.tools.portscan.state.closed}}。Windows 防火墙不会把这条消息交给程序，有管理员权限时，工具会从网络流量的副本中读取它。没有管理员权限时，关闭的 UDP 端口显示为 {{app.tools.portscan.state.silent}}。</p>
+</section>
+
+<section>
+  <h2>它发送什么，速度多快</h2>
+  <ul>
+    <li>TCP 上，建立一个连接后立即关闭，不在上面发送任何数据。UDP 上，对 DNS、NTP、NetBIOS、mDNS 和 SSDP 发送真实的请求，对其他端口发送空数据报。</li>
+    <li>与本机处于同一网络的电脑，每次询问 256 个端口，每个等待 1 秒。位于路由器后面的电脑，每次询问 32 个，每秒最多新发 20 个，每个等待 3 秒，以免占满路由器的连接表。可能超过五分钟的扫描会先询问你。</li>
+    <li>当 64 个端口显示 {{app.tools.portscan.state.unreachable}} 且没有其他端口响应时，说明那台电脑不在，扫描会停止询问它。</li>
+    <li>当只有少数端口没有回应而其余都有回应时，这几个端口会被以更慢的速度再问一次。</li>
+  </ul>
+  <p><strong>{{app.tools.portscan.copy}}</strong> 会以英文复制表格，<strong>{{app.tools.portscan.export}}</strong> 会把各行写入 CSV 文件。</p>
+</section>
+
+<section>
+  <h2>在控制台中检查一个端口</h2>
+  <p>只检查一个 TCP 端口时，PowerShell 和大多数 Linux 系统已经自带所需的工具：</p>
+<pre><code>Test-NetConnection example.com -Port 443
+nc -zv example.com 443</code></pre>
+  <p>要查看服务版本或对方的操作系统，请用 nmap。本工具回答的是更早的问题：到底有哪些端口在 TCP 和 UDP 上有响应，而且无需再安装任何东西。</p>
+</section>
+
+<section>
+  <h2>要查的是本机的端口？</h2>
+  <p>如果你想知道本机上哪个程序占用了某个端口，或者服务器为什么打不开端口，请看<a href="../nage-chengxu-zhanyong-duankou/">哪个程序在使用端口</a>。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,138 @@
+{
+  "id": "port-scanner",
+  "order": 77,
+  "languages": {
+    "en": {
+      "slug": "port-scanner",
+      "link_text": "Port scanner",
+      "title": "Free TCP and UDP port scanner for Windows and Linux",
+      "description": "Find which ports of another computer answer over TCP and UDP, what each answer means, and how a scan stays gentle on your router."
+    },
+    "pl": {
+      "slug": "skaner-portow",
+      "link_text": "Skaner portów",
+      "title": "Darmowy skaner portów TCP i UDP dla Windows i Linuksa",
+      "description": "Sprawdź, które porty innego komputera odpowiadają przez TCP i UDP, co znaczy każda odpowiedź i jak skan oszczędza twój router."
+    },
+    "zh-Hans": {
+      "slug": "duankou-saomiao",
+      "link_text": "端口扫描",
+      "title": "适用于 Windows 和 Linux 的免费 TCP/UDP 端口扫描器",
+      "description": "查看另一台电脑的哪些端口在 TCP 和 UDP 上有响应、每种结果的含义，以及扫描如何不给路由器添负担。"
+    },
+    "ja": {
+      "slug": "pooto-sukyanaa",
+      "link_text": "ポートスキャナー",
+      "title": "Windows と Linux 用の無料 TCP・UDP ポートスキャナー",
+      "description": "別のコンピューターのどのポートが TCP と UDP で応答するか、各結果の意味、そしてルーターに負担をかけない走査のしかた。"
+    },
+    "de": {
+      "slug": "portscanner",
+      "link_text": "Portscanner",
+      "title": "Kostenloser TCP- und UDP-Portscanner für Windows und Linux",
+      "description": "Finde heraus, welche Ports eines anderen Computers über TCP und UDP antworten, was jede Antwort bedeutet und wie ein Scan deinen Router schont."
+    },
+    "fr": {
+      "slug": "scanner-de-ports",
+      "link_text": "Scanner de ports",
+      "title": "Scanner de ports TCP et UDP gratuit pour Windows et Linux",
+      "description": "Voyez quels ports d'un autre ordinateur répondent en TCP et en UDP, ce que veut dire chaque réponse et comment un scan ménage votre routeur."
+    },
+    "es": {
+      "slug": "escaner-de-puertos",
+      "link_text": "Escáner de puertos",
+      "title": "Escáner de puertos TCP y UDP gratuito para Windows y Linux",
+      "description": "Vea qué puertos de otro equipo responden por TCP y UDP, qué significa cada respuesta y cómo un escaneo no sobrecarga su router."
+    },
+    "pt-BR": {
+      "slug": "scanner-de-portas",
+      "link_text": "Scanner de portas",
+      "title": "Scanner de portas TCP e UDP gratuito para Windows e Linux",
+      "description": "Veja quais portas de outro computador respondem por TCP e UDP, o que cada resposta significa e como uma varredura poupa o seu roteador."
+    },
+    "it": {
+      "slug": "scanner-di-porte",
+      "link_text": "Scanner di porte",
+      "title": "Scanner di porte TCP e UDP gratuito per Windows e Linux",
+      "description": "Scopri quali porte di un altro computer rispondono su TCP e UDP, cosa significa ogni risposta e come una scansione risparmia il router."
+    },
+    "id": {
+      "slug": "pemindai-port",
+      "link_text": "Pemindai port",
+      "title": "Pemindai port TCP dan UDP gratis untuk Windows dan Linux",
+      "description": "Lihat port mana di komputer lain yang menjawab lewat TCP dan UDP, arti setiap jawaban, dan cara pemindaian tetap ringan bagi router Anda."
+    },
+    "ru": {
+      "slug": "skaner-portov",
+      "link_text": "Сканер портов",
+      "title": "Бесплатный сканер портов TCP и UDP для Windows и Linux",
+      "description": "Узнайте, какие порты другого компьютера отвечают по TCP и UDP, что значит каждый ответ и как сканирование бережёт ваш роутер."
+    },
+    "tr": {
+      "slug": "port-tarayici",
+      "link_text": "Port tarayıcı",
+      "title": "Windows ve Linux için ücretsiz TCP ve UDP port tarayıcı",
+      "description": "Başka bir bilgisayarın hangi portlarının TCP ve UDP ile yanıt verdiğini, her yanıtın anlamını ve taramanın yönlendiriciyi nasıl yormadığını görün."
+    },
+    "cs": {
+      "slug": "skener-portu",
+      "link_text": "Skener portů",
+      "title": "Bezplatný skener portů TCP a UDP pro Windows a Linux",
+      "description": "Zjistěte, které porty jiného počítače odpovídají přes TCP a UDP, co znamená každá odpověď a jak sken šetří váš router."
+    },
+    "vi": {
+      "slug": "quet-cong",
+      "link_text": "Quét cổng",
+      "title": "Trình quét cổng TCP và UDP miễn phí cho Windows và Linux",
+      "description": "Xem cổng nào của máy tính khác trả lời qua TCP và UDP, mỗi kết quả có nghĩa gì và cách quét mà không làm quá tải router."
+    },
+    "hi": {
+      "slug": "port-skainar",
+      "link_text": "पोर्ट स्कैनर",
+      "title": "Windows और Linux के लिए मुफ़्त TCP और UDP पोर्ट स्कैनर",
+      "description": "देखें कि दूसरे कंप्यूटर के कौन-से पोर्ट TCP और UDP पर जवाब देते हैं, हर जवाब का क्या मतलब है और स्कैन राउटर पर बोझ कैसे नहीं डालता।"
+    },
+    "ko": {
+      "slug": "poteu-seukaeneo",
+      "link_text": "포트 스캐너",
+      "title": "Windows와 Linux용 무료 TCP·UDP 포트 스캐너",
+      "description": "다른 컴퓨터의 어떤 포트가 TCP와 UDP로 응답하는지, 각 결과의 뜻, 그리고 라우터에 부담을 주지 않는 스캔 방식을 알아보세요."
+    },
+    "ar": {
+      "slug": "masih-almanafidh",
+      "link_text": "ماسح المنافذ",
+      "title": "ماسح منافذ TCP وUDP مجاني لنظامي Windows وLinux",
+      "description": "اعرف أيّ منافذ حاسوب آخر تجيب عبر TCP وUDP، وماذا يعني كل جواب، وكيف يرفق الفحص بالموجّه لديك."
+    },
+    "ro": {
+      "slug": "scanner-de-porturi",
+      "link_text": "Scanner de porturi",
+      "title": "Scanner de porturi TCP și UDP gratuit pentru Windows și Linux",
+      "description": "Vezi ce porturi ale altui computer răspund prin TCP și UDP, ce înseamnă fiecare răspuns și cum o scanare îți cruță routerul."
+    },
+    "nl": {
+      "slug": "poortscanner",
+      "link_text": "Poortscanner",
+      "title": "Gratis TCP- en UDP-poortscanner voor Windows en Linux",
+      "description": "Zie welke poorten van een andere computer antwoorden via TCP en UDP, wat elk antwoord betekent en hoe een scan je router spaart."
+    },
+    "zh-Hant": {
+      "slug": "lianjiekou-saomiao",
+      "link_text": "連接埠掃描",
+      "title": "適用於 Windows 與 Linux 的免費 TCP/UDP 連接埠掃描器",
+      "description": "查看另一台電腦的哪些連接埠在 TCP 與 UDP 上有回應、每種結果的意思，以及掃描如何不加重路由器的負擔。"
+    },
+    "uk": {
+      "slug": "skaner-portiv",
+      "link_text": "Сканер портів",
+      "title": "Безкоштовний сканер портів TCP і UDP для Windows і Linux",
+      "description": "Дізнайтеся, які порти іншого комп'ютера відповідають через TCP і UDP, що означає кожна відповідь і як сканування береже ваш роутер."
+    },
+    "th": {
+      "slug": "khrueang-skaen-port",
+      "link_text": "สแกนพอร์ต",
+      "title": "เครื่องสแกนพอร์ต TCP และ UDP ฟรีสำหรับ Windows และ Linux",
+      "description": "ดูว่าพอร์ตใดของคอมพิวเตอร์อีกเครื่องตอบผ่าน TCP และ UDP คำตอบแต่ละแบบหมายถึงอะไร และการสแกนถนอมเราเตอร์ของคุณอย่างไร"
+    }
+  }
+}

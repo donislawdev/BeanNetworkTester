@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>Başka bir bilgisayarın hangi portları yanıt veriyor?</h1>
+  <p class="lead">Bir port tarayıcı, bir bilgisayara port port orada bir şeyin yanıt verip vermediğini sorar. {{app.app.tabs.tools}} sekmesindeki {{app.tools.portscan.tab}} aracı bunu TCP ve UDP üzerinden, bir pencereden, Windows'ta ve Linux'ta yapar ve sonucun ne anlama geldiğini sade sözcüklerle söyler. Yalnızca test etmenize izin verilen bilgisayarları tarayın: güvenlik yazılımları ve ağ yöneticileri bir taramayı görebilir.</p>
+</section>
+
+<section>
+  <h2>Tarama nasıl yapılır</h2>
+  <ol>
+    <li>{{app.app.tabs.tools}} sekmesini, ardından {{app.tools.group.network}} ve {{app.tools.portscan.tab}} bölümünü açın.</li>
+    <li>Bilgisayarın adresini ya da adını ve portları denetim sayfasında yazdığınız gibi yazın: <code>22</code>, <code>80, 443</code> ya da <code>8000-8100</code>. Ya da onları <strong>{{app.tools.portscan.common}}</strong> (yaygın hizmetler ve geliştirme sunucuları), <strong>{{app.tools.portscan.well_known}}</strong> ya da <strong>{{app.tools.portscan.all}}</strong> ile doldurun.</li>
+    <li><strong>{{app.tools.portscan.tcp}}</strong>, <strong>{{app.tools.portscan.udp}}</strong> ya da ikisini işaretleyip <strong>{{app.tools.portscan.scan}}</strong> düğmesine basın. <strong>{{app.tools.portscan.stop}}</strong> taramayı, sorduğu portlarla erken bitirir.</li>
+  </ol>
+  <p>Aynı yanıtı veren yan yana portlar, portun genellikle taşıdığı hizmetin yanında tek bir satırı paylaşır ve tablonun üstündeki bir satır sonucun ne anlama geldiğini söyler.</p>
+</section>
+
+<section>
+  <h2>Her yanıtın anlamı</h2>
+  <table>
+    <tr><th>Yanıt</th><th>Anlamı</th></tr>
+    <tr><td><strong>{{app.tools.portscan.state.open}}</strong></td><td>TCP'de bir program o portta bağlantı kabul ediyor. UDP'de bir hizmet isteğe yanıt verdi.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.closed}}</strong></td><td>Bilgisayar orada hiçbir şeyin dinlemediğini söyledi.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.silent}}</strong></td><td>Zamanında hiçbir şey dönmedi. TCP'de genellikle bir güvenlik duvarı isteği düşürmüştür. UDP'de port açık da olabilir: isteği anlamayan bir hizmet sessiz kalır.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.unreachable}}</strong></td><td>Sistem bilgisayarın orada olmadığını söylüyor: kapalı ya da bu onun adresi değil.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.denied}}</strong></td><td>Bu bilgisayar isteği göndermeyi reddetti.</td></tr>
+  </table>
+  <p>Windows'ta kapalı bir UDP portu yalnızca program yönetici olarak çalışırken {{app.tools.portscan.state.closed}} gösterir. Windows güvenlik duvarı bu iletiyi programlardan saklar; yönetici haklarıyla araç onu ağ trafiğinin bir kopyasından okur. Bu haklar olmadan kapalı UDP portları {{app.tools.portscan.state.silent}} gösterir.</p>
+</section>
+
+<section>
+  <h2>Ne gönderir ve ne hızda</h2>
+  <ul>
+    <li>TCP'de, üzerinden hiçbir şey gönderilmeden hemen kapatılan bir bağlantı. UDP'de, DNS, NTP, NetBIOS, mDNS ve SSDP için gerçek bir istek, diğer her port için boş bir datagram.</li>
+    <li>Bu bilgisayarın bağlı olduğu bir ağdaki bilgisayara aynı anda 256 port, her biri için 1 sn ile sorulur. Bir yönlendiricinin arkasındakine aynı anda 32 port, saniyede en çok 20 yeni, her biri için 3 sn ile sorulur; böylece yönlendiricinin bağlantı tablosu dolmaz. Beş dakikadan uzun sürebilecek bir tarama önce sorar.</li>
+    <li>64 port {{app.tools.portscan.state.unreachable}} gösterdiğinde ve başka hiçbir port yanıt vermediğinde bilgisayar orada değildir ve tarama ona sormayı bırakır.</li>
+    <li>Yalnızca birkaç port yanıt vermediğinde ve gerisi verdiğinde, o birkaç porta bir kez daha, daha yavaş sorulur.</li>
+  </ul>
+  <p><strong>{{app.tools.portscan.copy}}</strong> tabloyu İngilizce kopyalar, <strong>{{app.tools.portscan.export}}</strong> ise satırları bir CSV dosyasına yazar.</p>
+</section>
+
+<section>
+  <h2>Tek bir port, konsoldan</h2>
+  <p>Tek bir TCP portunu denetlemek için PowerShell'de ve çoğu Linux sisteminde gereken her şey zaten vardır:</p>
+<pre><code>Test-NetConnection example.com -Port 443
+nc -zv example.com 443</code></pre>
+  <p>Hizmet sürümleri ya da öteki uçtaki sistem için araç nmap'tir. Bu araç ondan önceki soruyu yanıtlar: TCP ve UDP üzerinden hangi portlar yanıt veriyor, başka hiçbir şey kurmadan.</p>
+</section>
+
+<section>
+  <h2>Bu bilgisayardaki bir port mu?</h2>
+  <p>Soru, bu bilgisayarda bir portu hangi programın tuttuğu ya da bir sunucunun neden port açamadığıysa, <a href="../hangi-program-portu-kullaniyor/">portu hangi program kullanıyor</a> sayfasına bakın.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

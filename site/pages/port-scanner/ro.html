@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>Ce porturi ale altui computer răspund?</h1>
+  <p class="lead">Un scanner de porturi întreabă un computer, port cu port, dacă ceva răspunde acolo. Instrumentul {{app.tools.portscan.tab}} din fila {{app.app.tabs.tools}} face asta prin TCP și UDP, dintr-o fereastră, pe Windows și pe Linux, și spune în cuvinte simple ce înseamnă rezultatul. Scanează doar computere pe care ai voie să le testezi: programele de securitate și administratorii de rețea pot vedea o scanare.</p>
+</section>
+
+<section>
+  <h2>Cum pornești o scanare</h2>
+  <ol>
+    <li>Deschide fila {{app.app.tabs.tools}}, apoi {{app.tools.group.network}} și {{app.tools.portscan.tab}}.</li>
+    <li>Scrie adresa sau numele computerului și porturile cum le scrii pe pagina de control: <code>22</code>, <code>80, 443</code> sau <code>8000-8100</code>. Sau completează-le cu <strong>{{app.tools.portscan.common}}</strong> (servicii obișnuite și servere de dezvoltare), <strong>{{app.tools.portscan.well_known}}</strong> sau <strong>{{app.tools.portscan.all}}</strong>.</li>
+    <li>Bifează <strong>{{app.tools.portscan.tcp}}</strong>, <strong>{{app.tools.portscan.udp}}</strong> sau pe amândouă și apasă <strong>{{app.tools.portscan.scan}}</strong>. <strong>{{app.tools.portscan.stop}}</strong> o încheie mai devreme, cu porturile deja întrebate.</li>
+  </ol>
+  <p>Porturile vecine cu același răspuns împart un rând, lângă serviciul pe care portul îl poartă de obicei, iar un rând deasupra tabelului spune ce înseamnă rezultatul.</p>
+</section>
+
+<section>
+  <h2>Ce înseamnă fiecare răspuns</h2>
+  <table>
+    <tr><th>Răspuns</th><th>Înțeles</th></tr>
+    <tr><td><strong>{{app.tools.portscan.state.open}}</strong></td><td>Pe TCP un program acceptă conexiuni pe port. Pe UDP un serviciu a răspuns la cerere.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.closed}}</strong></td><td>Computerul a spus că acolo nu ascultă nimic.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.silent}}</strong></td><td>Nu s-a întors nimic la timp. Pe TCP de obicei un firewall a aruncat cererea. Pe UDP portul poate fi și deschis: un serviciu care nu înțelege cererea tace.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.unreachable}}</strong></td><td>Sistemul spune că acel computer nu e acolo: e oprit sau aceasta nu e adresa lui.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.denied}}</strong></td><td>Acest computer a refuzat să trimită cererea.</td></tr>
+  </table>
+  <p>Pe Windows un port UDP închis arată {{app.tools.portscan.state.closed}} doar când programul rulează ca administrator. Firewallul Windows ascunde acest mesaj de programe, iar cu drepturi de administrator instrumentul îl citește dintr-o copie a traficului de rețea. Fără ele, porturile UDP închise arată {{app.tools.portscan.state.silent}}.</p>
+</section>
+
+<section>
+  <h2>Ce trimite și cât de repede</h2>
+  <ul>
+    <li>Pe TCP, o conexiune închisă imediat, fără să trimită nimic prin ea. Pe UDP, o cerere reală pentru DNS, NTP, NetBIOS, mDNS și SSDP și o datagramă goală pentru orice alt port.</li>
+    <li>Un computer dintr-o rețea la care e legat acesta este întrebat de 256 de porturi deodată, cu 1 s pentru fiecare. Unul din spatele unui router este întrebat de 32 deodată, cel mult 20 noi pe secundă, cu 3 s pentru fiecare, ca să nu se umple tabelul de conexiuni al routerului. O scanare care poate dura peste cinci minute întreabă mai întâi.</li>
+    <li>Când 64 de porturi arată {{app.tools.portscan.state.unreachable}} și niciun alt port nu a răspuns, computerul nu e acolo, iar scanarea nu îl mai întreabă.</li>
+    <li>Când doar câteva porturi nu au răspuns, iar restul da, acelea câteva sunt întrebate încă o dată, mai încet.</li>
+  </ul>
+  <p><strong>{{app.tools.portscan.copy}}</strong> copiază tabelul în engleză, iar <strong>{{app.tools.portscan.export}}</strong> scrie rândurile într-un fișier CSV.</p>
+</section>
+
+<section>
+  <h2>Un singur port, din consolă</h2>
+  <p>Pentru a verifica un singur port TCP, PowerShell și majoritatea sistemelor Linux au deja tot ce trebuie:</p>
+<pre><code>Test-NetConnection example.com -Port 443
+nc -zv example.com 443</code></pre>
+  <p>Pentru versiunile serviciilor sau sistemul de la celălalt capăt, instrumentul este nmap. Acesta răspunde la întrebarea de dinainte: ce porturi răspund de fapt, prin TCP și UDP, fără nimic altceva de instalat.</p>
+</section>
+
+<section>
+  <h2>E vorba de un port de pe acest computer?</h2>
+  <p>Dacă întrebarea este ce program de pe acest computer ține un port sau de ce un server nu poate deschide unul, vezi <a href="../ce-program-foloseste-un-port/">ce program folosește un port</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

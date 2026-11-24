@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>Welke poorten van een andere computer antwoorden?</h1>
+  <p class="lead">Een poortscanner vraagt een computer, poort voor poort, of daar iets antwoordt. Het hulpmiddel {{app.tools.portscan.tab}} op het tabblad {{app.app.tabs.tools}} doet dat via TCP en UDP, vanuit een venster, op Windows en op Linux, en zegt in gewone woorden wat het resultaat betekent. Scan alleen computers die je mag testen: beveiligingssoftware en netwerkbeheerders kunnen een scan zien.</p>
+</section>
+
+<section>
+  <h2>Zo start je een scan</h2>
+  <ol>
+    <li>Open het tabblad {{app.app.tabs.tools}}, dan {{app.tools.group.network}} en {{app.tools.portscan.tab}}.</li>
+    <li>Typ het adres of de naam van de computer en de poorten zoals je ze op de bedieningspagina typt: <code>22</code>, <code>80, 443</code> of <code>8000-8100</code>. Of vul ze in met <strong>{{app.tools.portscan.common}}</strong> (gangbare diensten en ontwikkelservers), <strong>{{app.tools.portscan.well_known}}</strong> of <strong>{{app.tools.portscan.all}}</strong>.</li>
+    <li>Vink <strong>{{app.tools.portscan.tcp}}</strong>, <strong>{{app.tools.portscan.udp}}</strong> of beide aan en druk op <strong>{{app.tools.portscan.scan}}</strong>. <strong>{{app.tools.portscan.stop}}</strong> stopt eerder, met de poorten die al gevraagd zijn.</li>
+  </ol>
+  <p>Naburige poorten met hetzelfde antwoord delen één rij, naast de dienst die de poort meestal draagt, en een regel boven de tabel zegt wat het resultaat betekent.</p>
+</section>
+
+<section>
+  <h2>Wat elk antwoord betekent</h2>
+  <table>
+    <tr><th>Antwoord</th><th>Betekenis</th></tr>
+    <tr><td><strong>{{app.tools.portscan.state.open}}</strong></td><td>Bij TCP neemt een programma verbindingen aan op de poort. Bij UDP antwoordde een dienst op het verzoek.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.closed}}</strong></td><td>De computer zei dat daar niets luistert.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.silent}}</strong></td><td>Er kwam niets op tijd terug. Bij TCP gooide meestal een firewall het verzoek weg. Bij UDP kan de poort ook open zijn: een dienst die het verzoek niet begrijpt, zwijgt.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.unreachable}}</strong></td><td>Het systeem zegt dat de computer er niet is: hij staat uit, of dit is niet zijn adres.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.denied}}</strong></td><td>Deze computer weigerde het verzoek te versturen.</td></tr>
+  </table>
+  <p>Op Windows toont een gesloten UDP-poort alleen {{app.tools.portscan.state.closed}} als het programma als beheerder draait. De Windows-firewall houdt dat bericht weg van programma's, en met beheerdersrechten leest het hulpmiddel het uit een kopie van het netwerkverkeer. Zonder die rechten tonen gesloten UDP-poorten {{app.tools.portscan.state.silent}}.</p>
+</section>
+
+<section>
+  <h2>Wat het verstuurt, en hoe snel</h2>
+  <ul>
+    <li>Bij TCP een verbinding die meteen wordt gesloten zonder dat er iets over gaat. Bij UDP een echt verzoek voor DNS, NTP, NetBIOS, mDNS en SSDP, en een leeg datagram voor elke andere poort.</li>
+    <li>Een computer in een netwerk waar deze aan hangt, krijgt 256 poorten tegelijk gevraagd, met 1 s voor elk. Een computer achter een router krijgt er 32 tegelijk, hooguit 20 nieuwe per seconde, met 3 s voor elk, zodat de verbindingentabel van de router niet volloopt. Een scan die langer dan vijf minuten kan duren, vraagt eerst.</li>
+    <li>Als 64 poorten {{app.tools.portscan.state.unreachable}} tonen en geen andere poort antwoordde, is de computer er niet, en de scan stopt met vragen.</li>
+    <li>Als maar een paar poorten niet antwoordden en de rest wel, worden die paar nog een keer gevraagd, langzamer.</li>
+  </ul>
+  <p><strong>{{app.tools.portscan.copy}}</strong> kopieert de tabel in het Engels, en <strong>{{app.tools.portscan.export}}</strong> schrijft de rijen naar een CSV-bestand.</p>
+</section>
+
+<section>
+  <h2>Eén poort, vanuit de console</h2>
+  <p>Om één TCP-poort te controleren, hebben PowerShell en de meeste Linux-systemen al wat je nodig hebt:</p>
+<pre><code>Test-NetConnection example.com -Port 443
+nc -zv example.com 443</code></pre>
+  <p>Voor dienstversies of het systeem aan de andere kant is nmap het hulpmiddel. Dit hulpmiddel beantwoordt de vraag daarvoor: welke poorten antwoorden überhaupt, via TCP en UDP, zonder iets anders te installeren.</p>
+</section>
+
+<section>
+  <h2>Gaat het om een poort op deze computer?</h2>
+  <p>Als de vraag is welk programma op deze computer een poort bezet, of waarom een server er geen kan openen, kijk dan bij <a href="../welk-programma-gebruikt-een-poort/">welk programma een poort gebruikt</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

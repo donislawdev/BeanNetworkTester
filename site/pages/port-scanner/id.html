@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>Port mana di komputer lain yang menjawab?</h1>
+  <p class="lead">Pemindai port menanyai sebuah komputer, port demi port, apakah ada yang menjawab di sana. Alat {{app.tools.portscan.tab}} di tab {{app.app.tabs.tools}} melakukannya lewat TCP dan UDP, dari jendela, di Windows dan di Linux, dan menjelaskan arti hasilnya dengan kata-kata sederhana. Pindai hanya komputer yang boleh Anda uji: perangkat lunak keamanan dan administrator jaringan bisa melihat pemindaian.</p>
+</section>
+
+<section>
+  <h2>Cara menjalankan pemindaian</h2>
+  <ol>
+    <li>Buka tab {{app.app.tabs.tools}}, lalu {{app.tools.group.network}} dan {{app.tools.portscan.tab}}.</li>
+    <li>Ketik alamat atau nama komputernya, dan port dengan cara yang sama seperti di halaman kontrol: <code>22</code>, <code>80, 443</code>, atau <code>8000-8100</code>. Atau isi dengan <strong>{{app.tools.portscan.common}}</strong> (layanan umum dan server pengembangan), <strong>{{app.tools.portscan.well_known}}</strong>, atau <strong>{{app.tools.portscan.all}}</strong>.</li>
+    <li>Centang <strong>{{app.tools.portscan.tcp}}</strong>, <strong>{{app.tools.portscan.udp}}</strong>, atau keduanya, lalu tekan <strong>{{app.tools.portscan.scan}}</strong>. <strong>{{app.tools.portscan.stop}}</strong> mengakhirinya lebih awal, dengan port yang sudah ditanyai.</li>
+  </ol>
+  <p>Port yang berdekatan dengan jawaban yang sama berbagi satu baris, di samping layanan yang biasanya memakai port itu, dan satu baris di atas tabel menjelaskan arti hasilnya.</p>
+</section>
+
+<section>
+  <h2>Arti setiap jawaban</h2>
+  <table>
+    <tr><th>Jawaban</th><th>Arti</th></tr>
+    <tr><td><strong>{{app.tools.portscan.state.open}}</strong></td><td>Pada TCP, sebuah program menerima koneksi di port itu. Pada UDP, sebuah layanan menjawab permintaan.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.closed}}</strong></td><td>Komputer itu menjawab bahwa tidak ada yang mendengarkan di sana.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.silent}}</strong></td><td>Tidak ada yang kembali tepat waktu. Pada TCP biasanya firewall membuang permintaan. Pada UDP port itu juga bisa terbuka: layanan yang tidak memahami permintaan tetap diam.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.unreachable}}</strong></td><td>Sistem menyatakan komputer itu tidak ada: mati, atau itu bukan alamatnya.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.denied}}</strong></td><td>Komputer ini menolak mengirim permintaan.</td></tr>
+  </table>
+  <p>Di Windows, port UDP yang tertutup tampil sebagai {{app.tools.portscan.state.closed}} hanya jika program berjalan sebagai administrator. Firewall Windows menyembunyikan pesan itu dari program, dan dengan hak administrator alat ini membacanya dari salinan lalu lintas jaringan. Tanpa hak itu, port UDP yang tertutup tampil sebagai {{app.tools.portscan.state.silent}}.</p>
+</section>
+
+<section>
+  <h2>Apa yang dikirim, dan seberapa cepat</h2>
+  <ul>
+    <li>Pada TCP, koneksi yang langsung ditutup tanpa mengirim apa pun. Pada UDP, permintaan sungguhan untuk DNS, NTP, NetBIOS, mDNS, dan SSDP, serta datagram kosong untuk port lainnya.</li>
+    <li>Komputer di jaringan yang terhubung dengan komputer ini ditanyai 256 port sekaligus, dengan 1 detik untuk masing-masing. Komputer di balik router ditanyai 32 port sekaligus, paling banyak 20 baru per detik, dengan 3 detik untuk masing-masing, agar tabel koneksi router tidak penuh. Pemindaian yang bisa memakan lebih dari lima menit akan bertanya dulu.</li>
+    <li>Jika 64 port tampil sebagai {{app.tools.portscan.state.unreachable}} dan tidak ada port lain yang menjawab, komputer itu tidak ada, dan pemindaian berhenti menanyainya.</li>
+    <li>Jika hanya beberapa port yang tidak menjawab sementara sisanya menjawab, beberapa port itu ditanyai sekali lagi, lebih lambat.</li>
+  </ul>
+  <p><strong>{{app.tools.portscan.copy}}</strong> menyalin tabel dalam bahasa Inggris, dan <strong>{{app.tools.portscan.export}}</strong> menulis baris-barisnya ke berkas CSV.</p>
+</section>
+
+<section>
+  <h2>Satu port, dari konsol</h2>
+  <p>Untuk memeriksa satu port TCP saja, PowerShell dan kebanyakan sistem Linux sudah punya yang dibutuhkan:</p>
+<pre><code>Test-NetConnection example.com -Port 443
+nc -zv example.com 443</code></pre>
+  <p>Untuk versi layanan atau sistem di ujung sana, alatnya adalah nmap. Alat ini menjawab pertanyaan sebelumnya: port mana yang menjawab sama sekali, lewat TCP dan UDP, tanpa perlu memasang apa pun lagi.</p>
+</section>
+
+<section>
+  <h2>Yang dimaksud port di komputer ini?</h2>
+  <p>Jika pertanyaannya adalah program mana di komputer ini yang memakai sebuah port, atau mengapa server tidak bisa membukanya, lihat <a href="../program-mana-memakai-port/">program mana yang memakai port</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

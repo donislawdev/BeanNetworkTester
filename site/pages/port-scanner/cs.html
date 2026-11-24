@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>Které porty jiného počítače odpovídají?</h1>
+  <p class="lead">Skener portů se ptá počítače port po portu, zda tam něco odpovídá. Nástroj {{app.tools.portscan.tab}} na kartě {{app.app.tabs.tools}} to dělá přes TCP i UDP, z okna, ve Windows i v Linuxu, a obyčejnými slovy řekne, co výsledek znamená. Skenujte jen počítače, které smíte testovat: bezpečnostní software a správci sítě sken vidí.</p>
+</section>
+
+<section>
+  <h2>Jak spustit sken</h2>
+  <ol>
+    <li>Otevřete kartu {{app.app.tabs.tools}}, potom {{app.tools.group.network}} a {{app.tools.portscan.tab}}.</li>
+    <li>Napište adresu nebo název počítače a porty tak, jak je píšete na stránce ovládání: <code>22</code>, <code>80, 443</code> nebo <code>8000-8100</code>. Nebo je vyplňte tlačítkem <strong>{{app.tools.portscan.common}}</strong> (běžné služby a vývojové servery), <strong>{{app.tools.portscan.well_known}}</strong> nebo <strong>{{app.tools.portscan.all}}</strong>.</li>
+    <li>Zaškrtněte <strong>{{app.tools.portscan.tcp}}</strong>, <strong>{{app.tools.portscan.udp}}</strong> nebo obojí a stiskněte <strong>{{app.tools.portscan.scan}}</strong>. <strong>{{app.tools.portscan.stop}}</strong> ho ukončí dřív, s porty, na které se už zeptal.</li>
+  </ol>
+  <p>Sousední porty se stejnou odpovědí sdílejí jeden řádek, vedle služby, kterou port obvykle nese, a řádek nad tabulkou říká, co výsledek znamená.</p>
+</section>
+
+<section>
+  <h2>Co znamená každá odpověď</h2>
+  <table>
+    <tr><th>Odpověď</th><th>Význam</th></tr>
+    <tr><td><strong>{{app.tools.portscan.state.open}}</strong></td><td>Na TCP přijímá program na tomto portu spojení. Na UDP služba odpověděla na požadavek.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.closed}}</strong></td><td>Počítač odpověděl, že tam nic nenaslouchá.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.silent}}</strong></td><td>Včas se nic nevrátilo. Na TCP obvykle požadavek zahodil firewall. Na UDP může být port i otevřený: služba, která požadavku nerozumí, mlčí.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.unreachable}}</strong></td><td>Systém říká, že počítač tam není: je vypnutý, nebo to není jeho adresa.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.denied}}</strong></td><td>Tento počítač odmítl požadavek odeslat.</td></tr>
+  </table>
+  <p>Ve Windows ukazuje zavřený port UDP {{app.tools.portscan.state.closed}} jen tehdy, když program běží jako správce. Firewall Windows tuto zprávu programům zatajuje a s právy správce ji nástroj čte z kopie síťového provozu. Bez nich ukazují zavřené porty UDP {{app.tools.portscan.state.silent}}.</p>
+</section>
+
+<section>
+  <h2>Co posílá a jak rychle</h2>
+  <ul>
+    <li>Na TCP spojení, které se hned zavře, aniž by se jím cokoli poslalo. Na UDP skutečný požadavek pro DNS, NTP, NetBIOS, mDNS a SSDP a prázdný datagram pro každý jiný port.</li>
+    <li>Počítač v síti, ke které je tento připojen, se ptá na 256 portů najednou, s 1 s na každý. Počítač za routerem na 32 najednou, nejvýš 20 nových za sekundu, s 3 s na každý, aby se nezaplnila tabulka spojení routeru. Sken, který může trvat déle než pět minut, se nejdřív zeptá.</li>
+    <li>Když 64 portů ukáže {{app.tools.portscan.state.unreachable}} a žádný jiný port neodpověděl, počítač tam není a sken se ho přestane ptát.</li>
+    <li>Když neodpovědělo jen pár portů a ostatní ano, na těch pár se zeptá ještě jednou, pomaleji.</li>
+  </ul>
+  <p><strong>{{app.tools.portscan.copy}}</strong> zkopíruje tabulku anglicky a <strong>{{app.tools.portscan.export}}</strong> zapíše řádky do souboru CSV.</p>
+</section>
+
+<section>
+  <h2>Jeden port z konzole</h2>
+  <p>K ověření jediného portu TCP mají PowerShell i většina systémů Linux už všechno potřebné:</p>
+<pre><code>Test-NetConnection example.com -Port 443
+nc -zv example.com 443</code></pre>
+  <p>Na verze služeb nebo systém na druhé straně je nástrojem nmap. Tento odpovídá na otázku, která přichází dřív: které porty vůbec odpovídají, přes TCP i UDP, bez instalace čehokoli dalšího.</p>
+</section>
+
+<section>
+  <h2>Jde o port na tomto počítači?</h2>
+  <p>Pokud je otázkou, který program na tomto počítači drží port nebo proč server nemůže port otevřít, podívejte se na stránku <a href="../ktery-program-pouziva-port/">který program používá port</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

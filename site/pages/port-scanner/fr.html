@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>Quels ports d'un autre ordinateur répondent ?</h1>
+  <p class="lead">Un scanner de ports demande à un ordinateur, port par port, si quelque chose y répond. L'outil {{app.tools.portscan.tab}} de l'onglet {{app.app.tabs.tools}} le fait en TCP et en UDP, depuis une fenêtre, sous Windows et sous Linux, et dit avec des mots simples ce que signifie le résultat. Ne scannez que des ordinateurs que vous avez le droit de tester : les logiciels de sécurité et les administrateurs réseau peuvent voir un scan.</p>
+</section>
+
+<section>
+  <h2>Comment lancer un scan</h2>
+  <ol>
+    <li>Ouvrez l'onglet {{app.app.tabs.tools}}, puis {{app.tools.group.network}} et {{app.tools.portscan.tab}}.</li>
+    <li>Saisissez l'adresse ou le nom de l'ordinateur, et les ports comme vous les saisissez sur la page de contrôle : <code>22</code>, <code>80, 443</code> ou <code>8000-8100</code>. Ou remplissez-les avec <strong>{{app.tools.portscan.common}}</strong> (services courants et serveurs de développement), <strong>{{app.tools.portscan.well_known}}</strong> ou <strong>{{app.tools.portscan.all}}</strong>.</li>
+    <li>Cochez <strong>{{app.tools.portscan.tcp}}</strong>, <strong>{{app.tools.portscan.udp}}</strong> ou les deux, puis appuyez sur <strong>{{app.tools.portscan.scan}}</strong>. <strong>{{app.tools.portscan.stop}}</strong> arrête le scan plus tôt, avec les ports déjà interrogés.</li>
+  </ol>
+  <p>Les ports voisins qui donnent la même réponse partagent une ligne, à côté du service que le port porte d'habitude, et une ligne au-dessus du tableau dit ce que signifie le résultat.</p>
+</section>
+
+<section>
+  <h2>Ce que veut dire chaque réponse</h2>
+  <table>
+    <tr><th>Réponse</th><th>Signification</th></tr>
+    <tr><td><strong>{{app.tools.portscan.state.open}}</strong></td><td>En TCP, un programme accepte des connexions sur le port. En UDP, un service a répondu à la requête.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.closed}}</strong></td><td>L'ordinateur a répondu que rien n'écoute à cet endroit.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.silent}}</strong></td><td>Rien n'est revenu à temps. En TCP, un pare-feu a le plus souvent jeté la requête. En UDP, le port peut aussi être ouvert : un service qui ne comprend pas la requête se tait.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.unreachable}}</strong></td><td>Le système dit que l'ordinateur n'est pas là : il est éteint, ou ce n'est pas son adresse.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.denied}}</strong></td><td>Cet ordinateur a refusé d'envoyer la requête.</td></tr>
+  </table>
+  <p>Sous Windows, un port UDP fermé n'affiche {{app.tools.portscan.state.closed}} que si le programme tourne en administrateur. Le pare-feu Windows cache ce message aux programmes, et avec les droits d'administrateur l'outil le lit dans une copie du trafic réseau. Sans eux, les ports UDP fermés affichent {{app.tools.portscan.state.silent}}.</p>
+</section>
+
+<section>
+  <h2>Ce qu'il envoie, et à quelle vitesse</h2>
+  <ul>
+    <li>En TCP, une connexion fermée aussitôt, sans rien envoyer dessus. En UDP, une vraie requête pour DNS, NTP, NetBIOS, mDNS et SSDP, et un datagramme vide pour tout autre port.</li>
+    <li>Un ordinateur d'un réseau auquel celui-ci est relié est interrogé sur 256 ports à la fois, avec 1 s pour chacun. Un ordinateur derrière un routeur est interrogé sur 32 à la fois, au plus 20 nouveaux par seconde, avec 3 s pour chacun, pour ne pas remplir la table des connexions du routeur. Un scan qui peut durer plus de cinq minutes demande d'abord.</li>
+    <li>Quand 64 ports affichent {{app.tools.portscan.state.unreachable}} et qu'aucun autre port n'a répondu, l'ordinateur n'est pas là, et le scan cesse de l'interroger.</li>
+    <li>Quand seuls quelques ports n'ont pas répondu et que les autres oui, ces quelques-uns sont interrogés une seconde fois, plus lentement.</li>
+  </ul>
+  <p><strong>{{app.tools.portscan.copy}}</strong> copie le tableau en anglais, et <strong>{{app.tools.portscan.export}}</strong> écrit les lignes dans un fichier CSV.</p>
+</section>
+
+<section>
+  <h2>Un seul port, en console</h2>
+  <p>Pour vérifier un seul port TCP, PowerShell et la plupart des systèmes Linux ont déjà ce qu'il faut :</p>
+<pre><code>Test-NetConnection example.com -Port 443
+nc -zv example.com 443</code></pre>
+  <p>Pour les versions des services ou le système à l'autre bout, l'outil, c'est nmap. Celui-ci répond à la question d'avant : quels ports répondent tout court, en TCP et en UDP, sans rien d'autre à installer.</p>
+</section>
+
+<section>
+  <h2>Plutôt un port de cet ordinateur ?</h2>
+  <p>Si la question est de savoir quel programme de cet ordinateur tient un port, ou pourquoi un serveur ne peut pas en ouvrir un, voyez <a href="../quel-programme-utilise-un-port/">quel programme utilise un port</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

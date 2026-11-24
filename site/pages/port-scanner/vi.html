@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>Những cổng nào của máy tính khác trả lời?</h1>
+  <p class="lead">Trình quét cổng hỏi một máy tính, lần lượt từng cổng, xem có gì trả lời ở đó không. Công cụ {{app.tools.portscan.tab}} trên thẻ {{app.app.tabs.tools}} làm việc này qua TCP và UDP, từ một cửa sổ, trên Windows và Linux, và nói bằng lời dễ hiểu kết quả có nghĩa là gì. Chỉ quét những máy tính bạn được phép kiểm thử: phần mềm bảo mật và quản trị viên mạng có thể thấy một lần quét.</p>
+</section>
+
+<section>
+  <h2>Cách chạy một lần quét</h2>
+  <ol>
+    <li>Mở thẻ {{app.app.tabs.tools}}, rồi {{app.tools.group.network}} và {{app.tools.portscan.tab}}.</li>
+    <li>Nhập địa chỉ hoặc tên máy tính, và các cổng theo cách bạn nhập trên trang điều khiển: <code>22</code>, <code>80, 443</code> hoặc <code>8000-8100</code>. Hoặc điền bằng <strong>{{app.tools.portscan.common}}</strong> (các dịch vụ thông dụng và máy chủ phát triển), <strong>{{app.tools.portscan.well_known}}</strong> hoặc <strong>{{app.tools.portscan.all}}</strong>.</li>
+    <li>Đánh dấu <strong>{{app.tools.portscan.tcp}}</strong>, <strong>{{app.tools.portscan.udp}}</strong> hoặc cả hai, rồi nhấn <strong>{{app.tools.portscan.scan}}</strong>. <strong>{{app.tools.portscan.stop}}</strong> kết thúc sớm, với những cổng đã hỏi.</li>
+  </ol>
+  <p>Các cổng liền nhau có cùng câu trả lời dùng chung một dòng, bên cạnh dịch vụ mà cổng đó thường mang, và một dòng phía trên bảng cho biết kết quả có nghĩa là gì.</p>
+</section>
+
+<section>
+  <h2>Ý nghĩa của từng câu trả lời</h2>
+  <table>
+    <tr><th>Câu trả lời</th><th>Ý nghĩa</th></tr>
+    <tr><td><strong>{{app.tools.portscan.state.open}}</strong></td><td>Với TCP, có chương trình nhận kết nối trên cổng đó. Với UDP, một dịch vụ đã trả lời yêu cầu.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.closed}}</strong></td><td>Máy tính trả lời rằng không có gì lắng nghe ở đó.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.silent}}</strong></td><td>Không có gì quay về kịp. Với TCP, thường là tường lửa đã bỏ yêu cầu. Với UDP, cổng cũng có thể đang mở: dịch vụ không hiểu yêu cầu sẽ im lặng.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.unreachable}}</strong></td><td>Hệ thống báo máy tính không có ở đó: nó đang tắt, hoặc đây không phải địa chỉ của nó.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.denied}}</strong></td><td>Máy tính này từ chối gửi yêu cầu.</td></tr>
+  </table>
+  <p>Trên Windows, một cổng UDP đóng chỉ hiện {{app.tools.portscan.state.closed}} khi chương trình chạy với quyền quản trị. Tường lửa Windows giấu thông báo đó khỏi các chương trình, và với quyền quản trị, công cụ đọc nó từ một bản sao của lưu lượng mạng. Không có quyền đó, các cổng UDP đóng hiện {{app.tools.portscan.state.silent}}.</p>
+</section>
+
+<section>
+  <h2>Nó gửi gì, và nhanh đến đâu</h2>
+  <ul>
+    <li>Với TCP, một kết nối được đóng ngay mà không gửi gì qua đó. Với UDP, một yêu cầu thật cho DNS, NTP, NetBIOS, mDNS và SSDP, và một gói dữ liệu rỗng cho mọi cổng khác.</li>
+    <li>Máy tính trong mạng mà máy này đang nối vào được hỏi 256 cổng một lúc, mỗi cổng chờ 1 giây. Máy sau router được hỏi 32 cổng một lúc, tối đa 20 cổng mới mỗi giây, mỗi cổng chờ 3 giây, để bảng kết nối của router không bị đầy. Lần quét có thể kéo dài hơn năm phút sẽ hỏi trước.</li>
+    <li>Khi 64 cổng hiện {{app.tools.portscan.state.unreachable}} và không cổng nào khác trả lời, máy tính đó không có ở đó, và lần quét ngừng hỏi nó.</li>
+    <li>Khi chỉ vài cổng không trả lời còn phần còn lại có trả lời, vài cổng đó được hỏi thêm một lần, chậm hơn.</li>
+  </ul>
+  <p><strong>{{app.tools.portscan.copy}}</strong> sao chép bảng bằng tiếng Anh, và <strong>{{app.tools.portscan.export}}</strong> ghi các dòng vào tệp CSV.</p>
+</section>
+
+<section>
+  <h2>Một cổng, từ dòng lệnh</h2>
+  <p>Để kiểm tra một cổng TCP, PowerShell và hầu hết hệ thống Linux đã có sẵn những gì cần:</p>
+<pre><code>Test-NetConnection example.com -Port 443
+nc -zv example.com 443</code></pre>
+  <p>Để biết phiên bản dịch vụ hay hệ điều hành ở đầu bên kia, hãy dùng nmap. Công cụ này trả lời câu hỏi đến trước đó: những cổng nào thực sự trả lời, qua TCP và UDP, mà không cần cài thêm gì.</p>
+</section>
+
+<section>
+  <h2>Muốn hỏi về một cổng trên máy này?</h2>
+  <p>Nếu câu hỏi là chương trình nào trên máy này đang giữ một cổng, hoặc vì sao máy chủ không mở được cổng, hãy xem <a href="../chuong-trinh-nao-dung-cong/">chương trình nào đang dùng cổng</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

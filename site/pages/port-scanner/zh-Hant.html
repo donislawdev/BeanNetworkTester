@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>另一台電腦的哪些連接埠有回應？</h1>
+  <p class="lead">連接埠掃描器會逐一詢問一台電腦的連接埠，看那裡是否有東西回應。{{app.app.tabs.tools}} 分頁上的 {{app.tools.portscan.tab}} 工具透過 TCP 與 UDP 完成這件事，在視窗中操作，適用於 Windows 與 Linux，並用淺白的話說明結果的意思。只掃描你有權測試的電腦：安全軟體與網路管理員看得到掃描。</p>
+</section>
+
+<section>
+  <h2>如何進行掃描</h2>
+  <ol>
+    <li>打開 {{app.app.tabs.tools}} 分頁，再打開 {{app.tools.group.network}} 與 {{app.tools.portscan.tab}}。</li>
+    <li>輸入那台電腦的位址或名稱，以及連接埠，寫法和控制頁上一樣：<code>22</code>、<code>80, 443</code> 或 <code>8000-8100</code>。也可以用 <strong>{{app.tools.portscan.common}}</strong>（常見服務與開發伺服器）、<strong>{{app.tools.portscan.well_known}}</strong> 或 <strong>{{app.tools.portscan.all}}</strong> 來填入。</li>
+    <li>勾選 <strong>{{app.tools.portscan.tcp}}</strong>、<strong>{{app.tools.portscan.udp}}</strong> 或兩者，然後按下 <strong>{{app.tools.portscan.scan}}</strong>。<strong>{{app.tools.portscan.stop}}</strong> 會提早結束掃描，只保留已經詢問過的連接埠。</li>
+  </ol>
+  <p>相鄰且結果相同的連接埠合為一列，旁邊是該連接埠通常承載的服務，表格上方的一行會說明結果的意思。</p>
+</section>
+
+<section>
+  <h2>各種結果的意思</h2>
+  <table>
+    <tr><th>結果</th><th>意思</th></tr>
+    <tr><td><strong>{{app.tools.portscan.state.open}}</strong></td><td>TCP 上有程式在該連接埠接受連線。UDP 上有服務回覆了要求。</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.closed}}</strong></td><td>那台電腦表示該連接埠上沒有程式在接聽。</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.silent}}</strong></td><td>在時限內沒有任何回應。在 TCP 上通常是防火牆丟棄了要求。在 UDP 上連接埠也可能是開放的：不理解該要求的服務會保持沉默。</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.unreachable}}</strong></td><td>系統表示那台電腦不在：它已關機，或者這不是它的位址。</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.denied}}</strong></td><td>這台電腦拒絕送出該要求。</td></tr>
+  </table>
+  <p>在 Windows 上，只有程式以系統管理員身分執行時，關閉的 UDP 連接埠才會顯示為 {{app.tools.portscan.state.closed}}。Windows 防火牆不會把這則訊息交給程式，有系統管理員權限時，工具會從網路流量的副本中讀取它。沒有該權限時，關閉的 UDP 連接埠顯示為 {{app.tools.portscan.state.silent}}。</p>
+</section>
+
+<section>
+  <h2>它送出什麼，速度多快</h2>
+  <ul>
+    <li>TCP 上，建立一條連線後立即關閉，不在上面送出任何資料。UDP 上，對 DNS、NTP、NetBIOS、mDNS 與 SSDP 送出真實的要求，對其他連接埠送出空的資料包。</li>
+    <li>與本機在同一個網路的電腦，每次詢問 256 個連接埠，每個等待 1 秒。位於路由器後面的電腦，每次詢問 32 個，每秒最多新發 20 個，每個等待 3 秒，以免塞滿路由器的連線表。可能超過五分鐘的掃描會先詢問你。</li>
+    <li>當 64 個連接埠顯示 {{app.tools.portscan.state.unreachable}} 且沒有其他連接埠回應時，表示那台電腦不在，掃描會停止詢問它。</li>
+    <li>當只有少數連接埠沒有回應而其餘都有回應時，這幾個連接埠會以較慢的速度再問一次。</li>
+  </ul>
+  <p><strong>{{app.tools.portscan.copy}}</strong> 會以英文複製表格，<strong>{{app.tools.portscan.export}}</strong> 會把各列寫入 CSV 檔案。</p>
+</section>
+
+<section>
+  <h2>在主控台中檢查一個連接埠</h2>
+  <p>只檢查一個 TCP 連接埠時，PowerShell 與大多數 Linux 系統已經內建所需的工具：</p>
+<pre><code>Test-NetConnection example.com -Port 443
+nc -zv example.com 443</code></pre>
+  <p>要查看服務版本或對方的作業系統，請用 nmap。本工具回答的是更早的問題：到底有哪些連接埠在 TCP 與 UDP 上有回應，而且不必再安裝任何東西。</p>
+</section>
+
+<section>
+  <h2>要查的是本機的連接埠？</h2>
+  <p>如果你想知道本機上哪個程式佔用了某個連接埠，或伺服器為什麼開不了連接埠，請見<a href="../nage-chengshi-zhanyong-lianjiekou/">哪個程式在使用連接埠</a>。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

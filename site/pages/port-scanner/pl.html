@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>Które porty innego komputera odpowiadają?</h1>
+  <p class="lead">Skaner portów pyta komputer, port po porcie, czy coś tam odpowiada. Narzędzie {{app.tools.portscan.tab}} na zakładce {{app.app.tabs.tools}} robi to przez TCP i UDP, z okna, w Windows i w Linuksie, i zwykłymi słowami mówi, co znaczy wynik. Skanuj tylko komputery, które wolno ci testować: oprogramowanie zabezpieczające i administratorzy sieci widzą skan.</p>
+</section>
+
+<section>
+  <h2>Jak uruchomić skan</h2>
+  <ol>
+    <li>Otwórz zakładkę {{app.app.tabs.tools}}, a w niej {{app.tools.group.network}} i {{app.tools.portscan.tab}}.</li>
+    <li>Wpisz adres albo nazwę komputera i porty tak, jak wpisujesz je na stronie sterowania: <code>22</code>, <code>80, 443</code> albo <code>8000-8100</code>. Możesz też wypełnić je przyciskiem <strong>{{app.tools.portscan.common}}</strong> (popularne usługi i serwery deweloperskie), <strong>{{app.tools.portscan.well_known}}</strong> albo <strong>{{app.tools.portscan.all}}</strong>.</li>
+    <li>Zaznacz <strong>{{app.tools.portscan.tcp}}</strong>, <strong>{{app.tools.portscan.udp}}</strong> albo oba i naciśnij <strong>{{app.tools.portscan.scan}}</strong>. <strong>{{app.tools.portscan.stop}}</strong> kończy skan wcześniej, z portami, o które zdążył zapytać.</li>
+  </ol>
+  <p>Sąsiednie porty z tą samą odpowiedzią dzielą jeden wiersz, obok usługi, którą port zwykle obsługuje, a linia nad tabelą mówi, co znaczy wynik.</p>
+</section>
+
+<section>
+  <h2>Co znaczy każda odpowiedź</h2>
+  <table>
+    <tr><th>Odpowiedź</th><th>Znaczenie</th></tr>
+    <tr><td><strong>{{app.tools.portscan.state.open}}</strong></td><td>Przez TCP jakiś program przyjmuje połączenia na tym porcie. Przez UDP usługa odpowiedziała na zapytanie.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.closed}}</strong></td><td>Komputer odpowiedział, że nic tam nie nasłuchuje.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.silent}}</strong></td><td>Nic nie wróciło na czas. Przez TCP zwykle zapora odrzuciła zapytanie. Przez UDP port może być też otwarty: usługa, która nie rozumie zapytania, milczy.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.unreachable}}</strong></td><td>System mówi, że komputera nie ma: jest wyłączony albo to nie jego adres.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.denied}}</strong></td><td>Ten komputer odmówił wysłania zapytania.</td></tr>
+  </table>
+  <p>W Windows zamknięty port UDP pokazuje się jako {{app.tools.portscan.state.closed}} tylko wtedy, gdy program działa jako administrator. Zapora Windows ukrywa tę wiadomość przed programami, a z uprawnieniami administratora narzędzie odczytuje ją z kopii ruchu sieciowego. Bez nich zamknięte porty UDP pokazują się jako {{app.tools.portscan.state.silent}}.</p>
+</section>
+
+<section>
+  <h2>Co wysyła i jak szybko</h2>
+  <ul>
+    <li>Przez TCP połączenie zamykane od razu, bez wysłania czegokolwiek. Przez UDP prawdziwe zapytanie dla DNS, NTP, NetBIOS, mDNS i SSDP, a dla każdego innego portu pusty datagram.</li>
+    <li>Komputer w sieci, do której podłączony jest ten komputer, jest pytany o 256 portów naraz, z 1 s na każdy. Komputer za routerem jest pytany o 32 naraz, najwyżej 20 nowych na sekundę, z 3 s na każdy, żeby nie zapchać tabeli połączeń routera. Skan, który może potrwać ponad pięć minut, najpierw pyta.</li>
+    <li>Gdy 64 porty pokażą {{app.tools.portscan.state.unreachable}}, a żaden inny nie odpowiedział, komputera nie ma i skan przestaje go pytać.</li>
+    <li>Gdy tylko kilka portów nie odpowiedziało, a reszta tak, te kilka jest pytanych jeszcze raz, wolniej.</li>
+  </ul>
+  <p><strong>{{app.tools.portscan.copy}}</strong> kopiuje tabelę po angielsku, a <strong>{{app.tools.portscan.export}}</strong> zapisuje wiersze do pliku CSV.</p>
+</section>
+
+<section>
+  <h2>Jeden port, z konsoli</h2>
+  <p>Do sprawdzenia jednego portu TCP PowerShell i większość systemów Linux mają już wszystko, czego trzeba:</p>
+<pre><code>Test-NetConnection example.com -Port 443
+nc -zv example.com 443</code></pre>
+  <p>Do wersji usług albo systemu po drugiej stronie służy nmap. To narzędzie odpowiada na pytanie wcześniejsze: które porty w ogóle odpowiadają, przez TCP i UDP, bez instalowania czegokolwiek więcej.</p>
+</section>
+
+<section>
+  <h2>Chodzi o port na tym komputerze?</h2>
+  <p>Jeśli pytanie brzmi, który program na tym komputerze trzyma port albo dlaczego serwer nie może go otworzyć, zajrzyj na stronę <a href="../ktory-program-uzywa-portu/">który program używa portu</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
