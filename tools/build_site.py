@@ -38,6 +38,7 @@ must never do is succeed quietly.
 """
 import argparse
 import ast
+import hashlib
 import html
 import json
 import os
@@ -52,9 +53,12 @@ from urllib.parse import urlsplit
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from beantester import appinfo, exitcodes, fields, presets          # noqa: E402
+from beantester import (appinfo, cli, exitcodes, fields, filters,  # noqa: E402
+                        presets, settings)
 
 SITE_DIR = "site"
+# What the site's explanations were last checked against (``doc_sources``).
+DOC_SOURCES = os.path.join(SITE_DIR, "doc-sources.json")
 DEFAULT_OUT = os.path.join("build", "site")
 THEME_FILE = os.path.join("beantester", "gui", "theme.py")
 
@@ -917,29 +921,163 @@ def preset_table(app, texts):
     return Raw("<table>%s</table>" % "".join(rows))
 
 
-def settings_table(app, texts):
-    """Every setting that has a command-line flag, from ``fields.FIELD_DEFS``.
+def _number(value):
+    """A number as a reader writes it: ``10000000``, not the ``1e+07`` of ``%g``."""
+    return "%d" % value if float(value).is_integer() else "%g" % value
 
-    The flag names, units and ranges come from the registry the program validates
-    against, and the label comes from the language file, so this table says the same
-    thing as the form and as ``--help`` without being a third copy of either.
+
+# The window puts a colon after a field's label; a heading does not take one. The
+# second is the full-width colon of the Chinese window.
+_LABEL_COLONS = ":" + chr(0xFF1A)
+
+
+def _program_label(text):
+    return text.rstrip().rstrip(_LABEL_COLONS).rstrip()
+
+
+def explained(texts, key, app):
+    """A site sentence as HTML, with the program's own words put in.
+
+    A sentence may name a button or a part of the window through ``{{app.<key>}}``,
+    the same placeholder the page bodies use, so a German page names the button the
+    German reader will find on screen, which is the English one while the program has
+    no German. A placeholder the program does not have is an error, not a blank.
     """
-    heads = [texts["table.flag"], texts["table.setting"], texts["table.unit"],
-             texts["table.range"]]
-    rows = ["<tr>%s</tr>" % "".join("<th>%s</th>" % html.escape(h, quote=True) for h in heads)]
-    for field in fields.FIELD_DEFS:
-        if not getattr(field, "cli", None):
+    if key not in texts:
+        raise SiteError("the site has no sentence %r: add it to every site/i18n/*.json" % key)
+    text = html.escape(texts[key], quote=True)
+
+    def program_word(match):
+        name = match.group(1)
+        if not name.startswith("app.") or name not in app:
+            raise SiteError("%r names %r, which the program has no text for" % (key, name))
+        return html.escape(app[name], quote=True)
+    return PLACEHOLDER_RE.sub(program_word, text)
+
+
+def _setting_values(field, app, texts):
+    """What a setting accepts, read from the registry it is validated against."""
+    kind = field.kind
+    words = {fields.BOOL: "ref.switch", fields.SCHEDULE: "ref.schedule",
+             fields.SEED: "ref.seed", fields.CHOICE: "ref.choice"}
+    if kind in words:
+        return explained(texts, words[kind], app)
+    unit = app.get("app." + field.unit_key, field.unit) if field.unit_key else field.unit
+    bounds = field.bounds
+    span = "%s - %s" % (_number(bounds[0]), _number(bounds[1])) if bounds else ""
+    parts = [html.escape(p, quote=True) for p in (unit, span) if p]
+    if kind == fields.EXPR:
+        parts.insert(0, explained(texts, "ref.expression", app))
+    return ", ".join(parts)
+
+
+def _setting_default(field, app, texts):
+    """The default when it is something other than "off", or ``""``."""
+    value = settings.DEFAULT_SETTINGS.get(field.key)
+    if value in (None, "", False, 0, -1):
+        return ""
+    if isinstance(value, str):
+        shown = "<code>%s</code>" % html.escape(value, quote=True)
+    else:
+        unit = app.get("app." + field.unit_key, field.unit) if field.unit_key else field.unit
+        shown = html.escape(" ".join(p for p in (_number(value), unit) if p), quote=True)
+    return explained(texts, "ref.default", app).replace("{value}", shown)
+
+
+def _setting_when(field, app, texts):
+    """When a change reaches a session that is running, from the registry's flags."""
+    if field.ui_only:
+        return explained(texts, "ref.when.view", app)
+    if field.start_only:
+        return explained(texts, "ref.when.start", app)
+    return explained(texts, "ref.when.live", app)
+
+
+def _setting_choices(field, app):
+    """The values of a dropdown, each with the words the window shows for it."""
+    if field.key != "filter":
+        raise SiteError("no list of values for the dropdown %r: teach settings_reference "
+                        "where its choices live" % field.key)
+    items = ["<li><code>%s</code> %s</li>" % (html.escape(key, quote=True),
+                                              html.escape(app["app." + label], quote=True))
+             for key, label, _ in filters.FILTER_DEFS]
+    return '<ul class="choices">%s</ul>' % "".join(items)
+
+
+def settings_reference(app, texts):
+    """Every setting, under the part of the window it sits in, from ``fields``.
+
+    The label, the flag, the name in a file, the values, the default and when a change
+    takes effect all come from the registry the program validates against, so this
+    says the same thing as the form and as ``--help`` without being a third copy of
+    either. Only the sentence saying what each setting does is the site's own
+    (``setting.<key>``), and ``doc_sources`` ties it to the program's text about the
+    same setting.
+    """
+    placed = set()
+    blocks = []
+    for section in fields.SECTIONS:
+        if not section.fields:
             continue
-        label = app.get("app." + field.label, field.key)
-        unit = app.get("app." + field.unit_key, field.unit) if getattr(
-            field, "unit_key", None) else (field.unit or "")
-        bounds = getattr(field, "bounds", None)
-        span = "%g - %g" % bounds if bounds else "-"
-        cells = ["<code>--%s</code>" % html.escape(field.cli, quote=True),
-                 html.escape(label, quote=True), html.escape(unit or "-", quote=True),
-                 html.escape(span, quote=True)]
-        rows.append("<tr>%s</tr>" % "".join("<td>%s</td>" % c for c in cells))
-    return Raw("<table>%s</table>" % "".join(rows))
+        head = '<h3 class="group" id="settings-%s">%s</h3>' % (
+            section.id, html.escape(app["app." + section.label], quote=True))
+        if section.surface == "settings":
+            head += '<p class="where">%s</p>' % explained(texts, "ref.settings_window", app)
+        entries = []
+        for key in section.fields:
+            field = fields.FIELDS[key]
+            placed.add(key)
+            meta = ["<code>--%s</code>" % html.escape(field.cli, quote=True),
+                    explained(texts, "ref.in_file", app).replace(
+                        "{name}", "<code>%s</code>" % html.escape(key, quote=True)),
+                    _setting_values(field, app, texts),
+                    _setting_when(field, app, texts),
+                    _setting_default(field, app, texts)]
+            body = '<p class="meta">%s</p><p>%s</p>' % (
+                "".join("<span>%s</span>" % part for part in meta if part),
+                explained(texts, "setting." + key, app))
+            if field.kind == fields.CHOICE:
+                body += _setting_choices(field, app)
+            entries.append('<dt id="setting-%s">%s</dt><dd>%s</dd>' % (
+                key, html.escape(_program_label(app["app." + field.label]), quote=True), body))
+        blocks.append('%s<dl class="settings">%s</dl>' % (head, "".join(entries)))
+    missing = [f.key for f in fields.FIELD_DEFS if f.key not in placed]
+    if missing:
+        raise SiteError("settings in no section of the window, so missing from the "
+                        "reference: %s" % ", ".join(missing))
+    return Raw("".join(blocks))
+
+
+def _fingerprint(parts):
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()[:12]
+
+
+def doc_sources(root):
+    """A fingerprint of the program's own English text behind each site explanation.
+
+    A sentence on the site that says what a setting does is a second description of
+    it, next to the program's tooltip, its help sheet and its ``--help`` line. When
+    one of those changes, the setting probably changed, and the site sentence, in
+    every language, has to be read again. ``DOC_SOURCES`` records what the sentences
+    were last checked against; ``test_site`` compares, and ``--stamp-sources``
+    records again once they have been read.
+    """
+    app = load_app_strings(root, "en")
+    helps = {option: action.help or "" for action in cli.build_arg_parser()._actions
+             for option in action.option_strings}
+    out = {}
+    for field in fields.FIELD_DEFS:
+        parts = [app.get("app." + key, "") for key in (field.tip, field.help_body) if key]
+        parts.append(helps.get("--" + field.cli, ""))
+        out["setting." + field.key] = _fingerprint(parts)
+    return out
+
+
+def stamp_doc_sources(root):
+    """Record what the site's explanations were checked against (see ``doc_sources``)."""
+    data = doc_sources(root)
+    _write(root, DOC_SOURCES, json.dumps(data, indent=2, sort_keys=True) + "\n")
+    return data
 
 
 def exit_code_table(texts):
@@ -1073,7 +1211,7 @@ def page_context(page, code, registry, texts, home, colours, root, pages):
                                               texts[code]["nav.language"],
                                               _root_prefix(registry)),
         "page.preset_table": preset_table(app, texts[code]),
-        "page.settings_table": settings_table(app, texts[code]),
+        "page.settings_reference": settings_reference(app, texts[code]),
         "page.exit_code_table": exit_code_table(texts[code]),
         "page.scenario_table": scenario_table(root, texts[code]),
         "page.scenario_count": len(scenario_files(root)),
@@ -1196,7 +1334,14 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Build the Bean Network Tester website.")
     parser.add_argument("--out", default=None,
                         help="output directory (default: %s)" % DEFAULT_OUT)
+    parser.add_argument("--stamp-sources", action="store_true",
+                        help="record the program texts the site's explanations were "
+                             "checked against (%s), after re-reading the sentences "
+                             "test_site named, in every language" % DOC_SOURCES)
     args = parser.parse_args(argv)
+    if args.stamp_sources:
+        print("recorded %d sources in %s" % (len(stamp_doc_sources(ROOT)), DOC_SOURCES))
+        return 0
     try:
         written = build(ROOT, args.out)
     except SiteError as exc:

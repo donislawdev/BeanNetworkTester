@@ -915,6 +915,11 @@ def test_the_reference_tables_are_generated_from_the_registries(tmp_path):
             if getattr(field, "cli", None):
                 check(f"{rel}: --{field.cli} is in the table",
                       f"<code>--{field.cli}</code>" in text, "(missing row)")
+            check(f"{rel}: {field.key} has its own entry to link to",
+                  f'<dt id="setting-{field.key}">' in text, "(missing entry)")
+        # A range is written the way a reader types it: "%g" printed the speed limit's
+        # upper bound as 1e+07.
+        check(f"{rel}: no range in scientific notation", "e+0" not in text, "(1e+07?)")
         for name, value in vars(exitcodes).items():
             if name.isupper() and isinstance(value, int):
                 check(f"{rel}: exit code {value} is in the table", f"<td>{value}</td>" in text,
@@ -984,6 +989,93 @@ def test_every_exit_code_has_a_sentence_in_every_language():
         for name in names:
             key = "exit.%s" % name.lower()
             check(f"{code}: {key} has a sentence", strings.get(key, "").strip(), "(missing)")
+
+
+def _site_strings(code):
+    import json as jsonlib
+    return jsonlib.load(open(os.path.join(SITE, "i18n", "%s.json" % code), encoding="utf-8"))
+
+
+def test_every_setting_is_explained_and_every_explanation_names_a_setting():
+    """The reference page says what each setting does, and only settings that exist.
+
+    A new field fails the build until it has a sentence (``explained`` raises); this
+    is the other direction: a field that was removed or renamed must not leave its
+    sentence behind, translated 22 times and read by nothing.
+    """
+    from beantester import fields
+    strings = _site_strings("en")
+    written = sorted(key[len("setting."):] for key in strings if key.startswith("setting."))
+    check("there are explanations to compare", len(written) >= 40, f"({len(written)})")
+    check("every explanation names a setting the program has",
+          not set(written) - set(fields.FIELDS), f"({sorted(set(written) - set(fields.FIELDS))})")
+    check("every setting has an explanation",
+          not set(fields.FIELDS) - set(written), f"({sorted(set(fields.FIELDS) - set(written))})")
+
+
+def test_every_explanation_was_read_against_the_program_text_it_explains():
+    """A site sentence about a setting was checked against what the program says of it.
+
+    The program describes each setting three times (tooltip, help sheet, ``--help``);
+    the site describes it a fourth time, in 22 languages. When the program's English
+    changes, the setting has probably changed, and nothing else would notice that the
+    site still describes the old one. ``site/doc-sources.json`` records the program text
+    each sentence was last read against.
+    """
+    import json as jsonlib
+    recorded = jsonlib.load(open(os.path.join(ROOT, build_site.DOC_SOURCES), encoding="utf-8"))
+    current = build_site.doc_sources(ROOT)
+    changed = sorted(key for key in current if recorded.get(key) != current[key])
+    gone = sorted(set(recorded) - set(current))
+    check("the program's text is the one the site sentences were read against",
+          not changed and not gone,
+          f"(changed: {changed}; no longer in the program: {gone}. Re-read those sentences "
+          f"in site/i18n/*.json, in every language, then run "
+          f"python tools/build_site.py --stamp-sources)")
+
+
+def test_the_explanation_fingerprint_moves_with_the_program_text(tmp_path):
+    """Canary for the check above: a changed tooltip changes that setting's fingerprint
+    and no other, and a fingerprint that never moved would let every change through."""
+    import json as jsonlib
+    os.makedirs(os.path.join(str(tmp_path), "lang"))
+    strings = jsonlib.load(open(os.path.join(ROOT, "lang", "en.json"), encoding="utf-8"))
+    path = os.path.join(str(tmp_path), "lang", "en.json")
+    with open(path, "w", encoding="utf-8") as handle:
+        jsonlib.dump(strings, handle)
+    before = build_site.doc_sources(str(tmp_path))
+    check("the copy reads like the real tree", before == build_site.doc_sources(ROOT))
+    strings["tips.loss"] = strings["tips.loss"] + " Changed."
+    with open(path, "w", encoding="utf-8") as handle:
+        jsonlib.dump(strings, handle)
+    after = build_site.doc_sources(str(tmp_path))
+    moved = sorted(key for key in before if before[key] != after[key])
+    check("only the changed setting moves", moved == ["setting.loss"], f"({moved})")
+
+
+def _english_copies(english, translated, shortest=40):
+    """Keys whose translation is still the English sentence. Short texts may match on
+    purpose (the site's name, "Code", "Pages"), so only sentences count."""
+    return sorted(key for key, value in translated.items()
+                  if key != "_meta" and value == english.get(key) and len(value) >= shortest)
+
+
+def test_no_translation_is_left_as_the_english_sentence():
+    """A language forgotten after ``internal_tools/site_i18n.py fill`` would ship in English.
+
+    The fill copies new keys into every translation so the build stays green while the
+    translations are written, and every other check passes on a copy.
+    """
+    check("canary: a copied sentence is found",
+          _english_copies({"k": "A sentence long enough to be a sentence."},
+                          {"k": "A sentence long enough to be a sentence."}) == ["k"])
+    registry = build_site.load_registry(ROOT)
+    english = _site_strings(registry["default_language"])
+    for code in build_site.language_codes(registry):
+        if code == registry["default_language"]:
+            continue
+        left = _english_copies(english, _site_strings(code))
+        check(f"{code}: every sentence is translated", not left, f"(still English: {left[:6]})")
 
 
 def test_the_footer_names_the_accounts_and_carries_no_brand_mark(tmp_path):

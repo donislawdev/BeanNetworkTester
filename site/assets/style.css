@@ -367,6 +367,33 @@ pre code { background: none; border: 0; padding: 0; font-size: 1em; }
 code, pre { direction: ltr; unicode-bidi: isolate; }
 pre { text-align: left; }
 
+/* -- documented settings and flags ------------------------------------------ */
+/* One entry per setting or flag: its name, a line of facts read from the
+   program (flag, name in a file, values, when it applies), then what it does.
+   A list rather than a table, so a phone shows it without scrolling sideways. */
+h3.group {
+  font-size: 1.3rem;
+  margin: 2.75rem 0 .25rem;
+}
+.where { color: var(--muted); margin: 0 0 .75rem; }
+dl.settings { margin: 0; }
+dl.settings dt {
+  font-weight: 700;
+  margin-top: 1.25rem;
+  padding-top: .9rem;
+  border-top: 1px solid var(--border);
+}
+dl.settings dd { margin: .35rem 0 0; }
+dl.settings dd p { margin: .35rem 0; max-width: 70ch; }
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .2rem 1.1rem;
+  color: var(--muted);
+  font-size: .95rem;
+}
+.choices { margin: .35rem 0; }
+
 table {
   border-collapse: collapse;
   width: 100%;
