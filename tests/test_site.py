@@ -68,6 +68,12 @@ def _sandbox(base):
     # The scenarios page reads the shipped corpus, so a sandbox without it is not a
     # copy of the real inputs.
     shutil.copytree(os.path.join(ROOT, "scenarios"), os.path.join(root, "scenarios"))
+    # The statistics page reads the window's counter grid, its connection columns and
+    # the CSV headers from their source files.
+    for relpath in (build_site.STATS_PAGE, build_site.CONNS_PAGE, build_site.CSV_EXPORT):
+        target = os.path.join(root, relpath.replace("/", os.sep))
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copyfile(os.path.join(ROOT, relpath.replace("/", os.sep)), target)
     for asset in build_site.load_registry(ROOT).get("assets", []):
         target = os.path.join(root, asset["source"].replace("/", os.sep))
         os.makedirs(os.path.dirname(target), exist_ok=True)
@@ -1083,6 +1089,29 @@ def test_every_syntax_example_says_what_the_parser_does():
                       error is None, f"({error})")
 
 
+def test_every_counter_column_and_csv_column_is_explained():
+    """The statistics page explains every counter of the window's grid, every column of
+    the Connections tab and every column of the connections CSV, and no sentence is left
+    for one that is gone. The registries are read from source, as the builder reads them."""
+    cells = (build_site._literal(ROOT, build_site.STATS_PAGE, "CELLS")
+             + build_site._literal(ROOT, build_site.STATS_PAGE, "OVERLOAD_CELLS"))
+    columns = build_site._literal(ROOT, build_site.CONNS_PAGE, "COLUMNS")
+    header = build_site._literal(ROOT, build_site.CSV_EXPORT, "CONN_CSV_HEADER")
+    strings = _site_strings("en")
+    counters = {k[len("counter."):] for k in strings if k.startswith("counter.")}
+    written = {k[len("column."):] for k in strings if k.startswith("column.")}
+    own = {k[len("csv.conn."):] for k in strings if k.startswith("csv.conn.")}
+    check("every counter, and no other", counters == {c[0] for c in cells},
+          f"({sorted(counters ^ {c[0] for c in cells})})")
+    check("every column, and no other", written == set(columns), f"({sorted(written ^ set(columns))})")
+    mapped = set(build_site.CONN_CSV_TABLE_COLUMN)
+    check("the CSV map names only real CSV and table columns",
+          mapped <= set(header) and set(build_site.CONN_CSV_TABLE_COLUMN.values()) <= set(columns),
+          f"({sorted(mapped - set(header))})")
+    check("every CSV column is a table column or has its own sentence, never both",
+          own == set(header) - mapped, f"({sorted(own ^ (set(header) - mapped))})")
+
+
 def test_every_scenario_key_action_and_shipped_file_is_explained():
     """The scenarios page explains each key and action the validator accepts and says
     what each shipped file reproduces; a sentence left for a key, an action or a file
@@ -1126,6 +1155,10 @@ def test_the_explanation_fingerprint_moves_with_the_program_text(tmp_path):
     import json as jsonlib
     os.makedirs(os.path.join(str(tmp_path), "lang"))
     shutil.copytree(os.path.join(ROOT, "scenarios"), os.path.join(str(tmp_path), "scenarios"))
+    for relpath in (build_site.STATS_PAGE, build_site.CONNS_PAGE):
+        target = os.path.join(str(tmp_path), relpath.replace("/", os.sep))
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copyfile(os.path.join(ROOT, relpath.replace("/", os.sep)), target)
     strings = jsonlib.load(open(os.path.join(ROOT, "lang", "en.json"), encoding="utf-8"))
     path = os.path.join(str(tmp_path), "lang", "en.json")
     with open(path, "w", encoding="utf-8") as handle:

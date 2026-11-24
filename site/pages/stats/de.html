@@ -1,0 +1,61 @@
+<section class="hero">
+  <h1>Statistik, Verbindungen und CSV-Dateien erklärt</h1>
+  <p class="lead">Was jeder Zähler im Tab {{app.app.tabs.statistics}} zählt, was in jeder Spalte des
+  Tabs {{app.app.tabs.connections}} steht und was jede CSV-Datei enthält, die das Programm speichert.
+  Die Namen und die CSV-Spalten werden beim Erstellen dieser Seite aus dem Programm gelesen.</p>
+</section>
+
+<section>
+  <h2>Die Zähler im Tab {{app.app.tabs.statistics}}</h2>
+  <p>Download, Upload und die Warteschlange zeigen, was gerade passiert; jeder andere Zähler zählt
+  ab dem Start der Sitzung zusammen. Jeder hat auch eine Spalte in der Statistik-CSV, die unten
+  genannt ist.</p>
+  {{page.counter_reference}}
+  <p>{{app.stats.overflow}}, {{app.stats.shutdown_dropped}} und {{app.stats.send_failed}} sind
+  Pakete, die das Werkzeug selbst verloren hat, nicht die Störung, um die du gebeten hast. Sie halten
+  die Rechnung aus gesehen, zugestellt und verworfen ehrlich, gehören aber nicht zum effektiven
+  Verlust: Ist einer davon über null, stammt ein Teil des gemessenen Verlusts vom Werkzeug. Ein
+  Rechtsklick auf einen Wert kopiert ihn, und {{app.buttons.copy_counters}} kopiert jede Zeile so, wie
+  sie auf dem Bildschirm steht, praktisch für einen Fehlerbericht.</p>
+</section>
+
+<section>
+  <h2>Die Spalten des Tabs {{app.app.tabs.connections}}</h2>
+  <p>Eine Zeile pro Verbindung, jede Spalte lässt sich über ihre Überschrift sortieren, und jede
+  Überschrift trägt dieselbe Erklärung als Tooltip.</p>
+  {{page.column_reference}}
+</section>
+
+<section>
+  <h2>Wohin die CSV-Dateien gehen</h2>
+  <p>{{app.buttons.export_csv}} im Tab {{app.app.tabs.statistics}} hängt eine Zeile an eine Datei in
+  deinem eigenen Ordner an: <code>%LOCALAPPDATA%\BeanNetworkTester</code> unter Windows,
+  <code>~/.config/BeanNetworkTester</code> beim Linux-Paket und der Projektordner beim Start aus dem
+  Quellcode. Mit <code>BEAN_DATA_DIR</code> liegt sie woanders. Jede Zeile enthält die Zeit, ob das
+  Abfangen eingegrenzt war, und dann die Zähler unter den oben genannten Namen.</p>
+  <p>Der Export einer Tabelle, {{app.buttons.export_conns}} oder {{app.tools.sockets.export}} in den
+  Werkzeugen, fragt, wohin gespeichert werden soll, und schlägt einen Namen mit Datum und Uhrzeit
+  vor, damit ein zweiter Export den ersten nicht ersetzt. Das Protokoll nennt den vollständigen Pfad
+  jeder Datei, die das Programm speichert.</p>
+</section>
+
+<section>
+  <h2>Die Verbindungs-CSV</h2>
+  <p>Dieselben Zeilen wie in der Tabelle, aber die Spaltennamen schreiben aus, was die Tabelle
+  abkürzt, und Größen stehen immer in Bytes, nie in der Einheit, die der Bildschirm gewählt hat. Die
+  letzten beiden Spalten stehen absichtlich hinter dem Rest, damit ein Leser, der Spalten nach
+  Position nimmt, nicht durcheinanderkommt.</p>
+  {{page.conn_csv_table}}
+</section>
+
+<section>
+  <h2>Die Exporte der Werkzeuge</h2>
+  {{page.tool_csv_columns}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

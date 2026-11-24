@@ -1,0 +1,63 @@
+<section class="hero">
+  <h1>Statistieken, verbindingen en CSV-bestanden uitgelegd</h1>
+  <p class="lead">Wat elke teller op het tabblad {{app.app.tabs.statistics}} telt, wat elke kolom van
+  het tabblad {{app.app.tabs.connections}} bevat en wat er in elk CSV-bestand staat dat het programma
+  opslaat. De namen en de CSV-kolommen worden uit het programma gelezen wanneer deze pagina wordt
+  gebouwd.</p>
+</section>
+
+<section>
+  <h2>De tellers op het tabblad {{app.app.tabs.statistics}}</h2>
+  <p>Download, upload en de wachtrij laten zien wat er nu gebeurt; elke andere teller telt op vanaf
+  het begin van de sessie. Elke teller heeft ook een kolom in de statistieken-CSV, die hieronder
+  wordt genoemd.</p>
+  {{page.counter_reference}}
+  <p>{{app.stats.overflow}}, {{app.stats.shutdown_dropped}} en {{app.stats.send_failed}} zijn
+  pakketten die de tool zelf kwijtraakte, niet de verstoring waar je om vroeg. Ze houden de telling
+  van geziene, afgeleverde en weggegooide pakketten eerlijk, maar horen niet bij het effectieve
+  verlies: staat er een boven nul, dan komt een deel van het verlies dat je meet van de tool. Klik met
+  de rechtermuisknop op een waarde om die te kopiëren, of gebruik {{app.buttons.copy_counters}} om
+  elke regel te kopiëren zoals die op het scherm staat, handig voor een foutmelding.</p>
+</section>
+
+<section>
+  <h2>De kolommen van het tabblad {{app.app.tabs.connections}}</h2>
+  <p>Eén regel per verbinding, elke kolom is te sorteren via de kop, en elke kop draagt dezelfde
+  uitleg als tooltip.</p>
+  {{page.column_reference}}
+</section>
+
+<section>
+  <h2>Waar de CSV-bestanden terechtkomen</h2>
+  <p>{{app.buttons.export_csv}} op het tabblad {{app.app.tabs.statistics}} voegt een regel toe aan één
+  bestand in je eigen map: <code>%LOCALAPPDATA%\BeanNetworkTester</code> op Windows,
+  <code>~/.config/BeanNetworkTester</code> bij het Linux-pakket en de projectmap bij starten vanuit de
+  broncode. Stel <code>BEAN_DATA_DIR</code> in om het ergens anders te bewaren. Elke regel bevat de
+  tijd, of het onderscheppen was ingeperkt, en daarna de tellers, onder de namen die hierboven
+  staan.</p>
+  <p>Het exporteren van een tabel, {{app.buttons.export_conns}} of {{app.tools.sockets.export}} in de
+  tools, vraagt waar je wilt opslaan en stelt een naam met datum en tijd voor, zodat een tweede export
+  de eerste niet vervangt. Het logboek noemt het volledige pad van elk bestand dat het programma
+  opslaat.</p>
+</section>
+
+<section>
+  <h2>De verbindingen-CSV</h2>
+  <p>Dezelfde regels als in de tabel, maar de kolomnamen schrijven voluit wat de tabel afkort, en
+  groottes staan altijd in bytes, nooit in de eenheid die het scherm koos. De laatste twee kolommen
+  staan met opzet achter de rest, zodat een lezer die kolommen op positie neemt er niet door in de war
+  raakt.</p>
+  {{page.conn_csv_table}}
+</section>
+
+<section>
+  <h2>De exports van de tools</h2>
+  {{page.tool_csv_columns}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

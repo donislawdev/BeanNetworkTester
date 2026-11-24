@@ -1,0 +1,41 @@
+<section class="hero">
+  <h1>統計・接続・CSV ファイルの見方</h1>
+  <p class="lead">{{app.app.tabs.statistics}} タブの各カウンターが何を数えるか、{{app.app.tabs.connections}} タブの各列に何が入るか、プログラムが保存する各 CSV ファイルに何が含まれるか。名前と CSV の列は、このページを作るときにプログラムから読み取っています。</p>
+</section>
+
+<section>
+  <h2>{{app.app.tabs.statistics}} タブのカウンター</h2>
+  <p>ダウンロード、アップロード、キューは今この瞬間の状態を示し、それ以外のカウンターはセッション開始からの合計です。どのカウンターにも統計 CSV の列があり、その名前を下に示します。</p>
+  {{page.counter_reference}}
+  <p>{{app.stats.overflow}}、{{app.stats.shutdown_dropped}}、{{app.stats.send_failed}} は、指定した劣化ではなくツール自身が失ったパケットです。見たもの・届けたもの・捨てたものの計算を正しく保ちますが、実効ロスには含まれません。どれかがゼロより大きければ、測っているロスの一部はツールのせいです。値を右クリックするとその値をコピーでき、{{app.buttons.copy_counters}} を使うと画面どおりに全行をコピーできるので、不具合の報告に便利です。</p>
+</section>
+
+<section>
+  <h2>{{app.app.tabs.connections}} タブの列</h2>
+  <p>接続ごとに 1 行で、どの列も見出しをクリックすると並べ替えられ、各見出しにはツールチップで同じ説明が付いています。</p>
+  {{page.column_reference}}
+</section>
+
+<section>
+  <h2>CSV ファイルの保存先</h2>
+  <p>{{app.app.tabs.statistics}} タブの {{app.buttons.export_csv}} は、自分用のフォルダーにある 1 つのファイルに行を追加します。Windows では <code>%LOCALAPPDATA%\BeanNetworkTester</code>、Linux パッケージでは <code>~/.config/BeanNetworkTester</code>、ソースから動かすときはプロジェクトのフォルダーです。別の場所に置くには <code>BEAN_DATA_DIR</code> を設定します。各行には、時刻、キャプチャが絞り込まれていたかどうか、そして上に示した名前でカウンターが入ります。</p>
+  <p>表のエクスポート（{{app.buttons.export_conns}}、またはツールの {{app.tools.sockets.export}}）は保存先を尋ね、日付と時刻の入った名前を提案するので、2 回目のエクスポートが 1 回目を上書きしません。プログラムが保存したファイルのフルパスは、毎回ログに出ます。</p>
+</section>
+
+<section>
+  <h2>接続の CSV</h2>
+  <p>行は表と同じですが、列名は表の省略を書き下したもので、サイズは画面で選ばれた単位ではなく常にバイトです。最後の 2 列は、列を位置で読むプログラムがずれないよう、あえて残りの後ろに置いています。</p>
+  {{page.conn_csv_table}}
+</section>
+
+<section>
+  <h2>ツールのエクスポート</h2>
+  {{page.tool_csv_columns}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

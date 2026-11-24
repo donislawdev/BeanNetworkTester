@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>Giải thích thống kê, kết nối và tệp CSV</h1>
+  <p class="lead">Mỗi bộ đếm trên thẻ {{app.app.tabs.statistics}} đếm gì, mỗi cột của thẻ
+  {{app.app.tabs.connections}} chứa gì, và trong mỗi tệp CSV mà chương trình lưu có gì. Tên và các cột
+  CSV được đọc từ chính chương trình khi trang này được tạo.</p>
+</section>
+
+<section>
+  <h2>Các bộ đếm trên thẻ {{app.app.tabs.statistics}}</h2>
+  <p>Tải xuống, tải lên và hàng đợi cho thấy điều đang diễn ra ngay lúc này; mọi bộ đếm khác cộng
+  dồn từ khi phiên bắt đầu. Mỗi bộ đếm cũng có một cột trong tệp CSV thống kê, tên cột ghi ở dưới.</p>
+  {{page.counter_reference}}
+  <p>{{app.stats.overflow}}, {{app.stats.shutdown_dropped}} và {{app.stats.send_failed}} là các gói
+  do chính công cụ làm mất, không phải việc làm hỏng mà bạn yêu cầu. Chúng giữ cho phép tính gói đã
+  thấy, đã giao và đã loại bỏ được chính xác, nhưng không thuộc tỷ lệ mất thực tế: nếu bất kỳ bộ đếm
+  nào trong số đó lớn hơn 0, một phần tỷ lệ mất bạn đo được là do công cụ. Nhấp chuột phải vào một
+  giá trị để sao chép nó, hoặc dùng {{app.buttons.copy_counters}} để sao chép mọi dòng đúng như trên
+  màn hình, tiện cho một báo cáo lỗi.</p>
+</section>
+
+<section>
+  <h2>Các cột của thẻ {{app.app.tabs.connections}}</h2>
+  <p>Mỗi kết nối một dòng, mỗi cột sắp xếp được bằng tiêu đề của nó, và mỗi tiêu đề mang cùng lời
+  giải thích dưới dạng chú giải.</p>
+  {{page.column_reference}}
+</section>
+
+<section>
+  <h2>Tệp CSV được lưu ở đâu</h2>
+  <p>{{app.buttons.export_csv}} trên thẻ {{app.app.tabs.statistics}} thêm một dòng vào một tệp trong
+  thư mục của riêng bạn: <code>%LOCALAPPDATA%\BeanNetworkTester</code> trên Windows,
+  <code>~/.config/BeanNetworkTester</code> với gói Linux, và thư mục dự án khi chạy từ mã nguồn. Đặt
+  <code>BEAN_DATA_DIR</code> để lưu nó ở nơi khác. Mỗi dòng chứa thời gian, việc bắt gói có bị thu
+  hẹp hay không, rồi đến các bộ đếm, theo các tên đã nêu ở trên.</p>
+  <p>Việc xuất một bảng, {{app.buttons.export_conns}} hoặc {{app.tools.sockets.export}} trong các
+  công cụ, sẽ hỏi lưu ở đâu và đề xuất một tên có ngày giờ, để lần xuất thứ hai không thay thế lần
+  đầu. Nhật ký ghi đường dẫn đầy đủ của mọi tệp mà chương trình lưu.</p>
+</section>
+
+<section>
+  <h2>Tệp CSV kết nối</h2>
+  <p>Cùng các dòng như trong bảng, nhưng tên cột viết đầy đủ những gì bảng viết tắt, và kích thước
+  luôn tính bằng byte, không bao giờ theo đơn vị mà màn hình đã chọn. Hai cột cuối cố ý đứng sau
+  các cột còn lại, để chương trình đọc cột theo vị trí không bị chúng làm sai.</p>
+  {{page.conn_csv_table}}
+</section>
+
+<section>
+  <h2>Tệp xuất của các công cụ</h2>
+  {{page.tool_csv_columns}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

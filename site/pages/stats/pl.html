@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>Statystyki, połączenia i pliki CSV wyjaśnione</h1>
+  <p class="lead">Co liczy każdy licznik na karcie {{app.app.tabs.statistics}}, co jest w każdej
+  kolumnie karty {{app.app.tabs.connections}} i co zawiera każdy plik CSV zapisywany przez program.
+  Nazwy i kolumny CSV są czytane z programu przy budowaniu tej strony.</p>
+</section>
+
+<section>
+  <h2>Liczniki na karcie {{app.app.tabs.statistics}}</h2>
+  <p>Pobieranie, wysyłanie i kolejka pokazują to, co dzieje się w tej chwili; każdy inny licznik
+  sumuje od startu sesji. Każdy ma też swoją kolumnę w CSV statystyk, wymienioną niżej.</p>
+  {{page.counter_reference}}
+  <p>{{app.stats.overflow}}, {{app.stats.shutdown_dropped}} i {{app.stats.send_failed}} to
+  pakiety, które zgubiło samo narzędzie, a nie psucie, o które prosiłeś. Trzymają w porządku rachunek widzianych, dostarczonych
+  i odrzuconych, ale nie wchodzą do efektywnej utraty: każdy z nich powyżej zera znaczy, że część
+  mierzonej utraty jest winą narzędzia. Kliknij wartość prawym przyciskiem, żeby ją skopiować, albo
+  użyj {{app.buttons.copy_counters}}, żeby skopiować każdy wiersz tak, jak wygląda na ekranie, co
+  przydaje się w zgłoszeniu błędu.</p>
+</section>
+
+<section>
+  <h2>Kolumny karty {{app.app.tabs.connections}}</h2>
+  <p>Jeden wiersz na połączenie, każda kolumna sortuje się kliknięciem nagłówka, a każdy nagłówek
+  ma to samo wyjaśnienie w podpowiedzi.</p>
+  {{page.column_reference}}
+</section>
+
+<section>
+  <h2>Gdzie trafiają pliki CSV</h2>
+  <p>{{app.buttons.export_csv}} na karcie {{app.app.tabs.statistics}} dopisuje wiersz do jednego
+  pliku w Twoim folderze: <code>%LOCALAPPDATA%\BeanNetworkTester</code> na Windowsie,
+  <code>~/.config/BeanNetworkTester</code> w paczce dla Linuksa i folder projektu przy uruchomieniu
+  ze źródeł. Ustaw <code>BEAN_DATA_DIR</code>, żeby trzymać go gdzie indziej. Każdy wiersz zawiera
+  czas, to, czy przechwyt był zawężony, a potem liczniki pod nazwami podanymi wyżej.</p>
+  <p>Eksport tabeli, {{app.buttons.export_conns}} albo {{app.tools.sockets.export}} w narzędziach,
+  pyta, gdzie zapisać, i proponuje nazwę z datą i godziną, więc drugi eksport nie nadpisze
+  pierwszego. Log podaje pełną ścieżkę każdego pliku, który program zapisuje.</p>
+</section>
+
+<section>
+  <h2>CSV połączeń</h2>
+  <p>Te same wiersze co w tabeli, ale nazwy kolumn rozwijają to, co tabela skraca, a rozmiary są
+  zawsze w bajtach, nigdy w jednostce wybranej na ekranie. Ostatnie dwie kolumny celowo stoją za
+  resztą, żeby nie przesunęły niczego czytnikowi, który bierze kolumny po pozycji.</p>
+  {{page.conn_csv_table}}
+</section>
+
+<section>
+  <h2>Eksporty narzędzi</h2>
+  {{page.tool_csv_columns}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

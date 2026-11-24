@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>통계, 연결, CSV 파일 설명</h1>
+  <p class="lead">{{app.app.tabs.statistics}} 탭의 각 카운터가 무엇을 세는지, {{app.app.tabs.connections}}
+  탭의 각 열에 무엇이 담기는지, 그리고 프로그램이 저장하는 각 CSV 파일에 무엇이 들어 있는지 설명합니다.
+  이름과 CSV 열은 이 페이지를 만들 때 프로그램에서 직접 읽어 옵니다.</p>
+</section>
+
+<section>
+  <h2>{{app.app.tabs.statistics}} 탭의 카운터</h2>
+  <p>다운로드, 업로드, 대기열은 지금 이 순간 일어나는 일을 보여 주고, 나머지 카운터는 모두 세션을
+  시작한 때부터 누적됩니다. 각 카운터는 통계 CSV에도 열이 하나씩 있으며, 그 이름은 아래에 적혀
+  있습니다.</p>
+  {{page.counter_reference}}
+  <p>{{app.stats.overflow}}, {{app.stats.shutdown_dropped}}, {{app.stats.send_failed}}는 요청한
+  손상이 아니라 도구 자체가 잃은 패킷입니다. 본 패킷, 전달한 패킷, 버린 패킷의 계산을 정확하게
+  맞춰 주지만 실제 손실에는 들어가지 않습니다. 이 중 하나라도 0보다 크면 측정한 손실의 일부는 도구
+  탓입니다. 값을 마우스 오른쪽 버튼으로 클릭하면 복사되고, {{app.buttons.copy_counters}}는 모든 행을
+  화면에 보이는 그대로 복사하므로 버그 보고에 편리합니다.</p>
+</section>
+
+<section>
+  <h2>{{app.app.tabs.connections}} 탭의 열</h2>
+  <p>연결마다 한 행이며, 모든 열은 머리글로 정렬할 수 있고, 각 머리글에는 같은 설명이 도움말로
+  붙어 있습니다.</p>
+  {{page.column_reference}}
+</section>
+
+<section>
+  <h2>CSV 파일이 저장되는 곳</h2>
+  <p>{{app.app.tabs.statistics}} 탭의 {{app.buttons.export_csv}}는 사용자 자신의 폴더에 있는 파일
+  하나에 행을 하나 추가합니다. Windows에서는 <code>%LOCALAPPDATA%\BeanNetworkTester</code>, Linux
+  패키지에서는 <code>~/.config/BeanNetworkTester</code>, 소스 코드로 실행할 때는 프로젝트 폴더입니다.
+  다른 곳에 두려면 <code>BEAN_DATA_DIR</code>을 설정하십시오. 각 행에는 시각, 캡처 범위를 좁혔는지
+  여부, 그리고 위에 적힌 이름으로 된 카운터들이 들어 있습니다.</p>
+  <p>표 내보내기, 즉 도구의 {{app.buttons.export_conns}} 또는 {{app.tools.sockets.export}}는 저장할
+  위치를 묻고 날짜와 시간이 들어간 이름을 제안하므로, 두 번째 내보내기가 첫 번째를 덮어쓰지
+  않습니다. 로그에는 프로그램이 저장하는 모든 파일의 전체 경로가 남습니다.</p>
+</section>
+
+<section>
+  <h2>연결 CSV</h2>
+  <p>표와 같은 행이지만, 열 이름은 표가 줄여 쓴 것을 풀어 쓰고, 크기는 화면이 고른 단위가 아니라
+  항상 바이트로 적힙니다. 마지막 두 열은 일부러 나머지 열 뒤에 두었기 때문에, 열을 위치로 읽는
+  프로그램이 이 두 열 때문에 어긋나지 않습니다.</p>
+  {{page.conn_csv_table}}
+</section>
+
+<section>
+  <h2>도구의 내보내기</h2>
+  {{page.tool_csv_columns}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

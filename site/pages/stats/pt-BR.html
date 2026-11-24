@@ -1,0 +1,61 @@
+<section class="hero">
+  <h1>Estatísticas, conexões e arquivos CSV explicados</h1>
+  <p class="lead">O que cada contador da aba {{app.app.tabs.statistics}} conta, o que cada coluna da
+  aba {{app.app.tabs.connections}} mostra e o que há em cada arquivo CSV que o programa salva. Os
+  nomes e as colunas CSV são lidos do programa quando esta página é gerada.</p>
+</section>
+
+<section>
+  <h2>Os contadores da aba {{app.app.tabs.statistics}}</h2>
+  <p>Download, upload e a fila mostram o que está acontecendo agora; todos os outros contadores
+  somam desde o início da sessão. Cada um também tem uma coluna no CSV de estatísticas, indicada
+  abaixo.</p>
+  {{page.counter_reference}}
+  <p>{{app.stats.overflow}}, {{app.stats.shutdown_dropped}} e {{app.stats.send_failed}} são pacotes
+  que a própria ferramenta perdeu, não a degradação que você pediu. Eles mantêm certa a conta de
+  pacotes vistos, entregues e descartados, mas não fazem parte da perda efetiva: se algum deles
+  passar de zero, parte da perda que você mede é da ferramenta. Um clique direito num valor o copia,
+  e {{app.buttons.copy_counters}} copia cada linha como aparece na tela, útil para um relato de
+  bug.</p>
+</section>
+
+<section>
+  <h2>As colunas da aba {{app.app.tabs.connections}}</h2>
+  <p>Uma linha por conexão, cada coluna pode ser ordenada pelo cabeçalho, e cada cabeçalho traz a
+  mesma explicação numa dica.</p>
+  {{page.column_reference}}
+</section>
+
+<section>
+  <h2>Para onde vão os arquivos CSV</h2>
+  <p>{{app.buttons.export_csv}} na aba {{app.app.tabs.statistics}} acrescenta uma linha a um arquivo
+  na sua própria pasta: <code>%LOCALAPPDATA%\BeanNetworkTester</code> no Windows,
+  <code>~/.config/BeanNetworkTester</code> no pacote para Linux e a pasta do projeto quando ele roda a
+  partir do código-fonte. Defina <code>BEAN_DATA_DIR</code> para guardá-lo em outro lugar. Cada linha
+  traz a hora, se a captura estava restrita e depois os contadores, com os nomes indicados acima.</p>
+  <p>A exportação de uma tabela, {{app.buttons.export_conns}} ou {{app.tools.sockets.export}} nas
+  ferramentas, pergunta onde salvar e sugere um nome com a data e a hora, para que uma segunda
+  exportação não substitua a primeira. O log mostra o caminho completo de cada arquivo que o
+  programa salva.</p>
+</section>
+
+<section>
+  <h2>O CSV de conexões</h2>
+  <p>As mesmas linhas da tabela, mas os nomes das colunas escrevem por extenso o que a tabela
+  abrevia, e os tamanhos estão sempre em bytes, nunca na unidade que a tela escolheu. As duas
+  últimas colunas vêm depois das outras de propósito, para que um leitor que pega as colunas pela
+  posição não se confunda.</p>
+  {{page.conn_csv_table}}
+</section>
+
+<section>
+  <h2>As exportações das ferramentas</h2>
+  {{page.tool_csv_columns}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

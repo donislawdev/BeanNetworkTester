@@ -1,0 +1,62 @@
+<section class="hero">
+  <h1>Statistici, conexiuni și fișiere CSV explicate</h1>
+  <p class="lead">Ce numără fiecare contor din fila {{app.app.tabs.statistics}}, ce conține fiecare
+  coloană a filei {{app.app.tabs.connections}} și ce se află în fiecare fișier CSV pe care îl
+  salvează programul. Numele și coloanele CSV sunt citite din program atunci când este generată
+  această pagină.</p>
+</section>
+
+<section>
+  <h2>Contoarele din fila {{app.app.tabs.statistics}}</h2>
+  <p>Descărcarea, încărcarea și coada arată ce se întâmplă chiar acum; toate celelalte contoare se
+  adună de la începutul sesiunii. Fiecare are și o coloană în CSV-ul de statistici, numită mai
+  jos.</p>
+  {{page.counter_reference}}
+  <p>{{app.stats.overflow}}, {{app.stats.shutdown_dropped}} și {{app.stats.send_failed}} sunt
+  pachete pierdute chiar de unealtă, nu degradarea pe care ai cerut-o. Ele țin corectă socoteala
+  pachetelor văzute, livrate și aruncate, dar nu fac parte din pierderea efectivă: dacă oricare dintre
+  ele trece de zero, o parte din pierderea pe care o măsori vine de la unealtă. Un clic dreapta pe o
+  valoare o copiază, iar {{app.buttons.copy_counters}} copiază fiecare rând așa cum apare pe ecran,
+  util pentru un raport de eroare.</p>
+</section>
+
+<section>
+  <h2>Coloanele filei {{app.app.tabs.connections}}</h2>
+  <p>Un rând pentru fiecare conexiune, fiecare coloană se sortează din antetul ei, iar fiecare antet
+  poartă aceeași explicație ca sfat.</p>
+  {{page.column_reference}}
+</section>
+
+<section>
+  <h2>Unde ajung fișierele CSV</h2>
+  <p>{{app.buttons.export_csv}} din fila {{app.app.tabs.statistics}} adaugă un rând într-un fișier din
+  propriul tău folder: <code>%LOCALAPPDATA%\BeanNetworkTester</code> pe Windows,
+  <code>~/.config/BeanNetworkTester</code> pentru pachetul Linux și folderul proiectului când rulează
+  din codul sursă. Setează <code>BEAN_DATA_DIR</code> ca să îl ții în altă parte. Fiecare rând conține
+  ora, dacă interceptarea a fost restrânsă, apoi contoarele, sub numele date mai sus.</p>
+  <p>Exportul unui tabel, {{app.buttons.export_conns}} sau {{app.tools.sockets.export}} din unelte,
+  întreabă unde să salveze și propune un nume cu data și ora, ca un al doilea export să nu îl
+  înlocuiască pe primul. Jurnalul arată calea completă a fiecărui fișier pe care îl salvează
+  programul.</p>
+</section>
+
+<section>
+  <h2>CSV-ul conexiunilor</h2>
+  <p>Aceleași rânduri ca în tabel, dar numele coloanelor scriu întreg ce prescurtează tabelul, iar
+  dimensiunile sunt mereu în octeți, niciodată în unitatea aleasă de ecran. Ultimele două coloane vin
+  după celelalte intenționat, ca un cititor care ia coloanele după poziție să nu fie încurcat de
+  ele.</p>
+  {{page.conn_csv_table}}
+</section>
+
+<section>
+  <h2>Exporturile uneltelor</h2>
+  {{page.tool_csv_columns}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

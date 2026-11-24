@@ -38,6 +38,7 @@ must never do is succeed quietly.
 """
 import argparse
 import ast
+import functools
 import hashlib
 import html
 import json
@@ -1127,6 +1128,99 @@ def cli_reference(app, texts):
     return Raw("".join(blocks))
 
 
+@functools.lru_cache(maxsize=None)
+def _literal(root, relpath, name):
+    """A module-level literal of the program, read from its source rather than imported:
+    the window's modules import Tk, which the site build must not need. Cached: every
+    page of every language asks, and the answer cannot change during one build."""
+    tree = ast.parse(_read_text(os.path.join(root, relpath)))
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == name for t in node.targets):
+            return ast.literal_eval(node.value)
+    raise SiteError("%s has no literal %s" % (relpath, name))
+
+
+STATS_PAGE = "beantester/gui/pages/stats.py"
+CONNS_PAGE = "beantester/gui/pages/conns.py"
+CSV_EXPORT = "beantester/gui/csv_export.py"
+
+# Each column of the connections CSV, by the table column it is the unabbreviated
+# form of. A CSV column with no table column here needs its own sentence
+# (``csv.conn.<name>``), or the build fails: a column added to the file cannot reach
+# the site undocumented.
+CONN_CSV_TABLE_COLUMN = {
+    "process": "proc", "pid": "pid", "proto": "proto", "remote_ip": "remote_ip",
+    "remote_port": "remote_port", "local_port": "local_port", "packets": "packets",
+    "impaired": "scoped", "dropped": "dropped", "delivered_down_bytes": "down",
+    "delivered_up_bytes": "up", "delivered_total_bytes": "kb",
+    "captured_down_bytes": "down_seen", "captured_up_bytes": "up_seen",
+    "avg_bytes": "avg", "duration_s": "dur", "idle_s": "idle", "ice": "ice"}
+
+
+def counter_reference(root, app, texts):
+    """Every counter on the Statistics tab, from the window's own grid (``CELLS`` and the
+    driver's ``OVERLOAD_CELLS``): its label, its column in the statistics CSV and a
+    sentence ``counter.<key>``."""
+    cells = _literal(root, STATS_PAGE, "CELLS") + _literal(root, STATS_PAGE, "OVERLOAD_CELLS")
+    csv_names = _literal(root, CSV_EXPORT, "CSV_COLUMNS")
+    entries = []
+    for key, label, unit, _tip in cells:
+        meta = [explained(texts, "csv.in_file", app).replace(
+            "{name}", "<code>%s</code>" % html.escape(csv_names.get(key, key), quote=True))]
+        if unit:
+            meta.insert(0, html.escape(unit, quote=True))
+        entries.append('<dt id="counter-%s">%s</dt><dd><p class="meta">%s</p><p>%s</p></dd>' % (
+            key, html.escape(_program_label(app["app." + label]), quote=True),
+            "".join("<span>%s</span>" % part for part in meta),
+            explained(texts, "counter." + key, app)))
+    return Raw('<dl class="settings">%s</dl>' % "".join(entries))
+
+
+def column_reference(root, app, texts):
+    """Every column of the Connections tab, from its registry: the header the window
+    shows and a sentence ``column.<key>``."""
+    columns = _literal(root, CONNS_PAGE, "COLUMNS")
+    entries = "".join('<dt id="column-%s">%s</dt><dd><p>%s</p></dd>' % (
+        key, html.escape(app["app." + label], quote=True),
+        explained(texts, "column." + key, app)) for key, label in columns.items())
+    return Raw('<dl class="settings">%s</dl>' % entries)
+
+
+def conn_csv_table(root, app, texts):
+    """The connections CSV, column by column, from ``CONN_CSV_HEADER``: the table column
+    each one spells out, or its own sentence."""
+    header = _literal(root, CSV_EXPORT, "CONN_CSV_HEADER")
+    columns = _literal(root, CONNS_PAGE, "COLUMNS")
+    heads = [texts["table.csv_column"], texts["table.meaning"]]
+    rows = ["<tr>%s</tr>" % "".join("<th>%s</th>" % html.escape(h, quote=True) for h in heads)]
+    for name in header:
+        column = CONN_CSV_TABLE_COLUMN.get(name)
+        if column:
+            meaning = explained(texts, "csv.same_as_column", app).replace(
+                "{column}", '<a href="#column-%s">%s</a>' % (
+                    column, html.escape(app["app." + columns[column]], quote=True)))
+        else:
+            meaning = explained(texts, "csv.conn." + name, app)
+        rows.append("<tr><td><code>%s</code></td><td>%s</td></tr>"
+                    % (html.escape(name, quote=True), meaning))
+    return Raw("<table>%s</table>" % "".join(rows))
+
+
+def tool_csv_columns(root, app, texts):
+    """The columns of the three Tools exports, read from their headers."""
+    blocks = []
+    for kind, literal, tab in (("sockets", "SOCKETS_CSV_HEADER", "tools.sockets.tab"),
+                               ("ports", "PORTS_CSV_HEADER", "tools.portcheck.tab"),
+                               ("scan", "PORT_SCAN_CSV_HEADER", "tools.portscan.tab")):
+        names = ", ".join("<code>%s</code>" % html.escape(n, quote=True)
+                          for n in _literal(root, CSV_EXPORT, literal))
+        blocks.append("<dt>%s</dt><dd><p>%s</p><p>%s</p></dd>" % (
+            html.escape(app["app." + tab], quote=True),
+            explained(texts, "csv." + kind, app), names))
+    return Raw('<dl class="settings">%s</dl>' % "".join(blocks))
+
+
 def _fingerprint(parts):
     return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()[:12]
 
@@ -1151,6 +1245,12 @@ def doc_sources(root):
         out["setting." + field.key] = _fingerprint(parts)
     for action in cli_options().values():
         out["flag." + action.dest] = _fingerprint([action.help or ""])
+    for key, label, _unit, tip in (_literal(root, STATS_PAGE, "CELLS")
+                                   + _literal(root, STATS_PAGE, "OVERLOAD_CELLS")):
+        out["counter." + key] = _fingerprint([app.get("app." + label, ""),
+                                              app.get("app." + tip, "")])
+    for key, tip in _literal(root, CONNS_PAGE, "COLUMN_TIPS").items():
+        out["column." + key] = _fingerprint([app.get("app." + tip, "")])
     # A shipped scenario's sentence says what the file reproduces: an edit to the file
     # may change that.
     for name in scenario_files(root):
@@ -1347,6 +1447,10 @@ def page_context(page, code, registry, texts, home, colours, root, pages):
         "page.scenario_table": scenario_table(root, texts[code]),
         "page.scenario_reference": scenario_reference(app, texts[code]),
         "page.scenario_not_live": scenario_not_live(app),
+        "page.counter_reference": counter_reference(root, app, texts[code]),
+        "page.column_reference": column_reference(root, app, texts[code]),
+        "page.conn_csv_table": conn_csv_table(root, app, texts[code]),
+        "page.tool_csv_columns": tool_csv_columns(root, app, texts[code]),
         "page.scenario_count": len(scenario_files(root)),
         "page.direction": _language(registry, code).get("direction", "ltr"),
         "page.social_links": social_links(registry, texts[code]),

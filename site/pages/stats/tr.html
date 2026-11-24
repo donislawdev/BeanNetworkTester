@@ -1,0 +1,61 @@
+<section class="hero">
+  <h1>İstatistikler, bağlantılar ve CSV dosyaları açıklamalı</h1>
+  <p class="lead">{{app.app.tabs.statistics}} sekmesindeki her sayacın neyi saydığı,
+  {{app.app.tabs.connections}} sekmesindeki her sütunun ne gösterdiği ve programın kaydettiği her CSV
+  dosyasında ne bulunduğu. Adlar ve CSV sütunları bu sayfa oluşturulurken programın kendisinden
+  okunur.</p>
+</section>
+
+<section>
+  <h2>{{app.app.tabs.statistics}} sekmesindeki sayaçlar</h2>
+  <p>İndirme, yükleme ve kuyruk şu anda ne olduğunu gösterir; diğer tüm sayaçlar oturumun
+  başlangıcından beri toplanır. Her birinin istatistik CSV dosyasında da bir sütunu vardır, adı
+  aşağıda verilir.</p>
+  {{page.counter_reference}}
+  <p>{{app.stats.overflow}}, {{app.stats.shutdown_dropped}} ve {{app.stats.send_failed}} aracın
+  kendisinin kaybettiği paketlerdir, sizin istediğiniz bozulma değil. Görülen, teslim edilen ve
+  atılan paketlerin hesabını doğru tutarlar ama etkin kaybın parçası değildir: biri sıfırın üstündeyse
+  ölçtüğünüz kaybın bir kısmı araçtan gelir. Bir değere sağ tıklamak onu kopyalar,
+  {{app.buttons.copy_counters}} ise her satırı ekranda göründüğü gibi kopyalar; bu bir hata raporu
+  için kullanışlıdır.</p>
+</section>
+
+<section>
+  <h2>{{app.app.tabs.connections}} sekmesinin sütunları</h2>
+  <p>Her bağlantı için bir satır; her sütun başlığından sıralanır ve her başlık aynı açıklamayı
+  araç ipucu olarak taşır.</p>
+  {{page.column_reference}}
+</section>
+
+<section>
+  <h2>CSV dosyaları nereye gider</h2>
+  <p>{{app.app.tabs.statistics}} sekmesindeki {{app.buttons.export_csv}}, kendi klasörünüzdeki bir
+  dosyaya bir satır ekler: Windows'ta <code>%LOCALAPPDATA%\BeanNetworkTester</code>, Linux paketinde
+  <code>~/.config/BeanNetworkTester</code> ve kaynak koddan çalıştırıldığında proje klasörü. Başka bir
+  yerde tutmak için <code>BEAN_DATA_DIR</code> değişkenini ayarlayın. Her satırda zaman, yakalamanın
+  daraltılıp daraltılmadığı ve ardından yukarıda verilen adlarla sayaçlar bulunur.</p>
+  <p>Bir tablonun dışa aktarımı, araçlardaki {{app.buttons.export_conns}} ya da
+  {{app.tools.sockets.export}}, nereye kaydedileceğini sorar ve içinde tarih ile saat olan bir ad
+  önerir; böylece ikinci dışa aktarım birincinin yerine geçmez. Günlük, programın kaydettiği her
+  dosyanın tam yolunu yazar.</p>
+</section>
+
+<section>
+  <h2>Bağlantılar CSV dosyası</h2>
+  <p>Tablodaki satırların aynısı, ama sütun adları tablonun kısalttığını açık açık yazar ve boyutlar
+  her zaman bayt cinsindendir, asla ekranın seçtiği birimde değil. Son iki sütun bilerek diğerlerinin
+  arkasına konmuştur; böylece sütunları konumlarına göre alan bir okuyucunun kafası karışmaz.</p>
+  {{page.conn_csv_table}}
+</section>
+
+<section>
+  <h2>Araçların dışa aktarımları</h2>
+  {{page.tool_csv_columns}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

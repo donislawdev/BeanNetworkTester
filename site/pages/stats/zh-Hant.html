@@ -1,0 +1,41 @@
+<section class="hero">
+  <h1>統計、連線與 CSV 檔案說明</h1>
+  <p class="lead">{{app.app.tabs.statistics}}分頁上每個計數器計算什麼，{{app.app.tabs.connections}}分頁每一欄顯示什麼，以及程式儲存的每個 CSV 檔案包含什麼。名稱和 CSV 欄位在建置本頁時從程式中讀取。</p>
+</section>
+
+<section>
+  <h2>{{app.app.tabs.statistics}}分頁上的計數器</h2>
+  <p>下載、上傳和佇列顯示的是此刻正在發生的情況；其他每個計數器都從工作階段開始累計。每個計數器在統計 CSV 中都有自己的欄位，欄名如下所示。</p>
+  {{page.counter_reference}}
+  <p>{{app.stats.overflow}}、{{app.stats.shutdown_dropped}}和{{app.stats.send_failed}}是工具自己遺失的封包，而不是你要求的損傷。它們讓「看到、送達、丟棄」的帳目保持正確，但不計入有效遺失：只要其中任何一個大於零，就表示你量到的遺失有一部分來自工具本身。在某個值上按右鍵可以複製它，或使用「{{app.buttons.copy_counters}}」依照畫面上的樣子複製每一列，方便撰寫錯誤回報。</p>
+</section>
+
+<section>
+  <h2>{{app.app.tabs.connections}}分頁的欄位</h2>
+  <p>每個連線一列，每一欄都可以按欄標題排序，每個欄標題的提示中都有相同的說明。</p>
+  {{page.column_reference}}
+</section>
+
+<section>
+  <h2>CSV 檔案存放在哪裡</h2>
+  <p>{{app.app.tabs.statistics}}分頁上的「{{app.buttons.export_csv}}」會在你自己的資料夾中的一個檔案裡附加一列：Windows 上是 <code>%LOCALAPPDATA%\BeanNetworkTester</code>，Linux 套件是 <code>~/.config/BeanNetworkTester</code>，從原始碼執行時是專案資料夾。設定 <code>BEAN_DATA_DIR</code> 可以把它放到別處。每一列包含時間、擷取是否有縮小範圍，接著是各計數器，欄名如上所示。</p>
+  <p>表格的匯出，也就是「{{app.buttons.export_conns}}」或工具中的「{{app.tools.sockets.export}}」，會詢問儲存位置，並提供含日期和時間的檔名，所以第二次匯出不會取代第一次。程式儲存每個檔案時都會在記錄中寫出完整路徑。</p>
+</section>
+
+<section>
+  <h2>連線 CSV</h2>
+  <p>列與表格相同，但欄名把表格的縮寫寫完整，大小一律以位元組表示，而不是畫面上選用的單位。最後兩欄刻意放在其他欄位之後，這樣依位置讀取欄位的程式不會被打亂。</p>
+  {{page.conn_csv_table}}
+</section>
+
+<section>
+  <h2>各工具的匯出</h2>
+  {{page.tool_csv_columns}}
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
