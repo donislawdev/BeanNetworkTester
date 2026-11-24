@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>An alternative to NEWT, the Network Emulator for Windows Toolkit</h1>
+  <p class="lead">NEWT was Microsoft's network emulator for Windows. It added delay, loss and a speed limit to real traffic, so a program could be tried on a bad network from an ordinary PC. Microsoft no longer offers it for download. This page maps each NEWT setting onto Bean Network Tester, which does the same job on Windows 10 and 11.</p>
+</section>
+
+<section>
+  <h2>What happened to NEWT</h2>
+  <ul>
+    <li>NEWT shipped with the Games for Windows LIVE SDK and the Xbox development kit. Its driver then went into Visual Studio 2010, as the network emulation in load tests.</li>
+    <li>Microsoft has deprecated web performance and load testing in Visual Studio, network emulation included. Visual Studio 2019 is the last version where it is fully available.</li>
+    <li>There is no download from Microsoft today. A search turns up copies on download sites and a Chocolatey package last updated in 2013.</li>
+  </ul>
+  <p>An emulator installs a network driver and runs with administrator rights, so it is worth knowing where an installer comes from before you run it.</p>
+</section>
+
+<section>
+  <h2>NEWT settings, one by one</h2>
+  <p>Add <code>--target</code> and <code>--duration</code> to every command here, or it affects the whole computer.</p>
+  <table>
+    <tr><th>In NEWT</th><th>Setting in the window</th><th>Flag</th></tr>
+    <tr><td>Latency</td><td>{{app.fields.latency}}, and {{app.fields.jitter}} for a delay that varies</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td>Bandwidth</td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 1221 --up 1221</code></td></tr>
+    <tr><td>Queue</td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+    <tr><td>Packet loss</td><td>{{app.fields.loss}}, and {{app.fields.loss_burst}} for losses that come in runs</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td>Reordering</td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td>Errors</td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td>Connect and disconnect</td><td>{{app.frames.flapping}}</td><td><code>--flap-period 10 --flap-down 40</code></td></tr>
+    <tr><td>Filter by IP address</td><td>{{app.frames.destination}}</td><td><code>--dst-ip 10.0.0.5</code></td></tr>
+    <tr><td>Filter by protocol</td><td>{{app.frames.traffic}}: {{app.filters.tcp}}, {{app.filters.udp}} or {{app.filters.ping}}</td><td><code>--filter tcp</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Speed.</strong> The speed limit fields are in KB/s, with K = 1024: 122 is about 1 Mbit/s and 1221 about 10 Mbit/s. The <a href="../netem-for-windows/">netem page</a> has a longer table.</li>
+    <li><strong>Queue.</strong> {{app.fields.buffer}} is a time in milliseconds, not a number of packets.</li>
+    <li><strong>Reordering.</strong> There is no reorder percentage. A spike holds back a single packet so the ones sent after it overtake it, and the reordered counter on the {{app.app.tabs.statistics}} page shows whether that really happened.</li>
+    <li><strong>Both directions.</strong> Each value applies on the way out and on the way back, so <code>--latency 100</code> adds about 200 ms to a ping. For different values per direction, tick {{app.fields.asym}}, or add <code>--asym</code> and the flags that end in <code>-up</code>.</li>
+  </ul>
+  <p>A typical NEWT link as one command, aimed at one program for two minutes:</p>
+<pre><code>BeanNetworkTester.exe --latency 100 --jitter 20 --loss 2 --down 1221 --up 1221 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>What this one brings</h2>
+  <ul>
+    <li><strong>One program, not the whole computer.</strong> Besides an address and a protocol, a filter can be a program, by name or process ID. <a href="../target-one-app/">Aim the impairment at a single app</a> while the rest of the machine stays normal.</li>
+    <li><strong>A command line with exit codes.</strong> The same executable <a href="../network-tests-in-ci/">runs in CI</a> and reports every outcome through its exit code.</li>
+    <li><strong>Runs you can repeat.</strong> With <code>--seed</code>, the same random loss and jitter come back on the next run.</li>
+    <li><strong>Settings that change on their own.</strong> <a href="../scenarios-over-time/">Timed scenarios</a> switch the settings at set seconds while you watch the program.</li>
+    <li><strong>A live view.</strong> A chart, counters and a table of connections show what was hit and how much.</li>
+    <li><strong>Network tools in the same window.</strong> A <a href="../continuous-ping/">continuous ping</a> with a chart, a <a href="../port-scanner/">port scanner</a> and a <a href="../nat-type-test/">NAT type test</a>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>When to use something else</h2>
+  <ul>
+    <li><strong>You need a whole network of routers and switches.</strong> That is a network simulator, such as GNS3 or EVE-NG, which runs virtual devices. An emulator changes the traffic of one real computer.</li>
+    <li><strong>You want a commercial product with support.</strong> SoftPerfect Connection Emulator is a paid network emulator for Windows.</li>
+    <li><strong>You are on Linux.</strong> tc netem is built in, and this tool runs there too, as an experiment. See <a href="../simulate-network-on-linux/">bad network on Linux</a>.</li>
+    <li><strong>You cannot get administrator rights.</strong> Changing other programs' traffic needs them, with any tool.</li>
+  </ul>
+  <p>Comparing free tools for Windows? The <a href="../clumsy-alternative/">Clumsy alternative</a> page covers Clumsy, NetLimiter and proxies such as Fiddler.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

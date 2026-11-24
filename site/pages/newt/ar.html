@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>بديل لـ NEWT، أي Network Emulator for Windows Toolkit</h1>
+  <p class="lead">كان NEWT محاكي الشبكة من Microsoft لنظام Windows. كان يضيف التأخير وفقدان الحزم وحدًّا للسرعة إلى حركة مرور حقيقية، فيمكن تجربة برنامج على شبكة سيئة من حاسوب عادي. لم تعد Microsoft تتيحه للتنزيل. تقابل هذه الصفحة كل إعداد في NEWT بما يقابله في Bean Network Tester، الذي يؤدي العمل نفسه على Windows 10 و11.</p>
+</section>
+
+<section>
+  <h2>ماذا حدث لـ NEWT</h2>
+  <ul>
+    <li>كان NEWT يأتي مع Games for Windows LIVE SDK وحزمة تطوير Xbox. ثم انتقل برنامج تشغيله إلى Visual Studio 2010، بوصفه محاكاة الشبكة في اختبارات التحميل.</li>
+    <li>أوقفت Microsoft دعم اختبارات أداء الويب واختبارات التحميل في Visual Studio، ومحاكاة الشبكة معها. Visual Studio 2019 هو آخر إصدار تتوفر فيه كاملة.</li>
+    <li>لا يوجد اليوم تنزيل من Microsoft. يعثر البحث على نسخ في مواقع التنزيل وعلى حزمة Chocolatey آخر تحديث لها في 2013.</li>
+  </ul>
+  <p>يثبّت المحاكي برنامج تشغيل للشبكة ويعمل بصلاحيات المسؤول، لذا من المفيد أن تعرف مصدر أي برنامج تثبيت قبل تشغيله.</p>
+</section>
+
+<section>
+  <h2>إعدادات NEWT واحدًا واحدًا</h2>
+  <p>أضف <code>--target</code> و<code>--duration</code> إلى كل أمر في هذه الصفحة، وإلا أثّر في الحاسوب كله.</p>
+  <table>
+    <tr><th>في NEWT</th><th>الإعداد في النافذة</th><th>الراية</th></tr>
+    <tr><td>زمن الاستجابة (Latency)</td><td>{{app.fields.latency}}، و{{app.fields.jitter}} لتأخير يتغير</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td>عرض النطاق (Bandwidth)</td><td>{{app.fields.download}}، {{app.fields.upload}}</td><td><code>--down 1221 --up 1221</code></td></tr>
+    <tr><td>قائمة الانتظار (Queue)</td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+    <tr><td>فقدان الحزم (Packet loss)</td><td>{{app.fields.loss}}، و{{app.fields.loss_burst}} لفقدان يأتي متتاليًا</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td>تبديل الترتيب (Reordering)</td><td>{{app.fields.spike_prob}}، {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td>الأخطاء (Errors)</td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td>الانقطاع وإعادة الاتصال</td><td>{{app.frames.flapping}}</td><td><code>--flap-period 10 --flap-down 40</code></td></tr>
+    <tr><td>التصفية حسب عنوان IP</td><td>{{app.frames.destination}}</td><td><code>--dst-ip 10.0.0.5</code></td></tr>
+    <tr><td>التصفية حسب البروتوكول</td><td>{{app.frames.traffic}}: {{app.filters.tcp}} أو {{app.filters.udp}} أو {{app.filters.ping}}</td><td><code>--filter tcp</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>السرعة.</strong> حقول حد السرعة بوحدة KB/s، حيث K = 1024: القيمة 122 تساوي نحو 1 Mbit/s، و1221 نحو 10 Mbit/s. في <a href="../netem-lil-windows/">صفحة netem</a> جدول أطول.</li>
+    <li><strong>قائمة الانتظار.</strong> {{app.fields.buffer}} زمن بالميلي ثانية، وليس عددًا من الحزم.</li>
+    <li><strong>تبديل الترتيب.</strong> لا توجد نسبة مئوية لتبديل الترتيب. تحتجز القفزة حزمة واحدة فتسبقها الحزم المرسلة بعدها، ويُظهر عدّاد الحزم المبدّلة في صفحة {{app.app.tabs.statistics}} هل حدث ذلك فعلًا.</li>
+    <li><strong>الاتجاهان.</strong> تنطبق كل قيمة في الذهاب والإياب، لذا يضيف <code>--latency 100</code> نحو 200 ms إلى ping. لقيم مختلفة في كل اتجاه، حدّد {{app.fields.asym}}، أو أضف <code>--asym</code> والرايات التي تنتهي بـ <code>-up</code>.</li>
+  </ul>
+  <p>رابط NEWT نموذجي في أمر واحد، موجَّه إلى برنامج واحد لمدة دقيقتين:</p>
+<pre><code>BeanNetworkTester.exe --latency 100 --jitter 20 --loss 2 --down 1221 --up 1221 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>ما الذي تقدمه هذه الأداة</h2>
+  <ul>
+    <li><strong>برنامج واحد، لا الحاسوب كله.</strong> إلى جانب العنوان والبروتوكول، يمكن أن يكون المرشح برنامجًا، بالاسم أو بمعرّف العملية. <a href="../istihdaf-tatbiq-wahid/">وجّه التدهور إلى تطبيق واحد</a> بينما يبقى باقي الجهاز طبيعيًا.</li>
+    <li><strong>سطر أوامر برموز خروج.</strong> الملف التنفيذي نفسه <a href="../ikhtibar-alshabaka-fi-ci/">يعمل في CI</a> ويُبلغ عن كل نتيجة برمز خروجه.</li>
+    <li><strong>تشغيلات يمكن تكرارها.</strong> مع <code>--seed</code> يعود الفقدان العشوائي نفسه والتذبذب نفسه في التشغيل التالي.</li>
+    <li><strong>إعدادات تتغير وحدها.</strong> <a href="../sinaryuhat-zamaniya/">السيناريوهات الزمنية</a> تبدّل الإعدادات في ثوانٍ محددة بينما تراقب البرنامج.</li>
+    <li><strong>عرض مباشر.</strong> رسم بياني وعدّادات وجدول اتصالات تُظهر ما الذي تأثر وبأي قدر.</li>
+    <li><strong>أدوات شبكة في النافذة نفسها.</strong> <a href="../ping-mutawasil/">ping متواصل</a> برسم بياني، و<a href="../masih-almanafidh/">ماسح منافذ</a>، و<a href="../ikhtibar-naw-nat/">اختبار نوع NAT</a>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>متى تستخدم شيئًا آخر</h2>
+  <ul>
+    <li><strong>تحتاج إلى شبكة كاملة من الموجّهات والمبدّلات.</strong> هذا عمل محاكي شبكات مثل GNS3 أو EVE-NG، يشغّل أجهزة افتراضية. أما المحاكي هنا فيغيّر حركة مرور حاسوب حقيقي واحد.</li>
+    <li><strong>تريد منتجًا تجاريًا مع دعم.</strong> SoftPerfect Connection Emulator محاكي شبكة مدفوع لنظام Windows.</li>
+    <li><strong>تعمل على Linux.</strong> tc netem مدمج فيه، وهذه الأداة تعمل هناك أيضًا، بشكل تجريبي. انظر <a href="../muhakat-alshabaka-ala-linux/">شبكة سيئة على Linux</a>.</li>
+    <li><strong>لا يمكنك الحصول على صلاحيات المسؤول.</strong> تغيير حركة مرور البرامج الأخرى يحتاج إليها، مع أي أداة.</li>
+  </ul>
+  <p>تقارن بين أدوات مجانية لنظام Windows؟ تتناول صفحة <a href="../badil-clumsy/">بديل Clumsy</a> أداة Clumsy وNetLimiter ووكلاء مثل Fiddler.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

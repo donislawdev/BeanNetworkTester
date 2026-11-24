@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>NEWT, यानी Network Emulator for Windows Toolkit का विकल्प</h1>
+  <p class="lead">NEWT Windows के लिए Microsoft का नेटवर्क एमुलेटर था। यह असली ट्रैफ़िक में देरी, पैकेट लॉस और स्पीड लिमिट जोड़ता था, ताकि किसी प्रोग्राम को साधारण PC पर ही खराब नेटवर्क में आज़माया जा सके। Microsoft अब इसे डाउनलोड के लिए नहीं देता। यह पेज NEWT की हर सेटिंग को Bean Network Tester से जोड़ता है, जो Windows 10 और 11 पर यही काम करता है।</p>
+</section>
+
+<section>
+  <h2>NEWT का क्या हुआ</h2>
+  <ul>
+    <li>NEWT, Games for Windows LIVE SDK और Xbox के डेवलपमेंट किट के साथ आता था। बाद में इसका ड्राइवर Visual Studio 2010 में लोड टेस्ट के नेटवर्क एमुलेशन के रूप में पहुँचा।</li>
+    <li>Microsoft ने Visual Studio में वेब परफ़ॉर्मेंस और लोड टेस्टिंग को, नेटवर्क एमुलेशन सहित, बंद करने की घोषणा कर दी है। Visual Studio 2019 आख़िरी वर्शन है जिसमें ये पूरी तरह उपलब्ध हैं।</li>
+    <li>आज Microsoft से कोई डाउनलोड नहीं है। खोज करने पर डाउनलोड साइटों पर इसकी कॉपियाँ और 2013 में आख़िरी बार अपडेट हुआ एक Chocolatey पैकेज मिलता है।</li>
+  </ul>
+  <p>एमुलेटर एक नेटवर्क ड्राइवर इंस्टॉल करता है और एडमिनिस्ट्रेटर अधिकारों के साथ चलता है, इसलिए किसी इंस्टॉलर को चलाने से पहले यह जानना अच्छा है कि वह कहाँ से आया है।</p>
+</section>
+
+<section>
+  <h2>NEWT की सेटिंग्स, एक-एक करके</h2>
+  <p>इस पेज की हर कमांड में <code>--target</code> और <code>--duration</code> जोड़ें, वरना वह पूरे कंप्यूटर पर असर डालेगी।</p>
+  <table>
+    <tr><th>NEWT में</th><th>विंडो में सेटिंग</th><th>फ़्लैग</th></tr>
+    <tr><td>लेटेंसी (Latency)</td><td>{{app.fields.latency}}, और बदलती देरी के लिए {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td>बैंडविड्थ (Bandwidth)</td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 1221 --up 1221</code></td></tr>
+    <tr><td>कतार (Queue)</td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+    <tr><td>पैकेट लॉस (Packet loss)</td><td>{{app.fields.loss}}, और लगातार होने वाले लॉस के लिए {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td>क्रम बदलना (Reordering)</td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td>त्रुटियाँ (Errors)</td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td>कनेक्शन टूटना और जुड़ना</td><td>{{app.frames.flapping}}</td><td><code>--flap-period 10 --flap-down 40</code></td></tr>
+    <tr><td>IP पते से फ़िल्टर</td><td>{{app.frames.destination}}</td><td><code>--dst-ip 10.0.0.5</code></td></tr>
+    <tr><td>प्रोटोकॉल से फ़िल्टर</td><td>{{app.frames.traffic}}: {{app.filters.tcp}}, {{app.filters.udp}} या {{app.filters.ping}}</td><td><code>--filter tcp</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>स्पीड।</strong> स्पीड लिमिट फ़ील्ड KB/s में हैं, जहाँ K = 1024: 122 लगभग 1 Mbit/s है और 1221 लगभग 10 Mbit/s। <a href="../windows-ke-liye-netem/">netem वाले पेज</a> पर एक लंबी तालिका है।</li>
+    <li><strong>कतार।</strong> {{app.fields.buffer}} मिलीसेकंड में एक समय है, पैकेटों की संख्या नहीं।</li>
+    <li><strong>क्रम बदलना।</strong> क्रम बदलने का कोई प्रतिशत नहीं है। एक स्पाइक किसी एक पैकेट को रोक लेता है, ताकि उसके बाद भेजे गए पैकेट उससे आगे निकल जाएँ, और {{app.app.tabs.statistics}} पेज पर क्रम से बाहर पैकेटों का काउंटर दिखाता है कि ऐसा सच में हुआ या नहीं।</li>
+    <li><strong>दोनों दिशाएँ।</strong> हर मान जाते और आते, दोनों समय लागू होता है, इसलिए <code>--latency 100</code> किसी ping में लगभग 200 ms जोड़ता है। हर दिशा के लिए अलग मान चाहिए तो {{app.fields.asym}} पर टिक करें, या <code>--asym</code> और <code>-up</code> पर ख़त्म होने वाले फ़्लैग जोड़ें।</li>
+  </ul>
+  <p>NEWT का एक आम लिंक एक ही कमांड में, दो मिनट के लिए एक प्रोग्राम पर निशाना साधते हुए:</p>
+<pre><code>BeanNetworkTester.exe --latency 100 --jitter 20 --loss 2 --down 1221 --up 1221 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>यह टूल क्या देता है</h2>
+  <ul>
+    <li><strong>पूरा कंप्यूटर नहीं, एक प्रोग्राम।</strong> पते और प्रोटोकॉल के अलावा फ़िल्टर एक प्रोग्राम भी हो सकता है, नाम या प्रोसेस ID से। <a href="../ek-app-par-nishana/">गड़बड़ी को एक ही ऐप पर निशाना बनाएँ</a>, जबकि बाकी मशीन सामान्य रहती है।</li>
+    <li><strong>एग्ज़िट कोड वाली कमांड लाइन।</strong> वही एग्ज़िक्यूटेबल <a href="../ci-mein-network-test/">CI में चलता है</a> और हर नतीजा अपने एग्ज़िट कोड से बताता है।</li>
+    <li><strong>दोहराए जा सकने वाले रन।</strong> <code>--seed</code> के साथ, वही रैंडम लॉस और वही जिटर अगले रन में फिर आते हैं।</li>
+    <li><strong>अपने-आप बदलने वाली सेटिंग्स।</strong> <a href="../samay-ke-anusar-scenario/">समय के अनुसार सीनारियो</a> तय सेकंड पर सेटिंग्स बदलते हैं, जबकि आप प्रोग्राम को देखते रहते हैं।</li>
+    <li><strong>लाइव व्यू।</strong> एक चार्ट, काउंटर और कनेक्शनों की तालिका दिखाते हैं कि किस पर असर पड़ा और कितना।</li>
+    <li><strong>उसी विंडो में नेटवर्क टूल।</strong> चार्ट के साथ <a href="../lagataar-ping/">लगातार ping</a>, एक <a href="../port-skainar/">पोर्ट स्कैनर</a> और एक <a href="../nat-type-jaanch/">NAT टाइप टेस्ट</a>।</li>
+  </ul>
+</section>
+
+<section>
+  <h2>कब कुछ और इस्तेमाल करें</h2>
+  <ul>
+    <li><strong>आपको राउटर और स्विच का पूरा नेटवर्क चाहिए।</strong> यह नेटवर्क सिम्युलेटर का काम है, जैसे GNS3 या EVE-NG, जो वर्चुअल डिवाइस चलाते हैं। एमुलेटर एक असली कंप्यूटर का ट्रैफ़िक बदलता है।</li>
+    <li><strong>आपको सपोर्ट के साथ एक व्यावसायिक प्रोडक्ट चाहिए।</strong> SoftPerfect Connection Emulator, Windows के लिए एक पेड नेटवर्क एमुलेटर है।</li>
+    <li><strong>आप Linux पर हैं।</strong> tc netem उसमें पहले से है, और यह टूल भी वहाँ प्रयोग के तौर पर चलता है। <a href="../linux-par-network-simulation/">Linux पर खराब नेटवर्क</a> देखें।</li>
+    <li><strong>आपको एडमिनिस्ट्रेटर अधिकार नहीं मिल सकते।</strong> दूसरे प्रोग्रामों का ट्रैफ़िक बदलने के लिए इनकी ज़रूरत होती है, चाहे कोई भी टूल हो।</li>
+  </ul>
+  <p>Windows के मुफ़्त टूल की तुलना कर रहे हैं? <a href="../clumsy-vikalp/">Clumsy का विकल्प</a> पेज Clumsy, NetLimiter और Fiddler जैसे प्रॉक्सी के बारे में बताता है।</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

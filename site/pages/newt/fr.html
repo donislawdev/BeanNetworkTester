@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>Une alternative à NEWT, le Network Emulator for Windows Toolkit</h1>
+  <p class="lead">NEWT était l’émulateur réseau de Microsoft pour Windows. Il ajoutait du délai, de la perte et une limite de vitesse à un vrai trafic, pour essayer un programme sur un mauvais réseau depuis un PC ordinaire. Microsoft ne le propose plus au téléchargement. Cette page fait correspondre chaque réglage de NEWT à Bean Network Tester, qui fait le même travail sous Windows 10 et 11.</p>
+</section>
+
+<section>
+  <h2>Ce qu’est devenu NEWT</h2>
+  <ul>
+    <li>NEWT était livré avec le Games for Windows LIVE SDK et le kit de développement Xbox. Son pilote est ensuite passé dans Visual Studio 2010, comme émulation réseau des tests de charge.</li>
+    <li>Microsoft a déprécié les tests de performances web et de charge dans Visual Studio, émulation réseau comprise. Visual Studio 2019 est la dernière version où ils sont entièrement disponibles.</li>
+    <li>Il n’y a plus de téléchargement chez Microsoft. Une recherche donne des copies sur des sites de téléchargement et un paquet Chocolatey mis à jour pour la dernière fois en 2013.</li>
+  </ul>
+  <p>Un émulateur installe un pilote réseau et s’exécute avec les droits d’administrateur. Mieux vaut donc savoir d’où vient un programme d’installation avant de le lancer.</p>
+</section>
+
+<section>
+  <h2>Les réglages de NEWT, un par un</h2>
+  <p>Ajoutez <code>--target</code> et <code>--duration</code> à chaque commande de cette page, sinon elle touche tout l’ordinateur.</p>
+  <table>
+    <tr><th>Dans NEWT</th><th>Réglage dans la fenêtre</th><th>Option</th></tr>
+    <tr><td>Latence (Latency)</td><td>{{app.fields.latency}}, et {{app.fields.jitter}} pour un délai qui varie</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td>Bande passante (Bandwidth)</td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 1221 --up 1221</code></td></tr>
+    <tr><td>File d’attente (Queue)</td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+    <tr><td>Perte de paquets (Packet loss)</td><td>{{app.fields.loss}}, et {{app.fields.loss_burst}} pour des pertes qui arrivent en série</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td>Réordonnancement (Reordering)</td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td>Erreurs (Errors)</td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td>Déconnexion et reconnexion</td><td>{{app.frames.flapping}}</td><td><code>--flap-period 10 --flap-down 40</code></td></tr>
+    <tr><td>Filtre par adresse IP</td><td>{{app.frames.destination}}</td><td><code>--dst-ip 10.0.0.5</code></td></tr>
+    <tr><td>Filtre par protocole</td><td>{{app.frames.traffic}} : {{app.filters.tcp}}, {{app.filters.udp}} ou {{app.filters.ping}}</td><td><code>--filter tcp</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Vitesse.</strong> Les champs de limite de vitesse sont en KB/s, avec K = 1024 : 122 vaut environ 1 Mbit/s et 1221 environ 10 Mbit/s. La <a href="../netem-pour-windows/">page netem</a> a un tableau plus long.</li>
+    <li><strong>File d’attente.</strong> {{app.fields.buffer}} est une durée en millisecondes, pas un nombre de paquets.</li>
+    <li><strong>Réordonnancement.</strong> Il n’y a pas de pourcentage de réordonnancement. Un pic retient un seul paquet, que ceux envoyés après lui dépassent, et le compteur de paquets réordonnés de la page {{app.app.tabs.statistics}} indique si cela s’est vraiment produit.</li>
+    <li><strong>Les deux sens.</strong> Chaque valeur s’applique à l’aller et au retour, donc <code>--latency 100</code> ajoute environ 200 ms à un ping. Pour des valeurs différentes selon le sens, cochez {{app.fields.asym}}, ou ajoutez <code>--asym</code> et les options qui finissent par <code>-up</code>.</li>
+  </ul>
+  <p>Un lien NEWT typique en une seule commande, visant un programme pendant deux minutes :</p>
+<pre><code>BeanNetworkTester.exe --latency 100 --jitter 20 --loss 2 --down 1221 --up 1221 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Ce que celui-ci apporte</h2>
+  <ul>
+    <li><strong>Un programme, pas tout l’ordinateur.</strong> En plus d’une adresse et d’un protocole, un filtre peut être un programme, par son nom ou son ID de processus. <a href="../cibler-une-application/">Visez une seule application</a> pendant que le reste de la machine reste normal.</li>
+    <li><strong>Une ligne de commande avec codes de sortie.</strong> Le même exécutable <a href="../tests-reseau-en-ci/">tourne en CI</a> et rend compte de chaque résultat par son code de sortie.</li>
+    <li><strong>Des exécutions reproductibles.</strong> Avec <code>--seed</code>, la même perte aléatoire et la même gigue reviennent à l’exécution suivante.</li>
+    <li><strong>Des réglages qui changent tout seuls.</strong> Les <a href="../scenarios-dans-le-temps/">scénarios chronométrés</a> changent les réglages à des secondes précises pendant que vous observez le programme.</li>
+    <li><strong>Une vue en direct.</strong> Un graphique, des compteurs et un tableau des connexions montrent ce qui a été touché, et à quel point.</li>
+    <li><strong>Des outils réseau dans la même fenêtre.</strong> Un <a href="../ping-continu/">ping continu</a> avec graphique, un <a href="../scanner-de-ports/">scanner de ports</a> et un <a href="../test-type-nat/">test du type de NAT</a>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Quand choisir autre chose</h2>
+  <ul>
+    <li><strong>Il vous faut tout un réseau de routeurs et de commutateurs.</strong> C’est le rôle d’un simulateur de réseau, comme GNS3 ou EVE-NG, qui fait tourner des équipements virtuels. Un émulateur modifie le trafic d’un vrai ordinateur.</li>
+    <li><strong>Vous voulez un produit commercial avec support.</strong> SoftPerfect Connection Emulator est un émulateur réseau payant pour Windows.</li>
+    <li><strong>Vous êtes sous Linux.</strong> tc netem est intégré, et cet outil y tourne aussi, à titre expérimental. Voir <a href="../simuler-un-reseau-sous-linux/">un mauvais réseau sous Linux</a>.</li>
+    <li><strong>Vous ne pouvez pas obtenir les droits d’administrateur.</strong> Modifier le trafic d’autres programmes les exige, quel que soit l’outil.</li>
+  </ul>
+  <p>Vous comparez des outils gratuits pour Windows ? La page <a href="../alternative-a-clumsy/">Alternative à Clumsy</a> traite de Clumsy, de NetLimiter et des proxys comme Fiddler.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

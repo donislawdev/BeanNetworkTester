@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>Lựa chọn thay thế NEWT, Network Emulator for Windows Toolkit</h1>
+  <p class="lead">NEWT là trình giả lập mạng của Microsoft cho Windows. Nó thêm độ trễ, mất gói và giới hạn tốc độ vào lưu lượng thật, để có thể thử một chương trình trên mạng kém ngay từ một máy tính bình thường. Microsoft không còn cho tải về nữa. Trang này đối chiếu từng thiết lập của NEWT với Bean Network Tester, công cụ làm cùng việc đó trên Windows 10 và 11.</p>
+</section>
+
+<section>
+  <h2>Chuyện gì đã xảy ra với NEWT</h2>
+  <ul>
+    <li>NEWT đi kèm Games for Windows LIVE SDK và bộ công cụ phát triển Xbox. Sau đó trình điều khiển của nó được đưa vào Visual Studio 2010, thành phần giả lập mạng trong kiểm thử tải.</li>
+    <li>Microsoft đã ngừng phát triển kiểm thử hiệu năng web và kiểm thử tải trong Visual Studio, kể cả phần giả lập mạng. Visual Studio 2019 là phiên bản cuối cùng có đầy đủ các tính năng này.</li>
+    <li>Ngày nay không có bản tải về nào từ Microsoft. Tìm kiếm chỉ ra các bản sao trên trang tải phần mềm và một gói Chocolatey cập nhật lần cuối vào năm 2013.</li>
+  </ul>
+  <p>Trình giả lập cài một trình điều khiển mạng và chạy với quyền quản trị, nên trước khi chạy một bộ cài đặt, bạn nên biết nó đến từ đâu.</p>
+</section>
+
+<section>
+  <h2>Từng thiết lập của NEWT</h2>
+  <p>Thêm <code>--target</code> và <code>--duration</code> vào mọi lệnh trên trang này, nếu không lệnh sẽ ảnh hưởng đến cả máy tính.</p>
+  <table>
+    <tr><th>Trong NEWT</th><th>Thiết lập trong cửa sổ</th><th>Cờ</th></tr>
+    <tr><td>Độ trễ (Latency)</td><td>{{app.fields.latency}}, và {{app.fields.jitter}} cho độ trễ thay đổi</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td>Băng thông (Bandwidth)</td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 1221 --up 1221</code></td></tr>
+    <tr><td>Hàng đợi (Queue)</td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+    <tr><td>Mất gói (Packet loss)</td><td>{{app.fields.loss}}, và {{app.fields.loss_burst}} cho mất gói liên tiếp</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td>Đảo thứ tự (Reordering)</td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td>Lỗi (Errors)</td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td>Ngắt và kết nối lại</td><td>{{app.frames.flapping}}</td><td><code>--flap-period 10 --flap-down 40</code></td></tr>
+    <tr><td>Lọc theo địa chỉ IP</td><td>{{app.frames.destination}}</td><td><code>--dst-ip 10.0.0.5</code></td></tr>
+    <tr><td>Lọc theo giao thức</td><td>{{app.frames.traffic}}: {{app.filters.tcp}}, {{app.filters.udp}} hoặc {{app.filters.ping}}</td><td><code>--filter tcp</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Tốc độ.</strong> Các ô giới hạn tốc độ tính bằng KB/s, với K = 1024: 122 là khoảng 1 Mbit/s và 1221 khoảng 10 Mbit/s. <a href="../netem-cho-windows/">Trang netem</a> có một bảng dài hơn.</li>
+    <li><strong>Hàng đợi.</strong> {{app.fields.buffer}} là thời gian tính bằng mili giây, không phải số gói.</li>
+    <li><strong>Đảo thứ tự.</strong> Không có phần trăm đảo thứ tự. Một đột biến giữ lại một gói duy nhất để các gói gửi sau vượt lên, và bộ đếm gói bị đảo thứ tự trên trang {{app.app.tabs.statistics}} cho biết điều đó có thật sự xảy ra hay không.</li>
+    <li><strong>Hai chiều.</strong> Mỗi giá trị áp dụng cả chiều đi lẫn chiều về, nên <code>--latency 100</code> thêm khoảng 200 ms vào một lần ping. Muốn đặt giá trị khác nhau cho từng chiều, hãy đánh dấu {{app.fields.asym}}, hoặc thêm <code>--asym</code> và các cờ kết thúc bằng <code>-up</code>.</li>
+  </ul>
+  <p>Một đường truyền NEWT điển hình viết thành một lệnh, nhắm vào một chương trình trong hai phút:</p>
+<pre><code>BeanNetworkTester.exe --latency 100 --jitter 20 --loss 2 --down 1221 --up 1221 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Công cụ này mang lại gì</h2>
+  <ul>
+    <li><strong>Một chương trình, không phải cả máy tính.</strong> Ngoài địa chỉ và giao thức, bộ lọc có thể là một chương trình, theo tên hoặc ID tiến trình. <a href="../nham-vao-mot-ung-dung/">Nhắm suy giảm vào một ứng dụng</a> trong khi phần còn lại của máy vẫn bình thường.</li>
+    <li><strong>Dòng lệnh có mã thoát.</strong> Cùng một tệp thực thi <a href="../kiem-thu-mang-trong-ci/">chạy trong CI</a> và báo mọi kết quả bằng mã thoát của nó.</li>
+    <li><strong>Lần chạy lặp lại được.</strong> Với <code>--seed</code>, cùng mức mất gói ngẫu nhiên và cùng độ dao động trễ sẽ quay lại ở lần chạy sau.</li>
+    <li><strong>Thiết lập tự thay đổi.</strong> <a href="../kich-ban-theo-thoi-gian/">Kịch bản theo thời gian</a> chuyển thiết lập ở những giây đã định trong khi bạn quan sát chương trình.</li>
+    <li><strong>Theo dõi trực tiếp.</strong> Biểu đồ, bộ đếm và bảng kết nối cho thấy cái gì bị ảnh hưởng và nhiều đến đâu.</li>
+    <li><strong>Công cụ mạng trong cùng cửa sổ.</strong> <a href="../ping-lien-tuc/">Ping liên tục</a> có biểu đồ, <a href="../quet-cong/">trình quét cổng</a> và <a href="../kiem-tra-loai-nat/">kiểm tra loại NAT</a>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Khi nào nên dùng công cụ khác</h2>
+  <ul>
+    <li><strong>Bạn cần cả một mạng gồm bộ định tuyến và bộ chuyển mạch.</strong> Đó là việc của trình mô phỏng mạng như GNS3 hoặc EVE-NG, chạy các thiết bị ảo. Trình giả lập thay đổi lưu lượng của một máy tính thật.</li>
+    <li><strong>Bạn muốn một sản phẩm thương mại có hỗ trợ.</strong> SoftPerfect Connection Emulator là trình giả lập mạng trả phí cho Windows.</li>
+    <li><strong>Bạn dùng Linux.</strong> tc netem có sẵn, và công cụ này cũng chạy ở đó, ở dạng thử nghiệm. Xem <a href="../mo-phong-mang-tren-linux/">mạng kém trên Linux</a>.</li>
+    <li><strong>Bạn không thể có quyền quản trị.</strong> Thay đổi lưu lượng của chương trình khác cần quyền này, với bất kỳ công cụ nào.</li>
+  </ul>
+  <p>Đang so sánh các công cụ miễn phí cho Windows? Trang <a href="../thay-the-clumsy/">Lựa chọn thay thế Clumsy</a> nói về Clumsy, NetLimiter và các proxy như Fiddler.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

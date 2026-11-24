@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>ทางเลือกแทน NEWT หรือ Network Emulator for Windows Toolkit</h1>
+  <p class="lead">NEWT เป็นโปรแกรมจำลองเครือข่ายของ Microsoft สำหรับ Windows มันเพิ่มความหน่วง การสูญหายของแพ็กเก็ต และการจำกัดความเร็วให้กับทราฟฟิกจริง เพื่อให้ลองโปรแกรมบนเครือข่ายที่แย่ได้จากพีซีธรรมดา ตอนนี้ Microsoft ไม่ได้ให้ดาวน์โหลดแล้ว หน้านี้จับคู่การตั้งค่าแต่ละอย่างของ NEWT กับ Bean Network Tester ซึ่งทำงานแบบเดียวกันบน Windows 10 และ 11</p>
+</section>
+
+<section>
+  <h2>เกิดอะไรขึ้นกับ NEWT</h2>
+  <ul>
+    <li>NEWT มาพร้อมกับ Games for Windows LIVE SDK และชุดพัฒนาสำหรับ Xbox ต่อมาไดรเวอร์ของมันถูกย้ายเข้าไปใน Visual Studio 2010 เป็นการจำลองเครือข่ายในการทดสอบโหลด</li>
+    <li>Microsoft ประกาศเลิกใช้การทดสอบประสิทธิภาพเว็บและการทดสอบโหลดใน Visual Studio รวมถึงการจำลองเครือข่ายด้วย Visual Studio 2019 เป็นเวอร์ชันสุดท้ายที่มีความสามารถเหล่านี้ครบถ้วน</li>
+    <li>วันนี้ไม่มีให้ดาวน์โหลดจาก Microsoft แล้ว การค้นหาจะเจอสำเนาบนเว็บดาวน์โหลด และแพ็กเกจ Chocolatey ที่อัปเดตครั้งล่าสุดในปี 2013</li>
+  </ul>
+  <p>โปรแกรมจำลองจะติดตั้งไดรเวอร์เครือข่ายและทำงานด้วยสิทธิ์ผู้ดูแลระบบ ดังนั้นก่อนเรียกใช้ตัวติดตั้ง ควรรู้ก่อนว่ามันมาจากไหน</p>
+</section>
+
+<section>
+  <h2>การตั้งค่าของ NEWT ทีละอย่าง</h2>
+  <p>เติม <code>--target</code> และ <code>--duration</code> ในทุกคำสั่งบนหน้านี้ ไม่อย่างนั้นคำสั่งจะมีผลกับทั้งคอมพิวเตอร์</p>
+  <table>
+    <tr><th>ใน NEWT</th><th>การตั้งค่าในหน้าต่าง</th><th>แฟลก</th></tr>
+    <tr><td>ความหน่วง (Latency)</td><td>{{app.fields.latency}} และ {{app.fields.jitter}} สำหรับความหน่วงที่ไม่คงที่</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td>แบนด์วิดท์ (Bandwidth)</td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 1221 --up 1221</code></td></tr>
+    <tr><td>คิว (Queue)</td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+    <tr><td>การสูญหายของแพ็กเก็ต (Packet loss)</td><td>{{app.fields.loss}} และ {{app.fields.loss_burst}} สำหรับการสูญหายที่มาติดกันเป็นชุด</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td>การสลับลำดับ (Reordering)</td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td>ข้อผิดพลาด (Errors)</td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td>การหลุดและการเชื่อมต่อใหม่</td><td>{{app.frames.flapping}}</td><td><code>--flap-period 10 --flap-down 40</code></td></tr>
+    <tr><td>กรองตามที่อยู่ IP</td><td>{{app.frames.destination}}</td><td><code>--dst-ip 10.0.0.5</code></td></tr>
+    <tr><td>กรองตามโปรโตคอล</td><td>{{app.frames.traffic}}: {{app.filters.tcp}}, {{app.filters.udp}} หรือ {{app.filters.ping}}</td><td><code>--filter tcp</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>ความเร็ว</strong> ช่องจำกัดความเร็วมีหน่วยเป็น KB/s โดย K = 1024 ค่า 122 เท่ากับประมาณ 1 Mbit/s และ 1221 ประมาณ 10 Mbit/s <a href="../netem-samrap-windows/">หน้า netem</a> มีตารางที่ยาวกว่านี้</li>
+    <li><strong>คิว</strong> {{app.fields.buffer}} เป็นเวลาในหน่วยมิลลิวินาที ไม่ใช่จำนวนแพ็กเก็ต</li>
+    <li><strong>การสลับลำดับ</strong> ไม่มีค่าเปอร์เซ็นต์ของการสลับลำดับ สไปก์จะกักแพ็กเก็ตไว้หนึ่งตัว ให้แพ็กเก็ตที่ส่งตามหลังแซงไป และตัวนับแพ็กเก็ตที่สลับลำดับในหน้า {{app.app.tabs.statistics}} จะบอกว่าเกิดขึ้นจริงหรือไม่</li>
+    <li><strong>ทั้งสองทิศทาง</strong> ทุกค่ามีผลทั้งขาไปและขากลับ ดังนั้น <code>--latency 100</code> จะเพิ่มเวลา ping ราว 200 ms ถ้าต้องการค่าที่ต่างกันในแต่ละทิศทาง ให้ติ๊ก {{app.fields.asym}} หรือเติม <code>--asym</code> กับแฟลกที่ลงท้ายด้วย <code>-up</code></li>
+  </ul>
+  <p>ลิงก์ NEWT แบบทั่วไปเขียนเป็นคำสั่งเดียว เล็งไปที่โปรแกรมเดียวเป็นเวลาสองนาที</p>
+<pre><code>BeanNetworkTester.exe --latency 100 --jitter 20 --loss 2 --down 1221 --up 1221 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>เครื่องมือนี้ให้อะไร</h2>
+  <ul>
+    <li><strong>โปรแกรมเดียว ไม่ใช่ทั้งคอมพิวเตอร์</strong> นอกจากที่อยู่และโปรโตคอลแล้ว ตัวกรองยังเป็นโปรแกรมได้ด้วย โดยระบุชื่อหรือ ID ของโปรเซส <a href="../cho-chong-ap-diao/">เล็งความเสียหายไปที่แอปเดียว</a> ขณะที่ส่วนอื่นของเครื่องยังทำงานตามปกติ</li>
+    <li><strong>บรรทัดคำสั่งที่มีรหัสออก</strong> ไฟล์โปรแกรมเดียวกัน<a href="../thotsop-khrueakhai-nai-ci/">ทำงานใน CI</a> และรายงานทุกผลลัพธ์ด้วยรหัสออก</li>
+    <li><strong>การรันที่ทำซ้ำได้</strong> เมื่อใช้ <code>--seed</code> การสูญหายแบบสุ่มและจิตเตอร์ชุดเดิมจะกลับมาในการรันครั้งถัดไป</li>
+    <li><strong>การตั้งค่าที่เปลี่ยนเอง</strong> <a href="../senario-tam-wela/">สถานการณ์ตามเวลา</a>จะสลับการตั้งค่าในวินาทีที่กำหนด ขณะที่คุณดูโปรแกรมอยู่</li>
+    <li><strong>มุมมองแบบสด</strong> กราฟ ตัวนับ และตารางการเชื่อมต่อแสดงว่าอะไรโดนผลกระทบและมากแค่ไหน</li>
+    <li><strong>เครื่องมือเครือข่ายในหน้าต่างเดียวกัน</strong> <a href="../ping-tor-nueang/">ping ต่อเนื่อง</a>พร้อมกราฟ <a href="../khrueang-skaen-port/">เครื่องสแกนพอร์ต</a> และ<a href="../truat-praphet-nat/">การทดสอบประเภท NAT</a></li>
+  </ul>
+</section>
+
+<section>
+  <h2>เมื่อไรควรใช้อย่างอื่น</h2>
+  <ul>
+    <li><strong>คุณต้องการเครือข่ายทั้งวงที่มีเราเตอร์และสวิตช์</strong> นั่นเป็นงานของโปรแกรมจำลองเครือข่ายแบบ GNS3 หรือ EVE-NG ที่รันอุปกรณ์เสมือน ส่วนโปรแกรมจำลองแบบนี้เปลี่ยนทราฟฟิกของคอมพิวเตอร์จริงเครื่องเดียว</li>
+    <li><strong>คุณต้องการผลิตภัณฑ์เชิงพาณิชย์ที่มีการสนับสนุน</strong> SoftPerfect Connection Emulator เป็นโปรแกรมจำลองเครือข่ายแบบเสียเงินสำหรับ Windows</li>
+    <li><strong>คุณใช้ Linux</strong> tc netem มีมาให้ในระบบอยู่แล้ว และเครื่องมือนี้ก็ทำงานบน Linux ได้ในแบบทดลอง ดู<a href="../jamlong-khrueakhai-bon-linux/">เครือข่ายแย่บน Linux</a></li>
+    <li><strong>คุณขอสิทธิ์ผู้ดูแลระบบไม่ได้</strong> การเปลี่ยนทราฟฟิกของโปรแกรมอื่นต้องใช้สิทธิ์นี้ ไม่ว่าจะใช้เครื่องมือใด</li>
+  </ul>
+  <p>กำลังเปรียบเทียบเครื่องมือฟรีสำหรับ Windows อยู่ใช่ไหม หน้า<a href="../thang-lueak-thaen-clumsy/">ทางเลือกแทน Clumsy</a>พูดถึง Clumsy, NetLimiter และพร็อกซีอย่าง Fiddler</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

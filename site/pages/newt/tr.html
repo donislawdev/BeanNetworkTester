@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>NEWT, yani Network Emulator for Windows Toolkit için bir alternatif</h1>
+  <p class="lead">NEWT, Microsoft'un Windows için ağ emülatörüydü. Gerçek trafiğe gecikme, paket kaybı ve hız sınırı ekler, böylece bir program sıradan bir bilgisayarda kötü bir ağda denenebilirdi. Microsoft artık onu indirme için sunmuyor. Bu sayfa, NEWT'in her ayarını Windows 10 ve 11'de aynı işi yapan Bean Network Tester'a eşler.</p>
+</section>
+
+<section>
+  <h2>NEWT'e ne oldu</h2>
+  <ul>
+    <li>NEWT, Games for Windows LIVE SDK ve Xbox geliştirme kitiyle birlikte geliyordu. Sürücüsü daha sonra Visual Studio 2010'a, yük testlerindeki ağ emülasyonu olarak girdi.</li>
+    <li>Microsoft, Visual Studio'daki web performans ve yük testlerini, ağ emülasyonu dahil, kullanımdan kaldırdı. Bunların tam olarak sunulduğu son sürüm Visual Studio 2019'dur.</li>
+    <li>Bugün Microsoft'tan bir indirme yok. Bir arama, indirme sitelerindeki kopyaları ve en son 2013'te güncellenmiş bir Chocolatey paketini bulur.</li>
+  </ul>
+  <p>Bir emülatör ağ sürücüsü kurar ve yönetici haklarıyla çalışır. Bu yüzden bir kurulum dosyasını çalıştırmadan önce nereden geldiğini bilmeye değer.</p>
+</section>
+
+<section>
+  <h2>NEWT ayarları, tek tek</h2>
+  <p>Bu sayfadaki her komuta <code>--target</code> ve <code>--duration</code> ekleyin, yoksa komut bütün bilgisayarı etkiler.</p>
+  <table>
+    <tr><th>NEWT'te</th><th>Penceredeki ayar</th><th>Bayrak</th></tr>
+    <tr><td>Gecikme (Latency)</td><td>{{app.fields.latency}}, değişen bir gecikme için de {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td>Bant genişliği (Bandwidth)</td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 1221 --up 1221</code></td></tr>
+    <tr><td>Kuyruk (Queue)</td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+    <tr><td>Paket kaybı (Packet loss)</td><td>{{app.fields.loss}}, art arda gelen kayıplar için de {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td>Yeniden sıralama (Reordering)</td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td>Hatalar (Errors)</td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td>Bağlantının kopup gelmesi</td><td>{{app.frames.flapping}}</td><td><code>--flap-period 10 --flap-down 40</code></td></tr>
+    <tr><td>IP adresine göre filtre</td><td>{{app.frames.destination}}</td><td><code>--dst-ip 10.0.0.5</code></td></tr>
+    <tr><td>Protokole göre filtre</td><td>{{app.frames.traffic}}: {{app.filters.tcp}}, {{app.filters.udp}} veya {{app.filters.ping}}</td><td><code>--filter tcp</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Hız.</strong> Hız sınırı alanları KB/s cinsindendir ve K = 1024'tür: 122 yaklaşık 1 Mbit/s, 1221 yaklaşık 10 Mbit/s eder. <a href="../windows-icin-netem/">netem sayfasında</a> daha uzun bir tablo var.</li>
+    <li><strong>Kuyruk.</strong> {{app.fields.buffer}} paket sayısı değil, milisaniye cinsinden bir süredir.</li>
+    <li><strong>Yeniden sıralama.</strong> Yeniden sıralama yüzdesi yoktur. Bir sıçrama tek bir paketi bekletir, ondan sonra gönderilenler onu geçer ve {{app.app.tabs.statistics}} sayfasındaki yeniden sıralanan paket sayacı bunun gerçekten olup olmadığını gösterir.</li>
+    <li><strong>İki yön.</strong> Her değer hem gidişte hem dönüşte uygulanır, bu yüzden <code>--latency 100</code> bir ping'e yaklaşık 200 ms ekler. Her yön için farklı değerler istiyorsanız {{app.fields.asym}} seçeneğini işaretleyin ya da <code>--asym</code> ile <code>-up</code> ile biten bayrakları ekleyin.</li>
+  </ul>
+  <p>Tipik bir NEWT bağlantısı tek bir komut olarak, iki dakika boyunca tek bir programa yöneltilmiş hâliyle:</p>
+<pre><code>BeanNetworkTester.exe --latency 100 --jitter 20 --loss 2 --down 1221 --up 1221 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Bu aracın getirdikleri</h2>
+  <ul>
+    <li><strong>Bilgisayarın tamamı değil, tek bir program.</strong> Adres ve protokolün yanında filtre bir program da olabilir, adıyla ya da işlem kimliğiyle. <a href="../tek-uygulamayi-hedefle/">Bozulmayı tek bir uygulamaya yöneltin</a>, makinenin geri kalanı normal kalsın.</li>
+    <li><strong>Çıkış kodlu bir komut satırı.</strong> Aynı çalıştırılabilir dosya <a href="../ci-icinde-ag-testleri/">CI'da çalışır</a> ve her sonucu çıkış koduyla bildirir.</li>
+    <li><strong>Tekrarlanabilen çalıştırmalar.</strong> <code>--seed</code> ile aynı rastgele kayıp ve aynı jitter bir sonraki çalıştırmada geri gelir.</li>
+    <li><strong>Kendiliğinden değişen ayarlar.</strong> <a href="../zamana-bagli-senaryolar/">Zamanlı senaryolar</a> siz programı izlerken ayarları belirlenen saniyelerde değiştirir.</li>
+    <li><strong>Canlı görünüm.</strong> Bir grafik, sayaçlar ve bir bağlantı tablosu neyin ne kadar etkilendiğini gösterir.</li>
+    <li><strong>Aynı pencerede ağ araçları.</strong> Grafikli bir <a href="../surekli-ping/">sürekli ping</a>, bir <a href="../port-tarayici/">port tarayıcı</a> ve bir <a href="../nat-turu-testi/">NAT türü testi</a>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Ne zaman başka bir şey kullanmalı</h2>
+  <ul>
+    <li><strong>Yönlendirici ve anahtarlardan oluşan bütün bir ağa ihtiyacınız var.</strong> Bu, GNS3 veya EVE-NG gibi sanal cihazlar çalıştıran bir ağ simülatörünün işidir. Bir emülatör tek bir gerçek bilgisayarın trafiğini değiştirir.</li>
+    <li><strong>Destekli ticari bir ürün istiyorsunuz.</strong> SoftPerfect Connection Emulator, Windows için ücretli bir ağ emülatörüdür.</li>
+    <li><strong>Linux kullanıyorsunuz.</strong> tc netem yerleşik olarak gelir ve bu araç da orada deneysel olarak çalışır. <a href="../linuxta-ag-simulasyonu/">Linux'ta kötü ağ</a> sayfasına bakın.</li>
+    <li><strong>Yönetici hakları alamıyorsunuz.</strong> Başka programların trafiğini değiştirmek, hangi araçla olursa olsun bu hakları gerektirir.</li>
+  </ul>
+  <p>Windows için ücretsiz araçları mı karşılaştırıyorsunuz? <a href="../clumsy-alternatifi/">Clumsy alternatifi</a> sayfası Clumsy'yi, NetLimiter'ı ve Fiddler gibi proxy'leri ele alır.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

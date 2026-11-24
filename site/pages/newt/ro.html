@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>O alternativă la NEWT, adică Network Emulator for Windows Toolkit</h1>
+  <p class="lead">NEWT era emulatorul de rețea al Microsoft pentru Windows. Adăuga întârziere, pierderi și o limită de viteză traficului real, ca un program să poată fi încercat pe o rețea proastă de pe un PC obișnuit. Microsoft nu îl mai oferă pentru descărcare. Această pagină pune fiecare setare NEWT în corespondență cu Bean Network Tester, care face aceeași treabă pe Windows 10 și 11.</p>
+</section>
+
+<section>
+  <h2>Ce s-a întâmplat cu NEWT</h2>
+  <ul>
+    <li>NEWT venea cu Games for Windows LIVE SDK și cu kitul de dezvoltare pentru Xbox. Driverul lui a trecut apoi în Visual Studio 2010, ca emulare de rețea în testele de încărcare.</li>
+    <li>Microsoft a declarat învechite testele de performanță web și de încărcare din Visual Studio, inclusiv emularea de rețea. Visual Studio 2019 este ultima versiune în care sunt disponibile complet.</li>
+    <li>Astăzi nu există o descărcare de la Microsoft. O căutare găsește copii pe site-uri de descărcări și un pachet Chocolatey actualizat ultima dată în 2013.</li>
+  </ul>
+  <p>Un emulator instalează un driver de rețea și rulează cu drepturi de administrator, așa că merită să știi de unde vine un program de instalare înainte să-l rulezi.</p>
+</section>
+
+<section>
+  <h2>Setările NEWT, una câte una</h2>
+  <p>Adaugă <code>--target</code> și <code>--duration</code> la fiecare comandă de pe această pagină, altfel afectează tot computerul.</p>
+  <table>
+    <tr><th>În NEWT</th><th>Setarea din fereastră</th><th>Indicator</th></tr>
+    <tr><td>Latență (Latency)</td><td>{{app.fields.latency}}, și {{app.fields.jitter}} pentru o întârziere care variază</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td>Lățime de bandă (Bandwidth)</td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 1221 --up 1221</code></td></tr>
+    <tr><td>Coadă (Queue)</td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+    <tr><td>Pierdere de pachete (Packet loss)</td><td>{{app.fields.loss}}, și {{app.fields.loss_burst}} pentru pierderi care vin în serie</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td>Reordonare (Reordering)</td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td>Erori (Errors)</td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td>Deconectare și reconectare</td><td>{{app.frames.flapping}}</td><td><code>--flap-period 10 --flap-down 40</code></td></tr>
+    <tr><td>Filtru după adresa IP</td><td>{{app.frames.destination}}</td><td><code>--dst-ip 10.0.0.5</code></td></tr>
+    <tr><td>Filtru după protocol</td><td>{{app.frames.traffic}}: {{app.filters.tcp}}, {{app.filters.udp}} sau {{app.filters.ping}}</td><td><code>--filter tcp</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Viteză.</strong> Câmpurile limitei de viteză sunt în KB/s, cu K = 1024: 122 înseamnă cam 1 Mbit/s, iar 1221 cam 10 Mbit/s. <a href="../netem-pentru-windows/">Pagina despre netem</a> are un tabel mai lung.</li>
+    <li><strong>Coadă.</strong> {{app.fields.buffer}} este un timp în milisecunde, nu un număr de pachete.</li>
+    <li><strong>Reordonare.</strong> Nu există un procent de reordonare. Un vârf reține un singur pachet, astfel încât cele trimise după el îl depășesc, iar contorul de pachete reordonate de pe pagina {{app.app.tabs.statistics}} arată dacă asta s-a întâmplat cu adevărat.</li>
+    <li><strong>Ambele sensuri.</strong> Fiecare valoare se aplică la dus și la întors, deci <code>--latency 100</code> adaugă cam 200 ms la un ping. Pentru valori diferite pe fiecare sens, bifează {{app.fields.asym}}, sau adaugă <code>--asym</code> și indicatorii care se termină în <code>-up</code>.</li>
+  </ul>
+  <p>O legătură NEWT tipică într-o singură comandă, țintită pe un program timp de două minute:</p>
+<pre><code>BeanNetworkTester.exe --latency 100 --jitter 20 --loss 2 --down 1221 --up 1221 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Ce aduce acest instrument</h2>
+  <ul>
+    <li><strong>Un program, nu tot computerul.</strong> Pe lângă o adresă și un protocol, un filtru poate fi un program, după nume sau ID de proces. <a href="../tinteste-o-aplicatie/">Țintește degradarea pe o singură aplicație</a> în timp ce restul mașinii rămâne normal.</li>
+    <li><strong>O linie de comandă cu coduri de ieșire.</strong> Același executabil <a href="../teste-retea-in-ci/">rulează în CI</a> și raportează fiecare rezultat prin codul său de ieșire.</li>
+    <li><strong>Rulări care se pot repeta.</strong> Cu <code>--seed</code>, aceleași pierderi aleatorii și același jitter revin la rularea următoare.</li>
+    <li><strong>Setări care se schimbă singure.</strong> <a href="../scenarii-in-timp/">Scenariile temporizate</a> schimbă setările la secundele alese în timp ce urmărești programul.</li>
+    <li><strong>O vedere în timp real.</strong> Un grafic, contoare și un tabel al conexiunilor arată ce a fost afectat și cât de mult.</li>
+    <li><strong>Instrumente de rețea în aceeași fereastră.</strong> Un <a href="../ping-continuu/">ping continuu</a> cu grafic, un <a href="../scanner-de-porturi/">scanner de porturi</a> și un <a href="../test-tip-nat/">test al tipului de NAT</a>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Când să folosești altceva</h2>
+  <ul>
+    <li><strong>Ai nevoie de o rețea întreagă de routere și switch-uri.</strong> Asta este treaba unui simulator de rețea, precum GNS3 sau EVE-NG, care rulează dispozitive virtuale. Un emulator schimbă traficul unui singur computer real.</li>
+    <li><strong>Vrei un produs comercial cu suport.</strong> SoftPerfect Connection Emulator este un emulator de rețea plătit pentru Windows.</li>
+    <li><strong>Lucrezi pe Linux.</strong> tc netem este inclus, iar acest instrument rulează și acolo, experimental. Vezi <a href="../simulare-retea-pe-linux/">o rețea proastă pe Linux</a>.</li>
+    <li><strong>Nu poți obține drepturi de administrator.</strong> Schimbarea traficului altor programe le cere, cu orice instrument.</li>
+  </ul>
+  <p>Compari instrumente gratuite pentru Windows? Pagina <a href="../alternativa-clumsy/">Alternativă la Clumsy</a> tratează Clumsy, NetLimiter și proxy-uri precum Fiddler.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

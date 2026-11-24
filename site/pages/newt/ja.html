@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>NEWT（Network Emulator for Windows Toolkit）の代替</h1>
+  <p class="lead">NEWTはMicrosoftが作ったWindows向けのネットワークエミュレーターです。実際の通信に遅延、パケットロス、速度制限を加え、普通のPCで悪いネットワークでのプログラムの動きを確かめられました。Microsoftは現在、ダウンロードを提供していません。このページでは、NEWTの各設定を、Windows 10と11で同じことができるBean Network Testerに対応づけます。</p>
+</section>
+
+<section>
+  <h2>NEWTはどうなったか</h2>
+  <ul>
+    <li>NEWTはGames for Windows LIVE SDKとXboxの開発キットに付属していました。その後、ドライバーはVisual Studio 2010に移り、負荷テストのネットワークエミュレーションになりました。</li>
+    <li>MicrosoftはVisual StudioのWebパフォーマンステストと負荷テストを、ネットワークエミュレーションも含めて非推奨にしました。これらを完全に使える最後のバージョンはVisual Studio 2019です。</li>
+    <li>現在、Microsoftからのダウンロードはありません。検索で見つかるのは、ダウンロードサイトにあるコピーと、2013年が最終更新のChocolateyパッケージです。</li>
+  </ul>
+  <p>エミュレーターはネットワークドライバーをインストールし、管理者権限で動きます。インストーラーを実行する前に、その入手元を確かめておく価値があります。</p>
+</section>
+
+<section>
+  <h2>NEWTの設定を1つずつ</h2>
+  <p>このページのどのコマンドにも <code>--target</code> と <code>--duration</code> を付けてください。付けないとコンピューター全体に影響します。</p>
+  <table>
+    <tr><th>NEWTでは</th><th>ウィンドウの設定</th><th>フラグ</th></tr>
+    <tr><td>遅延（Latency）</td><td>{{app.fields.latency}}。遅延を揺らすなら{{app.fields.jitter}}も</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td>帯域（Bandwidth）</td><td>{{app.fields.download}}、{{app.fields.upload}}</td><td><code>--down 1221 --up 1221</code></td></tr>
+    <tr><td>キュー（Queue）</td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+    <tr><td>パケットロス（Packet loss）</td><td>{{app.fields.loss}}。ロスを連続させるなら{{app.fields.loss_burst}}も</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td>順序の入れ替え（Reordering）</td><td>{{app.fields.spike_prob}}、{{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td>エラー（Errors）</td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td>切断と再接続</td><td>{{app.frames.flapping}}</td><td><code>--flap-period 10 --flap-down 40</code></td></tr>
+    <tr><td>IPアドレスでのフィルター</td><td>{{app.frames.destination}}</td><td><code>--dst-ip 10.0.0.5</code></td></tr>
+    <tr><td>プロトコルでのフィルター</td><td>{{app.frames.traffic}}：{{app.filters.tcp}}、{{app.filters.udp}}、{{app.filters.ping}}</td><td><code>--filter tcp</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>速度。</strong>速度制限フィールドの単位はKB/sで、K = 1024です。122は約1 Mbit/s、1221は約10 Mbit/sです。より長い表は<a href="../windows-de-netem/">netemのページ</a>にあります。</li>
+    <li><strong>キュー。</strong>{{app.fields.buffer}}はミリ秒の時間で、パケット数ではありません。</li>
+    <li><strong>順序の入れ替え。</strong>入れ替えの割合を指定する項目はありません。スパイクは1つのパケットだけを止め、あとから送ったパケットに追い越させます。実際に起きたかどうかは{{app.app.tabs.statistics}}ページの入れ替えカウンターで確認できます。</li>
+    <li><strong>両方向。</strong>どの値も行きと帰りの両方にかかるので、<code>--latency 100</code> でpingは約200 ms増えます。方向ごとに別の値にするには、{{app.fields.asym}}にチェックを入れるか、<code>--asym</code> と <code>-up</code> で終わるフラグを付けます。</li>
+  </ul>
+  <p>典型的なNEWTの回線を1つのコマンドにし、1つのプログラムに2分間だけ向けた例です。</p>
+<pre><code>BeanNetworkTester.exe --latency 100 --jitter 20 --loss 2 --down 1221 --up 1221 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>このツールでできること</h2>
+  <ul>
+    <li><strong>コンピューター全体ではなく、1つのプログラム。</strong>アドレスとプロトコルのほかに、プログラムを名前かプロセスIDでフィルターにできます。<a href="../hitotsu-no-apuri/">障害を1つのアプリに向けて</a>、ほかの部分は普段どおりに保てます。</li>
+    <li><strong>終了コードを返すコマンドライン。</strong>同じ実行ファイルが<a href="../ci-nettowaku-tesuto/">CIで動き</a>、すべての結果を終了コードで返します。</li>
+    <li><strong>繰り返せる実行。</strong><code>--seed</code> を使うと、次の実行でも同じランダムなロスとジッターが再現されます。</li>
+    <li><strong>ひとりでに変わる設定。</strong><a href="../jikan-henka-shinario/">時間で変わるシナリオ</a>が決めた秒数で設定を切り替えるので、プログラムを見ているだけで済みます。</li>
+    <li><strong>ライブ表示。</strong>グラフ、カウンター、接続の表が、どの通信がどれだけ影響を受けたかを示します。</li>
+    <li><strong>同じウィンドウのネットワークツール。</strong>グラフ付きの<a href="../renzoku-ping/">連続ping</a>、<a href="../pooto-sukyanaa/">ポートスキャナー</a>、<a href="../nat-taipu-tesuto/">NATタイプテスト</a>。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>別のツールを選ぶべき場合</h2>
+  <ul>
+    <li><strong>ルーターとスイッチからなるネットワーク全体が必要。</strong>それはGNS3やEVE-NGのような、仮想機器を動かすネットワークシミュレーターの仕事です。エミュレーターが変えるのは、実在する1台のコンピューターの通信です。</li>
+    <li><strong>サポート付きの商用製品が欲しい。</strong>SoftPerfect Connection EmulatorはWindows向けの有料ネットワークエミュレーターです。</li>
+    <li><strong>Linuxを使っている。</strong>tc netemが標準で入っていて、このツールも試験的にLinuxで動きます。<a href="../linux-de-nettowaku-moni/">Linuxで悪いネットワークを再現する</a>をご覧ください。</li>
+    <li><strong>管理者権限をもらえない。</strong>ほかのプログラムの通信を変えるには、どのツールでも管理者権限が必要です。</li>
+  </ul>
+  <p>Windows向けの無料ツールを比べていますか？<a href="../clumsy-daitai/">Clumsyの代替</a>のページで、Clumsy、NetLimiter、Fiddlerのようなプロキシを取り上げています。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
