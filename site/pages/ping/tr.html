@@ -1,0 +1,47 @@
+<section class="hero">
+  <h1>Sayıları sizin için tutan sürekli ping</h1>
+  <p class="lead">Sürekli ping, bir bağlantının kararlı olup olmadığını görmenin en hızlı yoludur: siz durdurana kadar ardı ardına yankı istekleri. Windows'ta da Linux'ta da konsolda bulunur. {{app.app.tabs.tools}} sekmesindeki {{app.tools.ping.tab}} aracı aynısını yapar ve konsolun saymayı size bıraktığı sayıları tutar: jitter, en uzun kayıp serisi ve yanıtların %95'inin altında kaldığı gidiş-dönüş süresi.</p>
+</section>
+
+<section>
+  <h2>Konsolda</h2>
+  <p>Windows komut isteminde <code>-t</code>, siz Ctrl+C tuşlarına basana kadar ping atar. Ctrl+Break o ana kadarki toplamları gösterir ve devam eder.</p>
+<pre><code>ping -t 1.1.1.1</code></pre>
+  <p>Çıktıyı bir dosyada tutmak ya da her satıra saat eklemek için PowerShell'de:</p>
+<pre><code>ping -t 1.1.1.1 > ping.txt
+ping.exe -t 1.1.1.1 | ForEach-Object { "{0:HH:mm:ss} {1}" -f (Get-Date), $_ }</code></pre>
+  <p>PowerShell 7'nin bunun için kendi komutu vardır; Linux'ta ise sıradan bir ping zaten Ctrl+C'ye kadar sürer. <code>-D</code> her satıra bir zaman damgası ekler:</p>
+<pre><code>Test-Connection 1.1.1.1 -Repeat
+ping -D 1.1.1.1</code></pre>
+  <p>Hiçbiri çalışırken bir özet çıkarmaz: her yanıt için bir satır ve sonda toplamlar alırsınız.</p>
+</section>
+
+<section>
+  <h2>{{app.tools.ping.tab}} aracıyla</h2>
+  <ul>
+    <li>Bir adres ya da ad yazın; ne sıklıkla ping atılacağını, bir yanıtın ne kadar bekleneceğini, her ping'in kaç bayt taşıyacağını (<code>ping.exe</code> gibi 32, en çok 65 500) ve kaç ping gönderileceğini seçin ya da {{app.tools.ping.stop}} düğmesine kadar sürmesine izin verin. Sonra <strong>{{app.tools.ping.start}}</strong> düğmesine basın.</li>
+    <li>Her ping bir satırdır: ne zaman çıktığı, gidiş-dönüş süresi, TTL değeri ve neyin geri geldiği. Bir grafik son 60 ping'in sürelerini gösterir.</li>
+    <li>Tablonun üstündeki bir satır toplamları tutar: gönderilen, yanıtlar, kaybolan, en uzun kayıp serisi, en düşük, ortalama ve en yüksek gidiş-dönüş süresi, jitter (sürenin bir yanıttan ötekine ne kadar oynadığı) ve yanıtların %95'inin altında kaldığı süre.</li>
+    <li>Öne başka bir sekme geldiğinde de ping atmayı sürdürür. {{app.tools.sockets.tab}} ya da {{app.app.tabs.connections}} içindeki bir satıra sağ tıklayıp <strong>{{app.menu.ping_address}}</strong> seçeneğini seçerek öteki ucuna ping atabilirsiniz.</li>
+    <li><strong>{{app.tools.ping.copy}}</strong> satırları ve toplamları, bir hata raporu için İngilizce olarak kopyalar.</li>
+  </ul>
+  <p>Bekleme süresinden sonra gelen bir yanıt kaybolmuş sayılır. Yüksek gecikmede daha uzun bir bekleme seçin.</p>
+</section>
+
+<section>
+  <h2>Kötü ağın gelişini izleyin</h2>
+  <p>Ping'i başlatın, ardından denetim sayfasında biraz gecikme ve kayıp içeren bir oturum başlatın. Oturum başladığında, durduğunda, yeni ayarlar aldığında ya da bir senaryonun sonraki adımına geçtiğinde satır, o andan beri geçen süreyi ve ortalama gidiş-dönüş süresi ile kayıp oranının öncesinden ne kadar farklı olduğunu gösterir; grafik de o anı kesikli bir çizgiyle işaretler. Bir başka satır, oturumun bu ping'lere ne yaptığını söyler: onları bozar, görür ama dokunmaz ya da hiç yakalamaz.</p>
+  <p>Varsayılan trafik filtresiyle bir ping gecikmeyi iki kez taşır; bu yüzden 100 ms gecikme gidiş-dönüş süresine yaklaşık 200 ms ekler. Kayıp ise isteği ve yanıtı ayrı ayrı vurur; bu yüzden %20 kayıp, ping'lerin yaklaşık üçte birini kaybettirir. Tek bir programa yöneltilmiş bir oturum hiçbir ping'e dokunmaz, çünkü bir ping hiçbir programın bağlantısına ait değildir: bu durumda adresi hedefleyin.</p>
+</section>
+
+<section>
+  <h2>Linux'ta</h2>
+  <p>Araç Linux'ta da çalışır. Sistemin grubunuza ping göndermeye izin verdiği yerde, Ubuntu 26.04'te olduğu gibi, <code>sudo</code> istemez; izin vermediği yerde, Ubuntu 24.04'te olduğu gibi, ister. Gerisi <a href="../linuxta-ag-simulasyonu/">Linux sayfasında</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

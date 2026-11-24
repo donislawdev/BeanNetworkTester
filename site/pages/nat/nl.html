@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>Welk NAT-type heb ik, en komt een gesprek tot stand?</h1>
+  <p class="lead">Videogesprekken, games en WebRTC-apps verbinden twee apparaten rechtstreeks als de routers ertussen dat toelaten, en wijken anders uit naar een relay, een TURN-server. Het hulpmiddel {{app.tools.nat.tab}} op het tabblad {{app.app.tabs.tools}} vertelt je in een paar seconden welk geval op jouw netwerk geldt, vanaf je eigen computer.</p>
+</section>
+
+<section>
+  <h2>Zo start je het</h2>
+  <ol>
+    <li>Open het tabblad {{app.app.tabs.tools}}, dan {{app.tools.group.network}} en {{app.tools.nat.tab}}.</li>
+    <li>Een STUN-server en een TURN-server zijn al ingevuld (die van Cloudflare). Vul je eigen in als je gesprekken andere gebruiken.</li>
+    <li>Druk op <strong>{{app.tools.nat.start}}</strong>. Na een paar seconden vult de tabel zich, en een regel erboven vat het resultaat in gewone woorden samen.</li>
+  </ol>
+  <p>Er gaat niets naar buiten tot je drukt. Dan stuurt het hulpmiddel een paar verzoeken naar de twee servers en kleine testpakketten naar het eigen openbare adres van je netwerk, en stopt.</p>
+</section>
+
+<section>
+  <h2>Wat de regels betekenen</h2>
+  <table>
+    <tr><th>Regel</th><th>Wat hij je vertelt</th></tr>
+    <tr><td><strong>{{app.tools.nat.row.public}}</strong></td><td>Het adres en de poort die de router deze computer geeft, en of hij de poort houdt die de computer gebruikte.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.mapping}}</strong></td><td><strong>{{app.tools.nat.result.independent}}</strong>: één socket krijgt voor elke server dezelfde openbare poort, dus apparaten achter andere routers kunnen meestal rechtstreeks verbinden. <strong>{{app.tools.nat.result.by_address}}</strong> of <strong>{{app.tools.nat.result.by_address_port}}</strong>: een nieuwe poort voor elke server, dus een gesprek heeft misschien een relay nodig.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.hairpin_together}}</strong>, <strong>{{app.tools.nat.row.hairpin_first}}</strong></td><td>Of twee apparaten achter deze router elkaar via zijn openbare adres bereiken. Een router die de weg sluit nadat één kant eerst verstuurde, laat zo'n gesprek over aan het lokale netwerk of een relay.</td></tr>
+    <tr><td><strong>TURN</strong></td><td>Of de TURN-server antwoordt via UDP op 3478 en 443, via TCP op 3478 en 80, en via TLS op 5349 en 443. Hem wordt zonder aanmelding om een relay gevraagd, en het antwoord "401, aanmelden nodig" laat zien dat hij er is. Via TLS wordt zijn certificaat gecontroleerd tegen de basiscertificaten die deze computer vertrouwt: een certificaat dat hij niet vertrouwt, kan wijzen op een proxy of firewall onderweg die TLS meeleest.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>De namen van NAT-types die je misschien kent</h2>
+  <p>De oude namen komen uit de eerste STUN-standaard: full cone, restricted cone, port-restricted cone en symmetric. Een symmetrische NAT geeft voor elke server een nieuwe poort, en alle drie de "cone"-types houden één poort voor alle servers. Wat de "cone"-types onderscheidt, is filtering, en die test dit hulpmiddel niet.</p>
+  <p>Spelconsoles tonen een eigen oordeel, zoals Open, Moderate of Strict. Dat mengt de koppeling, de filtering en de vraag of de router poorten doorstuurt voor de console, dus deze regels zijn er niet één op één in te vertalen.</p>
+</section>
+
+<section>
+  <h2>Wat het je niet vertelt</h2>
+  <ul>
+    <li>Of de router datagrammen binnenlaat van een adres waar deze computer niets naartoe heeft gestuurd (filtering).</li>
+    <li>Iets over één router als er nog een NAT achter zit. Achter de NAT van een provider of een VPN beschrijft het resultaat die hele keten.</li>
+    <li>Het leest en verandert niets op de router. De twee servers zien het openbare adres van je netwerk, en <strong>{{app.tools.nat.copy}}</strong> kopieert de tabel in het Engels, met dat adres erin.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Test daarna het gesprek op een slecht netwerk</h2>
+  <p>Zodra je weet welke weg een gesprek neemt, kan de bedieningspagina vertraging en verlies op één deel ervan richten: {{app.fields.call_checks}}, {{app.fields.call_turn_control}} of {{app.fields.call_media}}. Zo zie je of een gesprek een trage verbindingscontrole overleeft zonder dat beeld en geluid eronder lijden, of andersom. De rest van het richten staat op <a href="../een-app-als-doel/">een app als doel</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

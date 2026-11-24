@@ -1,0 +1,138 @@
+{
+  "id": "nat",
+  "order": 79,
+  "languages": {
+    "en": {
+      "slug": "nat-type-test",
+      "link_text": "NAT type test",
+      "title": "Check your NAT type and TURN server from your PC",
+      "description": "See what your router does to calls: the public address, whether it keeps the port, hairpinning, and whether a TURN server answers on UDP, TCP and TLS."
+    },
+    "pl": {
+      "slug": "test-typu-nat",
+      "link_text": "Test typu NAT",
+      "title": "Sprawdź typ NAT i serwer TURN ze swojego komputera",
+      "description": "Zobacz, co router robi z rozmowami: adres publiczny, czy zachowuje port, hairpinning i czy serwer TURN odpowiada przez UDP, TCP i TLS."
+    },
+    "zh-Hans": {
+      "slug": "nat-leixing-ceshi",
+      "link_text": "NAT 类型检测",
+      "title": "在电脑上检测 NAT 类型和 TURN 服务器",
+      "description": "看看路由器如何对待通话：公网地址、端口是否保持、回环（hairpin），以及 TURN 服务器是否在 UDP、TCP 和 TLS 上响应。"
+    },
+    "ja": {
+      "slug": "nat-taipu-tesuto",
+      "link_text": "NAT タイプのテスト",
+      "title": "PC から NAT タイプと TURN サーバーを確認する",
+      "description": "ルーターが通話をどう扱うかを確認: パブリックアドレス、ポートが保たれるか、ヘアピン、TURN サーバーが UDP・TCP・TLS で応答するか。"
+    },
+    "de": {
+      "slug": "nat-typ-testen",
+      "link_text": "NAT-Typ testen",
+      "title": "NAT-Typ und TURN-Server vom eigenen PC aus prüfen",
+      "description": "Sieh, was dein Router mit Anrufen macht: die öffentliche Adresse, ob er den Port behält, Hairpinning und ob ein TURN-Server über UDP, TCP und TLS antwortet."
+    },
+    "fr": {
+      "slug": "test-type-nat",
+      "link_text": "Test du type de NAT",
+      "title": "Vérifier son type de NAT et un serveur TURN depuis son PC",
+      "description": "Voyez ce que votre routeur fait aux appels : l'adresse publique, s'il garde le port, le hairpinning et si un serveur TURN répond en UDP, TCP et TLS."
+    },
+    "es": {
+      "slug": "prueba-tipo-nat",
+      "link_text": "Prueba de tipo de NAT",
+      "title": "Comprobar el tipo de NAT y un servidor TURN desde el PC",
+      "description": "Vea qué hace su router con las llamadas: la dirección pública, si conserva el puerto, el hairpinning y si un servidor TURN responde por UDP, TCP y TLS."
+    },
+    "pt-BR": {
+      "slug": "teste-tipo-nat",
+      "link_text": "Teste de tipo de NAT",
+      "title": "Verificar o tipo de NAT e um servidor TURN pelo PC",
+      "description": "Veja o que o seu roteador faz com as chamadas: o endereço público, se ele mantém a porta, o hairpinning e se um servidor TURN responde por UDP, TCP e TLS."
+    },
+    "it": {
+      "slug": "test-tipo-nat",
+      "link_text": "Test del tipo di NAT",
+      "title": "Verificare tipo di NAT e server TURN dal proprio PC",
+      "description": "Scopri cosa fa il router alle chiamate: l'indirizzo pubblico, se mantiene la porta, l'hairpinning e se un server TURN risponde su UDP, TCP e TLS."
+    },
+    "id": {
+      "slug": "tes-tipe-nat",
+      "link_text": "Tes tipe NAT",
+      "title": "Periksa tipe NAT dan server TURN dari PC Anda",
+      "description": "Lihat apa yang dilakukan router pada panggilan: alamat publik, apakah port dipertahankan, hairpinning, dan apakah server TURN menjawab lewat UDP, TCP, dan TLS."
+    },
+    "ru": {
+      "slug": "test-tipa-nat",
+      "link_text": "Проверка типа NAT",
+      "title": "Проверка типа NAT и сервера TURN со своего компьютера",
+      "description": "Узнайте, что роутер делает со звонками: публичный адрес, сохраняет ли он порт, hairpinning и отвечает ли сервер TURN по UDP, TCP и TLS."
+    },
+    "tr": {
+      "slug": "nat-turu-testi",
+      "link_text": "NAT türü testi",
+      "title": "Bilgisayarınızdan NAT türünü ve TURN sunucusunu denetleyin",
+      "description": "Yönlendiricinin aramalara ne yaptığını görün: genel adres, port korunuyor mu, hairpinning ve TURN sunucusu UDP, TCP ve TLS ile yanıt veriyor mu."
+    },
+    "cs": {
+      "slug": "test-typu-nat",
+      "link_text": "Test typu NAT",
+      "title": "Zjistěte typ NAT a server TURN ze svého počítače",
+      "description": "Podívejte se, co router dělá s hovory: veřejná adresa, zda zachová port, hairpinning a zda server TURN odpovídá přes UDP, TCP a TLS."
+    },
+    "vi": {
+      "slug": "kiem-tra-loai-nat",
+      "link_text": "Kiểm tra loại NAT",
+      "title": "Kiểm tra loại NAT và máy chủ TURN từ máy tính của bạn",
+      "description": "Xem router làm gì với các cuộc gọi: địa chỉ công khai, có giữ cổng hay không, hairpinning, và máy chủ TURN có trả lời qua UDP, TCP và TLS không."
+    },
+    "hi": {
+      "slug": "nat-type-jaanch",
+      "link_text": "NAT टाइप टेस्ट",
+      "title": "अपने PC से NAT टाइप और TURN सर्वर जाँचें",
+      "description": "देखें कि राउटर कॉल के साथ क्या करता है: पब्लिक पता, पोर्ट बना रहता है या नहीं, हेयरपिनिंग, और TURN सर्वर UDP, TCP और TLS पर जवाब देता है या नहीं।"
+    },
+    "ko": {
+      "slug": "nat-yuhyeong-teseuteu",
+      "link_text": "NAT 유형 테스트",
+      "title": "PC에서 NAT 유형과 TURN 서버 확인하기",
+      "description": "라우터가 통화를 어떻게 다루는지 확인하세요: 공인 주소, 포트 유지 여부, 헤어핀, TURN 서버가 UDP·TCP·TLS로 응답하는지."
+    },
+    "ar": {
+      "slug": "ikhtibar-naw-nat",
+      "link_text": "اختبار نوع NAT",
+      "title": "افحص نوع NAT وخادم TURN من حاسوبك",
+      "description": "اعرف ما يفعله الموجّه بالمكالمات: العنوان العام، وهل يحتفظ بالمنفذ، والـ hairpinning، وهل يجيب خادم TURN عبر UDP وTCP وTLS."
+    },
+    "ro": {
+      "slug": "test-tip-nat",
+      "link_text": "Test tip NAT",
+      "title": "Verifică tipul de NAT și un server TURN de pe PC",
+      "description": "Vezi ce face routerul cu apelurile: adresa publică, dacă păstrează portul, hairpinning și dacă un server TURN răspunde prin UDP, TCP și TLS."
+    },
+    "nl": {
+      "slug": "nat-type-testen",
+      "link_text": "NAT-type testen",
+      "title": "Je NAT-type en een TURN-server controleren vanaf je pc",
+      "description": "Zie wat je router met gesprekken doet: het openbare adres, of hij de poort houdt, hairpinning en of een TURN-server antwoordt via UDP, TCP en TLS."
+    },
+    "zh-Hant": {
+      "slug": "nat-leixing-ceshi",
+      "link_text": "NAT 類型檢測",
+      "title": "在電腦上檢測 NAT 類型與 TURN 伺服器",
+      "description": "看看路由器如何處理通話：公用位址、連接埠是否保持、迴路（hairpin），以及 TURN 伺服器是否在 UDP、TCP 與 TLS 上回應。"
+    },
+    "uk": {
+      "slug": "test-typu-nat",
+      "link_text": "Перевірка типу NAT",
+      "title": "Перевірка типу NAT і сервера TURN зі свого ПК",
+      "description": "Дізнайтеся, що роутер робить із дзвінками: публічна адреса, чи зберігає він порт, hairpinning і чи відповідає сервер TURN через UDP, TCP і TLS."
+    },
+    "th": {
+      "slug": "truat-praphet-nat",
+      "link_text": "ทดสอบประเภท NAT",
+      "title": "ตรวจประเภท NAT และเซิร์ฟเวอร์ TURN จากพีซีของคุณ",
+      "description": "ดูว่าเราเตอร์ทำอะไรกับการโทร: ที่อยู่สาธารณะ เก็บพอร์ตไว้หรือไม่ แฮร์พินนิง และเซิร์ฟเวอร์ TURN ตอบผ่าน UDP, TCP และ TLS หรือไม่"
+    }
+  }
+}

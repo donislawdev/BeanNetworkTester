@@ -1305,16 +1305,13 @@ def _bullet(lines, index, nested=True):
 
 
 def _readme_parts(lines, tools_name):
-    """The README's three places that say what goes out: the feature bullet that names
-    Ping (with its wrapped lines), the Tools tab's entry (``tools_name``, the tab as
-    that README names it) and the section just above the SmartScreen one. The Tools
-    entry joined on 2026-11-12: seven translations went on saying only Ping and NAT
-    and STUN send after Port scan came, and nothing read that entry."""
+    """The README's two places that say what goes out: the Tools tab's entry
+    (``tools_name``, the tab as that README names it) and the section just above the
+    SmartScreen one. The Tools entry joined on 2026-11-12: seven translations went on
+    saying only Ping and NAT and STUN send after Port scan came, and nothing read that
+    entry. The feature list's "No telemetry" bullet names no tool: it says only that
+    nothing is sent on its own, and these two places say what is sent when asked."""
     parts = []
-    for index, line in enumerate(lines):
-        if line.startswith("- **") and "Ping" in _bullet(lines, index):
-            parts.append(("feature list", _bullet(lines, index)))
-            break
     tools = next((i for i, line in enumerate(lines)
                   if line.startswith(f"- **{tools_name}**")), None)
     if tools is not None:
@@ -1370,10 +1367,10 @@ def test_every_sentence_about_what_goes_out_names_every_tool_that_sends():
     found = what_goes_out()
     readmes = [name for name in os.listdir(ROOT)
                if name.startswith("README") and name.endswith(".md")]
-    # Three per README, the notices, --license and one per window language: fewer means
+    # Two per README, the notices, --license and one per window language: fewer means
     # a sentence was not found, and a check over nothing passes everything.
     check("every sentence about what goes out was found",
-          len(found) == 3 * len(readmes) + 2 + len(languages) and all(t for _w, t, _l in found),
+          len(found) == 2 * len(readmes) + 2 + len(languages) and all(t for _w, t, _l in found),
           f"({[(where, len(text)) for where, text, _l in found]})")
     missing = {}
     for where, text, language in found:

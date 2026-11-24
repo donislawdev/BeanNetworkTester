@@ -1,0 +1,47 @@
+<section class="hero">
+  <h1>A continuous ping that keeps the numbers for you</h1>
+  <p class="lead">A continuous ping is the quickest way to see whether a connection is steady: one echo request after another, until you stop it. Windows and Linux both have one in the console. The {{app.tools.ping.tab}} tool on the {{app.app.tabs.tools}} tab does the same and keeps the numbers the console leaves you to count: the jitter, the longest run of losses and the round trip that 95% of the replies stayed within.</p>
+</section>
+
+<section>
+  <h2>In the console</h2>
+  <p>In the Windows command prompt, <code>-t</code> pings until you press Ctrl+C. Ctrl+Break prints the totals so far and keeps going.</p>
+<pre><code>ping -t 1.1.1.1</code></pre>
+  <p>To keep the output in a file, or to put a time on every line, in PowerShell:</p>
+<pre><code>ping -t 1.1.1.1 > ping.txt
+ping.exe -t 1.1.1.1 | ForEach-Object { "{0:HH:mm:ss} {1}" -f (Get-Date), $_ }</code></pre>
+  <p>PowerShell 7 has its own command for it, and on Linux a plain ping already runs until Ctrl+C. <code>-D</code> puts a timestamp on each line:</p>
+<pre><code>Test-Connection 1.1.1.1 -Repeat
+ping -D 1.1.1.1</code></pre>
+  <p>What none of them does is sum up the run while it goes: you get one line per reply and the totals at the end.</p>
+</section>
+
+<section>
+  <h2>With the {{app.tools.ping.tab}} tool</h2>
+  <ul>
+    <li>Type an address or a name, choose how often to ping, how long to wait for a reply, how many bytes each ping carries (32, as <code>ping.exe</code> sends, up to 65 500) and how many pings to send, or let it run until {{app.tools.ping.stop}}. Then press <strong>{{app.tools.ping.start}}</strong>.</li>
+    <li>Each ping is a row: when it went out, its round trip, its TTL and what came back. A chart shows the round trips of the last 60.</li>
+    <li>A line above the table keeps the totals: sent, replies, lost, the longest run of losses, the lowest, average and highest round trip, the jitter (how much the round trip moves from one reply to the next) and the round trip 95% of replies stayed within.</li>
+    <li>It keeps pinging while another tab is in front. Right-click a row on {{app.tools.sockets.tab}} or on {{app.app.tabs.connections}} and choose <strong>{{app.menu.ping_address}}</strong> to ping its far end.</li>
+    <li><strong>{{app.tools.ping.copy}}</strong> copies the rows and the totals, in English, for a bug report.</li>
+  </ul>
+  <p>A reply that comes after the wait counts as lost. With a long latency, choose a longer wait.</p>
+</section>
+
+<section>
+  <h2>Watch a bad network arrive</h2>
+  <p>Start the ping, then start a session on the Control page with some latency and loss. When the session starts, stops, gets new settings or moves to a scenario's next step, the line shows the time since then and how the average round trip and the share lost differ from before, and the chart marks the moment with a dashed line. Another line says what the session does to these pings: impairs them, sees them and leaves them alone, or does not capture them.</p>
+  <p>With the default traffic filter a ping carries the latency twice, so 100 ms of latency adds about 200 ms to the round trip, and loss hits the request and the reply separately, so 20% of loss loses about a third of the pings. A session aimed at one program never touches a ping, because a ping belongs to no program's connection: aim it at the address instead.</p>
+</section>
+
+<section>
+  <h2>On Linux</h2>
+  <p>The tool works on Linux too. It needs no <code>sudo</code> where the system lets your group send pings, as on Ubuntu 26.04, and needs it where it does not, as on Ubuntu 24.04. See <a href="../simulate-network-on-linux/">the Linux page</a> for the rest.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

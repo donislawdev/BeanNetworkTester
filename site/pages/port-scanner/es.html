@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>¿Qué puertos de otro equipo responden?</h1>
+  <p class="lead">Un escáner de puertos pregunta a un equipo, puerto por puerto, si algo responde allí. La herramienta {{app.tools.portscan.tab}} de la pestaña {{app.app.tabs.tools}} lo hace por TCP y UDP, desde una ventana, en Windows y en Linux, y dice con palabras sencillas qué significa el resultado. Escanee solo equipos que tenga permiso para probar: el software de seguridad y los administradores de red pueden ver un escaneo.</p>
+</section>
+
+<section>
+  <h2>Cómo hacer un escaneo</h2>
+  <ol>
+    <li>Abra la pestaña {{app.app.tabs.tools}} y luego {{app.tools.group.network}} y {{app.tools.portscan.tab}}.</li>
+    <li>Escriba la dirección o el nombre del equipo, y los puertos como los escribe en la página de control: <code>22</code>, <code>80, 443</code> o <code>8000-8100</code>. O rellénelos con <strong>{{app.tools.portscan.common}}</strong> (servicios habituales y servidores de desarrollo), <strong>{{app.tools.portscan.well_known}}</strong> o <strong>{{app.tools.portscan.all}}</strong>.</li>
+    <li>Marque <strong>{{app.tools.portscan.tcp}}</strong>, <strong>{{app.tools.portscan.udp}}</strong> o ambos, y pulse <strong>{{app.tools.portscan.scan}}</strong>. <strong>{{app.tools.portscan.stop}}</strong> lo termina antes, con los puertos que ya preguntó.</li>
+  </ol>
+  <p>Los puertos contiguos con la misma respuesta comparten una fila, junto al servicio que el puerto suele llevar, y una línea encima de la tabla dice qué significa el resultado.</p>
+</section>
+
+<section>
+  <h2>Qué significa cada respuesta</h2>
+  <table>
+    <tr><th>Respuesta</th><th>Significado</th></tr>
+    <tr><td><strong>{{app.tools.portscan.state.open}}</strong></td><td>En TCP, un programa acepta conexiones en el puerto. En UDP, un servicio respondió a la solicitud.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.closed}}</strong></td><td>El equipo respondió que allí no escucha nada.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.silent}}</strong></td><td>No volvió nada a tiempo. En TCP, normalmente un cortafuegos descartó la solicitud. En UDP el puerto también puede estar abierto: un servicio que no entiende la solicitud se queda callado.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.unreachable}}</strong></td><td>El sistema dice que el equipo no está: está apagado, o esa no es su dirección.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.denied}}</strong></td><td>Este equipo se negó a enviar la solicitud.</td></tr>
+  </table>
+  <p>En Windows, un puerto UDP cerrado muestra {{app.tools.portscan.state.closed}} solo cuando el programa se ejecuta como administrador. El cortafuegos de Windows oculta ese mensaje a los programas, y con permisos de administrador la herramienta lo lee de una copia del tráfico de red. Sin ellos, los puertos UDP cerrados muestran {{app.tools.portscan.state.silent}}.</p>
+</section>
+
+<section>
+  <h2>Qué envía y a qué velocidad</h2>
+  <ul>
+    <li>En TCP, una conexión que se cierra enseguida sin enviar nada por ella. En UDP, una solicitud real para DNS, NTP, NetBIOS, mDNS y SSDP, y un datagrama vacío para cualquier otro puerto.</li>
+    <li>A un equipo de una red a la que este está conectado se le preguntan 256 puertos a la vez, con 1 s para cada uno. A uno detrás de un router, 32 a la vez, como mucho 20 nuevos por segundo, con 3 s para cada uno, para no llenar la tabla de conexiones del router. Un escaneo que puede durar más de cinco minutos pregunta antes.</li>
+    <li>Cuando 64 puertos muestran {{app.tools.portscan.state.unreachable}} y ningún otro puerto respondió, el equipo no está, y el escaneo deja de preguntarle.</li>
+    <li>Cuando solo unos pocos puertos no respondieron y el resto sí, a esos pocos se les pregunta una vez más, más despacio.</li>
+  </ul>
+  <p><strong>{{app.tools.portscan.copy}}</strong> copia la tabla en inglés, y <strong>{{app.tools.portscan.export}}</strong> escribe las filas en un archivo CSV.</p>
+</section>
+
+<section>
+  <h2>Un puerto, desde la consola</h2>
+  <p>Para comprobar un solo puerto TCP, PowerShell y la mayoría de los sistemas Linux ya tienen lo necesario:</p>
+<pre><code>Test-NetConnection example.com -Port 443
+nc -zv example.com 443</code></pre>
+  <p>Para las versiones de los servicios o el sistema del otro extremo, la herramienta es nmap. Esta responde a la pregunta anterior: qué puertos responden siquiera, por TCP y UDP, sin nada más que instalar.</p>
+</section>
+
+<section>
+  <h2>¿Se trata de un puerto de este equipo?</h2>
+  <p>Si la pregunta es qué programa de este equipo ocupa un puerto, o por qué un servidor no puede abrir uno, consulte <a href="../que-programa-usa-un-puerto/">qué programa usa un puerto</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

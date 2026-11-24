@@ -1,0 +1,73 @@
+<section class="hero">
+  <h1>Una mala red en Linux, para una sola aplicación</h1>
+  <p class="lead">En Linux, la respuesta habitual es tc con netem: añade retardo y pérdidas a toda una interfaz de red, desde la línea de comandos. Bean Network Tester causa los mismos daños a un solo programa, desde una ventana o desde la línea de comandos, y se detiene solo. Su versión para Linux es experimental, y esta página explica qué significa eso.</p>
+</section>
+
+<section>
+  <h2>Los comandos de tc netem y qué usar aquí</h2>
+  <p>Un comando de netem y el comando más parecido aquí, uno al lado del otro. Ejecútelo con <code>sudo</code> y mantenga <code>--target</code> y <code>--duration</code>: sin ellos afecta a todo el equipo, como netem.</p>
+<pre><code>sudo tc qdisc add dev eth0 root netem delay 100ms 20ms loss 5%
+sudo ./BeanNetworkTester --target firefox --latency 100 --jitter 20 --loss 5 --duration 60</code></pre>
+  <table>
+    <tr><th>netem</th><th>Ajuste en la ventana</th><th>Opción</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 100%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 100</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <p>No todos los números se trasladan uno a uno. netem solo retrasa lo que sale de la interfaz, y esta herramienta captura los dos sentidos, así que <code>--latency 100</code> añade unos 200 ms a un viaje de ida y vuelta: añada <code>--filter out</code> para retrasar solo lo que sale. Una velocidad de netem está en bits por segundo, y el límite de velocidad aquí en KB/s. La <a href="../netem-para-windows/">página de netem</a> explica cada diferencia.</p>
+</section>
+
+<section>
+  <h2>¿Por qué no simplemente netem?</h2>
+  <ul>
+    <li><strong>Un programa, no toda la interfaz.</strong> netem ralentiza todo lo que sale por <code>eth0</code>, incluida su sesión ssh. Aquí <code>--target</code> elige un proceso por nombre (en Linux sin <code>.exe</code>: <code>firefox</code>, <code>chrome</code>), un PID, una dirección o un puerto, y el resto del equipo sigue funcionando.</li>
+    <li><strong>Los dos sentidos.</strong> netem moldea lo que sale, y el tráfico entrante necesita un dispositivo ifb y un segundo juego de reglas. Aquí la descarga y la subida tienen cada una su propio límite.</li>
+    <li><strong>Limpia lo que deja.</strong> Una regla de netem se queda hasta que la borra. Una sesión aquí termina tras <code>--duration</code>, y si el programa se cierra a la fuerza, el tráfico que retenía vuelve a pasar en unos 3 segundos.</li>
+    <li><strong>Ve lo que ocurrió.</strong> Un gráfico, una tabla de conexiones y contadores de lo retrasado, descartado y dejado pasar, en lugar de <code>tc -s qdisc</code>.</li>
+    <li><strong>Las ejecuciones se repiten.</strong> <code>--seed</code> reproduce la misma pérdida y el mismo jitter aleatorios, y los <a href="../escenarios-en-el-tiempo/">escenarios temporizados</a> cambian los ajustes en segundos fijados, como un script de <code>tc</code> y <code>sleep</code>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Qué necesita</h2>
+  <ul>
+    <li><strong>El paquete</strong> de la página de versiones, un <code>.tar.gz</code> con su propio Python y su propio Tk. Se construye en Ubuntu 24.04 y se comprueba en Ubuntu 24.04 y 26.04, para x86_64, y necesita glibc 2.38 o posterior.</li>
+    <li><strong>El kernel</strong>: Linux 5.10 o posterior, compilado con BTF. La captura funciona con eBPF.</li>
+    <li><strong>Root</strong>, o las capacidades CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN y CAP_NET_RAW. La ventana pide la contraseña de un administrador en el propio diálogo del escritorio, la línea de comandos necesita <code>sudo</code>, y <code>--simulate</code> no necesita ninguna de las dos.</li>
+  </ul>
+<pre><code>tar -xzf BeanNetworkTester-*-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+sudo ./BeanNetworkTester --doctor</code></pre>
+  <p><code>--install-desktop</code> añade el programa al menú de aplicaciones, así que ejecútelo sin <code>sudo</code>. <code>--doctor</code> enumera lo que todavía le falta al equipo.</p>
+</section>
+
+<section>
+  <h2>Las herramientas de red también funcionan en Linux</h2>
+  <p>La pestaña {{app.app.tabs.tools}} responde a preguntas antes y durante una prueba: {{app.tools.ping.tab}} (un ping continuo con gráfico), {{app.tools.nat.tab}}, {{app.tools.portscan.tab}}, {{app.tools.sockets.tab}}, {{app.tools.portcheck.tab}}, {{app.tools.tcphealth.tab}} (lo que el kernel guarda de cada conexión, como lo muestra <code>ss -ti</code>) y {{app.tools.adapters.tab}} (como los muestran <code>ip addr</code> e <code>ip route</code>). {{app.tools.tcphealth.tab}} y {{app.tools.adapters.tab}} no necesitan <code>sudo</code>, y {{app.tools.ping.tab}} solo lo necesita donde el sistema no deja a su grupo enviar pings, como en Ubuntu 24.04.</p>
+</section>
+
+<section>
+  <h2>En qué se diferencia Linux, hoy</h2>
+  <ul>
+    <li><code>--target</code> lee la lista de sockets del sistema, así que el primer intercambio de una conexión nueva puede pasar antes de que se aplique el objetivo.</li>
+    <li>Cuando la herramienta no da abasto, el kernel deja pasar los paquetes junto a ella sin dañarlos, y los contadores dicen cuántos.</li>
+    <li>Los fragmentos IP pasan siempre intactos.</li>
+    <li>En Linux, las sumas de comprobación y la atestación de la versión ocupan el lugar de una firma de código: dicen qué compilación produjo el archivo, y la <a href="../descarga/">página de descarga</a> muestra cómo comprobarlas.</li>
+  </ul>
+  <p>Para una configuración permanente de toda una interfaz, netem ya está en su kernel y es la herramienta adecuada. Esta sirve para probar una aplicación durante un rato.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

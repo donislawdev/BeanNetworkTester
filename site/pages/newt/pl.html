@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>Alternatywa dla NEWT, czyli Network Emulator for Windows Toolkit</h1>
+  <p class="lead">NEWT był emulatorem sieci Microsoftu dla Windows. Dodawał opóźnienie, utratę pakietów i limit prędkości do prawdziwego ruchu, dzięki czemu program dało się sprawdzić w złej sieci na zwykłym komputerze. Microsoft nie udostępnia go już do pobrania. Ta strona przekłada każde ustawienie NEWT na Bean Network Tester, który robi to samo w Windows 10 i 11.</p>
+</section>
+
+<section>
+  <h2>Co się stało z NEWT</h2>
+  <ul>
+    <li>NEWT trafiał do ludzi razem z Games for Windows LIVE SDK i zestawem deweloperskim Xboksa. Jego sterownik przeszedł potem do Visual Studio 2010 jako emulacja sieci w testach obciążeniowych.</li>
+    <li>Microsoft wycofuje testy wydajności i obciążenia w Visual Studio, razem z emulacją sieci. Visual Studio 2019 to ostatnia wersja, w której są w pełni dostępne.</li>
+    <li>Dziś Microsoft go nie udostępnia. Wyszukiwarka pokazuje kopie na serwisach z plikami i pakiet Chocolatey ostatnio aktualizowany w 2013 roku.</li>
+  </ul>
+  <p>Emulator instaluje sterownik sieciowy i działa z uprawnieniami administratora, więc zanim uruchomisz instalator, warto wiedzieć, skąd pochodzi.</p>
+</section>
+
+<section>
+  <h2>Ustawienia NEWT po kolei</h2>
+  <p>Do każdej komendy z tej strony dodaj <code>--target</code> i <code>--duration</code>, bo inaczej działa ona na cały komputer.</p>
+  <table>
+    <tr><th>W NEWT</th><th>Ustawienie w oknie</th><th>Flaga</th></tr>
+    <tr><td>Opóźnienie (latency)</td><td>{{app.fields.latency}}, a {{app.fields.jitter}} dla opóźnienia, które się zmienia</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td>Przepustowość (bandwidth)</td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 1221 --up 1221</code></td></tr>
+    <tr><td>Kolejka (queue)</td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+    <tr><td>Utrata pakietów (packet loss)</td><td>{{app.fields.loss}}, a {{app.fields.loss_burst}} dla strat, które przychodzą seriami</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td>Zmiana kolejności (reordering)</td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td>Błędy (errors)</td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td>Rozłączanie i łączenie</td><td>{{app.frames.flapping}}</td><td><code>--flap-period 10 --flap-down 40</code></td></tr>
+    <tr><td>Filtr po adresie IP</td><td>{{app.frames.destination}}</td><td><code>--dst-ip 10.0.0.5</code></td></tr>
+    <tr><td>Filtr po protokole</td><td>{{app.frames.traffic}}: {{app.filters.tcp}}, {{app.filters.udp}} albo {{app.filters.ping}}</td><td><code>--filter tcp</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Prędkość.</strong> Pola limitu prędkości są w KB/s, gdzie K = 1024: 122 to około 1 Mbit/s, a 1221 około 10 Mbit/s. Dłuższa tabela jest na <a href="../netem-dla-windows/">stronie o netem</a>.</li>
+    <li><strong>Kolejka.</strong> {{app.fields.buffer}} to czas w milisekundach, a nie liczba pakietów.</li>
+    <li><strong>Zmiana kolejności.</strong> Nie ma procentu zmiany kolejności. Skok zatrzymuje jeden pakiet, więc te wysłane po nim go wyprzedzają, a licznik pakietów poza kolejnością na stronie {{app.app.tabs.statistics}} pokazuje, czy tak się naprawdę stało.</li>
+    <li><strong>Oba kierunki.</strong> Każda wartość działa w drodze tam i z powrotem, więc <code>--latency 100</code> dodaje do pingu około 200 ms. Żeby ustawić kierunki osobno, zaznacz {{app.fields.asym}} albo dodaj <code>--asym</code> i flagi kończące się na <code>-up</code>.</li>
+  </ul>
+  <p>Typowe łącze z NEWT jako jedna komenda, wycelowana w jeden program na dwie minuty:</p>
+<pre><code>BeanNetworkTester.exe --latency 100 --jitter 20 --loss 2 --down 1221 --up 1221 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Co daje ten program</h2>
+  <ul>
+    <li><strong>Jeden program, nie cały komputer.</strong> Poza adresem i protokołem filtrem może być program, po nazwie albo numerze procesu. <a href="../celowanie-w-jedna-aplikacje/">Wyceluj w jedną aplikację</a>, a reszta komputera działa normalnie.</li>
+    <li><strong>Wiersz poleceń z kodami wyjścia.</strong> Ten sam plik wykonywalny <a href="../testy-sieciowe-w-ci/">działa w CI</a> i zgłasza każdy wynik kodem wyjścia.</li>
+    <li><strong>Przebiegi do powtórzenia.</strong> Z <code>--seed</code> te same losowe straty i wahania opóźnienia wracają przy następnym uruchomieniu.</li>
+    <li><strong>Ustawienia, które zmieniają się same.</strong> <a href="../scenariusze-w-czasie/">Scenariusze w czasie</a> przełączają ustawienia w wybranych sekundach, a ty patrzysz na program.</li>
+    <li><strong>Podgląd na żywo.</strong> Wykres, liczniki i tabela połączeń pokazują, co zostało trafione i jak mocno.</li>
+    <li><strong>Narzędzia sieciowe w tym samym oknie.</strong> <a href="../ciagly-ping/">Ciągły ping</a> z wykresem, <a href="../skaner-portow/">skaner portów</a> i <a href="../test-typu-nat/">test typu NAT</a>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Kiedy wybrać coś innego</h2>
+  <ul>
+    <li><strong>Potrzebujesz całej sieci routerów i przełączników.</strong> To zadanie dla symulatora sieci, takiego jak GNS3 albo EVE-NG, który uruchamia wirtualne urządzenia. Emulator zmienia ruch jednego prawdziwego komputera.</li>
+    <li><strong>Chcesz produkt komercyjny ze wsparciem.</strong> SoftPerfect Connection Emulator to płatny emulator sieci dla Windows.</li>
+    <li><strong>Pracujesz w Linuksie.</strong> tc netem jest wbudowany, a ten program też tam działa, eksperymentalnie. Zobacz <a href="../symulacja-sieci-w-linuksie/">złą sieć w Linuksie</a>.</li>
+    <li><strong>Nie możesz dostać uprawnień administratora.</strong> Zmiana ruchu innych programów ich wymaga, w każdym narzędziu.</li>
+  </ul>
+  <p>Porównujesz darmowe narzędzia dla Windows? Strona <a href="../alternatywa-dla-clumsy/">Alternatywa dla Clumsy</a> omawia Clumsy, NetLimitera i proxy takie jak Fiddler.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

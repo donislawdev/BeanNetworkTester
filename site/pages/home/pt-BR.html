@@ -53,9 +53,22 @@
     <li>Abra o <code>BeanNetworkTester.exe</code>. Ele pede permissões de administrador sozinho, porque capturar o tráfego exige isso.</li>
     <li>Escolha um perfil pronto, como “{{app.presets.3g}}”, pressione {{app.buttons.start}} e use o seu aplicativo.</li>
   </ol>
+  <p>Também roda no Linux, de forma experimental, a partir de um pacote .tar.gz. <a href="simular-rede-no-linux/">Rede ruim no Linux</a> explica do que ele precisa e o que muda lá.</p>
   <p>Há um modo de texto no mesmo arquivo, então tudo também roda em um pipeline. Um único comando basta para verificar se o seu serviço sobrevive a 10% de perda de pacotes:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>Ele para sozinho quando o tempo acaba, então uma etapa que trava não pode deixar uma rede quebrada para trás. Adicione <code>--simulate</code> para ensaiar um comando sem tocar no tráfego real.</p>
+</section>
+
+<section>
+  <h2>Ferramentas de rede na mesma janela</h2>
+  <p>A aba {{app.app.tabs.tools}} responde às perguntas de antes e depois de um teste, sem instalar um segundo programa:</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong>: um <a href="ping-continuo/">ping contínuo</a> com gráfico, jitter e perda de pacotes.</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong>: um <a href="scanner-de-portas/">scanner de portas TCP e UDP</a> para outro computador.</li>
+    <li><strong>{{app.tools.nat.tab}}</strong>: um <a href="teste-tipo-nat/">teste do tipo de NAT</a> e uma verificação do servidor TURN das suas chamadas.</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong> e <strong>{{app.tools.portcheck.tab}}</strong>: <a href="qual-programa-usa-uma-porta/">qual programa ocupa uma porta</a> neste computador, e se uma porta está livre.</li>
+  </ul>
+  <p>Vem de outra ferramenta? Veja as páginas sobre <a href="alternativa-ao-clumsy/">Clumsy</a>, <a href="netem-para-windows/">netem</a> e <a href="alternativa-ao-newt/">NEWT</a>.</p>
 </section>
 
 <section>

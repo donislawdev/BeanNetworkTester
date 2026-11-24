@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>NEWT(Network Emulator for Windows Toolkit) 대안</h1>
+  <p class="lead">NEWT는 Microsoft가 만든 Windows용 네트워크 에뮬레이터였습니다. 실제 트래픽에 지연, 패킷 손실, 속도 제한을 더해 평범한 PC에서 나쁜 네트워크를 만들고 프로그램을 시험할 수 있었습니다. Microsoft는 이제 다운로드를 제공하지 않습니다. 이 페이지는 NEWT의 각 설정을 Windows 10과 11에서 같은 일을 하는 Bean Network Tester에 대응시킵니다.</p>
+</section>
+
+<section>
+  <h2>NEWT는 어떻게 되었나</h2>
+  <ul>
+    <li>NEWT는 Games for Windows LIVE SDK와 Xbox 개발 키트에 포함되어 있었습니다. 이후 드라이버가 Visual Studio 2010으로 옮겨져 부하 테스트의 네트워크 에뮬레이션이 되었습니다.</li>
+    <li>Microsoft는 Visual Studio의 웹 성능 테스트와 부하 테스트를 네트워크 에뮬레이션까지 포함해 사용 중단했습니다. 이 기능을 온전히 쓸 수 있는 마지막 버전은 Visual Studio 2019입니다.</li>
+    <li>지금은 Microsoft에서 받을 곳이 없습니다. 검색하면 다운로드 사이트의 사본과 2013년에 마지막으로 업데이트된 Chocolatey 패키지가 나옵니다.</li>
+  </ul>
+  <p>에뮬레이터는 네트워크 드라이버를 설치하고 관리자 권한으로 실행됩니다. 그러니 설치 프로그램을 실행하기 전에 어디서 온 것인지 알아 두는 편이 좋습니다.</p>
+</section>
+
+<section>
+  <h2>NEWT 설정을 하나씩</h2>
+  <p>이 페이지의 모든 명령에 <code>--target</code>과 <code>--duration</code>을 붙이세요. 그러지 않으면 컴퓨터 전체에 영향을 줍니다.</p>
+  <table>
+    <tr><th>NEWT에서</th><th>창의 설정</th><th>플래그</th></tr>
+    <tr><td>지연(Latency)</td><td>{{app.fields.latency}}, 지연이 흔들리게 하려면 {{app.fields.jitter}}도</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td>대역폭(Bandwidth)</td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 1221 --up 1221</code></td></tr>
+    <tr><td>큐(Queue)</td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+    <tr><td>패킷 손실(Packet loss)</td><td>{{app.fields.loss}}, 손실이 연달아 일어나게 하려면 {{app.fields.loss_burst}}도</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td>순서 바뀜(Reordering)</td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td>오류(Errors)</td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td>연결 끊김과 재연결</td><td>{{app.frames.flapping}}</td><td><code>--flap-period 10 --flap-down 40</code></td></tr>
+    <tr><td>IP 주소로 필터</td><td>{{app.frames.destination}}</td><td><code>--dst-ip 10.0.0.5</code></td></tr>
+    <tr><td>프로토콜로 필터</td><td>{{app.frames.traffic}}: {{app.filters.tcp}}, {{app.filters.udp}} 또는 {{app.filters.ping}}</td><td><code>--filter tcp</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>속도.</strong> 속도 제한 필드의 단위는 KB/s이고 K = 1024입니다. 122는 약 1 Mbit/s, 1221은 약 10 Mbit/s입니다. 더 긴 표는 <a href="../windows-yong-netem/">netem 페이지</a>에 있습니다.</li>
+    <li><strong>큐.</strong> {{app.fields.buffer}}는 패킷 수가 아니라 밀리초 단위의 시간입니다.</li>
+    <li><strong>순서 바뀜.</strong> 순서를 바꾸는 비율 설정은 없습니다. 스파이크가 패킷 하나를 붙잡아 두면 그 뒤에 보낸 패킷들이 앞지르고, {{app.app.tabs.statistics}} 페이지의 순서 바뀜 카운터로 실제로 일어났는지 확인할 수 있습니다.</li>
+    <li><strong>양방향.</strong> 각 값은 가는 길과 오는 길 모두에 적용되므로 <code>--latency 100</code>은 ping에 약 200 ms를 더합니다. 방향마다 다른 값을 쓰려면 {{app.fields.asym}}을 체크하거나, <code>--asym</code>과 <code>-up</code>으로 끝나는 플래그를 붙이세요.</li>
+  </ul>
+  <p>전형적인 NEWT 링크를 명령 하나로 만들어 한 프로그램에 2분 동안 적용한 예입니다.</p>
+<pre><code>BeanNetworkTester.exe --latency 100 --jitter 20 --loss 2 --down 1221 --up 1221 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>이 도구가 주는 것</h2>
+  <ul>
+    <li><strong>컴퓨터 전체가 아니라 프로그램 하나.</strong> 주소와 프로토콜 외에 프로그램도 이름이나 프로세스 ID로 필터가 될 수 있습니다. <a href="../hanaui-aep-daesang/">열화를 앱 하나에만 적용하고</a> 나머지는 평소대로 둘 수 있습니다.</li>
+    <li><strong>종료 코드가 있는 명령줄.</strong> 같은 실행 파일이 <a href="../ci-neteuwokeu-teseuteu/">CI에서 실행되고</a> 모든 결과를 종료 코드로 알려 줍니다.</li>
+    <li><strong>다시 재현할 수 있는 실행.</strong> <code>--seed</code>를 쓰면 다음 실행에서도 같은 무작위 손실과 지터가 다시 나옵니다.</li>
+    <li><strong>저절로 바뀌는 설정.</strong> <a href="../sigan-byeol-sinario/">시간별 시나리오</a>가 정해 둔 초에 설정을 바꾸므로 프로그램을 지켜보기만 하면 됩니다.</li>
+    <li><strong>실시간 화면.</strong> 차트, 카운터, 연결 표가 무엇이 얼마나 영향을 받았는지 보여 줍니다.</li>
+    <li><strong>같은 창의 네트워크 도구.</strong> 차트가 있는 <a href="../yeonsok-ping/">연속 ping</a>, <a href="../poteu-seukaeneo/">포트 스캐너</a>, <a href="../nat-yuhyeong-teseuteu/">NAT 유형 테스트</a>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>다른 도구가 나은 경우</h2>
+  <ul>
+    <li><strong>라우터와 스위치로 이루어진 네트워크 전체가 필요합니다.</strong> 그것은 GNS3나 EVE-NG처럼 가상 장비를 실행하는 네트워크 시뮬레이터의 일입니다. 에뮬레이터는 실제 컴퓨터 한 대의 트래픽을 바꿉니다.</li>
+    <li><strong>지원이 있는 상용 제품을 원합니다.</strong> SoftPerfect Connection Emulator는 Windows용 유료 네트워크 에뮬레이터입니다.</li>
+    <li><strong>Linux를 씁니다.</strong> tc netem이 기본으로 들어 있고, 이 도구도 실험 단계로 Linux에서 실행됩니다. <a href="../linux-neteuwokeu-simyulleisyeon/">Linux에서 나쁜 네트워크 만들기</a>를 보세요.</li>
+    <li><strong>관리자 권한을 받을 수 없습니다.</strong> 다른 프로그램의 트래픽을 바꾸려면 어떤 도구든 관리자 권한이 필요합니다.</li>
+  </ul>
+  <p>Windows용 무료 도구를 비교하고 있나요? <a href="../clumsy-daeche/">Clumsy 대안</a> 페이지에서 Clumsy, NetLimiter, 그리고 Fiddler 같은 프록시를 다룹니다.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

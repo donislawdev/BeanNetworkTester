@@ -1,0 +1,73 @@
+<section class="hero">
+  <h1>Een slecht netwerk op Linux, voor één app</h1>
+  <p class="lead">Op Linux is het gebruikelijke antwoord tc met netem: dat voegt vertraging en verlies toe aan een hele netwerkinterface, vanaf de opdrachtregel. Bean Network Tester richt dezelfde schade aan bij één programma, vanuit een venster of vanaf de opdrachtregel, en stopt vanzelf. De Linux-versie is experimenteel, en deze pagina vertelt wat dat betekent.</p>
+</section>
+
+<section>
+  <h2>tc netem-commando's en wat je hier gebruikt</h2>
+  <p>Een netem-commando en het dichtstbijzijnde commando hier, naast elkaar. Start het met <code>sudo</code> en laat <code>--target</code> en <code>--duration</code> staan: zonder die twee werkt het op de hele computer, net als netem.</p>
+<pre><code>sudo tc qdisc add dev eth0 root netem delay 100ms 20ms loss 5%
+sudo ./BeanNetworkTester --target firefox --latency 100 --jitter 20 --loss 5 --duration 60</code></pre>
+  <table>
+    <tr><th>netem</th><th>Instelling in het venster</th><th>Vlag</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 100%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 100</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <p>Niet elk getal gaat één op één over. netem vertraagt alleen wat de interface verlaat, en dit hulpmiddel vangt beide richtingen af, dus <code>--latency 100</code> voegt ongeveer 200 ms toe aan een retourtijd: voeg <code>--filter out</code> toe om alleen uitgaand verkeer te vertragen. Een netem-snelheid is in bits per seconde, de snelheidslimiet hier in KB/s. De <a href="../netem-voor-windows/">netem-pagina</a> legt elk verschil uit.</p>
+</section>
+
+<section>
+  <h2>Waarom niet gewoon netem?</h2>
+  <ul>
+    <li><strong>Eén programma, niet de hele interface.</strong> netem vertraagt alles wat via <code>eth0</code> naar buiten gaat, ook je ssh-sessie. Hier kiest <code>--target</code> een proces op naam (op Linux zonder <code>.exe</code>: <code>firefox</code>, <code>chrome</code>), een PID, een adres of een poort, en de rest van de machine werkt gewoon door.</li>
+    <li><strong>Beide richtingen.</strong> netem vormt wat naar buiten gaat, en inkomend verkeer vraagt een ifb-apparaat en een tweede set regels. Hier hebben download en upload elk een eigen limiet.</li>
+    <li><strong>Het ruimt zelf op.</strong> Een netem-regel blijft staan tot je hem verwijdert. Een sessie hier eindigt na <code>--duration</code>, en als het programma wordt afgesloten, stroomt het verkeer dat het vasthield na ongeveer 3 seconden weer door.</li>
+    <li><strong>Je ziet wat er gebeurde.</strong> Een grafiek, een verbindingentabel en tellers van wat is vertraagd, weggegooid en doorgelaten, in plaats van <code>tc -s qdisc</code>.</li>
+    <li><strong>Runs zijn te herhalen.</strong> <code>--seed</code> speelt hetzelfde willekeurige verlies en dezelfde jitter opnieuw af, en <a href="../scenarios-in-de-tijd/">getimede scenario's</a> veranderen de instellingen op vaste seconden, zoals een script met <code>tc</code> en <code>sleep</code>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Wat het nodig heeft</h2>
+  <ul>
+    <li><strong>Het pakket</strong> van de releasepagina, een <code>.tar.gz</code> met een eigen Python en Tk. Het wordt gebouwd op Ubuntu 24.04 en gecontroleerd op Ubuntu 24.04 en 26.04, voor x86_64, en vraagt glibc 2.38 of nieuwer.</li>
+    <li><strong>De kernel</strong>: Linux 5.10 of nieuwer, gebouwd met BTF. Het afvangen draait op eBPF.</li>
+    <li><strong>Root</strong>, of de capabilities CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN en CAP_NET_RAW. Het venster vraagt het wachtwoord van een beheerder in de eigen dialoog van de desktop, de opdrachtregel heeft <code>sudo</code> nodig, en <code>--simulate</code> heeft geen van beide nodig.</li>
+  </ul>
+<pre><code>tar -xzf BeanNetworkTester-*-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+sudo ./BeanNetworkTester --doctor</code></pre>
+  <p><code>--install-desktop</code> zet het programma in het toepassingenmenu, dus start het zonder <code>sudo</code>. <code>--doctor</code> somt op wat de machine nog mist.</p>
+</section>
+
+<section>
+  <h2>De netwerkhulpmiddelen werken ook op Linux</h2>
+  <p>Het tabblad {{app.app.tabs.tools}} beantwoordt vragen voor en tijdens een test: {{app.tools.ping.tab}} (een doorlopende ping met grafiek), {{app.tools.nat.tab}}, {{app.tools.portscan.tab}}, {{app.tools.sockets.tab}}, {{app.tools.portcheck.tab}}, {{app.tools.tcphealth.tab}} (wat de kernel per verbinding bijhoudt, zoals <code>ss -ti</code> het toont) en {{app.tools.adapters.tab}} (zoals <code>ip addr</code> en <code>ip route</code> ze tonen). {{app.tools.tcphealth.tab}} en {{app.tools.adapters.tab}} hebben geen <code>sudo</code> nodig, en {{app.tools.ping.tab}} heeft het alleen nodig waar het systeem je groep geen pings laat sturen, zoals op Ubuntu 24.04.</p>
+</section>
+
+<section>
+  <h2>Waar Linux vandaag anders is</h2>
+  <ul>
+    <li><code>--target</code> leest de lijst met sockets van het systeem, dus de eerste uitwisseling van een nieuwe verbinding kan erdoor glippen voordat het doel geldt.</li>
+    <li>Als het hulpmiddel het niet bijhoudt, laat de kernel pakketten er onbeschadigd langs gaan, en de tellers zeggen hoeveel.</li>
+    <li>IP-fragmenten gaan altijd onaangeroerd door.</li>
+    <li>Op Linux nemen de controlesommen en de attestatie van de release de plaats in van een codehandtekening: ze zeggen welke build het bestand maakte, en de <a href="../downloaden/">downloadpagina</a> laat zien hoe je ze controleert.</li>
+  </ul>
+  <p>Voor een blijvende instelling van een hele interface zit netem al in je kernel en is dat het juiste hulpmiddel. Dit is om één toepassing een tijdje te testen.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

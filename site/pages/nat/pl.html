@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>Jaki mam typ NAT i czy rozmowa się połączy?</h1>
+  <p class="lead">Rozmowy wideo, gry i aplikacje WebRTC łączą dwa urządzenia bezpośrednio, kiedy pozwalają na to routery między nimi, a gdy nie pozwalają, przechodzą przez przekaźnik, czyli serwer TURN. Narzędzie {{app.tools.nat.tab}} na zakładce {{app.app.tabs.tools}} w kilka sekund mówi, który przypadek dotyczy twojej sieci, prosto z twojego komputera.</p>
+</section>
+
+<section>
+  <h2>Jak to uruchomić</h2>
+  <ol>
+    <li>Otwórz zakładkę {{app.app.tabs.tools}}, a w niej {{app.tools.group.network}} i {{app.tools.nat.tab}}.</li>
+    <li>Serwer STUN i serwer TURN są już wpisane (Cloudflare). Wpisz własne, jeśli twoje rozmowy używają innych.</li>
+    <li>Naciśnij <strong>{{app.tools.nat.start}}</strong>. Po kilku sekundach tabela się wypełni, a linia nad nią podsumuje wynik zwykłymi słowami.</li>
+  </ol>
+  <p>Nic nie wychodzi, dopóki nie naciśniesz przycisku. Wtedy narzędzie wysyła kilka zapytań do obu serwerów i małe pakiety testowe na publiczny adres twojej sieci, po czym się zatrzymuje.</p>
+</section>
+
+<section>
+  <h2>Co znaczą wiersze</h2>
+  <table>
+    <tr><th>Wiersz</th><th>Co mówi</th></tr>
+    <tr><td><strong>{{app.tools.nat.row.public}}</strong></td><td>Adres i port, które router daje temu komputerowi, oraz to, czy zachowuje port użyty przez komputer.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.mapping}}</strong></td><td><strong>{{app.tools.nat.result.independent}}</strong>: jedno gniazdo dostaje ten sam publiczny port dla każdego serwera, więc urządzenia za innymi routerami zwykle mogą połączyć się bezpośrednio. <strong>{{app.tools.nat.result.by_address}}</strong> albo <strong>{{app.tools.nat.result.by_address_port}}</strong>: nowy port dla każdego serwera, więc rozmowa może potrzebować przekaźnika.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.hairpin_together}}</strong>, <strong>{{app.tools.nat.row.hairpin_first}}</strong></td><td>Czy dwa urządzenia za tym routerem dosięgną się nawzajem przez jego adres publiczny. Router, który zamyka drogę, gdy jedna strona ruszyła pierwsza, zostawia taką rozmowę sieci lokalnej albo przekaźnikowi.</td></tr>
+    <tr><td><strong>TURN</strong></td><td>Czy serwer TURN odpowiada przez UDP na portach 3478 i 443, przez TCP na 3478 i 80 oraz przez TLS na 5349 i 443. Jest proszony o przekaźnik bez logowania, a odpowiedź „401, potrzebne logowanie” znaczy, że jest. Przez TLS jego certyfikat jest sprawdzany względem certyfikatów głównych, którym ufa ten komputer: certyfikat, któremu nie ufa, może oznaczać proxy albo zaporę po drodze, która czyta TLS.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Nazwy typów NAT, które można spotkać</h2>
+  <p>Stare nazwy pochodzą z pierwszego standardu STUN: full cone, restricted cone, port-restricted cone i symmetric. NAT symetryczny to ten, który daje nowy port dla każdego serwera, a wszystkie trzy typy „cone” trzymają jeden port dla każdego serwera. Typy „cone” różnią się filtrowaniem, którego to narzędzie nie sprawdza.</p>
+  <p>Konsole do gier pokazują własny werdykt, na przykład Open, Moderate albo Strict. Łączy on mapowanie, filtrowanie i to, czy router przekierowuje porty dla konsoli, więc te wiersze nie przekładają się na niego jeden do jednego.</p>
+</section>
+
+<section>
+  <h2>Czego nie powie</h2>
+  <ul>
+    <li>Czy router wpuszcza datagramy z adresu, do którego ten komputer nic nie wysłał (filtrowanie).</li>
+    <li>Niczego o jednym routerze, gdy za nim stoi kolejny NAT. Za NAT-em dostawcy albo VPN-em wynik opisuje cały ten łańcuch.</li>
+    <li>Niczego nie zmienia na routerze. Oba serwery widzą publiczny adres twojej sieci, a <strong>{{app.tools.nat.copy}}</strong> kopiuje tabelę po angielsku, razem z tym adresem.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Potem przetestuj rozmowę na złej sieci</h2>
+  <p>Gdy wiesz już, którędy idzie rozmowa, strona sterowania może skierować opóźnienie i straty na jedną jej część: {{app.fields.call_checks}}, {{app.fields.call_turn_control}} albo {{app.fields.call_media}}. Tak sprawdzisz, czy rozmowa przetrwa wolne sprawdzanie połączenia bez psucia samego obrazu i dźwięku, albo odwrotnie. Resztę celowania opisuje strona <a href="../celowanie-w-jedna-aplikacje/">celowanie w jedną aplikację</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>Apa tipe NAT saya, dan apakah panggilan akan tersambung?</h1>
+  <p class="lead">Panggilan video, game, dan aplikasi WebRTC menghubungkan dua perangkat secara langsung jika router di antaranya mengizinkan, dan beralih ke relai, yaitu server TURN, jika tidak. Alat {{app.tools.nat.tab}} di tab {{app.app.tabs.tools}} memberi tahu dalam beberapa detik kasus mana yang berlaku untuk jaringan Anda, langsung dari komputer Anda sendiri.</p>
+</section>
+
+<section>
+  <h2>Cara menjalankannya</h2>
+  <ol>
+    <li>Buka tab {{app.app.tabs.tools}}, lalu {{app.tools.group.network}} dan {{app.tools.nat.tab}}.</li>
+    <li>Server STUN dan server TURN sudah terisi (milik Cloudflare). Ketik milik Anda sendiri jika panggilan Anda memakai server lain.</li>
+    <li>Tekan <strong>{{app.tools.nat.start}}</strong>. Beberapa detik kemudian tabel terisi, dan satu baris di atasnya merangkum hasilnya dengan kata-kata sederhana.</li>
+  </ol>
+  <p>Tidak ada yang keluar sampai Anda menekannya. Setelah itu alat mengirim beberapa permintaan ke kedua server dan paket uji kecil ke alamat publik jaringan Anda sendiri, lalu berhenti.</p>
+</section>
+
+<section>
+  <h2>Arti setiap baris</h2>
+  <table>
+    <tr><th>Baris</th><th>Apa yang diberitahukannya</th></tr>
+    <tr><td><strong>{{app.tools.nat.row.public}}</strong></td><td>Alamat dan port yang diberikan router kepada komputer ini, dan apakah router mempertahankan port yang dipakai komputer.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.mapping}}</strong></td><td><strong>{{app.tools.nat.result.independent}}</strong>: satu soket mendapat port publik yang sama untuk setiap server, jadi perangkat di balik router lain biasanya bisa terhubung langsung. <strong>{{app.tools.nat.result.by_address}}</strong> atau <strong>{{app.tools.nat.result.by_address_port}}</strong>: port baru untuk setiap server, jadi panggilan mungkin memerlukan relai.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.hairpin_together}}</strong>, <strong>{{app.tools.nat.row.hairpin_first}}</strong></td><td>Apakah dua perangkat di balik router ini bisa saling menjangkau lewat alamat publiknya. Router yang menutup jalan setelah satu sisi mengirim lebih dulu menyerahkan panggilan seperti itu ke jaringan lokal atau relai.</td></tr>
+    <tr><td><strong>TURN</strong></td><td>Apakah server TURN menjawab lewat UDP 3478 dan 443, TCP 3478 dan 80, serta TLS 5349 dan 443. Server diminta relai tanpa login, dan jawaban "401, perlu login" menunjukkan server itu ada. Lewat TLS sertifikatnya diperiksa terhadap sertifikat akar yang dipercaya komputer ini: sertifikat yang tidak dipercaya bisa berarti ada proxy atau firewall di tengah jalan yang membaca TLS.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Nama-nama tipe NAT yang mungkin pernah Anda lihat</h2>
+  <p>Nama-nama lama berasal dari standar STUN pertama: full cone, restricted cone, port-restricted cone, dan symmetric. NAT simetris adalah yang memberi port baru untuk setiap server, sedangkan ketiga jenis "cone" mempertahankan satu port untuk semua server. Yang membedakan jenis-jenis "cone" adalah pemfilteran, yang tidak diuji oleh alat ini.</p>
+  <p>Konsol game menampilkan penilaiannya sendiri, seperti Open, Moderate, atau Strict. Penilaian itu mencampur pemetaan, pemfilteran, dan apakah router meneruskan port untuk konsol, jadi baris-baris ini tidak bisa diterjemahkan ke sana satu banding satu.</p>
+</section>
+
+<section>
+  <h2>Yang tidak diberitahukannya</h2>
+  <ul>
+    <li>Apakah router meloloskan datagram dari alamat yang belum pernah dikirimi apa pun oleh komputer ini (pemfilteran).</li>
+    <li>Apa pun tentang satu router saja jika di belakangnya ada NAT lain. Di balik NAT penyedia atau VPN, hasilnya menggambarkan seluruh rantai itu.</li>
+    <li>Alat ini tidak membaca dan tidak mengubah apa pun di router. Kedua server melihat alamat publik jaringan Anda, dan <strong>{{app.tools.nat.copy}}</strong> menyalin tabel dalam bahasa Inggris beserta alamat itu.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Lalu uji panggilannya di jaringan buruk</h2>
+  <p>Setelah Anda tahu jalur yang diambil sebuah panggilan, halaman kontrol bisa mengarahkan latensi dan kehilangan paket ke satu bagiannya saja: {{app.fields.call_checks}}, {{app.fields.call_turn_control}}, atau {{app.fields.call_media}}. Dengan begitu Anda melihat apakah panggilan bertahan menghadapi pemeriksaan koneksi yang lambat tanpa merusak audio dan video, atau sebaliknya. Sisa cara menyasar ada di <a href="../sasar-satu-aplikasi/">sasar satu aplikasi</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

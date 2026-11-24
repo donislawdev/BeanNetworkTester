@@ -1,0 +1,138 @@
+{
+  "id": "newt",
+  "order": 71,
+  "languages": {
+    "en": {
+      "slug": "newt-alternative",
+      "link_text": "A NEWT alternative",
+      "title": "An alternative to Network Emulator for Windows Toolkit (NEWT)",
+      "description": "Microsoft no longer offers NEWT for download. Each NEWT setting mapped to a window setting and a flag of a network emulator for Windows 10 and 11."
+    },
+    "pl": {
+      "slug": "alternatywa-dla-newt",
+      "link_text": "Alternatywa dla NEWT",
+      "title": "Alternatywa dla Network Emulator for Windows Toolkit (NEWT)",
+      "description": "Microsoft nie udostępnia już NEWT do pobrania. Każde ustawienie NEWT przełożone na pole w oknie i flagę emulatora sieci dla Windows 10 i 11."
+    },
+    "zh-Hans": {
+      "slug": "newt-tidai-fangan",
+      "link_text": "NEWT 替代方案",
+      "title": "Network Emulator for Windows Toolkit (NEWT) 替代方案",
+      "description": "微软已不再提供 NEWT 下载。本页把 NEWT 的每项设置对应到一款适用于 Windows 10 和 11 的网络模拟器的窗口设置和命令行参数。"
+    },
+    "ja": {
+      "slug": "newt-daitai",
+      "link_text": "NEWTの代替",
+      "title": "Network Emulator for Windows Toolkit (NEWT) の代替",
+      "description": "MicrosoftはNEWTの配布を終了しています。NEWTの各設定を、Windows 10と11で動くネットワークエミュレーターの画面の設定とフラグに対応づけます。"
+    },
+    "de": {
+      "slug": "alternative-zu-newt",
+      "link_text": "Alternative zu NEWT",
+      "title": "Alternative zu Network Emulator for Windows Toolkit (NEWT)",
+      "description": "Microsoft bietet NEWT nicht mehr an. Jede NEWT-Einstellung als Feld im Fenster und als Flag eines Netzwerkemulators für Windows 10 und 11."
+    },
+    "fr": {
+      "slug": "alternative-a-newt",
+      "link_text": "Alternative à NEWT",
+      "title": "Une alternative à Network Emulator for Windows Toolkit (NEWT)",
+      "description": "Microsoft ne propose plus NEWT. Chaque réglage de NEWT traduit en champ de la fenêtre et en option d’un émulateur réseau pour Windows 10 et 11."
+    },
+    "es": {
+      "slug": "alternativa-a-newt",
+      "link_text": "Alternativa a NEWT",
+      "title": "Una alternativa a Network Emulator for Windows Toolkit (NEWT)",
+      "description": "Microsoft ya no ofrece NEWT. Cada ajuste de NEWT llevado a un campo de la ventana y a una opción de un emulador de red para Windows 10 y 11."
+    },
+    "pt-BR": {
+      "slug": "alternativa-ao-newt",
+      "link_text": "Alternativa ao NEWT",
+      "title": "Uma alternativa ao Network Emulator for Windows Toolkit (NEWT)",
+      "description": "A Microsoft não oferece mais o NEWT. Cada ajuste do NEWT levado a um campo da janela e a uma flag de um emulador de rede para Windows 10 e 11."
+    },
+    "it": {
+      "slug": "alternativa-a-newt",
+      "link_text": "Alternativa a NEWT",
+      "title": "Un’alternativa a Network Emulator for Windows Toolkit (NEWT)",
+      "description": "Microsoft non offre più NEWT. Ogni impostazione di NEWT tradotta in un campo della finestra e in un flag di un emulatore di rete per Windows 10 e 11."
+    },
+    "id": {
+      "slug": "alternatif-newt",
+      "link_text": "Alternatif NEWT",
+      "title": "Alternatif Network Emulator for Windows Toolkit (NEWT)",
+      "description": "Microsoft tidak lagi menyediakan NEWT. Setiap pengaturan NEWT dipetakan ke kolom di jendela dan flag emulator jaringan untuk Windows 10 dan 11."
+    },
+    "ru": {
+      "slug": "alternativa-newt",
+      "link_text": "Альтернатива NEWT",
+      "title": "Альтернатива Network Emulator for Windows Toolkit (NEWT)",
+      "description": "Microsoft больше не раздаёт NEWT. Каждая настройка NEWT переведена в поле окна и флаг командной строки эмулятора сети для Windows 10 и 11."
+    },
+    "tr": {
+      "slug": "newt-alternatifi",
+      "link_text": "NEWT alternatifi",
+      "title": "Network Emulator for Windows Toolkit (NEWT) alternatifi",
+      "description": "Microsoft artık NEWT'i sunmuyor. NEWT'in her ayarı, Windows 10 ve 11 için bir ağ emülatöründe bir pencere alanına ve bir komut bayrağına eşlenir."
+    },
+    "cs": {
+      "slug": "alternativa-k-newt",
+      "link_text": "Alternativa k NEWT",
+      "title": "Alternativa k Network Emulator for Windows Toolkit (NEWT)",
+      "description": "Microsoft už NEWT nenabízí ke stažení. Každé nastavení NEWT převedené na pole v okně a přepínač emulátoru sítě pro Windows 10 a 11."
+    },
+    "vi": {
+      "slug": "thay-the-newt",
+      "link_text": "Thay thế NEWT",
+      "title": "Thay thế Network Emulator for Windows Toolkit (NEWT)",
+      "description": "Microsoft không còn cung cấp NEWT. Mỗi thiết lập NEWT ứng với một ô trong cửa sổ và một cờ dòng lệnh của trình giả lập mạng cho Windows 10 và 11."
+    },
+    "hi": {
+      "slug": "newt-vikalp",
+      "link_text": "NEWT का विकल्प",
+      "title": "Network Emulator for Windows Toolkit (NEWT) का विकल्प",
+      "description": "Microsoft अब NEWT डाउनलोड के लिए नहीं देता। NEWT की हर सेटिंग Windows 10 और 11 के नेटवर्क एमुलेटर की एक सेटिंग और एक फ़्लैग से जुड़ी है।"
+    },
+    "ko": {
+      "slug": "newt-daeche",
+      "link_text": "NEWT 대안",
+      "title": "Network Emulator for Windows Toolkit (NEWT) 대안",
+      "description": "Microsoft는 더 이상 NEWT를 배포하지 않습니다. NEWT의 각 설정을 Windows 10과 11용 네트워크 에뮬레이터의 창 설정과 플래그에 대응시켰습니다."
+    },
+    "ar": {
+      "slug": "badil-newt",
+      "link_text": "بديل NEWT",
+      "title": "بديل Network Emulator for Windows Toolkit (NEWT)",
+      "description": "لم تعد Microsoft تتيح تنزيل NEWT. كل إعداد في NEWT مقابل حقل في النافذة وراية في سطر الأوامر لمحاكي شبكة على Windows 10 و11."
+    },
+    "ro": {
+      "slug": "alternativa-newt",
+      "link_text": "Alternativă la NEWT",
+      "title": "O alternativă la Network Emulator for Windows Toolkit (NEWT)",
+      "description": "Microsoft nu mai oferă NEWT. Fiecare setare NEWT, ca un câmp din fereastră și un indicator al unui emulator de rețea pentru Windows 10 și 11."
+    },
+    "nl": {
+      "slug": "newt-alternatief",
+      "link_text": "NEWT-alternatief",
+      "title": "Alternatief voor Network Emulator for Windows Toolkit (NEWT)",
+      "description": "Microsoft biedt NEWT niet meer aan. Elke NEWT-instelling als veld in het venster en als vlag van een netwerkemulator voor Windows 10 en 11."
+    },
+    "zh-Hant": {
+      "slug": "newt-tidai-fangan",
+      "link_text": "NEWT 替代方案",
+      "title": "Network Emulator for Windows Toolkit (NEWT) 替代方案",
+      "description": "微軟已不再提供 NEWT 下載。本頁把 NEWT 的每項設定對應到一款適用於 Windows 10 和 11 的網路模擬器的視窗設定與命令列參數。"
+    },
+    "uk": {
+      "slug": "alternatyva-newt",
+      "link_text": "Альтернатива NEWT",
+      "title": "Альтернатива Network Emulator for Windows Toolkit (NEWT)",
+      "description": "Microsoft більше не поширює NEWT. Кожне налаштування NEWT перенесено в поле вікна та прапорець командного рядка емулятора мережі для Windows 10 і 11."
+    },
+    "th": {
+      "slug": "thang-lueak-thaen-newt",
+      "link_text": "ทางเลือกแทน NEWT",
+      "title": "ทางเลือกแทน Network Emulator for Windows Toolkit (NEWT)",
+      "description": "Microsoft ไม่ได้ให้ดาวน์โหลด NEWT แล้ว หน้านี้จับคู่ทุกการตั้งค่าของ NEWT กับช่องในหน้าต่างและแฟลกของโปรแกรมจำลองเครือข่ายสำหรับ Windows 10 และ 11"
+    }
+  }
+}

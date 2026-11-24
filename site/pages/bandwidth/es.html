@@ -40,6 +40,11 @@
   <p>Con un límite en marcha, el contador de paquetes descartados puede quedarse en cero. No es un error: un límite primero hace esperar a los paquetes y solo los descarta cuando la cola está realmente llena. Dale un búfer pequeño y aparecerán los descartes.</p>
 </section>
 
+<section>
+  <h2>Un limitador para pruebas, no un gestor de ancho de banda</h2>
+  <p>NetLimiter y otros gestores de ancho de banda mantienen límites en tus programas todo el tiempo, en el uso diario. Esta herramienta limita una app solo mientras dura una prueba: se detiene sola cuando se acaba el tiempo, y la misma prueba puede añadir el resto de una mala red, como latencia, pérdida y cortes. Para un límite permanente en un programa que usas cada día, un gestor de ancho de banda es la mejor opción.</p>
+</section>
+
 <section class="closing">
   <h2>{{cta.closing}}</h2>
   <p class="actions">

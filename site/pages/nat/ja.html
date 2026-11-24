@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>NAT タイプは何か、通話はつながるか</h1>
+  <p class="lead">ビデオ通話、ゲーム、WebRTC アプリは、間にあるルーターが許せば2台の機器を直接つなぎ、許さなければ中継、つまり TURN サーバーに切り替えます。{{app.app.tabs.tools}} タブの {{app.tools.nat.tab}} ツールは、あなたのネットワークがどちらに当たるかを、あなた自身のコンピューターから数秒で教えてくれます。</p>
+</section>
+
+<section>
+  <h2>実行のしかた</h2>
+  <ol>
+    <li>{{app.app.tabs.tools}} タブを開き、{{app.tools.group.network}} の {{app.tools.nat.tab}} を開きます。</li>
+    <li>STUN サーバーと TURN サーバーはすでに入っています (Cloudflare のもの)。通話が別のサーバーを使うなら、自分のものを入力してください。</li>
+    <li><strong>{{app.tools.nat.start}}</strong> を押します。数秒で表が埋まり、その上の1行が結果をふつうの言葉でまとめます。</li>
+  </ol>
+  <p>押すまでは何も送信されません。押すと、ツールは2つのサーバーにいくつかの要求を、ネットワーク自身のパブリックアドレスに小さなテストパケットを送り、そこで止まります。</p>
+</section>
+
+<section>
+  <h2>各行の意味</h2>
+  <table>
+    <tr><th>行</th><th>わかること</th></tr>
+    <tr><td><strong>{{app.tools.nat.row.public}}</strong></td><td>ルーターがこのコンピューターに割り当てるアドレスとポート、そしてコンピューターが使ったポートをそのまま保つかどうか。</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.mapping}}</strong></td><td><strong>{{app.tools.nat.result.independent}}</strong>: 1つのソケットがどのサーバーに対しても同じパブリックポートを得るので、ほかのルーターの後ろにある機器とはたいてい直接つながります。<strong>{{app.tools.nat.result.by_address}}</strong> または <strong>{{app.tools.nat.result.by_address_port}}</strong>: サーバーごとに新しいポートになるので、通話には中継が必要になることがあります。</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.hairpin_together}}</strong>、<strong>{{app.tools.nat.row.hairpin_first}}</strong></td><td>このルーターの後ろにある2台の機器が、ルーターのパブリックアドレスを通って互いに届くかどうか。片方が先に送ったあとで通り道を閉じるルーターでは、そうした通話はローカルネットワークか中継に任されます。</td></tr>
+    <tr><td><strong>TURN</strong></td><td>TURN サーバーが UDP の 3478 と 443、TCP の 3478 と 80、TLS の 5349 と 443 で応答するかどうか。ログインなしで中継を求め、「401、ログインが必要」という答えが返れば、サーバーはそこにあります。TLS では、このコンピューターが信頼するルート証明書でサーバーの証明書を確かめます。信頼されない証明書は、途中に TLS を読むプロキシやファイアウォールがあることを意味する場合があります。</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>見かけたことのある NAT タイプの名前</h2>
+  <p>古い名前は最初の STUN 規格から来ています: フルコーン、制限コーン、ポート制限コーン、シンメトリック。シンメトリック NAT はサーバーごとに新しいポートを割り当てるもので、3つのコーンはどのサーバーに対しても1つのポートを保ちます。コーン同士を分けるのはフィルタリングで、このツールはそれを調べません。</p>
+  <p>ゲーム機は Open、Moderate、Strict のような独自の判定を表示します。これはマッピング、フィルタリング、そしてルーターがゲーム機のためにポートを転送しているかを合わせたものなので、ここの行とは1対1では対応しません。</p>
+</section>
+
+<section>
+  <h2>わからないこと</h2>
+  <ul>
+    <li>このコンピューターが何も送っていないアドレスからのデータグラムを、ルーターが通すかどうか (フィルタリング)。</li>
+    <li>後ろにもう1つ NAT があるときの、ルーター1台だけの様子。プロバイダーの NAT や VPN の後ろでは、結果はその経路全体を表します。</li>
+    <li>ルーターの設定は何も読まず、何も変えません。2つのサーバーにはネットワークのパブリックアドレスが見え、<strong>{{app.tools.nat.copy}}</strong> はそのアドレスを含む表を英語でコピーします。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>次に、悪いネットワークで通話を試す</h2>
+  <p>通話がどの経路を通るかがわかったら、コントロールページで遅延とロスをその一部だけに向けられます: {{app.fields.call_checks}}、{{app.fields.call_turn_control}}、{{app.fields.call_media}}。こうすれば、メディアを壊さずに接続確認だけを遅くしても通話が持ちこたえるか、またその逆を確かめられます。ほかの対象指定については<a href="../hitotsu-no-apuri/">1つのアプリに絞る</a>を参照してください。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -53,9 +53,22 @@
     <li>เริ่ม <code>BeanNetworkTester.exe</code> มันขอสิทธิ์ผู้ดูแลระบบเอง เพราะการดักจับทราฟฟิกต้องใช้</li>
     <li>เลือกโปรไฟล์สำเร็จรูปอย่าง “{{app.presets.3g}}” กด {{app.buttons.start}} แล้วใช้แอปของคุณ</li>
   </ol>
+  <p>เครื่องมือนี้ทำงานบน Linux ได้ด้วยในแบบทดลอง จากแพ็กเกจ .tar.gz หน้า <a href="jamlong-khrueakhai-bon-linux/">เครือข่ายแย่บน Linux</a> บอกว่าต้องใช้อะไรและมีอะไรต่างไปบ้าง</p>
   <p>มีโหมดข้อความในไฟล์เดียวกัน ทั้งหมดนี้จึงรันในไปป์ไลน์ได้ด้วย คำสั่งเดียวก็พอที่จะตรวจว่าบริการของคุณทนการสูญหายของแพ็กเก็ต 10% ได้หรือไม่:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>มันหยุดเองเมื่อหมดเวลา ขั้นตอนที่ค้างจึงไม่ทิ้งเครือข่ายที่พังไว้เบื้องหลัง เพิ่ม <code>--simulate</code> เพื่อซ้อมคำสั่งโดยไม่แตะทราฟฟิกจริง</p>
+</section>
+
+<section>
+  <h2>เครื่องมือเครือข่ายในหน้าต่างเดียวกัน</h2>
+  <p>แท็บ {{app.app.tabs.tools}} ตอบคำถามที่เกิดก่อนและหลังการทดสอบ โดยไม่ต้องติดตั้งโปรแกรมที่สอง</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong>: <a href="ping-tor-nueang/">ping ต่อเนื่อง</a>พร้อมกราฟ จิตเตอร์ และแพ็กเก็ตสูญหาย</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong>: <a href="khrueang-skaen-port/">เครื่องสแกนพอร์ต TCP และ UDP</a> สำหรับคอมพิวเตอร์เครื่องอื่น</li>
+    <li><strong>{{app.tools.nat.tab}}</strong>: <a href="truat-praphet-nat/">การทดสอบประเภท NAT</a> และการตรวจเซิร์ฟเวอร์ TURN ที่ใช้ในการโทรของคุณ</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong> และ <strong>{{app.tools.portcheck.tab}}</strong>: <a href="program-nai-chai-port/">โปรแกรมไหนใช้พอร์ต</a>บนคอมพิวเตอร์เครื่องนี้ และพอร์ตว่างหรือไม่</li>
+  </ul>
+  <p>ย้ายมาจากเครื่องมืออื่นใช่ไหม ดูหน้าเกี่ยวกับ <a href="thang-lueak-thaen-clumsy/">Clumsy</a>, <a href="netem-samrap-windows/">netem</a> และ <a href="thang-lueak-thaen-newt/">NEWT</a></p>
 </section>
 
 <section>

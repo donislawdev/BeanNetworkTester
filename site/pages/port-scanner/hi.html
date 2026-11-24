@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>दूसरे कंप्यूटर के कौन-से पोर्ट जवाब देते हैं?</h1>
+  <p class="lead">पोर्ट स्कैनर किसी कंप्यूटर से एक-एक पोर्ट पूछता है कि वहाँ कुछ जवाब देता है या नहीं। {{app.app.tabs.tools}} टैब का {{app.tools.portscan.tab}} टूल यह TCP और UDP पर, एक विंडो से, Windows और Linux पर करता है, और आसान शब्दों में बताता है कि नतीजे का क्या मतलब है। सिर्फ़ वही कंप्यूटर स्कैन करें जिन्हें टेस्ट करने की आपको अनुमति है: सुरक्षा सॉफ़्टवेयर और नेटवर्क एडमिनिस्ट्रेटर स्कैन देख सकते हैं।</p>
+</section>
+
+<section>
+  <h2>स्कैन कैसे चलाएँ</h2>
+  <ol>
+    <li>{{app.app.tabs.tools}} टैब खोलें, फिर {{app.tools.group.network}} और {{app.tools.portscan.tab}}।</li>
+    <li>कंप्यूटर का पता या नाम लिखें, और पोर्ट वैसे ही लिखें जैसे कंट्रोल पेज पर लिखते हैं: <code>22</code>, <code>80, 443</code> या <code>8000-8100</code>। या उन्हें <strong>{{app.tools.portscan.common}}</strong> (आम सेवाएँ और डेवलपमेंट सर्वर), <strong>{{app.tools.portscan.well_known}}</strong> या <strong>{{app.tools.portscan.all}}</strong> से भरें।</li>
+    <li><strong>{{app.tools.portscan.tcp}}</strong>, <strong>{{app.tools.portscan.udp}}</strong> या दोनों पर टिक करें और <strong>{{app.tools.portscan.scan}}</strong> दबाएँ। <strong>{{app.tools.portscan.stop}}</strong> स्कैन को पहले ही खत्म कर देता है, उन पोर्टों के साथ जिन्हें वह पूछ चुका है।</li>
+  </ol>
+  <p>एक ही जवाब वाले पास-पास के पोर्ट एक पंक्ति में आते हैं, उस सेवा के साथ जो आम तौर पर उस पोर्ट पर चलती है, और टेबल के ऊपर एक पंक्ति बताती है कि नतीजे का क्या मतलब है।</p>
+</section>
+
+<section>
+  <h2>हर जवाब का मतलब</h2>
+  <table>
+    <tr><th>जवाब</th><th>मतलब</th></tr>
+    <tr><td><strong>{{app.tools.portscan.state.open}}</strong></td><td>TCP पर कोई प्रोग्राम उस पोर्ट पर कनेक्शन स्वीकार करता है। UDP पर किसी सेवा ने अनुरोध का जवाब दिया।</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.closed}}</strong></td><td>कंप्यूटर ने बताया कि वहाँ कुछ नहीं सुन रहा।</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.silent}}</strong></td><td>समय पर कुछ वापस नहीं आया। TCP पर आम तौर पर किसी फ़ायरवॉल ने अनुरोध गिरा दिया। UDP पर पोर्ट खुला भी हो सकता है: जो सेवा अनुरोध नहीं समझती, वह चुप रहती है।</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.unreachable}}</strong></td><td>सिस्टम कहता है कि वह कंप्यूटर वहाँ नहीं है: वह बंद है, या यह उसका पता नहीं है।</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.denied}}</strong></td><td>इस कंप्यूटर ने अनुरोध भेजने से इनकार कर दिया।</td></tr>
+  </table>
+  <p>Windows पर कोई बंद UDP पोर्ट {{app.tools.portscan.state.closed}} तभी दिखाता है जब प्रोग्राम एडमिनिस्ट्रेटर के रूप में चल रहा हो। Windows फ़ायरवॉल यह संदेश प्रोग्रामों से छिपाता है, और एडमिनिस्ट्रेटर अधिकारों के साथ टूल इसे नेटवर्क ट्रैफ़िक की एक कॉपी से पढ़ता है। इनके बिना बंद UDP पोर्ट {{app.tools.portscan.state.silent}} दिखाते हैं।</p>
+</section>
+
+<section>
+  <h2>यह क्या भेजता है, और कितनी तेज़ी से</h2>
+  <ul>
+    <li>TCP पर एक कनेक्शन जिसे तुरंत बंद कर दिया जाता है, उस पर कुछ भेजे बिना। UDP पर DNS, NTP, NetBIOS, mDNS और SSDP के लिए असली अनुरोध, और बाकी हर पोर्ट के लिए एक खाली डेटाग्राम।</li>
+    <li>जिस नेटवर्क से यह कंप्यूटर जुड़ा है, उसके किसी कंप्यूटर से एक साथ 256 पोर्ट पूछे जाते हैं, हर एक के लिए 1 सेकंड। राउटर के पीछे वाले कंप्यूटर से एक साथ 32, एक सेकंड में ज़्यादा से ज़्यादा 20 नए, हर एक के लिए 3 सेकंड, ताकि राउटर की कनेक्शन टेबल न भर जाए। जो स्कैन पाँच मिनट से ज़्यादा ले सकता है, वह पहले पूछता है।</li>
+    <li>जब 64 पोर्ट {{app.tools.portscan.state.unreachable}} दिखाएँ और किसी और पोर्ट ने जवाब न दिया हो, तो वह कंप्यूटर वहाँ नहीं है, और स्कैन उससे पूछना बंद कर देता है।</li>
+    <li>जब सिर्फ़ कुछ पोर्टों ने जवाब न दिया हो और बाकी ने दिया हो, तो उन कुछ से एक बार और, धीरे से, पूछा जाता है।</li>
+  </ul>
+  <p><strong>{{app.tools.portscan.copy}}</strong> टेबल को अंग्रेज़ी में कॉपी करता है, और <strong>{{app.tools.portscan.export}}</strong> पंक्तियों को एक CSV फ़ाइल में लिखता है।</p>
+</section>
+
+<section>
+  <h2>कंसोल से एक पोर्ट</h2>
+  <p>सिर्फ़ एक TCP पोर्ट जाँचने के लिए PowerShell और ज़्यादातर Linux सिस्टम में ज़रूरी चीज़ पहले से है:</p>
+<pre><code>Test-NetConnection example.com -Port 443
+nc -zv example.com 443</code></pre>
+  <p>सेवाओं के संस्करण या दूसरे छोर का सिस्टम जानने के लिए nmap सही टूल है। यह टूल उससे पहले वाले सवाल का जवाब देता है: TCP और UDP पर कौन-से पोर्ट जवाब देते भी हैं, और कुछ और इंस्टॉल किए बिना।</p>
+</section>
+
+<section>
+  <h2>इसी कंप्यूटर के किसी पोर्ट की बात है?</h2>
+  <p>अगर सवाल यह है कि इस कंप्यूटर पर कौन-सा प्रोग्राम कोई पोर्ट पकड़े है, या सर्वर पोर्ट क्यों नहीं खोल पा रहा, तो <a href="../kaun-sa-program-port-use-kar-raha-hai/">कौन-सा प्रोग्राम पोर्ट इस्तेमाल कर रहा है</a> देखें।</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

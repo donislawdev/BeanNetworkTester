@@ -53,9 +53,22 @@
     <li>Khởi động <code>BeanNetworkTester.exe</code>. Nó tự xin quyền quản trị, vì việc bắt lưu lượng cần quyền đó.</li>
     <li>Chọn một cấu hình mẫu như “{{app.presets.3g}}”, nhấn {{app.buttons.start}} và dùng ứng dụng của bạn.</li>
   </ol>
+  <p>Công cụ cũng chạy trên Linux, ở dạng thử nghiệm, từ gói .tar.gz. Trang <a href="mo-phong-mang-tren-linux/">Mạng kém trên Linux</a> cho biết nó cần gì và có gì khác ở đó.</p>
   <p>Có chế độ văn bản trong cùng tệp, nên cả thứ này cũng chạy được trong pipeline. Một lệnh là đủ để kiểm tra dịch vụ của bạn có chịu nổi mất 10 % gói tin không:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>Nó tự dừng khi hết thời gian, nên một bước bị treo không thể để lại sau lưng một mạng hỏng. Thêm <code>--simulate</code> để chạy thử một lệnh mà không đụng đến lưu lượng thật.</p>
+</section>
+
+<section>
+  <h2>Công cụ mạng trong cùng cửa sổ</h2>
+  <p>Thẻ {{app.app.tabs.tools}} trả lời những câu hỏi trước và sau một lần thử, không cần cài thêm chương trình thứ hai:</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong>: <a href="ping-lien-tuc/">ping liên tục</a> có biểu đồ, jitter và mất gói.</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong>: <a href="quet-cong/">trình quét cổng TCP và UDP</a> cho một máy tính khác.</li>
+    <li><strong>{{app.tools.nat.tab}}</strong>: <a href="kiem-tra-loai-nat/">kiểm tra loại NAT</a> và kiểm tra máy chủ TURN mà cuộc gọi của bạn dùng.</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong> và <strong>{{app.tools.portcheck.tab}}</strong>: <a href="chuong-trinh-nao-dung-cong/">chương trình nào giữ một cổng</a> trên máy này, và cổng có còn trống không.</li>
+  </ul>
+  <p>Chuyển từ công cụ khác sang? Xem các trang về <a href="thay-the-clumsy/">Clumsy</a>, <a href="netem-cho-windows/">netem</a> và <a href="thay-the-newt/">NEWT</a>.</p>
 </section>
 
 <section>

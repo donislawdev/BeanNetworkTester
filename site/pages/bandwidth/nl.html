@@ -40,6 +40,11 @@
   <p>Met een actieve limiet kan de teller voor weggegooide pakketten op nul blijven staan. Dat is geen bug: een limiet laat pakketten eerst wachten en gooit ze pas weg als de wachtrij echt vol is. Geef hem een kleine buffer en de verliezen verschijnen.</p>
 </section>
 
+<section>
+  <h2>Een begrenzer voor tests, geen bandbreedtebeheerder</h2>
+  <p>NetLimiter en andere bandbreedtebeheerders houden limieten op je programma's altijd aan, bij dagelijks gebruik. Deze tool beperkt één app alleen zolang een test loopt: hij stopt vanzelf als de tijd om is, en dezelfde test kan de rest van een slecht netwerk toevoegen, zoals latentie, verlies en onderbrekingen. Voor een blijvende limiet op een programma dat je elke dag gebruikt, is een bandbreedtebeheerder de betere keus.</p>
+</section>
+
 <section class="closing">
   <h2>{{cta.closing}}</h2>
   <p class="actions">

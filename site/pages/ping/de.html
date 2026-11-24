@@ -1,0 +1,47 @@
+<section class="hero">
+  <h1>Ein Dauer-Ping, der für dich mitzählt</h1>
+  <p class="lead">Ein Dauer-Ping ist der schnellste Weg zu sehen, ob eine Verbindung stabil ist: eine Echo-Anfrage nach der anderen, bis du ihn stoppst. Windows und Linux haben beide einen in der Konsole. Das Werkzeug {{app.tools.ping.tab}} im Tab {{app.app.tabs.tools}} macht dasselbe und behält die Zahlen, die dir die Konsole zum Selbstzählen überlässt: den Jitter, die längste Verlustserie und die Antwortzeit, unter der 95 % der Antworten blieben.</p>
+</section>
+
+<section>
+  <h2>In der Konsole</h2>
+  <p>In der Windows-Eingabeaufforderung pingt <code>-t</code>, bis du Strg+C drückst. Strg+Pause zeigt die bisherigen Summen und macht weiter.</p>
+<pre><code>ping -t 1.1.1.1</code></pre>
+  <p>Um die Ausgabe in einer Datei zu behalten oder jede Zeile mit einer Uhrzeit zu versehen, in PowerShell:</p>
+<pre><code>ping -t 1.1.1.1 > ping.txt
+ping.exe -t 1.1.1.1 | ForEach-Object { "{0:HH:mm:ss} {1}" -f (Get-Date), $_ }</code></pre>
+  <p>PowerShell 7 hat dafür einen eigenen Befehl, und unter Linux läuft ein normaler Ping ohnehin bis Strg+C. <code>-D</code> setzt vor jede Zeile einen Zeitstempel:</p>
+<pre><code>Test-Connection 1.1.1.1 -Repeat
+ping -D 1.1.1.1</code></pre>
+  <p>Keiner von ihnen fasst den Lauf zusammen, während er läuft: Du bekommst eine Zeile pro Antwort und die Summen am Ende.</p>
+</section>
+
+<section>
+  <h2>Mit dem Werkzeug {{app.tools.ping.tab}}</h2>
+  <ul>
+    <li>Gib eine Adresse oder einen Namen ein, wähle, wie oft gepingt wird, wie lange auf eine Antwort gewartet wird, wie viele Bytes jeder Ping trägt (32, wie <code>ping.exe</code> sendet, bis 65 500) und wie viele Pings gesendet werden, oder lass ihn bis {{app.tools.ping.stop}} laufen. Dann drück <strong>{{app.tools.ping.start}}</strong>.</li>
+    <li>Jeder Ping ist eine Zeile: wann er hinausging, seine Antwortzeit, seine TTL und was zurückkam. Ein Diagramm zeigt die Antwortzeiten der letzten 60.</li>
+    <li>Eine Zeile über der Tabelle hält die Summen: gesendet, Antworten, verloren, die längste Verlustserie, die niedrigste, mittlere und höchste Antwortzeit, den Jitter (wie stark sich die Antwortzeit von einer Antwort zur nächsten bewegt) und die Antwortzeit, unter der 95 % der Antworten blieben.</li>
+    <li>Es pingt weiter, während ein anderer Tab vorne ist. Klick mit der rechten Maustaste auf eine Zeile in {{app.tools.sockets.tab}} oder in {{app.app.tabs.connections}} und wähle <strong>{{app.menu.ping_address}}</strong>, um ihr anderes Ende zu pingen.</li>
+    <li><strong>{{app.tools.ping.copy}}</strong> kopiert die Zeilen und die Summen, auf Englisch, für einen Fehlerbericht.</li>
+  </ul>
+  <p>Eine Antwort, die nach der Wartezeit kommt, zählt als verloren. Bei großer Latenz wähle eine längere Wartezeit.</p>
+</section>
+
+<section>
+  <h2>Sieh zu, wie das schlechte Netz ankommt</h2>
+  <p>Starte den Ping und dann auf der Steuerungsseite eine Sitzung mit etwas Latenz und Verlust. Wenn die Sitzung startet, stoppt, neue Einstellungen bekommt oder zum nächsten Schritt eines Szenarios wechselt, zeigt die Zeile die Zeit seitdem und wie sich die mittlere Antwortzeit und der Verlustanteil von vorher unterscheiden, und das Diagramm markiert den Moment mit einer gestrichelten Linie. Eine weitere Zeile sagt, was die Sitzung mit diesen Pings macht: Sie beschädigt sie, sieht sie und lässt sie in Ruhe oder erfasst sie gar nicht.</p>
+  <p>Mit dem standardmäßigen Verkehrsfilter trägt ein Ping die Latenz zweimal, also fügen 100 ms Latenz der Antwortzeit etwa 200 ms hinzu, und Verlust trifft Anfrage und Antwort getrennt, also gehen bei 20 % Verlust etwa ein Drittel der Pings verloren. Eine Sitzung, die auf ein Programm zielt, berührt nie einen Ping, denn ein Ping gehört zu keiner Verbindung eines Programms: Ziel dann auf die Adresse.</p>
+</section>
+
+<section>
+  <h2>Unter Linux</h2>
+  <p>Das Werkzeug läuft auch unter Linux. Es braucht kein <code>sudo</code>, wo das System deiner Gruppe Pings erlaubt, wie unter Ubuntu 26.04, und braucht es, wo nicht, wie unter Ubuntu 24.04. Den Rest beschreibt die <a href="../netzwerk-simulieren-unter-linux/">Linux-Seite</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

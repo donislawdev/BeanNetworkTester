@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>What is my NAT type, and will a call connect?</h1>
+  <p class="lead">Video calls, games and WebRTC apps connect two devices directly when the routers between them allow it, and fall back to a relay, a TURN server, when they do not. The {{app.tools.nat.tab}} tool on the {{app.app.tabs.tools}} tab tells you which case your network is, in a few seconds, from your own computer.</p>
+</section>
+
+<section>
+  <h2>How to run it</h2>
+  <ol>
+    <li>Open the {{app.app.tabs.tools}} tab, then {{app.tools.group.network}} and {{app.tools.nat.tab}}.</li>
+    <li>A STUN server and a TURN server are already filled in (Cloudflare's). Type your own if your calls use other ones.</li>
+    <li>Press <strong>{{app.tools.nat.start}}</strong>. A few seconds later the table fills in, and a line above it sums up the result in plain words.</li>
+  </ol>
+  <p>Nothing goes out until you press it. Then the tool sends a few requests to the two servers and small test packets to your network's own public address, and stops.</p>
+</section>
+
+<section>
+  <h2>What the rows mean</h2>
+  <table>
+    <tr><th>Row</th><th>What it tells you</th></tr>
+    <tr><td><strong>{{app.tools.nat.row.public}}</strong></td><td>The address and port the router gives this computer, and whether it keeps the port the computer used.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.mapping}}</strong></td><td><strong>{{app.tools.nat.result.independent}}</strong>: one socket gets the same public port for every server, so devices behind other routers can usually connect directly. <strong>{{app.tools.nat.result.by_address}}</strong> or <strong>{{app.tools.nat.result.by_address_port}}</strong>: a new port for each server, so a call may need a relay.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.hairpin_together}}</strong>, <strong>{{app.tools.nat.row.hairpin_first}}</strong></td><td>Whether two devices behind this router reach each other through its public address. A router that closes the way after one side went first leaves such a call to the local network or a relay.</td></tr>
+    <tr><td><strong>TURN</strong></td><td>Whether the TURN server answers on UDP 3478 and 443, on TCP 3478 and 80, and over TLS on 5349 and 443. It is asked for a relay without a login, and "401, login needed" means it is there. Over TLS its certificate is checked against the root certificates this computer trusts: one it does not trust can mean a proxy or a firewall on the way that reads TLS.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>The NAT type names you may have seen</h2>
+  <p>The old names come from the first STUN standard: full cone, restricted cone, port-restricted cone and symmetric. A symmetric NAT is the one that gives a new port for each server, and all three cones keep one port for every server. What separates the cones is filtering, which this tool does not test.</p>
+  <p>Game consoles show a verdict of their own, such as Open, Moderate or Strict. It mixes the mapping, the filtering and whether the router forwards ports for the console, so these rows do not translate into it one to one.</p>
+</section>
+
+<section>
+  <h2>What it does not tell you</h2>
+  <ul>
+    <li>Whether the router lets in datagrams from an address this computer has not sent to (filtering).</li>
+    <li>Anything about one router alone when there is another NAT behind it. Behind a provider's NAT or a VPN, the result describes that whole chain.</li>
+    <li>It reads and changes nothing on the router. The two servers do see your network's public address, and <strong>{{app.tools.nat.copy}}</strong> copies the table in English with that address in it.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Then test the call on a bad network</h2>
+  <p>Once you know the path a call takes, the Control page can aim latency and loss at one part of it: {{app.fields.call_checks}}, {{app.fields.call_turn_control}} or {{app.fields.call_media}}. That is how you see whether a call survives a slow connection check without damaging the media, or the other way round. See <a href="../target-one-app/">aiming at one app</a> for the rest of the targeting.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

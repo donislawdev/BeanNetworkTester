@@ -1,0 +1,47 @@
+<section class="hero">
+  <h1>Un ping continuu care ține socotelile în locul tău</h1>
+  <p class="lead">Un ping continuu este cel mai rapid mod de a vedea dacă o conexiune e stabilă: o cerere de ecou după alta, până îl oprești. Windows și Linux au unul în consolă. Instrumentul {{app.tools.ping.tab}} din fila {{app.app.tabs.tools}} face același lucru și păstrează numerele pe care consola te lasă să le numeri singur: jitterul, cea mai lungă serie de pierderi și timpul dus-întors sub care au rămas 95% dintre răspunsuri.</p>
+</section>
+
+<section>
+  <h2>În consolă</h2>
+  <p>În linia de comandă Windows, <code>-t</code> trimite ping până apeși Ctrl+C. Ctrl+Break afișează totalurile de până atunci și continuă.</p>
+<pre><code>ping -t 1.1.1.1</code></pre>
+  <p>Ca să păstrezi ieșirea într-un fișier sau să pui o oră pe fiecare linie, în PowerShell:</p>
+<pre><code>ping -t 1.1.1.1 > ping.txt
+ping.exe -t 1.1.1.1 | ForEach-Object { "{0:HH:mm:ss} {1}" -f (Get-Date), $_ }</code></pre>
+  <p>PowerShell 7 are o comandă proprie pentru asta, iar pe Linux un ping obișnuit merge oricum până la Ctrl+C. <code>-D</code> pune o marcă de timp pe fiecare linie:</p>
+<pre><code>Test-Connection 1.1.1.1 -Repeat
+ping -D 1.1.1.1</code></pre>
+  <p>Niciunul nu rezumă rularea pe parcurs: primești câte o linie pe răspuns și totalurile la final.</p>
+</section>
+
+<section>
+  <h2>Cu instrumentul {{app.tools.ping.tab}}</h2>
+  <ul>
+    <li>Scrie o adresă sau un nume, alege cât de des să trimită ping, cât să aștepte un răspuns, câți octeți duce fiecare ping (32, cum trimite <code>ping.exe</code>, până la 65 500) și câte ping-uri să trimită, sau lasă-l să meargă până la {{app.tools.ping.stop}}. Apoi apasă <strong>{{app.tools.ping.start}}</strong>.</li>
+    <li>Fiecare ping este un rând: când a plecat, timpul lui dus-întors, TTL-ul și ce s-a întors. Un grafic arată timpii ultimelor 60.</li>
+    <li>Un rând deasupra tabelului ține totalurile: trimise, răspunsuri, pierdute, cea mai lungă serie de pierderi, timpul dus-întors minim, mediu și maxim, jitterul (cât se mișcă timpul de la un răspuns la următorul) și timpul sub care au rămas 95% dintre răspunsuri.</li>
+    <li>Continuă să trimită ping cât timp altă filă e în față. Dă clic dreapta pe un rând din {{app.tools.sockets.tab}} sau din {{app.app.tabs.connections}} și alege <strong>{{app.menu.ping_address}}</strong> ca să trimiți ping celuilalt capăt.</li>
+    <li><strong>{{app.tools.ping.copy}}</strong> copiază rândurile și totalurile, în engleză, pentru un raport de eroare.</li>
+  </ul>
+  <p>Un răspuns care vine după așteptare se numără ca pierdut. La o latență mare, alege o așteptare mai lungă.</p>
+</section>
+
+<section>
+  <h2>Privește cum vine rețeaua proastă</h2>
+  <p>Pornește ping-ul, apoi o sesiune pe pagina de control cu ceva latență și pierderi. Când sesiunea pornește, se oprește, primește setări noi sau trece la pasul următor al unui scenariu, rândul arată timpul de atunci și cum diferă timpul mediu dus-întors și partea pierdută față de înainte, iar graficul marchează momentul cu o linie punctată. Alt rând spune ce face sesiunea cu aceste ping-uri: le strică, le vede și le lasă în pace sau nu le prinde deloc.</p>
+  <p>Cu filtrul de trafic implicit, un ping duce latența de două ori, deci 100 ms de latență adaugă cam 200 ms la timpul dus-întors, iar pierderile lovesc cererea și răspunsul separat, deci 20% pierderi fac să se piardă cam o treime din ping-uri. O sesiune îndreptată spre un program nu atinge niciodată un ping, pentru că un ping nu aparține conexiunii niciunui program: în cazul acesta, îndreapt-o spre adresă.</p>
+</section>
+
+<section>
+  <h2>Pe Linux</h2>
+  <p>Instrumentul merge și pe Linux. Nu are nevoie de <code>sudo</code> acolo unde sistemul lasă grupul tău să trimită ping, ca pe Ubuntu 26.04, și are nevoie acolo unde nu, ca pe Ubuntu 24.04. Restul este pe <a href="../simulare-retea-pe-linux/">pagina despre Linux</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

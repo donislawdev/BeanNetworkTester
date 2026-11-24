@@ -1,0 +1,73 @@
+<section class="hero">
+  <h1>Linux'ta yalnızca tek bir uygulama için kötü ağ</h1>
+  <p class="lead">Linux'ta alışılmış cevap netem ile tc'dir: komut satırından, bütün bir ağ arayüzüne gecikme ve kayıp ekler. Bean Network Tester aynı türden hasarı tek bir programa verir, pencereden ya da komut satırından, ve kendiliğinden durur. Linux sürümü deneyseldir ve bu sayfa bunun ne anlama geldiğini anlatır.</p>
+</section>
+
+<section>
+  <h2>tc netem komutları ve burada ne kullanılır</h2>
+  <p>Bir netem komutu ve buradaki en yakın komut, yan yana. <code>sudo</code> ile çalıştırın ve <code>--target</code> ile <code>--duration</code> kalsın: bunlar olmadan, tıpkı netem gibi bütün bilgisayarı etkiler.</p>
+<pre><code>sudo tc qdisc add dev eth0 root netem delay 100ms 20ms loss 5%
+sudo ./BeanNetworkTester --target firefox --latency 100 --jitter 20 --loss 5 --duration 60</code></pre>
+  <table>
+    <tr><th>netem</th><th>Penceredeki ayar</th><th>Bayrak</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 100%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 100</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <p>Her sayı bire bir taşınmaz. netem yalnızca arayüzden çıkanı geciktirir, bu araç ise iki yönü de yakalar; bu yüzden <code>--latency 100</code> gidiş-dönüş süresine yaklaşık 200 ms ekler: yalnızca çıkanı geciktirmek için <code>--filter out</code> ekleyin. netem hızı saniyede bit cinsindendir, buradaki hız sınırı ise KB/s cinsinden. Her farkı <a href="../windows-icin-netem/">netem sayfası</a> açıklar.</p>
+</section>
+
+<section>
+  <h2>Neden sadece netem değil?</h2>
+  <ul>
+    <li><strong>Bütün arayüz değil, tek bir program.</strong> netem <code>eth0</code> üzerinden çıkan her şeyi yavaşlatır, ssh oturumunuz da dahil. Burada <code>--target</code> bir süreci adıyla (Linux'ta <code>.exe</code> olmadan: <code>firefox</code>, <code>chrome</code>), PID, adres ya da port ile seçer ve makinenin geri kalanı normal çalışır.</li>
+    <li><strong>İki yön.</strong> netem çıkan trafiği biçimlendirir; gelen trafik bir ifb aygıtı ve ikinci bir kural takımı ister. Burada indirme ve yüklemenin her birinin kendi sınırı vardır.</li>
+    <li><strong>Arkasını toplar.</strong> Bir netem kuralı siz silene kadar kalır. Buradaki bir oturum <code>--duration</code> sonunda biter ve program zorla kapatılırsa, tuttuğu trafik yaklaşık 3 saniye sonra yeniden akar.</li>
+    <li><strong>Ne olduğunu görürsünüz.</strong> <code>tc -s qdisc</code> yerine bir grafik, bir bağlantı tablosu ve geciktirilen, atılan ve geçirilen için sayaçlar.</li>
+    <li><strong>Çalıştırmalar tekrarlanır.</strong> <code>--seed</code> aynı rastgele kaybı ve jitter'ı yeniden oynatır, <a href="../zamana-bagli-senaryolar/">zamana bağlı senaryolar</a> da ayarları belirlenen saniyelerde değiştirir, tıpkı <code>tc</code> ve <code>sleep</code> ile yazılmış bir betik gibi.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Neye ihtiyaç duyar</h2>
+  <ul>
+    <li><strong>Sürümler sayfasındaki paket</strong>: kendi Python'u ve Tk'si olan bir <code>.tar.gz</code>. Ubuntu 24.04 üzerinde derlenir, x86_64 için Ubuntu 24.04 ve 26.04 üzerinde denetlenir ve glibc 2.38 ya da daha yenisini ister.</li>
+    <li><strong>Çekirdek</strong>: BTF ile derlenmiş Linux 5.10 ya da daha yenisi. Yakalama eBPF üzerinde çalışır.</li>
+    <li><strong>Root</strong> ya da CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN ve CAP_NET_RAW yetkinlikleri. Pencere, masaüstünün kendi iletişim kutusunda bir yöneticinin parolasını sorar; komut satırı <code>sudo</code> ister; <code>--simulate</code> ise ikisini de istemez.</li>
+  </ul>
+<pre><code>tar -xzf BeanNetworkTester-*-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+sudo ./BeanNetworkTester --doctor</code></pre>
+  <p><code>--install-desktop</code> programı uygulamalar menüsüne ekler, bu yüzden onu <code>sudo</code> olmadan çalıştırın. <code>--doctor</code> makinede hâlâ neyin eksik olduğunu listeler.</p>
+</section>
+
+<section>
+  <h2>Ağ araçları Linux'ta da çalışır</h2>
+  <p>{{app.app.tabs.tools}} sekmesi bir testten önceki ve test sırasındaki soruları yanıtlar: {{app.tools.ping.tab}} (grafikli sürekli ping), {{app.tools.nat.tab}}, {{app.tools.portscan.tab}}, {{app.tools.sockets.tab}}, {{app.tools.portcheck.tab}}, {{app.tools.tcphealth.tab}} (çekirdeğin her bağlantı için tuttukları, <code>ss -ti</code> komutunun gösterdiği gibi) ve {{app.tools.adapters.tab}} (<code>ip addr</code> ve <code>ip route</code> komutlarının gösterdiği gibi). {{app.tools.tcphealth.tab}} ve {{app.tools.adapters.tab}} <code>sudo</code> istemez; {{app.tools.ping.tab}} ise onu yalnızca sistemin grubunuza ping göndermeye izin vermediği yerde ister, Ubuntu 24.04'te olduğu gibi.</p>
+</section>
+
+<section>
+  <h2>Linux bugün nerede farklı</h2>
+  <ul>
+    <li><code>--target</code> sistemin soket listesini okur, bu yüzden yeni bir bağlantının ilk alışverişi hedef devreye girmeden geçebilir.</li>
+    <li>Araç yetişemediğinde çekirdek paketleri bozmadan onun yanından geçirir ve sayaçlar kaç tane olduğunu söyler.</li>
+    <li>IP parçaları her zaman dokunulmadan geçer.</li>
+    <li>Linux'ta kod imzasının yerini sürümün sağlama toplamları ve onayı alır: dosyayı hangi derlemenin ürettiğini söylerler ve <a href="../indir/">indirme sayfası</a> bunların nasıl denetleneceğini gösterir.</li>
+  </ul>
+  <p>Bütün bir arayüzün kalıcı ayarı için netem zaten çekirdeğinizdedir ve doğru araç odur. Bu araç ise bir uygulamayı bir süreliğine test etmek içindir.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

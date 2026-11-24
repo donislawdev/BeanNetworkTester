@@ -61,11 +61,11 @@ dele fica sabendo que existe.
   eventos.
 - **Exporta para CSV** - estatísticas da sessão e um instantâneo da tabela de conexões.
 - **Modo de linha de comando** - automatizável em CI, com códigos de saída e saída em JSON.
-- **Sem telemetria, não envia nada por conta própria** - a ferramenta Ping só faz ping no
-  endereço que você digita, e o NAT and STUN envia algumas solicitações aos dois servidores que você
-  digita e pequenos pacotes de teste para o próprio endereço público desta rede, ao apertar Check,
-  e o Port scan se conecta às portas que você escolhe no endereço que você digita, de Scan até o
-  fim ou Stop.
+- **Ferramentas de rede na mesma janela** - um ping contínuo com gráfico, jitter e perda de
+  pacotes, um scanner de portas TCP e UDP, uma verificação de NAT e TURN para chamadas, cada
+  socket deste computador com o programa que o usa, uma verificação de quais portas locais estão
+  livres, o estado de cada conexão TCP e os adaptadores de rede.
+- **Sem telemetria, não envia nada por conta própria**
 
 <p align="center">
   <img src="docs/demo.gif" alt="O Bean Network Tester adicionando lag e perda de pacotes a um ping ao vivo" width="820">

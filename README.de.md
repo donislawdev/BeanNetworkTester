@@ -65,11 +65,11 @@ der es braucht, dass es existiert.
   Ereignisprotokoll.
 - **Export nach CSV** - Sitzungsstatistik und ein Schnappschuss der Verbindungstabelle.
 - **Befehlszeilenmodus** - skriptfähig für CI, mit Exit-Codes und JSON-Ausgabe.
-- **Keine Telemetrie, sendet nichts von sich aus** - das Werkzeug Ping pingt nur die Adresse, die
-  Sie eingeben, und NAT and STUN sendet einige Anfragen an die beiden Server, die Sie eingeben, und
-  kleine Testpakete an die eigene öffentliche Adresse dieses Netzwerks, wenn Sie Check drücken,
-  und Port scan verbindet sich mit den Ports, die Sie wählen, unter der Adresse, die Sie
-  eingeben, von Scan bis zum Ende oder Stop.
+- **Netzwerkwerkzeuge im selben Fenster** - ein Dauer-Ping mit Diagramm, Jitter und
+  Paketverlust, ein Portscanner für TCP und UDP, eine NAT- und TURN-Prüfung für Anrufe, jeder
+  Socket dieses Computers mit dem Programm, das ihn hält, eine Prüfung, welche lokalen Ports frei
+  sind, der Zustand jeder TCP-Verbindung und die Netzwerkadapter.
+- **Keine Telemetrie, sendet nichts von sich aus**
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester fügt einem laufenden Ping Verzögerung und Paketverlust hinzu" width="820">

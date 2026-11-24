@@ -53,9 +53,22 @@
     <li>Start <code>BeanNetworkTester.exe</code>. Hij vraagt zelf om beheerdersrechten, omdat het onderscheppen van verkeer ze nodig heeft.</li>
     <li>Kies een kant-en-klaar profiel zoals “{{app.presets.3g}}”, druk op {{app.buttons.start}} en gebruik je app.</li>
   </ol>
+  <p>Op Linux draait het ook, als experiment, vanuit een .tar.gz-pakket. <a href="netwerk-simuleren-op-linux/">Slecht netwerk op Linux</a> vertelt wat het daar nodig heeft en wat er anders is.</p>
   <p>Er is een tekstmodus in hetzelfde bestand, dus het geheel draait ook in een pipeline. Eén opdracht is genoeg om te controleren of je dienst 10% pakketverlies overleeft:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>Het stopt vanzelf als de tijd om is, dus een stap die blijft hangen kan geen kapot netwerk achterlaten. Voeg <code>--simulate</code> toe om een opdracht te oefenen zonder echt verkeer aan te raken.</p>
+</section>
+
+<section>
+  <h2>Netwerktools in hetzelfde venster</h2>
+  <p>Het tabblad {{app.app.tabs.tools}} beantwoordt de vragen van voor en na een test, zonder een tweede programma te installeren:</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong>: een <a href="doorlopende-ping/">doorlopende ping</a> met grafiek, jitter en pakketverlies.</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong>: een <a href="poortscanner/">TCP- en UDP-poortscanner</a> voor een andere computer.</li>
+    <li><strong>{{app.tools.nat.tab}}</strong>: een <a href="nat-type-testen/">NAT-typetest</a> en een controle van de TURN-server die je gesprekken gebruiken.</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong> en <strong>{{app.tools.portcheck.tab}}</strong>: <a href="welk-programma-gebruikt-een-poort/">welk programma een poort vasthoudt</a> op deze computer, en of een poort vrij is.</li>
+  </ul>
+  <p>Kom je van een andere tool? Bekijk de pagina's over <a href="clumsy-alternatief/">Clumsy</a>, <a href="netem-voor-windows/">netem</a> en <a href="newt-alternatief/">NEWT</a>.</p>
 </section>
 
 <section>

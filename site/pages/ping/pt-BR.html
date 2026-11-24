@@ -1,0 +1,47 @@
+<section class="hero">
+  <h1>Um ping contínuo que faz as contas por você</h1>
+  <p class="lead">Um ping contínuo é o jeito mais rápido de ver se uma conexão está estável: uma solicitação de eco atrás da outra, até você parar. Windows e Linux têm um no console. A ferramenta {{app.tools.ping.tab}} da aba {{app.app.tabs.tools}} faz o mesmo e guarda os números que o console deixa para você contar: o jitter, a maior sequência de perdas e o tempo de ida e volta abaixo do qual ficaram 95% das respostas.</p>
+</section>
+
+<section>
+  <h2>No console</h2>
+  <p>No prompt de comando do Windows, <code>-t</code> faz ping até você apertar Ctrl+C. Ctrl+Break mostra os totais até ali e continua.</p>
+<pre><code>ping -t 1.1.1.1</code></pre>
+  <p>Para guardar a saída num arquivo, ou colocar um horário em cada linha, no PowerShell:</p>
+<pre><code>ping -t 1.1.1.1 > ping.txt
+ping.exe -t 1.1.1.1 | ForEach-Object { "{0:HH:mm:ss} {1}" -f (Get-Date), $_ }</code></pre>
+  <p>O PowerShell 7 tem um comando próprio para isso, e no Linux um ping comum já roda até Ctrl+C. O <code>-D</code> coloca um carimbo de tempo em cada linha:</p>
+<pre><code>Test-Connection 1.1.1.1 -Repeat
+ping -D 1.1.1.1</code></pre>
+  <p>Nenhum deles resume a execução enquanto ela acontece: você recebe uma linha por resposta e os totais no fim.</p>
+</section>
+
+<section>
+  <h2>Com a ferramenta {{app.tools.ping.tab}}</h2>
+  <ul>
+    <li>Digite um endereço ou um nome, escolha com que frequência fazer ping, quanto esperar por uma resposta, quantos bytes cada ping leva (32, como o <code>ping.exe</code> envia, até 65 500) e quantos pings enviar, ou deixe rodar até {{app.tools.ping.stop}}. Depois aperte <strong>{{app.tools.ping.start}}</strong>.</li>
+    <li>Cada ping é uma linha: quando saiu, o tempo de ida e volta, o TTL e o que voltou. Um gráfico mostra os tempos dos últimos 60.</li>
+    <li>Uma linha acima da tabela guarda os totais: enviados, respostas, perdidos, a maior sequência de perdas, o menor, o médio e o maior tempo de ida e volta, o jitter (quanto o tempo muda de uma resposta para a seguinte) e o tempo abaixo do qual ficaram 95% das respostas.</li>
+    <li>Ela continua fazendo ping enquanto outra aba está na frente. Clique com o botão direito numa linha de {{app.tools.sockets.tab}} ou de {{app.app.tabs.connections}} e escolha <strong>{{app.menu.ping_address}}</strong> para fazer ping na outra ponta.</li>
+    <li><strong>{{app.tools.ping.copy}}</strong> copia as linhas e os totais, em inglês, para um relatório de bug.</li>
+  </ul>
+  <p>Uma resposta que chega depois da espera conta como perdida. Com uma latência alta, escolha uma espera maior.</p>
+</section>
+
+<section>
+  <h2>Veja a rede ruim chegar</h2>
+  <p>Comece o ping e depois uma sessão na página de controle com um pouco de latência e perda. Quando a sessão começa, para, recebe novas configurações ou passa para o próximo passo de um cenário, a linha mostra o tempo desde então e como o tempo médio de ida e volta e a parte perdida diferem de antes, e o gráfico marca o momento com uma linha tracejada. Outra linha diz o que a sessão faz com esses pings: estraga, vê e deixa em paz, ou nem captura.</p>
+  <p>Com o filtro de tráfego padrão, um ping leva a latência duas vezes, então 100 ms de latência somam cerca de 200 ms ao tempo de ida e volta, e a perda atinge a solicitação e a resposta separadamente, então 20% de perda fazem perder cerca de um terço dos pings. Uma sessão mirada num programa nunca mexe num ping, porque um ping não pertence à conexão de nenhum programa: nesse caso, mire no endereço.</p>
+</section>
+
+<section>
+  <h2>No Linux</h2>
+  <p>A ferramenta também funciona no Linux. Ela não precisa de <code>sudo</code> onde o sistema deixa o seu grupo enviar pings, como no Ubuntu 26.04, e precisa onde não deixa, como no Ubuntu 24.04. O resto está na <a href="../simular-rede-no-linux/">página do Linux</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,47 @@
+<section class="hero">
+  <h1>숫자를 대신 챙겨 주는 연속 ping</h1>
+  <p class="lead">연속 ping은 연결이 안정적인지 보는 가장 빠른 방법입니다. 멈출 때까지 에코 요청을 하나씩 계속 보냅니다. Windows와 Linux 모두 콘솔에 있습니다. {{app.app.tabs.tools}} 탭의 {{app.tools.ping.tab}} 도구는 같은 일을 하면서, 콘솔에서는 직접 세야 하는 숫자를 챙겨 둡니다: 지터, 가장 긴 연속 손실, 그리고 응답의 95%가 넘지 않은 왕복 시간입니다.</p>
+</section>
+
+<section>
+  <h2>콘솔에서</h2>
+  <p>Windows 명령 프롬프트에서는 <code>-t</code>를 붙이면 Ctrl+C를 누를 때까지 ping을 보냅니다. Ctrl+Break를 누르면 지금까지의 합계를 보여 주고 계속합니다.</p>
+<pre><code>ping -t 1.1.1.1</code></pre>
+  <p>출력을 파일에 남기거나 줄마다 시각을 붙이려면 PowerShell에서:</p>
+<pre><code>ping -t 1.1.1.1 > ping.txt
+ping.exe -t 1.1.1.1 | ForEach-Object { "{0:HH:mm:ss} {1}" -f (Get-Date), $_ }</code></pre>
+  <p>PowerShell 7에는 이를 위한 명령이 따로 있고, Linux에서는 보통 ping이 원래 Ctrl+C까지 계속됩니다. <code>-D</code>는 줄마다 타임스탬프를 붙입니다:</p>
+<pre><code>Test-Connection 1.1.1.1 -Repeat
+ping -D 1.1.1.1</code></pre>
+  <p>어느 것도 실행 중에 요약해 주지는 않습니다. 응답마다 한 줄, 그리고 마지막에 합계가 나올 뿐입니다.</p>
+</section>
+
+<section>
+  <h2>{{app.tools.ping.tab}} 도구로</h2>
+  <ul>
+    <li>주소나 이름을 입력하고, ping 간격, 응답을 기다릴 시간, ping 하나에 실을 바이트 수(<code>ping.exe</code>처럼 32, 최대 65 500), 보낼 ping 수를 고르거나 {{app.tools.ping.stop}}까지 계속 돌게 둡니다. 그런 다음 <strong>{{app.tools.ping.start}}</strong>를 누릅니다.</li>
+    <li>ping 하나가 한 행입니다: 보낸 시각, 왕복 시간, TTL, 돌아온 것. 그래프는 최근 60개의 왕복 시간을 보여 줍니다.</li>
+    <li>표 위의 한 줄이 합계를 담습니다: 보낸 수, 응답, 손실, 가장 긴 연속 손실, 최소·평균·최대 왕복 시간, 지터(응답마다 왕복 시간이 얼마나 움직이는지), 그리고 응답의 95%가 넘지 않은 왕복 시간.</li>
+    <li>다른 탭이 앞에 있어도 ping은 계속됩니다. {{app.tools.sockets.tab}}나 {{app.app.tabs.connections}}의 행을 오른쪽 클릭하고 <strong>{{app.menu.ping_address}}</strong>를 고르면 그 상대편에 ping을 보냅니다.</li>
+    <li><strong>{{app.tools.ping.copy}}</strong>는 행과 합계를 버그 보고에 쓸 수 있게 영어로 복사합니다.</li>
+  </ul>
+  <p>기다리는 시간이 지난 뒤 온 응답은 손실로 셉니다. 지연이 크다면 기다리는 시간을 길게 잡으세요.</p>
+</section>
+
+<section>
+  <h2>나쁜 네트워크가 오는 것을 지켜보기</h2>
+  <p>ping을 시작한 뒤 컨트롤 페이지에서 지연과 손실을 조금 넣은 세션을 시작합니다. 세션이 시작되거나 멈추거나 새 설정을 받거나 시나리오의 다음 단계로 넘어가면, 그 줄은 그때부터 흐른 시간과 평균 왕복 시간 및 손실 비율이 이전과 얼마나 다른지를 보여 주고, 그래프는 그 순간을 점선으로 표시합니다. 또 다른 줄은 세션이 이 ping들에 무엇을 하는지 알려 줍니다: 손상시키는지, 보기만 하고 그대로 두는지, 아예 잡지 않는지.</p>
+  <p>기본 트래픽 필터에서는 ping 하나가 지연을 두 번 겪으므로, 100 ms의 지연은 왕복 시간에 약 200 ms를 더합니다. 손실은 요청과 응답에 따로 적용되므로, 20%의 손실이면 ping의 약 3분의 1을 잃습니다. 프로그램 하나를 대상으로 한 세션은 ping을 전혀 건드리지 않습니다. ping은 어떤 프로그램의 연결에도 속하지 않기 때문입니다. 이럴 때는 주소를 대상으로 하세요.</p>
+</section>
+
+<section>
+  <h2>Linux에서</h2>
+  <p>이 도구는 Linux에서도 동작합니다. Ubuntu 26.04처럼 시스템이 사용자 그룹의 ping 전송을 허용하는 곳에서는 <code>sudo</code>가 필요 없고, Ubuntu 24.04처럼 허용하지 않는 곳에서는 필요합니다. 나머지는 <a href="../linux-neteuwokeu-simyulleisyeon/">Linux 페이지</a>에 있습니다.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -40,6 +40,11 @@
   <p>Bei laufendem Limit kann der Zähler für verworfene Pakete bei null bleiben. Das ist kein Fehler: Ein Limit lässt Pakete zuerst warten und verwirft sie erst, wenn die Schlange wirklich voll ist. Gib ihm einen kleinen Puffer, und die Verluste erscheinen.</p>
 </section>
 
+<section>
+  <h2>Ein Begrenzer für Tests, kein Bandbreitenmanager</h2>
+  <p>NetLimiter und andere Bandbreitenmanager halten Limits für deine Programme dauerhaft aktiv, im Alltag. Dieses Tool begrenzt eine App nur so lange, wie ein Test läuft: Es stoppt von selbst, wenn die Zeit abgelaufen ist, und derselbe Test kann den Rest eines schlechten Netzes hinzufügen, etwa Latenz, Verlust und Ausfälle. Für ein dauerhaftes Limit auf einem Programm, das du jeden Tag nutzt, ist ein Bandbreitenmanager die bessere Wahl.</p>
+</section>
+
 <section class="closing">
   <h2>{{cta.closing}}</h2>
   <p class="actions">

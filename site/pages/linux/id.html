@@ -1,0 +1,73 @@
+<section class="hero">
+  <h1>Jaringan buruk di Linux, untuk satu aplikasi saja</h1>
+  <p class="lead">Di Linux, jawaban yang biasa adalah tc dengan netem: menambahkan jeda dan kehilangan paket ke seluruh antarmuka jaringan, dari baris perintah. Bean Network Tester memberi kerusakan yang sama pada satu program saja, dari jendela atau dari baris perintah, lalu berhenti sendiri. Versi Linux-nya masih eksperimental, dan halaman ini menjelaskan artinya.</p>
+</section>
+
+<section>
+  <h2>Perintah tc netem dan apa yang dipakai di sini</h2>
+  <p>Perintah netem dan perintah terdekatnya di sini, berdampingan. Jalankan dengan <code>sudo</code>, dan pertahankan <code>--target</code> serta <code>--duration</code>: tanpa keduanya, efeknya mengenai seluruh komputer, seperti netem.</p>
+<pre><code>sudo tc qdisc add dev eth0 root netem delay 100ms 20ms loss 5%
+sudo ./BeanNetworkTester --target firefox --latency 100 --jitter 20 --loss 5 --duration 60</code></pre>
+  <table>
+    <tr><th>netem</th><th>Pengaturan di jendela</th><th>Flag</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 100%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 100</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <p>Tidak semua angka pindah satu banding satu. netem hanya menunda apa yang keluar dari antarmuka, sedangkan alat ini menangkap dua arah, jadi <code>--latency 100</code> menambah sekitar 200 ms pada waktu pulang-pergi: tambahkan <code>--filter out</code> untuk menunda yang keluar saja. Kecepatan netem dalam bit per detik, sedangkan batas kecepatan di sini dalam KB/s. <a href="../netem-untuk-windows/">Halaman netem</a> menjelaskan setiap perbedaannya.</p>
+</section>
+
+<section>
+  <h2>Mengapa tidak netem saja?</h2>
+  <ul>
+    <li><strong>Satu program, bukan seluruh antarmuka.</strong> netem memperlambat semua yang keluar lewat <code>eth0</code>, termasuk sesi ssh Anda. Di sini <code>--target</code> memilih proses menurut nama (di Linux tanpa <code>.exe</code>: <code>firefox</code>, <code>chrome</code>), PID, alamat, atau port, dan bagian lain mesin tetap berjalan normal.</li>
+    <li><strong>Dua arah.</strong> netem membentuk lalu lintas keluar, sedangkan lalu lintas masuk butuh perangkat ifb dan seperangkat aturan kedua. Di sini unduhan dan unggahan punya batasnya masing-masing.</li>
+    <li><strong>Membersihkan sendiri.</strong> Aturan netem tetap ada sampai Anda menghapusnya. Sesi di sini berakhir setelah <code>--duration</code>, dan jika programnya dimatikan, lalu lintas yang ditahannya mengalir lagi setelah sekitar 3 detik.</li>
+    <li><strong>Anda melihat apa yang terjadi.</strong> Grafik, tabel koneksi, dan penghitung untuk yang ditunda, dibuang, dan diloloskan, bukan <code>tc -s qdisc</code>.</li>
+    <li><strong>Jalannya bisa diulang.</strong> <code>--seed</code> memutar ulang kehilangan paket dan jitter acak yang sama, dan <a href="../skenario-berbasis-waktu/">skenario berbasis waktu</a> mengubah pengaturan pada detik yang ditentukan, seperti skrip berisi <code>tc</code> dan <code>sleep</code>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Apa yang dibutuhkan</h2>
+  <ul>
+    <li><strong>Paketnya</strong> dari halaman rilis, berupa <code>.tar.gz</code> dengan Python dan Tk sendiri. Paket ini dibangun di Ubuntu 24.04 dan diperiksa di Ubuntu 24.04 dan 26.04, untuk x86_64, dan butuh glibc 2.38 atau lebih baru.</li>
+    <li><strong>Kernel</strong>: Linux 5.10 atau lebih baru, dibangun dengan BTF. Penangkapan berjalan di atas eBPF.</li>
+    <li><strong>Root</strong>, atau capability CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN, dan CAP_NET_RAW. Jendelanya meminta kata sandi administrator lewat dialog bawaan desktop, baris perintah butuh <code>sudo</code>, dan <code>--simulate</code> tidak butuh keduanya.</li>
+  </ul>
+<pre><code>tar -xzf BeanNetworkTester-*-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+sudo ./BeanNetworkTester --doctor</code></pre>
+  <p><code>--install-desktop</code> menambahkan program ke menu aplikasi, jadi jalankan tanpa <code>sudo</code>. <code>--doctor</code> mendaftar apa yang masih kurang di mesin ini.</p>
+</section>
+
+<section>
+  <h2>Alat jaringannya juga berjalan di Linux</h2>
+  <p>Tab {{app.app.tabs.tools}} menjawab pertanyaan sebelum dan selama pengujian: {{app.tools.ping.tab}} (ping terus-menerus dengan grafik), {{app.tools.nat.tab}}, {{app.tools.portscan.tab}}, {{app.tools.sockets.tab}}, {{app.tools.portcheck.tab}}, {{app.tools.tcphealth.tab}} (yang disimpan kernel untuk setiap koneksi, seperti yang ditampilkan <code>ss -ti</code>) dan {{app.tools.adapters.tab}} (seperti yang ditampilkan <code>ip addr</code> dan <code>ip route</code>). {{app.tools.tcphealth.tab}} dan {{app.tools.adapters.tab}} tidak butuh <code>sudo</code>, dan {{app.tools.ping.tab}} hanya membutuhkannya jika sistem tidak mengizinkan grup Anda mengirim ping, seperti di Ubuntu 24.04.</p>
+</section>
+
+<section>
+  <h2>Di mana Linux berbeda, saat ini</h2>
+  <ul>
+    <li><code>--target</code> membaca daftar soket sistem, jadi pertukaran pertama koneksi baru bisa lolos sebelum target berlaku.</li>
+    <li>Saat alat ini tidak bisa mengimbangi, kernel meloloskan paket di sampingnya tanpa dirusak, dan penghitung menunjukkan berapa banyak.</li>
+    <li>Fragmen IP selalu lewat tanpa diubah.</li>
+    <li>Di Linux, checksum dan atestasi rilis menggantikan tanda tangan kode: keduanya menunjukkan build mana yang menghasilkan berkas itu, dan <a href="../unduh/">halaman unduhan</a> menunjukkan cara memeriksanya.</li>
+  </ul>
+  <p>Untuk pengaturan permanen pada seluruh antarmuka, netem sudah ada di kernel Anda dan itulah alat yang tepat. Alat ini untuk menguji satu aplikasi selama beberapa waktu.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

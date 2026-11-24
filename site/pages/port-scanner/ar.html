@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>أيّ منافذ حاسوب آخر تجيب؟</h1>
+  <p class="lead">يسأل ماسح المنافذ حاسوبًا، منفذًا تلو منفذ، هل يجيب شيء هناك. تفعل أداة {{app.tools.portscan.tab}} في تبويب {{app.app.tabs.tools}} ذلك عبر TCP وUDP، من نافذة، على Windows وعلى Linux، وتقول بكلمات بسيطة ما تعنيه النتيجة. لا تفحص إلا الحواسيب المسموح لك باختبارها: برامج الحماية ومسؤولو الشبكات يستطيعون رؤية الفحص.</p>
+</section>
+
+<section>
+  <h2>كيف تشغّل فحصًا</h2>
+  <ol>
+    <li>افتح تبويب {{app.app.tabs.tools}}، ثم {{app.tools.group.network}} و{{app.tools.portscan.tab}}.</li>
+    <li>اكتب عنوان الحاسوب أو اسمه، والمنافذ كما تكتبها في صفحة التحكم: <code>22</code> أو <code>80, 443</code> أو <code>8000-8100</code>. أو املأها بـ <strong>{{app.tools.portscan.common}}</strong> (خدمات شائعة وخوادم تطوير) أو <strong>{{app.tools.portscan.well_known}}</strong> أو <strong>{{app.tools.portscan.all}}</strong>.</li>
+    <li>حدّد <strong>{{app.tools.portscan.tcp}}</strong> أو <strong>{{app.tools.portscan.udp}}</strong> أو كليهما، واضغط <strong>{{app.tools.portscan.scan}}</strong>. ينهي <strong>{{app.tools.portscan.stop}}</strong> الفحص مبكرًا، مع المنافذ التي سُئلت.</li>
+  </ol>
+  <p>تتشارك المنافذ المتجاورة ذات الجواب نفسه صفًا واحدًا، بجانب الخدمة التي يحملها المنفذ عادةً، ويقول سطر فوق الجدول ما تعنيه النتيجة.</p>
+</section>
+
+<section>
+  <h2>ماذا يعني كل جواب</h2>
+  <table>
+    <tr><th>الجواب</th><th>المعنى</th></tr>
+    <tr><td><strong>{{app.tools.portscan.state.open}}</strong></td><td>عبر TCP يقبل برنامج اتصالات على المنفذ. عبر UDP ردّت خدمة على الطلب.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.closed}}</strong></td><td>قال الحاسوب إن لا شيء ينصت هناك.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.silent}}</strong></td><td>لم يعد شيء في الوقت المحدد. عبر TCP غالبًا أسقط جدار حماية الطلب. عبر UDP قد يكون المنفذ مفتوحًا أيضًا: الخدمة التي لا تفهم الطلب تبقى صامتة.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.unreachable}}</strong></td><td>يقول النظام إن الحاسوب غير موجود: إنه مطفأ، أو هذا ليس عنوانه.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.denied}}</strong></td><td>رفض هذا الحاسوب إرسال الطلب.</td></tr>
+  </table>
+  <p>على Windows لا يظهر منفذ UDP المغلق بحالة {{app.tools.portscan.state.closed}} إلا حين يعمل البرنامج بصلاحيات المسؤول. يخفي جدار حماية Windows هذه الرسالة عن البرامج، ومع صلاحيات المسؤول تقرؤها الأداة من نسخة من حركة الشبكة. ومن دونها تظهر منافذ UDP المغلقة بحالة {{app.tools.portscan.state.silent}}.</p>
+</section>
+
+<section>
+  <h2>ماذا ترسل، وبأيّ سرعة</h2>
+  <ul>
+    <li>عبر TCP، اتصال يُغلق فورًا دون إرسال أيّ شيء عليه. عبر UDP، طلب حقيقي لـ DNS وNTP وNetBIOS وmDNS وSSDP، ومخطط بيانات فارغ لأيّ منفذ آخر.</li>
+    <li>الحاسوب في شبكة متصل بها هذا الحاسوب يُسأل عن 256 منفذًا في المرة، مع ثانية لكل منفذ. والحاسوب خلف موجّه يُسأل عن 32 في المرة، بحد أقصى 20 جديدًا في الثانية، مع 3 ثوانٍ لكل منفذ، حتى لا يمتلئ جدول اتصالات الموجّه. والفحص الذي قد يستغرق أكثر من خمس دقائق يسأل أولًا.</li>
+    <li>عندما تظهر 64 منفذًا بحالة {{app.tools.portscan.state.unreachable}} ولم يجب أيّ منفذ آخر، فالحاسوب غير موجود، ويتوقف الفحص عن سؤاله.</li>
+    <li>عندما لا يجيب إلا عدد قليل من المنافذ بينما أجاب الباقي، تُسأل تلك القلة مرة أخرى، بشكل أبطأ.</li>
+  </ul>
+  <p>ينسخ <strong>{{app.tools.portscan.copy}}</strong> الجدول بالإنجليزية، ويكتب <strong>{{app.tools.portscan.export}}</strong> الصفوف في ملف CSV.</p>
+</section>
+
+<section>
+  <h2>منفذ واحد من سطر الأوامر</h2>
+  <p>لفحص منفذ TCP واحد، في PowerShell ومعظم أنظمة Linux ما يلزم مسبقًا:</p>
+<pre><code>Test-NetConnection example.com -Port 443
+nc -zv example.com 443</code></pre>
+  <p>لمعرفة إصدارات الخدمات أو النظام في الطرف الآخر، الأداة هي nmap. أما هذه فتجيب عن السؤال الذي يسبقه: أيّ المنافذ تجيب أصلًا، عبر TCP وUDP، دون تثبيت أيّ شيء آخر.</p>
+</section>
+
+<section>
+  <h2>هل تقصد منفذًا على هذا الحاسوب؟</h2>
+  <p>إذا كان السؤال أيّ برنامج على هذا الحاسوب يحجز منفذًا، أو لماذا لا يستطيع خادم فتح منفذ، فانظر صفحة <a href="../ay-barnamaj-yastakhdim-almanfadh/">أيّ برنامج يستخدم المنفذ</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

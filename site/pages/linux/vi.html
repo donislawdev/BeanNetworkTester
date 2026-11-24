@@ -1,0 +1,73 @@
+<section class="hero">
+  <h1>Mạng kém trên Linux, chỉ cho một ứng dụng</h1>
+  <p class="lead">Trên Linux, câu trả lời quen thuộc là tc với netem: nó thêm độ trễ và mất gói cho cả một giao diện mạng, từ dòng lệnh. Bean Network Tester gây ra những hư hại tương tự cho một chương trình duy nhất, từ cửa sổ hoặc từ dòng lệnh, và tự dừng lại. Bản cho Linux vẫn đang thử nghiệm, và trang này cho biết điều đó có nghĩa là gì.</p>
+</section>
+
+<section>
+  <h2>Các lệnh tc netem và thứ nên dùng ở đây</h2>
+  <p>Một lệnh netem và lệnh gần nhất ở đây, đặt cạnh nhau. Hãy chạy với <code>sudo</code> và giữ <code>--target</code> cùng <code>--duration</code>: thiếu chúng, lệnh sẽ tác động lên cả máy tính, giống như netem.</p>
+<pre><code>sudo tc qdisc add dev eth0 root netem delay 100ms 20ms loss 5%
+sudo ./BeanNetworkTester --target firefox --latency 100 --jitter 20 --loss 5 --duration 60</code></pre>
+  <table>
+    <tr><th>netem</th><th>Thiết lập trong cửa sổ</th><th>Cờ</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 100%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 100</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <p>Không phải con số nào cũng chuyển được một đổi một. netem chỉ làm trễ những gì rời khỏi giao diện, còn công cụ này bắt cả hai chiều, nên <code>--latency 100</code> cộng thêm khoảng 200 ms vào thời gian khứ hồi: thêm <code>--filter out</code> để chỉ làm trễ chiều đi. Tốc độ của netem tính bằng bit mỗi giây, còn giới hạn tốc độ ở đây tính bằng KB/s. <a href="../netem-cho-windows/">Trang về netem</a> giải thích từng điểm khác biệt.</p>
+</section>
+
+<section>
+  <h2>Sao không dùng netem luôn?</h2>
+  <ul>
+    <li><strong>Một chương trình, không phải cả giao diện.</strong> netem làm chậm mọi thứ đi ra qua <code>eth0</code>, kể cả phiên ssh của bạn. Ở đây <code>--target</code> chọn một tiến trình theo tên (trên Linux không có <code>.exe</code>: <code>firefox</code>, <code>chrome</code>), một PID, một địa chỉ hoặc một cổng, và phần còn lại của máy vẫn chạy bình thường.</li>
+    <li><strong>Cả hai chiều.</strong> netem định hình lưu lượng đi ra, còn lưu lượng đi vào cần một thiết bị ifb và một bộ quy tắc thứ hai. Ở đây tải xuống và tải lên có giới hạn riêng.</li>
+    <li><strong>Tự dọn dẹp.</strong> Quy tắc netem còn đó cho đến khi bạn xóa nó. Một phiên ở đây kết thúc sau <code>--duration</code>, và nếu chương trình bị buộc dừng, lưu lượng nó đang giữ sẽ chảy lại sau khoảng 3 giây.</li>
+    <li><strong>Bạn thấy chuyện gì đã xảy ra.</strong> Một biểu đồ, một bảng kết nối và các bộ đếm những gì bị làm trễ, bị bỏ và được cho qua, thay vì <code>tc -s qdisc</code>.</li>
+    <li><strong>Các lần chạy lặp lại được.</strong> <code>--seed</code> phát lại đúng kiểu mất gói và jitter ngẫu nhiên đó, còn <a href="../kich-ban-theo-thoi-gian/">kịch bản theo thời gian</a> đổi thiết lập vào những giây đã định, như một script gồm <code>tc</code> và <code>sleep</code>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Cần những gì</h2>
+  <ul>
+    <li><strong>Gói cài đặt</strong> trên trang phát hành, một tệp <code>.tar.gz</code> kèm Python và Tk riêng. Gói được dựng trên Ubuntu 24.04 và kiểm tra trên Ubuntu 24.04 và 26.04, cho x86_64, và cần glibc 2.38 trở lên.</li>
+    <li><strong>Nhân</strong>: Linux 5.10 trở lên, dựng kèm BTF. Việc bắt gói chạy trên eBPF.</li>
+    <li><strong>Root</strong>, hoặc các quyền CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN và CAP_NET_RAW. Cửa sổ hỏi mật khẩu quản trị viên trong hộp thoại riêng của màn hình nền, dòng lệnh cần <code>sudo</code>, còn <code>--simulate</code> không cần cả hai.</li>
+  </ul>
+<pre><code>tar -xzf BeanNetworkTester-*-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+sudo ./BeanNetworkTester --doctor</code></pre>
+  <p><code>--install-desktop</code> thêm chương trình vào menu ứng dụng, vì vậy hãy chạy nó mà không có <code>sudo</code>. <code>--doctor</code> liệt kê những gì máy còn thiếu.</p>
+</section>
+
+<section>
+  <h2>Các công cụ mạng cũng chạy trên Linux</h2>
+  <p>Thẻ {{app.app.tabs.tools}} trả lời các câu hỏi trước và trong khi kiểm thử: {{app.tools.ping.tab}} (ping liên tục kèm biểu đồ), {{app.tools.nat.tab}}, {{app.tools.portscan.tab}}, {{app.tools.sockets.tab}}, {{app.tools.portcheck.tab}}, {{app.tools.tcphealth.tab}} (những gì nhân lưu cho từng kết nối, như <code>ss -ti</code> hiển thị) và {{app.tools.adapters.tab}} (như <code>ip addr</code> và <code>ip route</code> hiển thị). {{app.tools.tcphealth.tab}} và {{app.tools.adapters.tab}} không cần <code>sudo</code>, còn {{app.tools.ping.tab}} chỉ cần khi hệ thống không cho nhóm của bạn gửi ping, như trên Ubuntu 24.04.</p>
+</section>
+
+<section>
+  <h2>Linux khác ở đâu, hiện nay</h2>
+  <ul>
+    <li><code>--target</code> đọc danh sách socket của hệ thống, nên lần trao đổi đầu tiên của một kết nối mới có thể đi qua trước khi mục tiêu có hiệu lực.</li>
+    <li>Khi công cụ không theo kịp, nhân cho các gói đi vòng qua nó mà không bị làm hỏng, và các bộ đếm cho biết có bao nhiêu.</li>
+    <li>Các mảnh IP luôn đi qua nguyên vẹn.</li>
+    <li>Trên Linux, các tổng kiểm tra và chứng thực của bản phát hành thay cho chữ ký mã: chúng cho biết bản dựng nào đã tạo ra tệp, và <a href="../tai-ve/">trang tải về</a> chỉ cách kiểm tra chúng.</li>
+  </ul>
+  <p>Để cấu hình lâu dài cho cả một giao diện, netem đã có sẵn trong nhân của bạn và là công cụ đúng. Công cụ này dùng để kiểm thử một ứng dụng trong một khoảng thời gian.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

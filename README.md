@@ -60,11 +60,11 @@ exists.
 - **Watch it live** - chart, counters, a searchable connections table and an event log.
 - **Export to CSV** - session statistics and a snapshot of the connections table.
 - **Command-line mode** - scriptable for CI, with exit codes and JSON output.
-- **No telemetry, nothing sent on its own** - the Ping tool pings only the address you type,
-  from Ping to Stop, the NAT and STUN tool sends a few requests to the two servers you type
-  and small test packets to this network's own public address, when you press Check, and the
-  Port scan tool connects to the ports you choose on the address you type, from Scan to the end
-  or Stop.
+- **Network tools in the same window** - a continuous ping with a chart, jitter and packet loss,
+  a TCP and UDP port scanner, a NAT and TURN check for calls, every socket on this computer with
+  the program that holds it, a check of which local ports are free, the health of each TCP
+  connection, and the network adapters.
+- **No telemetry, nothing sent on its own**
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester adding lag and packet loss to a live ping" width="820">
@@ -266,7 +266,8 @@ exit code 1, as on Windows without administrator rights. Where Linux differs fro
 - IP fragments always pass through the tool, even those its filter does not match.
 - In the window, the files it saves (window state, profiles, CSV) stay yours under `sudo` and
   `pkexec`, and GitHub and Donate print their address instead of starting a browser as root.
-- On the Tools tab, Ping, Sockets, Port check, Filter tester, TCP health and Diagnostics work.
+- On the Tools tab, Ping, NAT and STUN, Port scan, Sockets, Port check, Filter tester, TCP health
+  and Diagnostics work.
   Ping works without `sudo` where the system lets your group send pings (the setting
   `net.ipv4.ping_group_range`: Ubuntu 26.04 allows it, 24.04 does not). With `sudo` it sends
   through a raw socket, which needs the capability CAP_NET_RAW: root has it unless the system

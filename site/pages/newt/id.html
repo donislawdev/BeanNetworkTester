@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>Alternatif untuk NEWT, Network Emulator for Windows Toolkit</h1>
+  <p class="lead">NEWT adalah emulator jaringan buatan Microsoft untuk Windows. Alat ini menambahkan jeda, kehilangan paket, dan batas kecepatan ke lalu lintas sungguhan, sehingga sebuah program bisa dicoba di jaringan buruk dari PC biasa. Microsoft tidak lagi menyediakannya untuk diunduh. Halaman ini memetakan setiap pengaturan NEWT ke Bean Network Tester, yang melakukan pekerjaan yang sama di Windows 10 dan 11.</p>
+</section>
+
+<section>
+  <h2>Apa yang terjadi pada NEWT</h2>
+  <ul>
+    <li>NEWT disertakan dalam Games for Windows LIVE SDK dan kit pengembangan Xbox. Driver-nya kemudian masuk ke Visual Studio 2010, sebagai emulasi jaringan pada uji beban.</li>
+    <li>Microsoft telah menghentikan uji performa web dan uji beban di Visual Studio, termasuk emulasi jaringannya. Visual Studio 2019 adalah versi terakhir yang menyediakannya secara penuh.</li>
+    <li>Saat ini tidak ada unduhan dari Microsoft. Pencarian menemukan salinan di situs unduhan dan paket Chocolatey yang terakhir diperbarui pada 2013.</li>
+  </ul>
+  <p>Emulator memasang driver jaringan dan berjalan dengan hak administrator, jadi sebaiknya ketahui dari mana sebuah penginstal berasal sebelum menjalankannya.</p>
+</section>
+
+<section>
+  <h2>Pengaturan NEWT, satu per satu</h2>
+  <p>Tambahkan <code>--target</code> dan <code>--duration</code> ke setiap perintah di halaman ini, atau perintah itu memengaruhi seluruh komputer.</p>
+  <table>
+    <tr><th>Di NEWT</th><th>Pengaturan di jendela</th><th>Flag</th></tr>
+    <tr><td>Latensi (Latency)</td><td>{{app.fields.latency}}, dan {{app.fields.jitter}} untuk jeda yang berubah-ubah</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td>Bandwidth</td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 1221 --up 1221</code></td></tr>
+    <tr><td>Antrean (Queue)</td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+    <tr><td>Kehilangan paket (Packet loss)</td><td>{{app.fields.loss}}, dan {{app.fields.loss_burst}} untuk kehilangan yang datang beruntun</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td>Pengurutan ulang (Reordering)</td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td>Galat (Errors)</td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td>Putus dan sambung</td><td>{{app.frames.flapping}}</td><td><code>--flap-period 10 --flap-down 40</code></td></tr>
+    <tr><td>Filter menurut alamat IP</td><td>{{app.frames.destination}}</td><td><code>--dst-ip 10.0.0.5</code></td></tr>
+    <tr><td>Filter menurut protokol</td><td>{{app.frames.traffic}}: {{app.filters.tcp}}, {{app.filters.udp}} atau {{app.filters.ping}}</td><td><code>--filter tcp</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Kecepatan.</strong> Kolom batas kecepatan dalam KB/s, dengan K = 1024: 122 kira-kira 1 Mbit/s dan 1221 kira-kira 10 Mbit/s. <a href="../netem-untuk-windows/">Halaman netem</a> punya tabel yang lebih panjang.</li>
+    <li><strong>Antrean.</strong> {{app.fields.buffer}} adalah waktu dalam milidetik, bukan jumlah paket.</li>
+    <li><strong>Pengurutan ulang.</strong> Tidak ada persentase pengurutan ulang. Sebuah lonjakan menahan satu paket sehingga paket yang dikirim sesudahnya mendahuluinya, dan penghitung paket yang tertukar urutannya di halaman {{app.app.tabs.statistics}} menunjukkan apakah itu benar-benar terjadi.</li>
+    <li><strong>Dua arah.</strong> Setiap nilai berlaku saat pergi dan saat kembali, jadi <code>--latency 100</code> menambah sekitar 200 ms pada ping. Untuk nilai berbeda di tiap arah, centang {{app.fields.asym}}, atau tambahkan <code>--asym</code> dan flag yang berakhiran <code>-up</code>.</li>
+  </ul>
+  <p>Sambungan NEWT yang umum sebagai satu perintah, diarahkan ke satu program selama dua menit:</p>
+<pre><code>BeanNetworkTester.exe --latency 100 --jitter 20 --loss 2 --down 1221 --up 1221 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Apa yang dibawa alat ini</h2>
+  <ul>
+    <li><strong>Satu program, bukan seluruh komputer.</strong> Selain alamat dan protokol, filter bisa berupa program, menurut nama atau ID proses. <a href="../sasar-satu-aplikasi/">Arahkan gangguan ke satu aplikasi</a> sementara bagian mesin lainnya tetap normal.</li>
+    <li><strong>Baris perintah dengan kode keluar.</strong> Berkas eksekusi yang sama <a href="../uji-jaringan-di-ci/">berjalan di CI</a> dan melaporkan setiap hasil lewat kode keluarnya.</li>
+    <li><strong>Jalannya uji yang bisa diulang.</strong> Dengan <code>--seed</code>, kehilangan acak dan jitter yang sama muncul lagi pada jalannya berikutnya.</li>
+    <li><strong>Pengaturan yang berubah sendiri.</strong> <a href="../skenario-berbasis-waktu/">Skenario berjadwal</a> mengganti pengaturan pada detik yang ditentukan sementara Anda mengamati program.</li>
+    <li><strong>Tampilan langsung.</strong> Grafik, penghitung, dan tabel koneksi menunjukkan apa yang terkena dan seberapa banyak.</li>
+    <li><strong>Alat jaringan di jendela yang sama.</strong> <a href="../ping-terus-menerus/">Ping terus-menerus</a> dengan grafik, <a href="../pemindai-port/">pemindai port</a>, dan <a href="../tes-tipe-nat/">tes tipe NAT</a>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Kapan memakai yang lain</h2>
+  <ul>
+    <li><strong>Anda butuh seluruh jaringan router dan switch.</strong> Itu tugas simulator jaringan, seperti GNS3 atau EVE-NG, yang menjalankan perangkat virtual. Emulator mengubah lalu lintas satu komputer sungguhan.</li>
+    <li><strong>Anda ingin produk komersial dengan dukungan.</strong> SoftPerfect Connection Emulator adalah emulator jaringan berbayar untuk Windows.</li>
+    <li><strong>Anda memakai Linux.</strong> tc netem sudah tersedia, dan alat ini juga berjalan di sana, secara eksperimental. Lihat <a href="../simulasi-jaringan-di-linux/">jaringan buruk di Linux</a>.</li>
+    <li><strong>Anda tidak bisa mendapat hak administrator.</strong> Mengubah lalu lintas program lain memerlukannya, dengan alat apa pun.</li>
+  </ul>
+  <p>Sedang membandingkan alat gratis untuk Windows? Halaman <a href="../alternatif-clumsy/">Alternatif Clumsy</a> membahas Clumsy, NetLimiter, dan proxy seperti Fiddler.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

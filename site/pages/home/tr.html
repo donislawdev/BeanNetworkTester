@@ -53,9 +53,22 @@
     <li><code>BeanNetworkTester.exe</code> dosyasını başlatın. Trafiği yakalamak yönetici hakları gerektirdiği için bunları kendisi ister.</li>
     <li>“{{app.presets.3g}}” gibi hazır bir profil seçin, {{app.buttons.start}} düğmesine basın ve uygulamanızı kullanın.</li>
   </ol>
+  <p>Linux'ta da deneysel olarak, bir .tar.gz paketinden çalışır. <a href="linuxta-ag-simulasyonu/">Linux üzerinde kötü ağ</a> sayfası neye ihtiyaç duyduğunu ve orada neyin farklı olduğunu anlatır.</p>
   <p>Aynı dosyada bir metin modu da var, böylece her şey bir pipeline içinde de çalışır. Hizmetinizin %10 paket kaybından sağ çıkıp çıkmadığını denetlemek için tek bir komut yeter:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>Süre dolunca kendiliğinden durur; böylece takılı kalan bir adım arkasında bozuk bir ağ bırakamaz. Gerçek trafiğe dokunmadan bir komutu denemek için <code>--simulate</code> ekleyin.</p>
+</section>
+
+<section>
+  <h2>Aynı pencerede ağ araçları</h2>
+  <p>{{app.app.tabs.tools}} sekmesi, ikinci bir program kurmadan, bir testten önce ve sonra gelen soruları yanıtlar:</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong>: grafik, jitter ve paket kaybıyla <a href="surekli-ping/">sürekli ping</a>.</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong>: başka bir bilgisayar için <a href="port-tarayici/">TCP ve UDP port tarayıcı</a>.</li>
+    <li><strong>{{app.tools.nat.tab}}</strong>: bir <a href="nat-turu-testi/">NAT türü testi</a> ve aramalarınızın kullandığı TURN sunucusunun kontrolü.</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong> ve <strong>{{app.tools.portcheck.tab}}</strong>: bu bilgisayarda <a href="hangi-program-portu-kullaniyor/">portu hangi programın tuttuğu</a> ve bir portun boş olup olmadığı.</li>
+  </ul>
+  <p>Başka bir araçtan mı geliyorsunuz? <a href="clumsy-alternatifi/">Clumsy</a>, <a href="windows-icin-netem/">netem</a> ve <a href="newt-alternatifi/">NEWT</a> sayfalarına bakın.</p>
 </section>
 
 <section>

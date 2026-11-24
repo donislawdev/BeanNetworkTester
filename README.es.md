@@ -65,11 +65,11 @@ tester que lo necesite.
   eventos.
 - **Exportar a CSV** - estadísticas de la sesión e instantánea de la tabla de conexiones.
 - **Modo de línea de comandos** - automatizable para CI, con códigos de salida y salida JSON.
-- **Sin telemetría, no envía nada por su cuenta** - la herramienta Ping solo hace ping a la
-  dirección que se escribe, y NAT and STUN envía unas pocas solicitudes a los dos servidores que se
-  escriben y pequeños paquetes de prueba a la propia dirección pública de esta red, al pulsar Check,
-  y Port scan se conecta a los puertos que se eligen en la dirección que se escribe, de Scan
-  hasta el final o Stop.
+- **Herramientas de red en la misma ventana** - un ping continuo con gráfico, jitter y pérdida
+  de paquetes, un escáner de puertos TCP y UDP, una comprobación de NAT y TURN para llamadas, cada
+  socket de este equipo con el programa que lo usa, una comprobación de qué puertos locales están
+  libres, el estado de cada conexión TCP y los adaptadores de red.
+- **Sin telemetría, no envía nada por su cuenta**
 
 <p align="center">
   <img src="docs/demo.gif" alt="Bean Network Tester adding lag and packet loss to a live ping" width="820">

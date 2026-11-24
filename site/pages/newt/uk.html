@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>Альтернатива NEWT, Network Emulator for Windows Toolkit</h1>
+  <p class="lead">NEWT був емулятором мережі від Microsoft для Windows. Він додавав до справжнього трафіку затримку, втрати й обмеження швидкості, щоб програму можна було перевірити в поганій мережі на звичайному ПК. Microsoft більше не дає його завантажити. Ця сторінка переносить кожне налаштування NEWT у Bean Network Tester, який робить те саме у Windows 10 і 11.</p>
+</section>
+
+<section>
+  <h2>Що сталося з NEWT</h2>
+  <ul>
+    <li>NEWT постачався з Games for Windows LIVE SDK і набором розробника для Xbox. Потім його драйвер увійшов до Visual Studio 2010 як емуляція мережі в навантажувальних тестах.</li>
+    <li>Microsoft оголосила застарілими веб-тести продуктивності та навантажувальні тести у Visual Studio, разом з емуляцією мережі. Visual Studio 2019 - остання версія, де вони доступні повністю.</li>
+    <li>Сьогодні завантажити його в Microsoft не можна. Пошук знаходить копії на сайтах завантажень і пакет Chocolatey, востаннє оновлений у 2013 році.</li>
+  </ul>
+  <p>Емулятор встановлює мережевий драйвер і працює з правами адміністратора, тож варто знати, звідки взявся інсталятор, перш ніж його запускати.</p>
+</section>
+
+<section>
+  <h2>Налаштування NEWT по черзі</h2>
+  <p>Додавайте <code>--target</code> і <code>--duration</code> до кожної команди на цій сторінці, інакше вона діє на весь комп’ютер.</p>
+  <table>
+    <tr><th>У NEWT</th><th>Налаштування у вікні</th><th>Прапорець</th></tr>
+    <tr><td>Затримка (Latency)</td><td>{{app.fields.latency}}, а {{app.fields.jitter}} - для затримки, що змінюється</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td>Пропускна здатність (Bandwidth)</td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 1221 --up 1221</code></td></tr>
+    <tr><td>Черга (Queue)</td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+    <tr><td>Втрата пакетів (Packet loss)</td><td>{{app.fields.loss}}, а {{app.fields.loss_burst}} - для втрат, що йдуть серіями</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td>Перестановка (Reordering)</td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td>Помилки (Errors)</td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td>Розриви та з’єднання</td><td>{{app.frames.flapping}}</td><td><code>--flap-period 10 --flap-down 40</code></td></tr>
+    <tr><td>Фільтр за IP-адресою</td><td>{{app.frames.destination}}</td><td><code>--dst-ip 10.0.0.5</code></td></tr>
+    <tr><td>Фільтр за протоколом</td><td>{{app.frames.traffic}}: {{app.filters.tcp}}, {{app.filters.udp}} або {{app.filters.ping}}</td><td><code>--filter tcp</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Швидкість.</strong> Поля обмеження швидкості задаються в KB/s, де K = 1024: 122 - це близько 1 Мбіт/с, а 1221 - близько 10 Мбіт/с. На <a href="../netem-dlya-windows/">сторінці про netem</a> таблиця довша.</li>
+    <li><strong>Черга.</strong> {{app.fields.buffer}} - це час у мілісекундах, а не кількість пакетів.</li>
+    <li><strong>Перестановка.</strong> Відсотка перестановки немає. Сплеск притримує один пакет, і надіслані після нього його обганяють, а лічильник переставлених пакетів на сторінці {{app.app.tabs.statistics}} показує, чи справді це сталося.</li>
+    <li><strong>Обидва напрямки.</strong> Кожне значення діє і туди, і назад, тому <code>--latency 100</code> додає до пінгу близько 200 мс. Щоб задати напрямки окремо, позначте {{app.fields.asym}} або додайте <code>--asym</code> і прапорці, що закінчуються на <code>-up</code>.</li>
+  </ul>
+  <p>Типовий канал із NEWT однією командою, спрямованою на одну програму на дві хвилини:</p>
+<pre><code>BeanNetworkTester.exe --latency 100 --jitter 20 --loss 2 --down 1221 --up 1221 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Що дає цей інструмент</h2>
+  <ul>
+    <li><strong>Одна програма, а не весь комп’ютер.</strong> Крім адреси та протоколу, фільтром може бути програма, за назвою або ідентифікатором процесу. <a href="../tsil-odyn-zastosunok/">Спрямуйте погіршення на один застосунок</a>, поки решта машини працює як звичайно.</li>
+    <li><strong>Командний рядок із кодами завершення.</strong> Той самий виконуваний файл <a href="../testy-merezhi-v-ci/">працює в CI</a> і повідомляє кожен результат своїм кодом завершення.</li>
+    <li><strong>Повторювані запуски.</strong> З <code>--seed</code> ті самі випадкові втрати й той самий джитер повертаються під час наступного запуску.</li>
+    <li><strong>Налаштування, що змінюються самі.</strong> <a href="../stsenarii-v-chasi/">Сценарії в часі</a> перемикають налаштування в задані секунди, поки ви дивитеся на програму.</li>
+    <li><strong>Живий перегляд.</strong> Графік, лічильники й таблиця з’єднань показують, що було зачеплено і наскільки.</li>
+    <li><strong>Мережеві інструменти в тому самому вікні.</strong> <a href="../bezperervnyi-ping/">Безперервний пінг</a> із графіком, <a href="../skaner-portiv/">сканер портів</a> і <a href="../test-typu-nat/">тест типу NAT</a>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Коли обрати щось інше</h2>
+  <ul>
+    <li><strong>Вам потрібна ціла мережа з маршрутизаторів і комутаторів.</strong> Це робота для симулятора мережі, наприклад GNS3 або EVE-NG, який запускає віртуальні пристрої. Емулятор змінює трафік одного справжнього комп’ютера.</li>
+    <li><strong>Вам потрібен комерційний продукт із підтримкою.</strong> SoftPerfect Connection Emulator - платний емулятор мережі для Windows.</li>
+    <li><strong>Ви працюєте в Linux.</strong> tc netem там вбудований, а цей інструмент теж працює, в експериментальному режимі. Див. <a href="../symulyaciya-merezhi-v-linux/">погана мережа в Linux</a>.</li>
+    <li><strong>Ви не можете отримати права адміністратора.</strong> Змінювати трафік інших програм без них не може жоден інструмент.</li>
+  </ul>
+  <p>Порівнюєте безкоштовні інструменти для Windows? Сторінка <a href="../alternatyva-clumsy/">Альтернатива Clumsy</a> розглядає Clumsy, NetLimiter і проксі на зразок Fiddler.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

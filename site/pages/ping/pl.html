@@ -1,0 +1,47 @@
+<section class="hero">
+  <h1>Ciągły ping, który liczy za ciebie</h1>
+  <p class="lead">Ciągły ping to najszybszy sposób, żeby zobaczyć, czy połączenie jest stabilne: jedno żądanie echo za drugim, aż go zatrzymasz. Windows i Linux mają go w konsoli. Narzędzie {{app.tools.ping.tab}} na zakładce {{app.app.tabs.tools}} robi to samo i trzyma liczby, które konsola zostawia tobie do policzenia: jitter, najdłuższą serię strat i czas odpowiedzi, w którym zmieściło się 95% odpowiedzi.</p>
+</section>
+
+<section>
+  <h2>W konsoli</h2>
+  <p>W wierszu poleceń Windows <code>-t</code> pinguje, aż naciśniesz Ctrl+C. Ctrl+Break wypisuje dotychczasowe podsumowanie i pinguje dalej.</p>
+<pre><code>ping -t 1.1.1.1</code></pre>
+  <p>Żeby zapisać wynik do pliku albo dopisać godzinę do każdej linii, w PowerShellu:</p>
+<pre><code>ping -t 1.1.1.1 > ping.txt
+ping.exe -t 1.1.1.1 | ForEach-Object { "{0:HH:mm:ss} {1}" -f (Get-Date), $_ }</code></pre>
+  <p>PowerShell 7 ma do tego własne polecenie, a w Linuksie zwykły ping i tak działa do Ctrl+C. <code>-D</code> dodaje znacznik czasu do każdej linii:</p>
+<pre><code>Test-Connection 1.1.1.1 -Repeat
+ping -D 1.1.1.1</code></pre>
+  <p>Żadne z nich nie podsumowuje przebiegu w trakcie: dostajesz jedną linię na odpowiedź i sumy na końcu.</p>
+</section>
+
+<section>
+  <h2>Narzędziem {{app.tools.ping.tab}}</h2>
+  <ul>
+    <li>Wpisz adres albo nazwę, wybierz, jak często pingować, jak długo czekać na odpowiedź, ile bajtów niesie każdy ping (32, tak jak wysyła <code>ping.exe</code>, do 65 500) i ile pingów wysłać, albo pozwól mu działać do {{app.tools.ping.stop}}. Potem naciśnij <strong>{{app.tools.ping.start}}</strong>.</li>
+    <li>Każdy ping to wiersz: kiedy wyszedł, jego czas odpowiedzi, TTL i to, co wróciło. Wykres pokazuje czasy odpowiedzi ostatnich 60.</li>
+    <li>Linia nad tabelą trzyma sumy: wysłane, odpowiedzi, utracone, najdłuższą serię strat, najniższy, średni i najwyższy czas odpowiedzi, jitter (o ile czas odpowiedzi zmienia się od jednej odpowiedzi do następnej) i czas, w którym zmieściło się 95% odpowiedzi.</li>
+    <li>Pinguje dalej, gdy na wierzchu jest inna zakładka. Kliknij prawym przyciskiem wiersz w {{app.tools.sockets.tab}} albo w {{app.app.tabs.connections}} i wybierz <strong>{{app.menu.ping_address}}</strong>, żeby pingować jego drugi koniec.</li>
+    <li><strong>{{app.tools.ping.copy}}</strong> kopiuje wiersze i sumy, po angielsku, do zgłoszenia błędu.</li>
+  </ul>
+  <p>Odpowiedź, która przyjdzie po czasie oczekiwania, liczy się jako utracona. Przy dużym opóźnieniu wybierz dłuższe czekanie.</p>
+</section>
+
+<section>
+  <h2>Zobacz, jak przychodzi zła sieć</h2>
+  <p>Uruchom ping, a potem sesję na stronie sterowania z jakimś opóźnieniem i stratami. Gdy sesja startuje, zatrzymuje się, dostaje nowe ustawienia albo przechodzi do następnego kroku scenariusza, linia pokazuje czas od tej chwili i to, jak średni czas odpowiedzi i odsetek strat różnią się od tego, co było wcześniej, a wykres zaznacza ten moment przerywaną linią. Kolejna linia mówi, co sesja robi z tymi pingami: psuje je, widzi i zostawia w spokoju albo w ogóle ich nie łapie.</p>
+  <p>Przy domyślnym filtrze ruchu ping niesie opóźnienie dwa razy, więc 100 ms opóźnienia dodaje około 200 ms do czasu odpowiedzi, a straty trafiają osobno w żądanie i w odpowiedź, więc 20% strat gubi mniej więcej co trzeci ping. Sesja skierowana na jeden program nigdy nie rusza pingu, bo ping nie należy do połączenia żadnego programu: skieruj ją wtedy na adres.</p>
+</section>
+
+<section>
+  <h2>W Linuksie</h2>
+  <p>Narzędzie działa też w Linuksie. Nie potrzebuje <code>sudo</code> tam, gdzie system pozwala twojej grupie wysyłać pingi, jak w Ubuntu 26.04, a potrzebuje go tam, gdzie nie pozwala, jak w Ubuntu 24.04. Resztę opisuje <a href="../symulacja-sieci-w-linuksie/">strona o Linuksie</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

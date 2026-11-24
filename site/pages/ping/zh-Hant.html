@@ -1,0 +1,47 @@
+<section class="hero">
+  <h1>幫你記下數字的持續 ping</h1>
+  <p class="lead">持續 ping 是查看連線是否穩定的最快方法：一個回應要求接著一個，直到你停止。Windows 與 Linux 的主控台裡都有。{{app.app.tabs.tools}} 分頁上的 {{app.tools.ping.tab}} 工具做同樣的事，還會記下主控台要你自己去數的數字：抖動、最長的連續遺失，以及 95% 的回覆都沒有超過的來回時間。</p>
+</section>
+
+<section>
+  <h2>在主控台中</h2>
+  <p>在 Windows 命令提示字元中，<code>-t</code> 會一直 ping，直到你按 Ctrl+C。按 Ctrl+Break 會顯示到目前為止的統計並繼續。</p>
+<pre><code>ping -t 1.1.1.1</code></pre>
+  <p>要把輸出存成檔案，或在每一行前加上時間，可以在 PowerShell 中：</p>
+<pre><code>ping -t 1.1.1.1 > ping.txt
+ping.exe -t 1.1.1.1 | ForEach-Object { "{0:HH:mm:ss} {1}" -f (Get-Date), $_ }</code></pre>
+  <p>PowerShell 7 有專用的指令；在 Linux 上，一般的 ping 本來就會一直執行到 Ctrl+C。<code>-D</code> 會在每一行前加上時間戳記：</p>
+<pre><code>Test-Connection 1.1.1.1 -Repeat
+ping -D 1.1.1.1</code></pre>
+  <p>它們都不會在執行過程中做彙總：你得到的是每個回覆一行，以及最後的總計。</p>
+</section>
+
+<section>
+  <h2>使用 {{app.tools.ping.tab}} 工具</h2>
+  <ul>
+    <li>輸入位址或名稱，選擇多久 ping 一次、等待回覆多久、每個 ping 攜帶多少位元組（32，與 <code>ping.exe</code> 送出的相同，最大 65 500），以及送出多少個 ping，或讓它一直執行到 {{app.tools.ping.stop}}。接著按下 <strong>{{app.tools.ping.start}}</strong>。</li>
+    <li>每個 ping 是一列：何時送出、來回時間、TTL 以及回來了什麼。圖表顯示最近 60 個的來回時間。</li>
+    <li>表格上方的一行保存總計：已送出、回覆、遺失、最長的連續遺失、最低、平均與最高來回時間、抖動（來回時間從一個回覆到下一個回覆變化多少），以及 95% 的回覆都沒有超過的來回時間。</li>
+    <li>切換到其他分頁時它也會繼續 ping。在 {{app.tools.sockets.tab}} 或 {{app.app.tabs.connections}} 中按右鍵點選一列，選擇 <strong>{{app.menu.ping_address}}</strong>，即可 ping 它的遠端。</li>
+    <li><strong>{{app.tools.ping.copy}}</strong> 會把各列與總計以英文複製，方便寫進錯誤回報。</li>
+  </ul>
+  <p>在等待時間之後才到的回覆算作遺失。延遲很大時，請選擇更長的等待時間。</p>
+</section>
+
+<section>
+  <h2>看著弱網到來</h2>
+  <p>先開始 ping，再在控制頁啟動一個帶有延遲與封包遺失的工作階段。當工作階段開始、停止、套用新設定或進入情境的下一步時，這一行會顯示從那一刻起經過的時間，以及平均來回時間與遺失比例和之前相比的變化，圖表會用虛線標出這個時刻。另一行會說明工作階段對這些 ping 做了什麼：損傷它們、看到但不處理，或根本不擷取。</p>
+  <p>使用預設的流量篩選時，一個 ping 會承受兩次延遲，所以 100 ms 的延遲會讓來回時間增加約 200 ms；封包遺失分別作用於要求與回覆，所以 20% 的遺失大約會丟掉三分之一的 ping。針對某個程式的工作階段永遠不會影響 ping，因為 ping 不屬於任何程式的連線：這時請改為針對位址。</p>
+</section>
+
+<section>
+  <h2>在 Linux 上</h2>
+  <p>這個工具在 Linux 上也能用。在系統允許你的群組送出 ping 的地方（如 Ubuntu 26.04）不需要 <code>sudo</code>，在不允許的地方（如 Ubuntu 24.04）則需要。其餘內容請見 <a href="../linux-ruowang-moni/">Linux 頁面</a>。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

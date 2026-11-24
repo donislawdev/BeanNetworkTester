@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>NAT của tôi thuộc loại nào, và cuộc gọi có kết nối được không?</h1>
+  <p class="lead">Gọi video, trò chơi và ứng dụng WebRTC nối hai thiết bị trực tiếp khi các router ở giữa cho phép, và chuyển sang một máy chuyển tiếp, tức máy chủ TURN, khi không cho phép. Công cụ {{app.tools.nat.tab}} trên thẻ {{app.app.tabs.tools}} cho bạn biết mạng của bạn rơi vào trường hợp nào chỉ trong vài giây, ngay từ máy tính của bạn.</p>
+</section>
+
+<section>
+  <h2>Cách chạy</h2>
+  <ol>
+    <li>Mở thẻ {{app.app.tabs.tools}}, rồi {{app.tools.group.network}} và {{app.tools.nat.tab}}.</li>
+    <li>Một máy chủ STUN và một máy chủ TURN đã được điền sẵn (của Cloudflare). Hãy nhập của bạn nếu cuộc gọi của bạn dùng máy chủ khác.</li>
+    <li>Nhấn <strong>{{app.tools.nat.start}}</strong>. Vài giây sau bảng được điền đầy, và một dòng phía trên tóm tắt kết quả bằng lời lẽ dễ hiểu.</li>
+  </ol>
+  <p>Không có gì được gửi đi cho đến khi bạn nhấn. Khi đó công cụ gửi vài yêu cầu đến hai máy chủ và các gói thử nhỏ đến chính địa chỉ công khai của mạng bạn, rồi dừng lại.</p>
+</section>
+
+<section>
+  <h2>Ý nghĩa của các dòng</h2>
+  <table>
+    <tr><th>Dòng</th><th>Nó cho bạn biết gì</th></tr>
+    <tr><td><strong>{{app.tools.nat.row.public}}</strong></td><td>Địa chỉ và cổng mà router cấp cho máy tính này, và router có giữ nguyên cổng mà máy tính đã dùng hay không.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.mapping}}</strong></td><td><strong>{{app.tools.nat.result.independent}}</strong>: một socket nhận cùng một cổng công khai cho mọi máy chủ, nên các thiết bị sau router khác thường có thể kết nối trực tiếp. <strong>{{app.tools.nat.result.by_address}}</strong> hoặc <strong>{{app.tools.nat.result.by_address_port}}</strong>: mỗi máy chủ một cổng mới, nên cuộc gọi có thể cần máy chuyển tiếp.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.hairpin_together}}</strong>, <strong>{{app.tools.nat.row.hairpin_first}}</strong></td><td>Hai thiết bị sau router này có tới được nhau qua địa chỉ công khai của nó hay không. Router đóng đường đi sau khi một bên gửi trước sẽ để cuộc gọi như vậy cho mạng cục bộ hoặc máy chuyển tiếp.</td></tr>
+    <tr><td><strong>TURN</strong></td><td>Máy chủ TURN có trả lời qua UDP 3478 và 443, TCP 3478 và 80, và TLS 5349 và 443 hay không. Máy chủ được yêu cầu một kênh chuyển tiếp mà không cần đăng nhập, và câu trả lời "401, cần đăng nhập" cho thấy nó có ở đó. Qua TLS, chứng chỉ của nó được kiểm tra với các chứng chỉ gốc mà máy tính này tin cậy: một chứng chỉ không được tin cậy có thể cho thấy có proxy hoặc tường lửa trên đường đi đang đọc TLS.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Những tên loại NAT bạn có thể đã thấy</h2>
+  <p>Các tên cũ đến từ tiêu chuẩn STUN đầu tiên: full cone, restricted cone, port-restricted cone và symmetric. NAT đối xứng là loại cấp một cổng mới cho mỗi máy chủ, còn cả ba loại "cone" giữ một cổng cho mọi máy chủ. Điều phân biệt các loại "cone" là cách lọc, và công cụ này không kiểm tra điều đó.</p>
+  <p>Máy chơi game hiển thị kết luận riêng, chẳng hạn Open, Moderate hoặc Strict. Kết luận đó trộn lẫn cách ánh xạ, cách lọc và việc router có chuyển tiếp cổng cho máy hay không, nên các dòng này không chuyển sang đó một đổi một.</p>
+</section>
+
+<section>
+  <h2>Những gì nó không cho biết</h2>
+  <ul>
+    <li>Router có cho vào các gói dữ liệu từ một địa chỉ mà máy tính này chưa từng gửi gì tới hay không (lọc).</li>
+    <li>Bất cứ điều gì về riêng một router khi phía sau còn một NAT khác. Sau NAT của nhà mạng hoặc sau VPN, kết quả mô tả cả chuỗi đó.</li>
+    <li>Nó không đọc và không thay đổi gì trên router. Hai máy chủ thấy địa chỉ công khai của mạng bạn, và <strong>{{app.tools.nat.copy}}</strong> sao chép bảng bằng tiếng Anh, có cả địa chỉ đó.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Sau đó thử cuộc gọi trên mạng kém</h2>
+  <p>Khi đã biết cuộc gọi đi theo đường nào, trang điều khiển có thể nhắm độ trễ và mất gói vào một phần của nó: {{app.fields.call_checks}}, {{app.fields.call_turn_control}} hoặc {{app.fields.call_media}}. Nhờ đó bạn thấy cuộc gọi có chịu được bước kiểm tra kết nối chậm mà không làm hỏng âm thanh và hình ảnh hay không, hoặc ngược lại. Phần còn lại của việc nhắm mục tiêu nằm ở trang <a href="../nham-vao-mot-ung-dung/">nhắm vào một ứng dụng</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

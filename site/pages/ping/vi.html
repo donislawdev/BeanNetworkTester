@@ -1,0 +1,47 @@
+<section class="hero">
+  <h1>Ping liên tục ghi lại các con số thay bạn</h1>
+  <p class="lead">Ping liên tục là cách nhanh nhất để xem kết nối có ổn định không: hết yêu cầu echo này đến yêu cầu khác, cho đến khi bạn dừng. Cả Windows và Linux đều có sẵn trong bảng điều khiển dòng lệnh. Công cụ {{app.tools.ping.tab}} trên thẻ {{app.app.tabs.tools}} làm điều tương tự và giữ lại những con số mà dòng lệnh để bạn tự đếm: jitter, chuỗi mất gói dài nhất và thời gian khứ hồi mà 95% phản hồi không vượt quá.</p>
+</section>
+
+<section>
+  <h2>Trong dòng lệnh</h2>
+  <p>Trong Command Prompt của Windows, <code>-t</code> sẽ ping cho đến khi bạn nhấn Ctrl+C. Ctrl+Break in ra tổng số tính đến lúc đó rồi chạy tiếp.</p>
+<pre><code>ping -t 1.1.1.1</code></pre>
+  <p>Để lưu kết quả vào tệp, hoặc thêm giờ vào mỗi dòng, trong PowerShell:</p>
+<pre><code>ping -t 1.1.1.1 > ping.txt
+ping.exe -t 1.1.1.1 | ForEach-Object { "{0:HH:mm:ss} {1}" -f (Get-Date), $_ }</code></pre>
+  <p>PowerShell 7 có lệnh riêng cho việc này, còn trên Linux một lệnh ping thông thường vốn đã chạy đến khi nhấn Ctrl+C. <code>-D</code> thêm dấu thời gian vào mỗi dòng:</p>
+<pre><code>Test-Connection 1.1.1.1 -Repeat
+ping -D 1.1.1.1</code></pre>
+  <p>Không lệnh nào tóm tắt lần chạy trong lúc nó đang diễn ra: bạn nhận một dòng cho mỗi phản hồi và tổng số ở cuối.</p>
+</section>
+
+<section>
+  <h2>Với công cụ {{app.tools.ping.tab}}</h2>
+  <ul>
+    <li>Nhập địa chỉ hoặc tên, chọn bao lâu ping một lần, chờ phản hồi bao lâu, mỗi ping mang bao nhiêu byte (32, giống <code>ping.exe</code>, tối đa 65 500) và gửi bao nhiêu ping, hoặc để nó chạy đến khi nhấn {{app.tools.ping.stop}}. Sau đó nhấn <strong>{{app.tools.ping.start}}</strong>.</li>
+    <li>Mỗi ping là một dòng: lúc gửi đi, thời gian khứ hồi, TTL và những gì quay về. Biểu đồ hiển thị thời gian khứ hồi của 60 ping gần nhất.</li>
+    <li>Một dòng phía trên bảng giữ tổng số: đã gửi, phản hồi, bị mất, chuỗi mất gói dài nhất, thời gian khứ hồi thấp nhất, trung bình và cao nhất, jitter (thời gian khứ hồi thay đổi bao nhiêu giữa hai phản hồi liên tiếp) và thời gian mà 95% phản hồi không vượt quá.</li>
+    <li>Nó vẫn tiếp tục ping khi một thẻ khác đang ở phía trước. Nhấp chuột phải vào một dòng trong {{app.tools.sockets.tab}} hoặc {{app.app.tabs.connections}} rồi chọn <strong>{{app.menu.ping_address}}</strong> để ping đầu bên kia.</li>
+    <li><strong>{{app.tools.ping.copy}}</strong> sao chép các dòng và tổng số bằng tiếng Anh, để dùng cho báo cáo lỗi.</li>
+  </ul>
+  <p>Phản hồi đến sau thời gian chờ được tính là bị mất. Khi độ trễ lớn, hãy chọn thời gian chờ dài hơn.</p>
+</section>
+
+<section>
+  <h2>Xem mạng kém ập đến</h2>
+  <p>Bắt đầu ping, rồi bắt đầu một phiên trên trang điều khiển với một ít độ trễ và mất gói. Khi phiên bắt đầu, dừng, nhận thiết lập mới hoặc chuyển sang bước tiếp theo của kịch bản, dòng đó hiển thị thời gian kể từ lúc ấy và mức chênh của thời gian khứ hồi trung bình cùng tỷ lệ mất so với trước, còn biểu đồ đánh dấu thời điểm đó bằng một đường nét đứt. Một dòng khác cho biết phiên đang làm gì với các ping này: làm hỏng chúng, thấy nhưng để yên, hoặc không bắt chúng.</p>
+  <p>Với bộ lọc lưu lượng mặc định, một ping chịu độ trễ hai lần, nên độ trễ 100 ms cộng thêm khoảng 200 ms vào thời gian khứ hồi, và mất gói tác động riêng lên yêu cầu và phản hồi, nên mất 20% làm mất khoảng một phần ba số ping. Một phiên nhắm vào một chương trình không bao giờ động đến ping, vì ping không thuộc kết nối của chương trình nào: khi đó hãy nhắm vào địa chỉ.</p>
+</section>
+
+<section>
+  <h2>Trên Linux</h2>
+  <p>Công cụ này cũng chạy trên Linux. Nó không cần <code>sudo</code> ở nơi hệ thống cho phép nhóm của bạn gửi ping, như Ubuntu 26.04, và cần ở nơi không cho phép, như Ubuntu 24.04. Phần còn lại có ở <a href="../mo-phong-mang-tren-linux/">trang về Linux</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

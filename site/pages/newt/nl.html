@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>Een alternatief voor NEWT, de Network Emulator for Windows Toolkit</h1>
+  <p class="lead">NEWT was de netwerkemulator van Microsoft voor Windows. Hij voegde vertraging, verlies en een snelheidslimiet toe aan echt verkeer, zodat je een programma op een gewone pc op een slecht netwerk kon uitproberen. Microsoft biedt hem niet meer aan als download. Deze pagina zet elke NEWT-instelling om naar Bean Network Tester, dat hetzelfde werk doet op Windows 10 en 11.</p>
+</section>
+
+<section>
+  <h2>Wat er met NEWT gebeurde</h2>
+  <ul>
+    <li>NEWT kwam mee met de Games for Windows LIVE SDK en de ontwikkelkit voor de Xbox. Het stuurprogramma ging daarna op in Visual Studio 2010, als netwerkemulatie in belastingstests.</li>
+    <li>Microsoft heeft webprestatie- en belastingstests in Visual Studio afgeschaft, netwerkemulatie inbegrepen. Visual Studio 2019 is de laatste versie waarin ze volledig beschikbaar zijn.</li>
+    <li>Er is vandaag geen download van Microsoft. Een zoekopdracht vindt kopieën op downloadsites en een Chocolatey-pakket dat in 2013 voor het laatst is bijgewerkt.</li>
+  </ul>
+  <p>Een emulator installeert een netwerkstuurprogramma en draait met beheerdersrechten, dus het loont om te weten waar een installatieprogramma vandaan komt voordat je het start.</p>
+</section>
+
+<section>
+  <h2>NEWT-instellingen, een voor een</h2>
+  <p>Zet <code>--target</code> en <code>--duration</code> achter elke opdracht op deze pagina, anders werkt hij op de hele computer.</p>
+  <table>
+    <tr><th>In NEWT</th><th>Instelling in het venster</th><th>Vlag</th></tr>
+    <tr><td>Latentie (Latency)</td><td>{{app.fields.latency}}, en {{app.fields.jitter}} voor een vertraging die wisselt</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td>Bandbreedte (Bandwidth)</td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 1221 --up 1221</code></td></tr>
+    <tr><td>Wachtrij (Queue)</td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+    <tr><td>Pakketverlies (Packet loss)</td><td>{{app.fields.loss}}, en {{app.fields.loss_burst}} voor verlies dat in reeksen komt</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td>Herordening (Reordering)</td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td>Fouten (Errors)</td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td>Verbreken en verbinden</td><td>{{app.frames.flapping}}</td><td><code>--flap-period 10 --flap-down 40</code></td></tr>
+    <tr><td>Filter op IP-adres</td><td>{{app.frames.destination}}</td><td><code>--dst-ip 10.0.0.5</code></td></tr>
+    <tr><td>Filter op protocol</td><td>{{app.frames.traffic}}: {{app.filters.tcp}}, {{app.filters.udp}} of {{app.filters.ping}}</td><td><code>--filter tcp</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Snelheid.</strong> De velden voor de snelheidslimiet zijn in KB/s, met K = 1024: 122 is ongeveer 1 Mbit/s en 1221 ongeveer 10 Mbit/s. De <a href="../netem-voor-windows/">netem-pagina</a> heeft een langere tabel.</li>
+    <li><strong>Wachtrij.</strong> {{app.fields.buffer}} is een tijd in milliseconden, geen aantal pakketten.</li>
+    <li><strong>Herordening.</strong> Er is geen percentage voor herordening. Een piek houdt één pakket vast, zodat de pakketten die erna zijn verstuurd het inhalen, en de teller voor herordende pakketten op de pagina {{app.app.tabs.statistics}} laat zien of dat echt gebeurde.</li>
+    <li><strong>Beide richtingen.</strong> Elke waarde geldt op de heenweg en op de terugweg, dus <code>--latency 100</code> voegt ongeveer 200 ms toe aan een ping. Voor verschillende waarden per richting vink je {{app.fields.asym}} aan, of voeg je <code>--asym</code> toe met de vlaggen die op <code>-up</code> eindigen.</li>
+  </ul>
+  <p>Een typische NEWT-verbinding als één opdracht, gericht op één programma, twee minuten lang:</p>
+<pre><code>BeanNetworkTester.exe --latency 100 --jitter 20 --loss 2 --down 1221 --up 1221 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Wat deze tool meebrengt</h2>
+  <ul>
+    <li><strong>Eén programma, niet de hele computer.</strong> Naast een adres en een protocol kan een filter een programma zijn, op naam of proces-ID. <a href="../een-app-als-doel/">Richt de verstoring op één app</a> terwijl de rest van de machine normaal blijft.</li>
+    <li><strong>Een opdrachtregel met afsluitcodes.</strong> Hetzelfde uitvoerbare bestand <a href="../netwerktests-in-ci/">draait in CI</a> en meldt elke uitkomst met zijn afsluitcode.</li>
+    <li><strong>Herhaalbare runs.</strong> Met <code>--seed</code> komen hetzelfde willekeurige verlies en dezelfde jitter bij de volgende run terug.</li>
+    <li><strong>Instellingen die vanzelf veranderen.</strong> <a href="../scenarios-in-de-tijd/">Getimede scenario's</a> wisselen de instellingen op vaste seconden terwijl jij naar het programma kijkt.</li>
+    <li><strong>Een live weergave.</strong> Een grafiek, tellers en een tabel met verbindingen laten zien wat er geraakt werd en hoeveel.</li>
+    <li><strong>Netwerktools in hetzelfde venster.</strong> Een <a href="../doorlopende-ping/">doorlopende ping</a> met grafiek, een <a href="../poortscanner/">poortscanner</a> en een <a href="../nat-type-testen/">NAT-typetest</a>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Wanneer je iets anders kiest</h2>
+  <ul>
+    <li><strong>Je hebt een heel netwerk van routers en switches nodig.</strong> Dat is een netwerksimulator, zoals GNS3 of EVE-NG, die virtuele apparaten draait. Een emulator verandert het verkeer van één echte computer.</li>
+    <li><strong>Je wilt een commercieel product met ondersteuning.</strong> SoftPerfect Connection Emulator is een betaalde netwerkemulator voor Windows.</li>
+    <li><strong>Je werkt op Linux.</strong> tc netem zit erin ingebouwd, en deze tool draait daar ook, als experiment. Zie <a href="../netwerk-simuleren-op-linux/">een slecht netwerk op Linux</a>.</li>
+    <li><strong>Je kunt geen beheerdersrechten krijgen.</strong> Het verkeer van andere programma's veranderen vraagt erom, met elke tool.</li>
+  </ul>
+  <p>Vergelijk je gratis tools voor Windows? De pagina <a href="../clumsy-alternatief/">Clumsy-alternatief</a> behandelt Clumsy, NetLimiter en proxy's zoals Fiddler.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

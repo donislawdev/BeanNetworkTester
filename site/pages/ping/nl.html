@@ -1,0 +1,47 @@
+<section class="hero">
+  <h1>Een doorlopende ping die de getallen voor je bijhoudt</h1>
+  <p class="lead">Een doorlopende ping is de snelste manier om te zien of een verbinding stabiel is: het ene echoverzoek na het andere, tot je hem stopt. Windows en Linux hebben er allebei een in de console. Het hulpmiddel {{app.tools.ping.tab}} op het tabblad {{app.app.tabs.tools}} doet hetzelfde en houdt de getallen bij die de console je zelf laat tellen: de jitter, de langste reeks verliezen en de retourtijd waaronder 95% van de antwoorden bleef.</p>
+</section>
+
+<section>
+  <h2>In de console</h2>
+  <p>In de Windows-opdrachtprompt pingt <code>-t</code> tot je op Ctrl+C drukt. Ctrl+Break toont de totalen tot dan toe en gaat door.</p>
+<pre><code>ping -t 1.1.1.1</code></pre>
+  <p>Om de uitvoer in een bestand te bewaren, of een tijd voor elke regel te zetten, in PowerShell:</p>
+<pre><code>ping -t 1.1.1.1 > ping.txt
+ping.exe -t 1.1.1.1 | ForEach-Object { "{0:HH:mm:ss} {1}" -f (Get-Date), $_ }</code></pre>
+  <p>PowerShell 7 heeft er een eigen opdracht voor, en op Linux loopt een gewone ping al door tot Ctrl+C. <code>-D</code> zet een tijdstempel voor elke regel:</p>
+<pre><code>Test-Connection 1.1.1.1 -Repeat
+ping -D 1.1.1.1</code></pre>
+  <p>Geen van alle vat de run samen terwijl hij loopt: je krijgt een regel per antwoord en de totalen aan het eind.</p>
+</section>
+
+<section>
+  <h2>Met het hulpmiddel {{app.tools.ping.tab}}</h2>
+  <ul>
+    <li>Typ een adres of een naam, kies hoe vaak er gepingd wordt, hoe lang op een antwoord gewacht wordt, hoeveel bytes elke ping meedraagt (32, zoals <code>ping.exe</code> stuurt, tot 65 500) en hoeveel pings er gaan, of laat hem lopen tot {{app.tools.ping.stop}}. Druk dan op <strong>{{app.tools.ping.start}}</strong>.</li>
+    <li>Elke ping is een rij: wanneer hij vertrok, zijn retourtijd, zijn TTL en wat er terugkwam. Een grafiek toont de retourtijden van de laatste 60.</li>
+    <li>Een regel boven de tabel houdt de totalen bij: verzonden, antwoorden, verloren, de langste reeks verliezen, de laagste, gemiddelde en hoogste retourtijd, de jitter (hoeveel de retourtijd van het ene antwoord naar het volgende beweegt) en de retourtijd waaronder 95% van de antwoorden bleef.</li>
+    <li>Hij blijft pingen terwijl een ander tabblad vooraan staat. Klik met rechts op een rij in {{app.tools.sockets.tab}} of in {{app.app.tabs.connections}} en kies <strong>{{app.menu.ping_address}}</strong> om het andere eind te pingen.</li>
+    <li><strong>{{app.tools.ping.copy}}</strong> kopieert de rijen en de totalen, in het Engels, voor een foutmelding.</li>
+  </ul>
+  <p>Een antwoord dat na de wachttijd binnenkomt, telt als verloren. Kies bij een hoge vertraging een langere wachttijd.</p>
+</section>
+
+<section>
+  <h2>Zie het slechte netwerk aankomen</h2>
+  <p>Start de ping en daarna op de bedieningspagina een sessie met wat vertraging en verlies. Als de sessie start, stopt, nieuwe instellingen krijgt of naar de volgende stap van een scenario gaat, toont de regel de tijd sindsdien en hoe de gemiddelde retourtijd en het verloren deel verschillen van daarvoor, en de grafiek markeert het moment met een stippellijn. Een andere regel zegt wat de sessie met deze pings doet: ze beschadigt ze, ziet ze en laat ze met rust, of vangt ze helemaal niet af.</p>
+  <p>Met het standaard verkeersfilter draagt een ping de vertraging twee keer, dus 100 ms vertraging voegt ongeveer 200 ms toe aan de retourtijd, en verlies treft het verzoek en het antwoord apart, dus bij 20% verlies gaat ongeveer een derde van de pings verloren. Een sessie die op één programma is gericht, raakt nooit een ping, want een ping hoort bij de verbinding van geen enkel programma: richt je dan op het adres.</p>
+</section>
+
+<section>
+  <h2>Op Linux</h2>
+  <p>Het hulpmiddel werkt ook op Linux. Het heeft geen <code>sudo</code> nodig waar het systeem je groep pings laat sturen, zoals op Ubuntu 26.04, en wel waar dat niet mag, zoals op Ubuntu 24.04. De rest staat op <a href="../netwerk-simuleren-op-linux/">de Linux-pagina</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

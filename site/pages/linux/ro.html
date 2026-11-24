@@ -1,0 +1,73 @@
+<section class="hero">
+  <h1>O rețea proastă pe Linux, pentru o singură aplicație</h1>
+  <p class="lead">Pe Linux, răspunsul obișnuit este tc cu netem: adaugă întârziere și pierderi unei întregi interfețe de rețea, din linia de comandă. Bean Network Tester face aceleași stricăciuni unui singur program, dintr-o fereastră sau din linia de comandă, și se oprește singur. Versiunea pentru Linux este experimentală, iar pagina aceasta spune ce înseamnă asta.</p>
+</section>
+
+<section>
+  <h2>Comenzile tc netem și ce folosești aici</h2>
+  <p>O comandă netem și cea mai apropiată comandă de aici, una lângă alta. Rulează cu <code>sudo</code> și păstrează <code>--target</code> și <code>--duration</code>: fără ele, efectul cuprinde tot computerul, ca la netem.</p>
+<pre><code>sudo tc qdisc add dev eth0 root netem delay 100ms 20ms loss 5%
+sudo ./BeanNetworkTester --target firefox --latency 100 --jitter 20 --loss 5 --duration 60</code></pre>
+  <table>
+    <tr><th>netem</th><th>Setarea din fereastră</th><th>Opțiune</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 100%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 100</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <p>Nu toate numerele se transferă unu la unu. netem întârzie doar ce iese din interfață, iar acest instrument prinde ambele sensuri, așa că <code>--latency 100</code> adaugă cam 200 ms la un drum dus-întors: adaugă <code>--filter out</code> ca să întârzii doar ce iese. O viteză netem este în biți pe secundă, iar limita de viteză de aici în KB/s. <a href="../netem-pentru-windows/">Pagina despre netem</a> explică fiecare diferență.</p>
+</section>
+
+<section>
+  <h2>De ce nu doar netem?</h2>
+  <ul>
+    <li><strong>Un program, nu toată interfața.</strong> netem încetinește tot ce iese prin <code>eth0</code>, inclusiv sesiunea ta ssh. Aici <code>--target</code> alege un proces după nume (pe Linux fără <code>.exe</code>: <code>firefox</code>, <code>chrome</code>), un PID, o adresă sau un port, iar restul mașinii funcționează normal.</li>
+    <li><strong>Ambele sensuri.</strong> netem modelează ce iese, iar traficul care intră cere un dispozitiv ifb și un al doilea set de reguli. Aici descărcarea și încărcarea au fiecare limita lor.</li>
+    <li><strong>Face curat după el.</strong> O regulă netem rămâne până o ștergi. O sesiune de aici se termină după <code>--duration</code>, iar dacă programul este oprit forțat, traficul pe care îl ținea curge din nou după aproximativ 3 secunde.</li>
+    <li><strong>Vezi ce s-a întâmplat.</strong> Un grafic, un tabel de conexiuni și contoare pentru ce a fost întârziat, aruncat și lăsat să treacă, în loc de <code>tc -s qdisc</code>.</li>
+    <li><strong>Rulările se repetă.</strong> <code>--seed</code> redă aceleași pierderi și același jitter aleatoriu, iar <a href="../scenarii-in-timp/">scenariile în timp</a> schimbă setările la secunde stabilite, ca un script cu <code>tc</code> și <code>sleep</code>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>De ce are nevoie</h2>
+  <ul>
+    <li><strong>Pachetul</strong> de pe pagina de versiuni, un <code>.tar.gz</code> cu propriul Python și propriul Tk. Este construit pe Ubuntu 24.04 și verificat pe Ubuntu 24.04 și 26.04, pentru x86_64, și cere glibc 2.38 sau mai nou.</li>
+    <li><strong>Nucleul</strong>: Linux 5.10 sau mai nou, compilat cu BTF. Captura rulează pe eBPF.</li>
+    <li><strong>Root</strong> sau capabilitățile CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN și CAP_NET_RAW. Fereastra cere parola unui administrator în dialogul propriu al desktopului, linia de comandă cere <code>sudo</code>, iar <code>--simulate</code> nu cere niciunul dintre ele.</li>
+  </ul>
+<pre><code>tar -xzf BeanNetworkTester-*-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+sudo ./BeanNetworkTester --doctor</code></pre>
+  <p><code>--install-desktop</code> adaugă programul în meniul de aplicații, așa că rulează-l fără <code>sudo</code>. <code>--doctor</code> enumeră ce îi mai lipsește mașinii.</p>
+</section>
+
+<section>
+  <h2>Instrumentele de rețea merg și pe Linux</h2>
+  <p>Fila {{app.app.tabs.tools}} răspunde la întrebări înainte și în timpul unui test: {{app.tools.ping.tab}} (un ping continuu cu grafic), {{app.tools.nat.tab}}, {{app.tools.portscan.tab}}, {{app.tools.sockets.tab}}, {{app.tools.portcheck.tab}}, {{app.tools.tcphealth.tab}} (ce păstrează nucleul pentru fiecare conexiune, cum arată <code>ss -ti</code>) și {{app.tools.adapters.tab}} (cum le arată <code>ip addr</code> și <code>ip route</code>). {{app.tools.tcphealth.tab}} și {{app.tools.adapters.tab}} nu cer <code>sudo</code>, iar {{app.tools.ping.tab}} îl cere doar acolo unde sistemul nu lasă grupul tău să trimită ping, ca pe Ubuntu 24.04.</p>
+</section>
+
+<section>
+  <h2>Unde diferă Linux, azi</h2>
+  <ul>
+    <li><code>--target</code> citește lista de socketuri a sistemului, așa că primul schimb al unei conexiuni noi poate trece înainte ca ținta să se aplice.</li>
+    <li>Când instrumentul nu ține pasul, nucleul lasă pachetele să treacă pe lângă el fără să fie stricate, iar contoarele spun câte.</li>
+    <li>Fragmentele IP trec mereu neatinse.</li>
+    <li>Pe Linux, sumele de control și atestarea versiunii țin locul unei semnături de cod: ele spun ce build a produs fișierul, iar <a href="../descarcare/">pagina de descărcare</a> arată cum le verifici.</li>
+  </ul>
+  <p>Pentru o configurare permanentă a unei interfețe întregi, netem este deja în nucleul tău și este instrumentul potrivit. Acesta este pentru a testa o aplicație o vreme.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

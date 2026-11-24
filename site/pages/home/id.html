@@ -53,9 +53,22 @@
     <li>Jalankan <code>BeanNetworkTester.exe</code>. Program ini meminta hak administrator sendiri, karena menangkap lalu lintas membutuhkannya.</li>
     <li>Pilih profil siap pakai seperti “{{app.presets.3g}}”, tekan {{app.buttons.start}}, lalu gunakan aplikasi Anda.</li>
   </ol>
+  <p>Alat ini juga berjalan di Linux, secara eksperimental, dari paket .tar.gz. <a href="simulasi-jaringan-di-linux/">Jaringan buruk di Linux</a> menjelaskan apa yang dibutuhkannya dan apa yang berbeda di sana.</p>
   <p>Ada mode teks di file yang sama, sehingga semuanya juga berjalan di pipeline. Satu perintah cukup untuk memeriksa apakah layanan Anda bertahan dari kehilangan paket 10%:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>Program berhenti sendiri saat waktunya habis, sehingga langkah yang macet tidak bisa meninggalkan jaringan yang rusak. Tambahkan <code>--simulate</code> untuk melatih perintah tanpa menyentuh lalu lintas sungguhan.</p>
+</section>
+
+<section>
+  <h2>Alat jaringan di jendela yang sama</h2>
+  <p>Tab {{app.app.tabs.tools}} menjawab pertanyaan sebelum dan sesudah pengujian, tanpa memasang program kedua:</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong>: <a href="ping-terus-menerus/">ping terus-menerus</a> dengan grafik, jitter, dan kehilangan paket.</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong>: <a href="pemindai-port/">pemindai port TCP dan UDP</a> untuk komputer lain.</li>
+    <li><strong>{{app.tools.nat.tab}}</strong>: <a href="tes-tipe-nat/">tes tipe NAT</a> dan pemeriksaan server TURN yang dipakai panggilan Anda.</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong> dan <strong>{{app.tools.portcheck.tab}}</strong>: <a href="program-mana-memakai-port/">program mana yang memegang port</a> di komputer ini, dan apakah port masih kosong.</li>
+  </ul>
+  <p>Pindah dari alat lain? Lihat halaman tentang <a href="alternatif-clumsy/">Clumsy</a>, <a href="netem-untuk-windows/">netem</a>, dan <a href="alternatif-newt/">NEWT</a>.</p>
 </section>
 
 <section>

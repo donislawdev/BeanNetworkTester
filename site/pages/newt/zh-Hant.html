@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>NEWT（Network Emulator for Windows Toolkit）的替代方案</h1>
+  <p class="lead">NEWT 是微軟為 Windows 做的網路模擬器。它在真實流量上加入延遲、封包遺失和限速，讓人在一般電腦上就能看程式在差網路下的表現。微軟已不再提供下載。本頁把 NEWT 的每項設定對應到 Bean Network Tester，它在 Windows 10 和 11 上做同樣的事。</p>
+</section>
+
+<section>
+  <h2>NEWT 後來怎麼了</h2>
+  <ul>
+    <li>NEWT 隨 Games for Windows LIVE SDK 和 Xbox 開發套件一起發佈。後來它的驅動程式進入了 Visual Studio 2010，成為負載測試中的網路模擬。</li>
+    <li>微軟已淘汰 Visual Studio 中的 Web 效能與負載測試，網路模擬也包含在內。Visual Studio 2019 是完整提供這些功能的最後一個版本。</li>
+    <li>如今微軟不再提供下載。搜尋能找到的是下載網站上的副本，以及一個最後更新於 2013 年的 Chocolatey 套件。</li>
+  </ul>
+  <p>模擬器會安裝網路驅動程式，並以系統管理員權限執行，所以執行安裝程式之前，最好先弄清楚它的來源。</p>
+</section>
+
+<section>
+  <h2>逐項對照 NEWT 的設定</h2>
+  <p>本頁的每條命令都要加上 <code>--target</code> 和 <code>--duration</code>，否則會影響整台電腦。</p>
+  <table>
+    <tr><th>NEWT 中</th><th>視窗中的設定</th><th>參數</th></tr>
+    <tr><td>延遲（Latency）</td><td>{{app.fields.latency}}；延遲需要變動時再加 {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td>頻寬（Bandwidth）</td><td>{{app.fields.download}}、{{app.fields.upload}}</td><td><code>--down 1221 --up 1221</code></td></tr>
+    <tr><td>佇列（Queue）</td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+    <tr><td>封包遺失（Packet loss）</td><td>{{app.fields.loss}}；遺失成串出現時再加 {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td>亂序（Reordering）</td><td>{{app.fields.spike_prob}}、{{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td>錯誤（Errors）</td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td>斷線與重新連線</td><td>{{app.frames.flapping}}</td><td><code>--flap-period 10 --flap-down 40</code></td></tr>
+    <tr><td>依 IP 位址篩選</td><td>{{app.frames.destination}}</td><td><code>--dst-ip 10.0.0.5</code></td></tr>
+    <tr><td>依通訊協定篩選</td><td>{{app.frames.traffic}}：{{app.filters.tcp}}、{{app.filters.udp}} 或 {{app.filters.ping}}</td><td><code>--filter tcp</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>速度。</strong>限速欄位的單位是 KB/s，K = 1024：122 約等於 1 Mbit/s，1221 約等於 10 Mbit/s。<a href="../netem-windows-duiying/">netem 頁面</a>有一張更長的換算表。</li>
+    <li><strong>佇列。</strong>{{app.fields.buffer}} 是以毫秒計的時間，而不是封包數量。</li>
+    <li><strong>亂序。</strong>沒有亂序百分比。一次延遲尖峰會拖住單一封包，讓之後送出的封包超過它，{{app.app.tabs.statistics}}頁面上的亂序計數會顯示是否真的發生了。</li>
+    <li><strong>兩個方向。</strong>每個值在去程和回程都會生效，所以 <code>--latency 100</code> 會讓 ping 增加約 200 毫秒。要為兩個方向分別設定，請勾選 {{app.fields.asym}}，或加上 <code>--asym</code> 和以 <code>-up</code> 結尾的參數。</li>
+  </ul>
+  <p>一條典型的 NEWT 連線寫成一條命令，只針對一個程式，持續兩分鐘：</p>
+<pre><code>BeanNetworkTester.exe --latency 100 --jitter 20 --loss 2 --down 1221 --up 1221 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>這個工具帶來什麼</h2>
+  <ul>
+    <li><strong>針對一個程式，而不是整台電腦。</strong>除了位址和通訊協定，篩選條件還可以是一個程式，依名稱或處理程序 ID 指定。<a href="../zhendui-yige-yingyong/">把網路劣化對準單一應用程式</a>，電腦的其他部分保持正常。</li>
+    <li><strong>有結束代碼的命令列。</strong>同一個執行檔可以<a href="../ci-wangluo-ceshi/">在 CI 中執行</a>，並用結束代碼回報每一種結果。</li>
+    <li><strong>可以重複的執行。</strong>使用 <code>--seed</code>，下一次執行會出現同樣的隨機封包遺失和抖動。</li>
+    <li><strong>會自己變化的設定。</strong><a href="../dingshi-changjing/">定時情境</a>在設定的秒數切換設定，你只需看著程式。</li>
+    <li><strong>即時檢視。</strong>圖表、計數器和連線表顯示哪些連線受到影響、影響了多少。</li>
+    <li><strong>同一視窗裡的網路工具。</strong>有圖表的<a href="../chixu-ping/">持續 ping</a>、<a href="../lianjiekou-saomiao/">連接埠掃描</a>和 <a href="../nat-leixing-ceshi/">NAT 類型測試</a>。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>什麼時候該用別的工具</h2>
+  <ul>
+    <li><strong>你需要由路由器和交換器組成的整個網路。</strong>那是網路模擬平台的工作，例如 GNS3 或 EVE-NG，它們執行虛擬裝置。模擬器改變的是一台真實電腦的流量。</li>
+    <li><strong>你想要有技術支援的商業產品。</strong>SoftPerfect Connection Emulator 是一款付費的 Windows 網路模擬器。</li>
+    <li><strong>你在用 Linux。</strong>tc netem 是內建的，這個工具在 Linux 上也能執行，屬於實驗性支援。請看<a href="../linux-ruowang-moni/">在 Linux 上模擬差網路</a>。</li>
+    <li><strong>你拿不到系統管理員權限。</strong>無論用哪個工具，改變其他程式的流量都需要它。</li>
+  </ul>
+  <p>在比較 Windows 上的免費工具？<a href="../clumsy-tidai-fangan/">Clumsy 替代方案</a>頁面介紹了 Clumsy、NetLimiter 以及 Fiddler 這類代理伺服器。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

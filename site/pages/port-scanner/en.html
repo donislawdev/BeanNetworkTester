@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>Which ports of another computer answer?</h1>
+  <p class="lead">A port scanner asks a computer, port by port, whether something there answers. The {{app.tools.portscan.tab}} tool on the {{app.app.tabs.tools}} tab does it over TCP and UDP, from a window, on Windows and on Linux, and says in plain words what the result means. Scan only computers you are allowed to test: security software and network administrators can see a scan.</p>
+</section>
+
+<section>
+  <h2>How to run a scan</h2>
+  <ol>
+    <li>Open the {{app.app.tabs.tools}} tab, then {{app.tools.group.network}} and {{app.tools.portscan.tab}}.</li>
+    <li>Type the computer's address or name, and the ports the way you type them on the Control page: <code>22</code>, or <code>80, 443</code>, or <code>8000-8100</code>. Or fill them in with <strong>{{app.tools.portscan.common}}</strong> (common services and development servers), <strong>{{app.tools.portscan.well_known}}</strong> or <strong>{{app.tools.portscan.all}}</strong>.</li>
+    <li>Tick <strong>{{app.tools.portscan.tcp}}</strong>, <strong>{{app.tools.portscan.udp}}</strong> or both, and press <strong>{{app.tools.portscan.scan}}</strong>. <strong>{{app.tools.portscan.stop}}</strong> ends it early, with the ports it asked.</li>
+  </ol>
+  <p>Ports next to each other with the same answer share one row, next to the service the port usually carries, and a line above the table says what the result means.</p>
+</section>
+
+<section>
+  <h2>What each answer means</h2>
+  <table>
+    <tr><th>Answer</th><th>Meaning</th></tr>
+    <tr><td><strong>{{app.tools.portscan.state.open}}</strong></td><td>On TCP a program accepts connections on the port. On UDP a service replied to the request.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.closed}}</strong></td><td>The computer said nothing listens there.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.silent}}</strong></td><td>Nothing came back in time. On TCP a firewall usually dropped the request. On UDP the port can also be open: a service that does not understand the request stays silent.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.unreachable}}</strong></td><td>The system says the computer is not there: it is off, or this is not its address.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.denied}}</strong></td><td>This computer refused to send the request.</td></tr>
+  </table>
+  <p>On Windows a closed UDP port reads {{app.tools.portscan.state.closed}} only when the program runs as administrator. The Windows firewall keeps that message from programs, and with administrator rights the tool reads it from a copy of the network traffic. Without them, closed UDP ports read {{app.tools.portscan.state.silent}}.</p>
+</section>
+
+<section>
+  <h2>What it sends, and how fast</h2>
+  <ul>
+    <li>On TCP, a connection that is closed at once with nothing sent on it. On UDP, a real request for DNS, NTP, NetBIOS, mDNS and SSDP, and an empty datagram for any other port.</li>
+    <li>A computer on a network this one is attached to is asked 256 ports at a time, with 1 s for each. One behind a router is asked 32 at a time, at most 20 new a second, with 3 s for each, so the router's table of connections does not fill up. A scan that can take more than five minutes asks first.</li>
+    <li>When 64 ports read {{app.tools.portscan.state.unreachable}} and no other port answered, the computer is not there, and the scan stops asking it.</li>
+    <li>When only a few ports gave no answer and the rest did, those few are asked once more, slower.</li>
+  </ul>
+  <p><strong>{{app.tools.portscan.copy}}</strong> copies the table in English, and <strong>{{app.tools.portscan.export}}</strong> writes the rows to a CSV file.</p>
+</section>
+
+<section>
+  <h2>One port, from the console</h2>
+  <p>To check a single TCP port, PowerShell and most Linux systems already have what you need:</p>
+<pre><code>Test-NetConnection example.com -Port 443
+nc -zv example.com 443</code></pre>
+  <p>For service versions or the system on the other end, nmap is the tool. This one answers the question before that: which ports answer at all, over TCP and UDP, with nothing else to install.</p>
+</section>
+
+<section>
+  <h2>A port on this computer instead?</h2>
+  <p>If the question is which program on this computer holds a port, or why a server cannot open one, see <a href="../which-program-uses-a-port/">which program is using a port</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

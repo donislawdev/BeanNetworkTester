@@ -1,0 +1,73 @@
+<section class="hero">
+  <h1>Плохая сеть в Linux, только для одного приложения</h1>
+  <p class="lead">В Linux обычный ответ - tc с netem: он добавляет задержку и потери всему сетевому интерфейсу, из командной строки. Bean Network Tester наносит тот же ущерб одной программе, из окна или из командной строки, и сам останавливается. Версия для Linux экспериментальная, и на этой странице сказано, что это значит.</p>
+</section>
+
+<section>
+  <h2>Команды tc netem и что использовать здесь</h2>
+  <p>Команда netem и ближайшая к ней команда здесь, рядом. Запускайте её через <code>sudo</code> и оставляйте <code>--target</code> и <code>--duration</code>: без них она действует на весь компьютер, как netem.</p>
+<pre><code>sudo tc qdisc add dev eth0 root netem delay 100ms 20ms loss 5%
+sudo ./BeanNetworkTester --target firefox --latency 100 --jitter 20 --loss 5 --duration 60</code></pre>
+  <table>
+    <tr><th>netem</th><th>Настройка в окне</th><th>Флаг</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 100%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 100</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <p>Не все числа переносятся один к одному. netem задерживает только то, что уходит с интерфейса, а этот инструмент перехватывает оба направления, поэтому <code>--latency 100</code> добавляет к времени отклика около 200 мс: добавьте <code>--filter out</code>, чтобы задерживать только исходящий трафик. Скорость в netem задаётся в битах в секунду, а ограничение скорости здесь - в КБ/с. Каждое различие объясняет <a href="../netem-dlya-windows/">страница о netem</a>.</p>
+</section>
+
+<section>
+  <h2>Почему не просто netem?</h2>
+  <ul>
+    <li><strong>Одна программа, а не весь интерфейс.</strong> netem замедляет всё, что уходит через <code>eth0</code>, включая вашу ssh-сессию. Здесь <code>--target</code> выбирает процесс по имени (в Linux без <code>.exe</code>: <code>firefox</code>, <code>chrome</code>), PID, адрес или порт, а остальная машина работает как обычно.</li>
+    <li><strong>Оба направления.</strong> netem формирует исходящий трафик, а для входящего нужны устройство ifb и второй набор правил. Здесь у загрузки и отдачи свои ограничения.</li>
+    <li><strong>Он убирает за собой.</strong> Правило netem остаётся, пока вы его не удалите. Сессия здесь заканчивается после <code>--duration</code>, а если программу завершить принудительно, трафик, который она держала, снова пойдёт примерно через 3 секунды.</li>
+    <li><strong>Видно, что произошло.</strong> График, таблица соединений и счётчики задержанного, отброшенного и пропущенного вместо <code>tc -s qdisc</code>.</li>
+    <li><strong>Прогоны повторяются.</strong> <code>--seed</code> воспроизводит те же случайные потери и джиттер, а <a href="../scenarii-vo-vremeni/">сценарии во времени</a> меняют настройки в заданные секунды, как скрипт из <code>tc</code> и <code>sleep</code>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Что нужно</h2>
+  <ul>
+    <li><strong>Пакет</strong> со страницы релизов, <code>.tar.gz</code> со своим Python и Tk. Он собирается на Ubuntu 24.04 и проверяется на Ubuntu 24.04 и 26.04, для x86_64, и требует glibc 2.38 или новее.</li>
+    <li><strong>Ядро</strong>: Linux 5.10 или новее, собранное с BTF. Перехват работает на eBPF.</li>
+    <li><strong>Root</strong> или возможности CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN и CAP_NET_RAW. Окно спрашивает пароль администратора в собственном диалоге рабочего стола, командной строке нужен <code>sudo</code>, а <code>--simulate</code> не нужно ни то ни другое.</li>
+  </ul>
+<pre><code>tar -xzf BeanNetworkTester-*-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+sudo ./BeanNetworkTester --doctor</code></pre>
+  <p><code>--install-desktop</code> добавляет программу в меню приложений, поэтому запускайте его без <code>sudo</code>. <code>--doctor</code> перечисляет, чего ещё не хватает машине.</p>
+</section>
+
+<section>
+  <h2>Сетевые инструменты тоже работают в Linux</h2>
+  <p>Вкладка {{app.app.tabs.tools}} отвечает на вопросы до теста и во время него: {{app.tools.ping.tab}} (непрерывный ping с графиком), {{app.tools.nat.tab}}, {{app.tools.portscan.tab}}, {{app.tools.sockets.tab}}, {{app.tools.portcheck.tab}}, {{app.tools.tcphealth.tab}} (то, что ядро хранит для каждого соединения, как показывает <code>ss -ti</code>) и {{app.tools.adapters.tab}} (как их показывают <code>ip addr</code> и <code>ip route</code>). {{app.tools.tcphealth.tab}} и {{app.tools.adapters.tab}} не требуют <code>sudo</code>, а {{app.tools.ping.tab}} требует его только там, где система не разрешает вашей группе отправлять ping, как в Ubuntu 24.04.</p>
+</section>
+
+<section>
+  <h2>Чем Linux отличается сегодня</h2>
+  <ul>
+    <li><code>--target</code> читает системный список сокетов, поэтому первый обмен нового соединения может пройти до того, как цель начнёт действовать.</li>
+    <li>Когда инструмент не успевает, ядро пропускает пакеты мимо него без искажений, и счётчики показывают, сколько их было.</li>
+    <li>IP-фрагменты всегда проходят нетронутыми.</li>
+    <li>В Linux место подписи кода занимают контрольные суммы и аттестация релиза: они говорят, какая сборка создала файл, а <a href="../skachat/">страница загрузки</a> показывает, как их проверить.</li>
+  </ul>
+  <p>Для постоянной настройки целого интерфейса netem уже есть в вашем ядре, и это правильный инструмент. Этот нужен, чтобы какое-то время тестировать одно приложение.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

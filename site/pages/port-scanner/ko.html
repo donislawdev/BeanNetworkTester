@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>다른 컴퓨터의 어떤 포트가 응답할까?</h1>
+  <p class="lead">포트 스캐너는 컴퓨터에 포트를 하나씩 물어서 거기서 무언가 응답하는지 확인합니다. {{app.app.tabs.tools}} 탭의 {{app.tools.portscan.tab}} 도구는 이것을 TCP와 UDP로, 창에서, Windows와 Linux 모두에서 하고, 결과가 무슨 뜻인지 쉬운 말로 알려 줍니다. 테스트해도 되는 컴퓨터만 스캔하세요. 보안 소프트웨어와 네트워크 관리자는 스캔을 볼 수 있습니다.</p>
+</section>
+
+<section>
+  <h2>스캔하는 방법</h2>
+  <ol>
+    <li>{{app.app.tabs.tools}} 탭을 열고 {{app.tools.group.network}}의 {{app.tools.portscan.tab}}을 엽니다.</li>
+    <li>컴퓨터의 주소나 이름을 입력하고, 포트는 컨트롤 페이지에서 쓰는 방식대로 입력합니다: <code>22</code>, <code>80, 443</code>, <code>8000-8100</code>. 또는 <strong>{{app.tools.portscan.common}}</strong>(흔한 서비스와 개발 서버), <strong>{{app.tools.portscan.well_known}}</strong>, <strong>{{app.tools.portscan.all}}</strong>로 채웁니다.</li>
+    <li><strong>{{app.tools.portscan.tcp}}</strong>, <strong>{{app.tools.portscan.udp}}</strong> 또는 둘 다 선택하고 <strong>{{app.tools.portscan.scan}}</strong>을 누릅니다. <strong>{{app.tools.portscan.stop}}</strong>은 이미 물어본 포트의 결과를 남기고 일찍 끝냅니다.</li>
+  </ol>
+  <p>이웃한 포트 중 응답이 같은 것은 한 행으로 묶이고, 옆에는 그 포트가 보통 맡는 서비스가 나오며, 표 위의 한 줄이 결과의 뜻을 설명합니다.</p>
+</section>
+
+<section>
+  <h2>각 응답의 뜻</h2>
+  <table>
+    <tr><th>응답</th><th>뜻</th></tr>
+    <tr><td><strong>{{app.tools.portscan.state.open}}</strong></td><td>TCP에서는 프로그램이 그 포트로 연결을 받습니다. UDP에서는 서비스가 요청에 응답했습니다.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.closed}}</strong></td><td>상대 컴퓨터가 거기서 아무것도 기다리지 않는다고 답했습니다.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.silent}}</strong></td><td>제때 아무것도 돌아오지 않았습니다. TCP에서는 대개 방화벽이 요청을 버렸습니다. UDP에서는 포트가 열려 있을 수도 있습니다. 요청을 이해하지 못하는 서비스는 조용히 있기 때문입니다.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.unreachable}}</strong></td><td>시스템이 그 컴퓨터가 없다고 말합니다. 꺼져 있거나, 그 주소가 아닙니다.</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.denied}}</strong></td><td>이 컴퓨터가 요청 보내기를 거부했습니다.</td></tr>
+  </table>
+  <p>Windows에서 닫힌 UDP 포트는 프로그램을 관리자로 실행했을 때만 {{app.tools.portscan.state.closed}}로 나옵니다. Windows 방화벽은 그 메시지를 프로그램에 전하지 않으며, 관리자 권한이 있으면 도구가 네트워크 트래픽의 사본에서 그것을 읽습니다. 권한이 없으면 닫힌 UDP 포트는 {{app.tools.portscan.state.silent}}로 나옵니다.</p>
+</section>
+
+<section>
+  <h2>무엇을 보내고, 얼마나 빠른가</h2>
+  <ul>
+    <li>TCP에서는 아무것도 보내지 않고 바로 닫는 연결. UDP에서는 DNS, NTP, NetBIOS, mDNS, SSDP에 진짜 요청을, 그 밖의 포트에는 빈 데이터그램을 보냅니다.</li>
+    <li>이 컴퓨터가 연결된 네트워크 안의 컴퓨터에는 한 번에 256개 포트를, 각각 1초씩 기다리며 묻습니다. 라우터 뒤의 컴퓨터에는 한 번에 32개, 초당 새로 최대 20개, 각각 3초씩 기다리며 묻습니다. 라우터의 연결 표가 넘치지 않게 하기 위해서입니다. 5분을 넘길 수 있는 스캔은 먼저 확인합니다.</li>
+    <li>64개 포트가 {{app.tools.portscan.state.unreachable}}로 나오고 다른 포트가 하나도 응답하지 않으면, 그 컴퓨터는 없는 것이며 스캔은 더 묻지 않습니다.</li>
+    <li>대부분의 포트가 응답하고 몇 개만 응답하지 않았다면, 그 몇 개에 한 번 더 천천히 묻습니다.</li>
+  </ul>
+  <p><strong>{{app.tools.portscan.copy}}</strong>는 표를 영어로 복사하고, <strong>{{app.tools.portscan.export}}</strong>는 행을 CSV 파일로 씁니다.</p>
+</section>
+
+<section>
+  <h2>콘솔에서 포트 하나</h2>
+  <p>TCP 포트 하나만 확인하려면 PowerShell과 대부분의 Linux 시스템에 필요한 것이 이미 있습니다:</p>
+<pre><code>Test-NetConnection example.com -Port 443
+nc -zv example.com 443</code></pre>
+  <p>서비스 버전이나 상대편 시스템을 알려면 nmap을 쓰세요. 이 도구는 그보다 앞선 질문, 즉 TCP와 UDP로 어떤 포트가 응답하기는 하는지에 답하며, 다른 것을 설치할 필요가 없습니다.</p>
+</section>
+
+<section>
+  <h2>이 컴퓨터의 포트가 궁금하다면?</h2>
+  <p>이 컴퓨터에서 어떤 프로그램이 포트를 쓰고 있는지, 서버가 왜 포트를 열지 못하는지 알고 싶다면 <a href="../eoneu-peurogeuraemi-poteureul-sseuneunga/">어느 프로그램이 포트를 쓰는가</a>를 보세요.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

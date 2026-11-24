@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>Jaký mám typ NAT a spojí se hovor?</h1>
+  <p class="lead">Videohovory, hry a aplikace WebRTC spojí dvě zařízení přímo, když to routery mezi nimi dovolí, a když ne, přejdou na přenosový server, server TURN. Nástroj {{app.tools.nat.tab}} na kartě {{app.app.tabs.tools}} vám za pár sekund řekne, který případ platí pro vaši síť, přímo z vašeho počítače.</p>
+</section>
+
+<section>
+  <h2>Jak ho spustit</h2>
+  <ol>
+    <li>Otevřete kartu {{app.app.tabs.tools}}, potom {{app.tools.group.network}} a {{app.tools.nat.tab}}.</li>
+    <li>Server STUN a server TURN už jsou vyplněné (servery Cloudflare). Pokud vaše hovory používají jiné, napište své.</li>
+    <li>Stiskněte <strong>{{app.tools.nat.start}}</strong>. Za pár sekund se tabulka zaplní a řádek nad ní shrne výsledek obyčejnými slovy.</li>
+  </ol>
+  <p>Dokud tlačítko nestisknete, nic neodchází. Potom nástroj pošle pár dotazů oběma serverům a malé testovací pakety na veřejnou adresu vaší vlastní sítě a zastaví se.</p>
+</section>
+
+<section>
+  <h2>Co znamenají řádky</h2>
+  <table>
+    <tr><th>Řádek</th><th>Co vám říká</th></tr>
+    <tr><td><strong>{{app.tools.nat.row.public}}</strong></td><td>Adresa a port, které router dává tomuto počítači, a zda zachová port, který počítač použil.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.mapping}}</strong></td><td><strong>{{app.tools.nat.result.independent}}</strong>: jeden soket dostane pro každý server stejný veřejný port, takže zařízení za jinými routery se obvykle spojí přímo. <strong>{{app.tools.nat.result.by_address}}</strong> nebo <strong>{{app.tools.nat.result.by_address_port}}</strong>: pro každý server nový port, takže hovor může potřebovat přenosový server.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.hairpin_together}}</strong>, <strong>{{app.tools.nat.row.hairpin_first}}</strong></td><td>Zda na sebe dvě zařízení za tímto routerem dosáhnou přes jeho veřejnou adresu. Router, který cestu zavře poté, co jedna strana poslala první, nechá takový hovor místní síti nebo přenosovému serveru.</td></tr>
+    <tr><td><strong>TURN</strong></td><td>Zda server TURN odpovídá přes UDP na 3478 a 443, přes TCP na 3478 a 80 a přes TLS na 5349 a 443. Žádá se o přenos bez přihlášení a odpověď „401, je nutné přihlášení“ ukazuje, že tam je. Přes TLS se jeho certifikát ověřuje proti kořenovým certifikátům, kterým tento počítač důvěřuje: certifikát, kterému nedůvěřuje, může znamenat proxy nebo firewall po cestě, který TLS čte.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Názvy typů NAT, na které jste možná narazili</h2>
+  <p>Staré názvy pocházejí z prvního standardu STUN: full cone, restricted cone, port-restricted cone a symmetric. Symetrický NAT dává pro každý server nový port, kdežto všechny tři typy „cone“ drží jeden port pro všechny servery. Typy „cone“ se liší filtrováním, které tento nástroj nezkoumá.</p>
+  <p>Herní konzole ukazují vlastní verdikt, například Open, Moderate nebo Strict. Míchá mapování, filtrování a to, zda router pro konzoli přesměrovává porty, takže tyto řádky se do něj nepřevádějí jedna ku jedné.</p>
+</section>
+
+<section>
+  <h2>Co vám neřekne</h2>
+  <ul>
+    <li>Zda router pustí dovnitř datagramy z adresy, na kterou tento počítač nic neposlal (filtrování).</li>
+    <li>Nic o jediném routeru, když je za ním další NAT. Za NATem poskytovatele nebo za VPN popisuje výsledek celý ten řetězec.</li>
+    <li>Na routeru nic nečte ani nemění. Oba servery vidí veřejnou adresu vaší sítě a <strong>{{app.tools.nat.copy}}</strong> zkopíruje tabulku anglicky i s touto adresou.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Potom vyzkoušejte hovor na špatné síti</h2>
+  <p>Jakmile víte, kudy hovor jde, stránka ovládání může namířit zpoždění a ztráty jen na jeho část: {{app.fields.call_checks}}, {{app.fields.call_turn_control}} nebo {{app.fields.call_media}}. Tak uvidíte, zda hovor přežije pomalé ověřování spojení, aniž by utrpěl zvuk a obraz, nebo naopak. Zbytek cílení popisuje stránka <a href="../cileni-na-jednu-aplikaci/">cílení na jednu aplikaci</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,52 @@
+<section class="hero">
+  <h1>Welchen NAT-Typ habe ich, und kommt ein Anruf durch?</h1>
+  <p class="lead">Videoanrufe, Spiele und WebRTC-Apps verbinden zwei Geräte direkt, wenn die Router dazwischen es erlauben, und weichen sonst auf ein Relay aus, einen TURN-Server. Das Werkzeug {{app.tools.nat.tab}} im Tab {{app.app.tabs.tools}} sagt dir in wenigen Sekunden, welcher Fall in deinem Netz gilt, direkt von deinem eigenen Computer aus.</p>
+</section>
+
+<section>
+  <h2>So startest du es</h2>
+  <ol>
+    <li>Öffne den Tab {{app.app.tabs.tools}}, dann {{app.tools.group.network}} und {{app.tools.nat.tab}}.</li>
+    <li>Ein STUN-Server und ein TURN-Server sind schon eingetragen (die von Cloudflare). Trag deine eigenen ein, wenn deine Anrufe andere nutzen.</li>
+    <li>Drück <strong>{{app.tools.nat.start}}</strong>. Nach ein paar Sekunden füllt sich die Tabelle, und eine Zeile darüber fasst das Ergebnis in einfachen Worten zusammen.</li>
+  </ol>
+  <p>Bis du drückst, geht nichts hinaus. Dann schickt das Werkzeug ein paar Anfragen an die beiden Server und kleine Testpakete an die eigene öffentliche Adresse deines Netzes und hört auf.</p>
+</section>
+
+<section>
+  <h2>Was die Zeilen bedeuten</h2>
+  <table>
+    <tr><th>Zeile</th><th>Was sie dir sagt</th></tr>
+    <tr><td><strong>{{app.tools.nat.row.public}}</strong></td><td>Die Adresse und der Port, die der Router diesem Computer gibt, und ob er den Port behält, den der Computer benutzt hat.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.mapping}}</strong></td><td><strong>{{app.tools.nat.result.independent}}</strong>: Ein Socket bekommt für jeden Server denselben öffentlichen Port, also können Geräte hinter anderen Routern sich meist direkt verbinden. <strong>{{app.tools.nat.result.by_address}}</strong> oder <strong>{{app.tools.nat.result.by_address_port}}</strong>: ein neuer Port für jeden Server, also braucht ein Anruf vielleicht ein Relay.</td></tr>
+    <tr><td><strong>{{app.tools.nat.row.hairpin_together}}</strong>, <strong>{{app.tools.nat.row.hairpin_first}}</strong></td><td>Ob zwei Geräte hinter diesem Router einander über seine öffentliche Adresse erreichen. Ein Router, der den Weg schließt, nachdem eine Seite zuerst gesendet hat, überlässt so einen Anruf dem lokalen Netz oder einem Relay.</td></tr>
+    <tr><td><strong>TURN</strong></td><td>Ob der TURN-Server über UDP auf 3478 und 443, über TCP auf 3478 und 80 und über TLS auf 5349 und 443 antwortet. Er wird ohne Anmeldung nach einem Relay gefragt, und die Antwort „401, Anmeldung nötig“ heißt, dass er da ist. Über TLS wird sein Zertifikat gegen die Stammzertifikate geprüft, denen dieser Computer vertraut: Eines, dem er nicht vertraut, kann einen Proxy oder eine Firewall unterwegs bedeuten, die TLS mitliest.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Die Namen von NAT-Typen, die du vielleicht kennst</h2>
+  <p>Die alten Namen stammen aus dem ersten STUN-Standard: Full Cone, Restricted Cone, Port-Restricted Cone und Symmetric. Ein symmetrisches NAT ist das, das für jeden Server einen neuen Port vergibt, und alle drei Cone-Arten behalten einen Port für jeden Server. Was die Cone-Arten unterscheidet, ist die Filterung, und die prüft dieses Werkzeug nicht.</p>
+  <p>Spielkonsolen zeigen ein eigenes Urteil wie Open, Moderate oder Strict. Es mischt die Zuordnung, die Filterung und die Frage, ob der Router Ports für die Konsole weiterleitet, deshalb lassen sich diese Zeilen nicht eins zu eins darauf übertragen.</p>
+</section>
+
+<section>
+  <h2>Was es dir nicht sagt</h2>
+  <ul>
+    <li>Ob der Router Datagramme von einer Adresse hereinlässt, an die dieser Computer nichts gesendet hat (Filterung).</li>
+    <li>Etwas über einen einzelnen Router, wenn dahinter noch ein NAT steht. Hinter dem NAT eines Anbieters oder einem VPN beschreibt das Ergebnis die ganze Kette.</li>
+    <li>Es liest und ändert nichts am Router. Die beiden Server sehen die öffentliche Adresse deines Netzes, und <strong>{{app.tools.nat.copy}}</strong> kopiert die Tabelle auf Englisch, mit dieser Adresse darin.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Dann den Anruf im schlechten Netz testen</h2>
+  <p>Sobald du weißt, welchen Weg ein Anruf nimmt, kann die Steuerungsseite Latenz und Verlust auf einen Teil davon richten: {{app.fields.call_checks}}, {{app.fields.call_turn_control}} oder {{app.fields.call_media}}. So siehst du, ob ein Anruf eine langsame Verbindungsprüfung übersteht, ohne dass die Medien leiden, oder umgekehrt. Den Rest der Zielauswahl beschreibt <a href="../eine-app-anvisieren/">eine App anvisieren</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

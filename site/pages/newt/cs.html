@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>Alternativa k NEWT, tedy Network Emulator for Windows Toolkit</h1>
+  <p class="lead">NEWT byl emulátor sítě od Microsoftu pro Windows. Přidával ke skutečnému provozu zpoždění, ztráty a omezení rychlosti, takže se program dal vyzkoušet ve špatné síti na běžném PC. Microsoft ho už ke stažení nenabízí. Tato stránka převádí každé nastavení NEWT na Bean Network Tester, který stejnou práci dělá ve Windows 10 a 11.</p>
+</section>
+
+<section>
+  <h2>Co se stalo s NEWT</h2>
+  <ul>
+    <li>NEWT se dodával s Games for Windows LIVE SDK a s vývojovou sadou pro Xbox. Jeho ovladač pak přešel do Visual Studia 2010 jako emulace sítě v zátěžových testech.</li>
+    <li>Microsoft označil webové výkonnostní a zátěžové testy ve Visual Studiu za zastaralé, včetně emulace sítě. Visual Studio 2019 je poslední verze, kde jsou plně k dispozici.</li>
+    <li>Dnes ho od Microsoftu stáhnout nelze. Vyhledávání najde kopie na stahovacích webech a balíček Chocolatey naposledy aktualizovaný v roce 2013.</li>
+  </ul>
+  <p>Emulátor instaluje síťový ovladač a běží s právy správce, proto se vyplatí vědět, odkud instalační program pochází, než ho spustíte.</p>
+</section>
+
+<section>
+  <h2>Nastavení NEWT jedno po druhém</h2>
+  <p>Ke každému příkazu na této stránce přidejte <code>--target</code> a <code>--duration</code>, jinak působí na celý počítač.</p>
+  <table>
+    <tr><th>V NEWT</th><th>Nastavení v okně</th><th>Přepínač</th></tr>
+    <tr><td>Zpoždění (Latency)</td><td>{{app.fields.latency}}, a {{app.fields.jitter}} pro zpoždění, které kolísá</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td>Šířka pásma (Bandwidth)</td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 1221 --up 1221</code></td></tr>
+    <tr><td>Fronta (Queue)</td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+    <tr><td>Ztráta paketů (Packet loss)</td><td>{{app.fields.loss}}, a {{app.fields.loss_burst}} pro ztráty, které přicházejí v řadě</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td>Přeházení pořadí (Reordering)</td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td>Chyby (Errors)</td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td>Odpojování a připojování</td><td>{{app.frames.flapping}}</td><td><code>--flap-period 10 --flap-down 40</code></td></tr>
+    <tr><td>Filtr podle IP adresy</td><td>{{app.frames.destination}}</td><td><code>--dst-ip 10.0.0.5</code></td></tr>
+    <tr><td>Filtr podle protokolu</td><td>{{app.frames.traffic}}: {{app.filters.tcp}}, {{app.filters.udp}} nebo {{app.filters.ping}}</td><td><code>--filter tcp</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Rychlost.</strong> Pole omezení rychlosti jsou v KB/s, kde K = 1024: 122 je asi 1 Mbit/s a 1221 asi 10 Mbit/s. Delší tabulka je na <a href="../netem-pro-windows/">stránce o netem</a>.</li>
+    <li><strong>Fronta.</strong> {{app.fields.buffer}} je čas v milisekundách, ne počet paketů.</li>
+    <li><strong>Přeházení pořadí.</strong> Procento přeházení neexistuje. Špička podrží jeden paket, takže ho ty odeslané po něm předběhnou, a počítadlo přeházených paketů na stránce {{app.app.tabs.statistics}} ukáže, jestli se to opravdu stalo.</li>
+    <li><strong>Oba směry.</strong> Každá hodnota platí cestou tam i zpět, takže <code>--latency 100</code> přidá k pingu asi 200 ms. Pro různé hodnoty v každém směru zaškrtněte {{app.fields.asym}}, nebo přidejte <code>--asym</code> a přepínače končící na <code>-up</code>.</li>
+  </ul>
+  <p>Typická linka z NEWT jako jeden příkaz, mířený na jeden program na dvě minuty:</p>
+<pre><code>BeanNetworkTester.exe --latency 100 --jitter 20 --loss 2 --down 1221 --up 1221 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Co tento nástroj přináší</h2>
+  <ul>
+    <li><strong>Jeden program, ne celý počítač.</strong> Kromě adresy a protokolu může být filtrem i program, podle názvu nebo ID procesu. <a href="../cileni-na-jednu-aplikaci/">Zamiřte zhoršení na jednu aplikaci</a>, zatímco zbytek počítače běží normálně.</li>
+    <li><strong>Příkazový řádek s návratovými kódy.</strong> Stejný spustitelný soubor <a href="../sitove-testy-v-ci/">běží v CI</a> a každý výsledek hlásí svým návratovým kódem.</li>
+    <li><strong>Opakovatelné běhy.</strong> S <code>--seed</code> se stejné náhodné ztráty a stejný jitter vrátí při dalším běhu.</li>
+    <li><strong>Nastavení, která se mění sama.</strong> <a href="../scenare-v-case/">Časované scénáře</a> přepínají nastavení v zadaných sekundách, zatímco sledujete program.</li>
+    <li><strong>Živý přehled.</strong> Graf, počítadla a tabulka spojení ukazují, co bylo zasaženo a jak moc.</li>
+    <li><strong>Síťové nástroje ve stejném okně.</strong> <a href="../neprerusovany-ping/">Nepřerušovaný ping</a> s grafem, <a href="../skener-portu/">skener portů</a> a <a href="../test-typu-nat/">test typu NAT</a>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Kdy sáhnout po něčem jiném</h2>
+  <ul>
+    <li><strong>Potřebujete celou síť routerů a přepínačů.</strong> To je práce pro simulátor sítě, jako je GNS3 nebo EVE-NG, který spouští virtuální zařízení. Emulátor mění provoz jednoho skutečného počítače.</li>
+    <li><strong>Chcete komerční produkt s podporou.</strong> SoftPerfect Connection Emulator je placený emulátor sítě pro Windows.</li>
+    <li><strong>Pracujete v Linuxu.</strong> tc netem je vestavěný a tento nástroj tam běží také, experimentálně. Viz <a href="../simulace-site-v-linuxu/">špatná síť v Linuxu</a>.</li>
+    <li><strong>Nemůžete získat práva správce.</strong> Změna provozu jiných programů je vyžaduje, v každém nástroji.</li>
+  </ul>
+  <p>Porovnáváte bezplatné nástroje pro Windows? Stránka <a href="../alternativa-ke-clumsy/">Alternativa ke Clumsy</a> probírá Clumsy, NetLimiter a proxy jako Fiddler.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

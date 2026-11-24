@@ -1,0 +1,73 @@
+<section class="hero">
+  <h1>شبكة سيئة على Linux لتطبيق واحد فقط</h1>
+  <p class="lead">على Linux، الجواب المعتاد هو tc مع netem: يضيف التأخير وفقدان الحزم إلى واجهة شبكة كاملة من سطر الأوامر. يُحدث Bean Network Tester الضرر نفسه لبرنامج واحد فقط، من نافذة أو من سطر الأوامر، ويتوقف من تلقاء نفسه. نسخته لنظام Linux تجريبية، وهذه الصفحة تشرح ما يعنيه ذلك.</p>
+</section>
+
+<section>
+  <h2>أوامر tc netem وما تستخدمه هنا</h2>
+  <p>أمر netem وأقرب أمر له هنا، جنبًا إلى جنب. شغّله باستخدام <code>sudo</code> وأبقِ <code>--target</code> و<code>--duration</code>: من دونهما يؤثر في الحاسوب كله، كما يفعل netem.</p>
+<pre><code>sudo tc qdisc add dev eth0 root netem delay 100ms 20ms loss 5%
+sudo ./BeanNetworkTester --target firefox --latency 100 --jitter 20 --loss 5 --duration 60</code></pre>
+  <table>
+    <tr><th>netem</th><th>الإعداد في النافذة</th><th>الخيار</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 100%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 100</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <p>لا تنتقل كل الأرقام كما هي. يؤخّر netem ما يغادر الواجهة فقط، أما هذه الأداة فتلتقط الاتجاهين، لذلك يضيف <code>--latency 100</code> نحو 200 ms إلى زمن الذهاب والإياب: أضف <code>--filter out</code> لتأخير ما يخرج فقط. سرعة netem بالبت في الثانية، وحدّ السرعة هنا بالكيلوبايت في الثانية. تشرح <a href="../netem-lil-windows/">صفحة netem</a> كل فرق.</p>
+</section>
+
+<section>
+  <h2>لماذا لا netem وحده؟</h2>
+  <ul>
+    <li><strong>برنامج واحد، لا الواجهة كلها.</strong> يبطئ netem كل ما يخرج عبر <code>eth0</code>، بما في ذلك جلسة ssh لديك. هنا يختار <code>--target</code> عملية باسمها (على Linux من دون <code>.exe</code>: <code>firefox</code> و<code>chrome</code>)، أو PID، أو عنوانًا، أو منفذًا، ويواصل باقي الجهاز العمل كالمعتاد.</li>
+    <li><strong>الاتجاهان.</strong> يشكّل netem ما يخرج، أما الحركة الواردة فتحتاج إلى جهاز ifb ومجموعة قواعد ثانية. هنا لكل من التنزيل والرفع حدّه الخاص.</li>
+    <li><strong>ينظّف وراءه.</strong> تبقى قاعدة netem حتى تحذفها. أما الجلسة هنا فتنتهي بعد <code>--duration</code>، وإذا أُنهي البرنامج قسرًا، تعود الحركة التي كان يحتجزها إلى المرور بعد نحو 3 ثوانٍ.</li>
+    <li><strong>ترى ما حدث.</strong> رسم بياني وجدول اتصالات وعدّادات لما تأخّر وما أُسقط وما مُرّر، بدلًا من <code>tc -s qdisc</code>.</li>
+    <li><strong>التشغيلات تتكرر.</strong> يعيد <code>--seed</code> الفقدان العشوائي والتذبذب نفسيهما، و<a href="../sinaryuhat-zamaniya/">السيناريوهات الزمنية</a> تغيّر الإعدادات في ثوانٍ محددة، كما يفعل نص برمجي من <code>tc</code> و<code>sleep</code>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>ما الذي يحتاجه</h2>
+  <ul>
+    <li><strong>الحزمة</strong> من صفحة الإصدارات، وهي ملف <code>.tar.gz</code> فيه Python وTk خاصّان به. تُبنى على Ubuntu 24.04 وتُفحص على Ubuntu 24.04 و26.04 لمعمارية x86_64، وتحتاج إلى glibc 2.38 أو أحدث.</li>
+    <li><strong>النواة</strong>: Linux 5.10 أو أحدث، مبنية مع BTF. يعمل الالتقاط عبر eBPF.</li>
+    <li><strong>صلاحيات root</strong>، أو القدرات CAP_BPF وCAP_PERFMON وCAP_NET_ADMIN وCAP_NET_RAW. تطلب النافذة كلمة مرور المسؤول في مربع حوار سطح المكتب نفسه، ويحتاج سطر الأوامر إلى <code>sudo</code>، ولا يحتاج <code>--simulate</code> إلى أيّ منهما.</li>
+  </ul>
+<pre><code>tar -xzf BeanNetworkTester-*-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+sudo ./BeanNetworkTester --doctor</code></pre>
+  <p>يضيف <code>--install-desktop</code> البرنامج إلى قائمة التطبيقات، لذا شغّله من دون <code>sudo</code>. ويسرد <code>--doctor</code> ما ينقص الجهاز بعد.</p>
+</section>
+
+<section>
+  <h2>أدوات الشبكة تعمل على Linux أيضًا</h2>
+  <p>يجيب تبويب {{app.app.tabs.tools}} عن الأسئلة قبل الاختبار وأثناءه: {{app.tools.ping.tab}} (ping متواصل مع رسم بياني)، و{{app.tools.nat.tab}}، و{{app.tools.portscan.tab}}، و{{app.tools.sockets.tab}}، و{{app.tools.portcheck.tab}}، و{{app.tools.tcphealth.tab}} (ما تحفظه النواة لكل اتصال، كما يعرضه <code>ss -ti</code>)، و{{app.tools.adapters.tab}} (كما يعرضها <code>ip addr</code> و<code>ip route</code>). لا يحتاج {{app.tools.tcphealth.tab}} و{{app.tools.adapters.tab}} إلى <code>sudo</code>، ولا يحتاج إليه {{app.tools.ping.tab}} إلا حيث لا يسمح النظام لمجموعتك بإرسال ping، كما في Ubuntu 24.04.</p>
+</section>
+
+<section>
+  <h2>أين يختلف Linux اليوم</h2>
+  <ul>
+    <li>يقرأ <code>--target</code> قائمة المقابس في النظام، لذا قد يمرّ أول تبادل في اتصال جديد قبل أن يسري الاستهداف.</li>
+    <li>عندما لا تلحق الأداة بالحركة، تدع النواة الحزم تمرّ بجانبها دون إفساد، وتقول العدّادات كم عددها.</li>
+    <li>تمرّ أجزاء IP دائمًا كما هي.</li>
+    <li>على Linux تحلّ المجاميع الاختبارية وشهادة الإصدار محلّ توقيع الشيفرة: فهي تقول أيّ بناء أنتج الملف، وتبيّن <a href="../tahmil/">صفحة التنزيل</a> كيف تتحقق منها.</li>
+  </ul>
+  <p>لإعداد دائم لواجهة كاملة، netem موجود أصلًا في نواتك وهو الأداة الصحيحة. أما هذه فهي لاختبار تطبيق واحد لبعض الوقت.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

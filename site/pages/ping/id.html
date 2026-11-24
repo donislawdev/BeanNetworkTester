@@ -1,0 +1,47 @@
+<section class="hero">
+  <h1>Ping terus-menerus yang mencatat angkanya untuk Anda</h1>
+  <p class="lead">Ping terus-menerus adalah cara tercepat melihat apakah koneksi stabil: satu permintaan echo demi satu, sampai Anda menghentikannya. Windows dan Linux sama-sama punya di konsol. Alat {{app.tools.ping.tab}} di tab {{app.app.tabs.tools}} melakukan hal yang sama dan menyimpan angka yang di konsol harus Anda hitung sendiri: jitter, deret kehilangan terpanjang, dan waktu pulang-pergi yang tidak dilampaui 95% balasan.</p>
+</section>
+
+<section>
+  <h2>Di konsol</h2>
+  <p>Di command prompt Windows, <code>-t</code> terus melakukan ping sampai Anda menekan Ctrl+C. Ctrl+Break menampilkan total sejauh ini lalu melanjutkan.</p>
+<pre><code>ping -t 1.1.1.1</code></pre>
+  <p>Untuk menyimpan keluaran ke berkas, atau menambahkan jam di setiap baris, di PowerShell:</p>
+<pre><code>ping -t 1.1.1.1 > ping.txt
+ping.exe -t 1.1.1.1 | ForEach-Object { "{0:HH:mm:ss} {1}" -f (Get-Date), $_ }</code></pre>
+  <p>PowerShell 7 punya perintah sendiri untuk itu, dan di Linux ping biasa memang berjalan sampai Ctrl+C. <code>-D</code> menambahkan cap waktu di setiap baris:</p>
+<pre><code>Test-Connection 1.1.1.1 -Repeat
+ping -D 1.1.1.1</code></pre>
+  <p>Tak satu pun merangkum jalannya ping selagi berlangsung: Anda mendapat satu baris per balasan dan total di akhir.</p>
+</section>
+
+<section>
+  <h2>Dengan alat {{app.tools.ping.tab}}</h2>
+  <ul>
+    <li>Ketik alamat atau nama, pilih seberapa sering melakukan ping, berapa lama menunggu balasan, berapa byte yang dibawa setiap ping (32, seperti yang dikirim <code>ping.exe</code>, hingga 65 500), dan berapa ping yang dikirim, atau biarkan berjalan sampai {{app.tools.ping.stop}}. Lalu tekan <strong>{{app.tools.ping.start}}</strong>.</li>
+    <li>Setiap ping adalah satu baris: kapan dikirim, waktu pulang-pergi, TTL, dan apa yang kembali. Grafik menampilkan waktu pulang-pergi 60 ping terakhir.</li>
+    <li>Satu baris di atas tabel menyimpan totalnya: terkirim, balasan, hilang, deret kehilangan terpanjang, waktu pulang-pergi terendah, rata-rata, dan tertinggi, jitter (seberapa jauh waktu pulang-pergi bergeser dari satu balasan ke balasan berikutnya), dan waktu yang tidak dilampaui 95% balasan.</li>
+    <li>Ping terus berjalan selagi tab lain ada di depan. Klik kanan sebuah baris di {{app.tools.sockets.tab}} atau di {{app.app.tabs.connections}} lalu pilih <strong>{{app.menu.ping_address}}</strong> untuk melakukan ping ke ujung lainnya.</li>
+    <li><strong>{{app.tools.ping.copy}}</strong> menyalin baris dan total dalam bahasa Inggris, untuk laporan bug.</li>
+  </ul>
+  <p>Balasan yang datang setelah waktu tunggu dihitung hilang. Dengan latensi tinggi, pilih waktu tunggu yang lebih panjang.</p>
+</section>
+
+<section>
+  <h2>Saksikan jaringan buruk datang</h2>
+  <p>Mulai ping, lalu mulai sesi di halaman kontrol dengan sedikit latensi dan kehilangan paket. Saat sesi mulai, berhenti, mendapat pengaturan baru, atau berpindah ke langkah berikutnya dalam skenario, baris itu menunjukkan waktu sejak saat itu dan perbedaan rata-rata waktu pulang-pergi serta porsi yang hilang dibanding sebelumnya, dan grafik menandai saat itu dengan garis putus-putus. Baris lain menyebutkan apa yang dilakukan sesi pada ping ini: merusaknya, melihatnya tetapi membiarkannya, atau tidak menangkapnya sama sekali.</p>
+  <p>Dengan filter lalu lintas bawaan, satu ping membawa latensi dua kali, jadi latensi 100 ms menambah sekitar 200 ms pada waktu pulang-pergi, dan kehilangan paket mengenai permintaan dan balasan secara terpisah, jadi kehilangan 20% menghilangkan kira-kira sepertiga ping. Sesi yang ditujukan ke satu program tidak pernah menyentuh ping, karena ping bukan milik koneksi program mana pun: dalam hal itu, tujukan ke alamatnya.</p>
+</section>
+
+<section>
+  <h2>Di Linux</h2>
+  <p>Alat ini juga berjalan di Linux. Alat ini tidak butuh <code>sudo</code> jika sistem mengizinkan grup Anda mengirim ping, seperti di Ubuntu 26.04, dan membutuhkannya jika tidak, seperti di Ubuntu 24.04. Selebihnya ada di <a href="../simulasi-jaringan-di-linux/">halaman Linux</a>.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

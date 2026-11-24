@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>Eine Alternative zu NEWT, dem Network Emulator for Windows Toolkit</h1>
+  <p class="lead">NEWT war der Netzwerkemulator von Microsoft für Windows. Er fügte echtem Verkehr Verzögerung, Paketverlust und ein Tempolimit hinzu, sodass sich ein Programm auf einem gewöhnlichen PC in einem schlechten Netz ausprobieren ließ. Microsoft bietet ihn nicht mehr zum Download an. Diese Seite überträgt jede NEWT-Einstellung auf Bean Network Tester, das unter Windows 10 und 11 dieselbe Aufgabe erledigt.</p>
+</section>
+
+<section>
+  <h2>Was aus NEWT wurde</h2>
+  <ul>
+    <li>NEWT kam mit dem Games for Windows LIVE SDK und dem Entwicklungskit für die Xbox. Sein Treiber ging danach in Visual Studio 2010 ein, als Netzwerkemulation in Lasttests.</li>
+    <li>Microsoft hat Webleistungs- und Lasttests in Visual Studio abgekündigt, die Netzwerkemulation eingeschlossen. Visual Studio 2019 ist die letzte Version, in der sie vollständig verfügbar sind.</li>
+    <li>Einen Download von Microsoft gibt es heute nicht. Eine Suche findet Kopien auf Download-Seiten und ein Chocolatey-Paket, das zuletzt 2013 aktualisiert wurde.</li>
+  </ul>
+  <p>Ein Emulator installiert einen Netzwerktreiber und läuft mit Administratorrechten. Es lohnt sich also zu wissen, woher ein Installationsprogramm stammt, bevor du es startest.</p>
+</section>
+
+<section>
+  <h2>NEWT-Einstellungen, eine nach der anderen</h2>
+  <p>Hänge an jeden Befehl hier <code>--target</code> und <code>--duration</code> an, sonst wirkt er auf den ganzen Computer.</p>
+  <table>
+    <tr><th>In NEWT</th><th>Einstellung im Fenster</th><th>Flag</th></tr>
+    <tr><td>Latenz (Latency)</td><td>{{app.fields.latency}}, dazu {{app.fields.jitter}} für eine schwankende Verzögerung</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td>Bandbreite (Bandwidth)</td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 1221 --up 1221</code></td></tr>
+    <tr><td>Warteschlange (Queue)</td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+    <tr><td>Paketverlust (Packet loss)</td><td>{{app.fields.loss}}, dazu {{app.fields.loss_burst}} für Verluste, die in Serien kommen</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td>Umsortieren (Reordering)</td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td>Fehler (Errors)</td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td>Trennen und Verbinden</td><td>{{app.frames.flapping}}</td><td><code>--flap-period 10 --flap-down 40</code></td></tr>
+    <tr><td>Filter nach IP-Adresse</td><td>{{app.frames.destination}}</td><td><code>--dst-ip 10.0.0.5</code></td></tr>
+    <tr><td>Filter nach Protokoll</td><td>{{app.frames.traffic}}: {{app.filters.tcp}}, {{app.filters.udp}} oder {{app.filters.ping}}</td><td><code>--filter tcp</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Tempo.</strong> Die Felder für das Tempolimit sind in KB/s, mit K = 1024: 122 sind etwa 1 Mbit/s und 1221 etwa 10 Mbit/s. Die <a href="../netem-fuer-windows/">netem-Seite</a> hat eine längere Tabelle.</li>
+    <li><strong>Warteschlange.</strong> {{app.fields.buffer}} ist eine Zeit in Millisekunden, keine Anzahl von Paketen.</li>
+    <li><strong>Umsortieren.</strong> Es gibt keinen Prozentwert fürs Umsortieren. Ein Spike hält ein einzelnes Paket zurück, sodass die danach gesendeten es überholen, und der Zähler für umsortierte Pakete auf der Seite {{app.app.tabs.statistics}} zeigt, ob das wirklich passiert ist.</li>
+    <li><strong>Beide Richtungen.</strong> Jeder Wert gilt auf dem Hin- und auf dem Rückweg, daher fügt <code>--latency 100</code> einem Ping etwa 200 ms hinzu. Für getrennte Werte je Richtung aktiviere {{app.fields.asym}} oder hänge <code>--asym</code> und die Flags an, die auf <code>-up</code> enden.</li>
+  </ul>
+  <p>Eine typische NEWT-Verbindung als ein Befehl, auf ein Programm gerichtet, für zwei Minuten:</p>
+<pre><code>BeanNetworkTester.exe --latency 100 --jitter 20 --loss 2 --down 1221 --up 1221 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Was dieses Tool mitbringt</h2>
+  <ul>
+    <li><strong>Ein Programm, nicht der ganze Computer.</strong> Neben Adresse und Protokoll kann ein Filter auch ein Programm sein, per Name oder Prozess-ID. <a href="../eine-app-anvisieren/">Ziele mit der Störung auf eine einzelne App</a>, während der Rest der Maschine normal bleibt.</li>
+    <li><strong>Eine Befehlszeile mit Exit-Codes.</strong> Dieselbe ausführbare Datei <a href="../netzwerktests-in-ci/">läuft in CI</a> und meldet jedes Ergebnis über ihren Exit-Code.</li>
+    <li><strong>Wiederholbare Läufe.</strong> Mit <code>--seed</code> kommen derselbe zufällige Verlust und derselbe Jitter im nächsten Lauf wieder.</li>
+    <li><strong>Einstellungen, die sich selbst ändern.</strong> <a href="../szenarien-ueber-zeit/">Zeitgesteuerte Szenarien</a> wechseln die Einstellungen zu festgelegten Sekunden, während du das Programm beobachtest.</li>
+    <li><strong>Eine Live-Ansicht.</strong> Ein Diagramm, Zähler und eine Tabelle der Verbindungen zeigen, was getroffen wurde und wie stark.</li>
+    <li><strong>Netzwerkwerkzeuge im selben Fenster.</strong> Ein <a href="../dauer-ping/">Dauer-Ping</a> mit Diagramm, ein <a href="../portscanner/">Portscanner</a> und ein <a href="../nat-typ-testen/">NAT-Typ-Test</a>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Wann etwas anderes besser passt</h2>
+  <ul>
+    <li><strong>Du brauchst ein ganzes Netz aus Routern und Switches.</strong> Das ist ein Netzwerksimulator wie GNS3 oder EVE-NG, der virtuelle Geräte betreibt. Ein Emulator verändert den Verkehr eines echten Computers.</li>
+    <li><strong>Du willst ein kommerzielles Produkt mit Support.</strong> SoftPerfect Connection Emulator ist ein kostenpflichtiger Netzwerkemulator für Windows.</li>
+    <li><strong>Du arbeitest unter Linux.</strong> tc netem ist eingebaut, und dieses Tool läuft dort auch, als Experiment. Siehe <a href="../netzwerk-simulieren-unter-linux/">schlechtes Netz unter Linux</a>.</li>
+    <li><strong>Du bekommst keine Administratorrechte.</strong> Den Verkehr anderer Programme zu verändern erfordert sie, mit jedem Tool.</li>
+  </ul>
+  <p>Du vergleichst kostenlose Tools für Windows? Die Seite <a href="../alternative-zu-clumsy/">Alternative zu Clumsy</a> behandelt Clumsy, NetLimiter und Proxys wie Fiddler.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

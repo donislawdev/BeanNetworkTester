@@ -53,9 +53,22 @@
     <li><code>BeanNetworkTester.exe</code> शुरू करें। यह एडमिनिस्ट्रेटर अधिकार खुद माँगता है, क्योंकि ट्रैफ़िक कैप्चर करने के लिए उनकी ज़रूरत है।</li>
     <li>“{{app.presets.3g}}” जैसा कोई तैयार प्रोफ़ाइल चुनें, {{app.buttons.start}} दबाएँ, और अपना ऐप इस्तेमाल करें।</li>
   </ol>
+  <p>यह Linux पर भी प्रयोग के तौर पर चलता है, एक .tar.gz पैकेज से। <a href="linux-par-network-simulation/">Linux पर खराब नेटवर्क</a> पेज बताता है कि इसे क्या चाहिए और वहाँ क्या अलग है।</p>
   <p>उसी फ़ाइल में टेक्स्ट मोड भी है, इसलिए यह सब पाइपलाइन में भी चलता है। यह जाँचने के लिए एक ही कमांड काफ़ी है कि आपकी सेवा 10% पैकेट लॉस झेल पाती है या नहीं:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>समय पूरा होने पर यह अपने आप रुक जाता है, इसलिए अटका हुआ चरण अपने पीछे टूटा हुआ नेटवर्क नहीं छोड़ सकता। असली ट्रैफ़िक को छुए बिना किसी कमांड का पूर्वाभ्यास करने के लिए <code>--simulate</code> जोड़ें।</p>
+</section>
+
+<section>
+  <h2>उसी विंडो में नेटवर्क टूल</h2>
+  <p>{{app.app.tabs.tools}} टैब टेस्ट से पहले और बाद के सवालों का जवाब देता है, दूसरा प्रोग्राम इंस्टॉल किए बिना:</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong>: चार्ट, जिटर और पैकेट लॉस के साथ <a href="lagataar-ping/">लगातार ping</a>।</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong>: किसी दूसरे कंप्यूटर के लिए <a href="port-skainar/">TCP और UDP पोर्ट स्कैनर</a>।</li>
+    <li><strong>{{app.tools.nat.tab}}</strong>: <a href="nat-type-jaanch/">NAT टाइप टेस्ट</a> और आपकी कॉल वाले TURN सर्वर की जाँच।</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong> और <strong>{{app.tools.portcheck.tab}}</strong>: इस कंप्यूटर पर <a href="kaun-sa-program-port-use-kar-raha-hai/">कौन सा प्रोग्राम पोर्ट रोके है</a>, और कोई पोर्ट खाली है या नहीं।</li>
+  </ul>
+  <p>किसी दूसरे टूल से आ रहे हैं? <a href="clumsy-vikalp/">Clumsy</a>, <a href="windows-ke-liye-netem/">netem</a> और <a href="newt-vikalp/">NEWT</a> वाले पेज देखें।</p>
 </section>
 
 <section>

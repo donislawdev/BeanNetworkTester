@@ -1,0 +1,73 @@
+<section class="hero">
+  <h1>Linux पर सिर्फ़ एक ऐप के लिए खराब नेटवर्क</h1>
+  <p class="lead">Linux पर आम तरीका netem के साथ tc है: यह कमांड लाइन से पूरे नेटवर्क इंटरफ़ेस में देरी और पैकेट लॉस जोड़ता है। Bean Network Tester यही नुकसान सिर्फ़ एक प्रोग्राम को पहुँचाता है, विंडो से या कमांड लाइन से, और अपने आप रुक जाता है। इसका Linux संस्करण अभी प्रायोगिक है, और यह पेज बताता है कि इसका मतलब क्या है।</p>
+</section>
+
+<section>
+  <h2>tc netem कमांड और यहाँ क्या इस्तेमाल करें</h2>
+  <p>एक netem कमांड और यहाँ उसकी सबसे नज़दीकी कमांड, साथ-साथ। इसे <code>sudo</code> के साथ चलाएँ और <code>--target</code> व <code>--duration</code> बनाए रखें: इनके बिना यह netem की तरह पूरे कंप्यूटर पर असर डालता है।</p>
+<pre><code>sudo tc qdisc add dev eth0 root netem delay 100ms 20ms loss 5%
+sudo ./BeanNetworkTester --target firefox --latency 100 --jitter 20 --loss 5 --duration 60</code></pre>
+  <table>
+    <tr><th>netem</th><th>विंडो में सेटिंग</th><th>फ़्लैग</th></tr>
+    <tr><td><code>delay 100ms</code></td><td>{{app.fields.latency}}</td><td><code>--latency 100</code></td></tr>
+    <tr><td><code>delay 100ms 20ms</code></td><td>{{app.fields.latency}}, {{app.fields.jitter}}</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td><code>loss 5%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 5</code></td></tr>
+    <tr><td><code>loss 100%</code></td><td>{{app.fields.loss}}</td><td><code>--loss 100</code></td></tr>
+    <tr><td><code>loss 5% 25%</code></td><td>{{app.fields.loss}}, {{app.fields.loss_burst}}</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td><code>duplicate 1%</code></td><td>{{app.fields.duplication}}</td><td><code>--dup 1</code></td></tr>
+    <tr><td><code>corrupt 0.1%</code></td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td><code>reorder 25%</code></td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td><code>rate 1mbit</code></td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 122 --up 122</code></td></tr>
+    <tr><td><code>limit 1000</code></td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+  </table>
+  <p>हर संख्या एक-के-बदले-एक नहीं बदलती। netem सिर्फ़ उसी को धीमा करता है जो इंटरफ़ेस से बाहर जाता है, जबकि यह टूल दोनों दिशाएँ पकड़ता है, इसलिए <code>--latency 100</code> एक राउंड ट्रिप में लगभग 200 ms जोड़ता है: सिर्फ़ बाहर जाने वाले ट्रैफ़िक को धीमा करने के लिए <code>--filter out</code> जोड़ें। netem की स्पीड बिट प्रति सेकंड में होती है, और यहाँ की स्पीड सीमा KB/s में। हर अंतर <a href="../windows-ke-liye-netem/">netem वाले पेज</a> पर समझाया गया है।</p>
+</section>
+
+<section>
+  <h2>सिर्फ़ netem क्यों नहीं?</h2>
+  <ul>
+    <li><strong>पूरा इंटरफ़ेस नहीं, एक प्रोग्राम।</strong> netem <code>eth0</code> से निकलने वाली हर चीज़ धीमी कर देता है, आपका ssh सेशन भी। यहाँ <code>--target</code> किसी प्रोसेस को नाम से (Linux पर <code>.exe</code> के बिना: <code>firefox</code>, <code>chrome</code>), PID, पते या पोर्ट से चुनता है, और बाकी मशीन सामान्य रूप से चलती रहती है।</li>
+    <li><strong>दोनों दिशाएँ।</strong> netem बाहर जाने वाले ट्रैफ़िक को आकार देता है, और आने वाले ट्रैफ़िक के लिए ifb डिवाइस और नियमों का दूसरा सेट चाहिए। यहाँ डाउनलोड और अपलोड दोनों की अपनी-अपनी सीमा है।</li>
+    <li><strong>यह अपने पीछे सफ़ाई करता है।</strong> netem का नियम तब तक रहता है जब तक आप उसे हटा न दें। यहाँ का सेशन <code>--duration</code> के बाद खत्म हो जाता है, और अगर प्रोग्राम ज़बरदस्ती बंद हो जाए, तो जो ट्रैफ़िक उसने रोका था वह लगभग 3 सेकंड बाद फिर से चलने लगता है।</li>
+    <li><strong>आप देखते हैं कि क्या हुआ।</strong> <code>tc -s qdisc</code> की जगह एक चार्ट, कनेक्शन की टेबल और काउंटर, जो बताते हैं कि क्या देर से भेजा गया, क्या गिराया गया और क्या जाने दिया गया।</li>
+    <li><strong>रन दोहराए जा सकते हैं।</strong> <code>--seed</code> वही रैंडम पैकेट लॉस और जिटर फिर से चलाता है, और <a href="../samay-ke-anusar-scenario/">समय के अनुसार सिनेरियो</a> तय सेकंडों पर सेटिंग बदलते हैं, जैसे <code>tc</code> और <code>sleep</code> से बनी कोई स्क्रिप्ट।</li>
+  </ul>
+</section>
+
+<section>
+  <h2>क्या चाहिए</h2>
+  <ul>
+    <li><strong>रिलीज़ पेज से पैकेज</strong>, अपने Python और Tk वाली एक <code>.tar.gz</code> फ़ाइल। यह Ubuntu 24.04 पर बनता है और x86_64 के लिए Ubuntu 24.04 और 26.04 पर जाँचा जाता है, और इसे glibc 2.38 या नया चाहिए।</li>
+    <li><strong>कर्नेल</strong>: BTF के साथ बना Linux 5.10 या नया। कैप्चर eBPF पर चलता है।</li>
+    <li><strong>Root</strong>, या CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN और CAP_NET_RAW क्षमताएँ। विंडो डेस्कटॉप के अपने डायलॉग में एडमिनिस्ट्रेटर का पासवर्ड माँगती है, कमांड लाइन को <code>sudo</code> चाहिए, और <code>--simulate</code> को इनमें से कुछ नहीं चाहिए।</li>
+  </ul>
+<pre><code>tar -xzf BeanNetworkTester-*-linux-x64.tar.gz
+cd BeanNetworkTester
+./BeanNetworkTester --install-desktop
+sudo ./BeanNetworkTester --doctor</code></pre>
+  <p><code>--install-desktop</code> प्रोग्राम को ऐप्लिकेशन मेन्यू में जोड़ता है, इसलिए इसे <code>sudo</code> के बिना चलाएँ। <code>--doctor</code> बताता है कि मशीन में अभी क्या कमी है।</p>
+</section>
+
+<section>
+  <h2>नेटवर्क टूल भी Linux पर चलते हैं</h2>
+  <p>{{app.app.tabs.tools}} टैब टेस्ट से पहले और उसके दौरान के सवालों के जवाब देता है: {{app.tools.ping.tab}} (चार्ट के साथ लगातार ping), {{app.tools.nat.tab}}, {{app.tools.portscan.tab}}, {{app.tools.sockets.tab}}, {{app.tools.portcheck.tab}}, {{app.tools.tcphealth.tab}} (हर कनेक्शन के लिए कर्नेल जो रखता है, जैसा <code>ss -ti</code> दिखाता है) और {{app.tools.adapters.tab}} (जैसा <code>ip addr</code> और <code>ip route</code> दिखाते हैं)। {{app.tools.tcphealth.tab}} और {{app.tools.adapters.tab}} को <code>sudo</code> नहीं चाहिए, और {{app.tools.ping.tab}} को यह सिर्फ़ वहाँ चाहिए जहाँ सिस्टम आपके ग्रुप को ping भेजने नहीं देता, जैसे Ubuntu 24.04 पर।</p>
+</section>
+
+<section>
+  <h2>आज Linux कहाँ अलग है</h2>
+  <ul>
+    <li><code>--target</code> सिस्टम की सॉकेट सूची पढ़ता है, इसलिए नए कनेक्शन का पहला आदान-प्रदान टारगेट लागू होने से पहले निकल सकता है।</li>
+    <li>जब टूल पीछे रह जाता है, तो कर्नेल पैकेटों को बिना बिगाड़े उसके बगल से निकाल देता है, और काउंटर बताते हैं कि कितने।</li>
+    <li>IP फ़्रैगमेंट हमेशा बिना छेड़े निकलते हैं।</li>
+    <li>Linux पर कोड हस्ताक्षर की जगह रिलीज़ के चेकसम और अटेस्टेशन लेते हैं: वे बताते हैं कि फ़ाइल किस बिल्ड ने बनाई, और <a href="../download-karein/">डाउनलोड पेज</a> दिखाता है कि उन्हें कैसे जाँचें।</li>
+  </ul>
+  <p>पूरे इंटरफ़ेस की स्थायी सेटिंग के लिए netem पहले से आपके कर्नेल में है और वही सही टूल है। यह टूल किसी एक ऐप्लिकेशन को कुछ समय तक टेस्ट करने के लिए है।</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

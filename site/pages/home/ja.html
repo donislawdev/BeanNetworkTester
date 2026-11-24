@@ -53,9 +53,22 @@
     <li><code>BeanNetworkTester.exe</code> を起動します。通信の取得には管理者権限が必要なため、自動で権限を求めます。</li>
     <li>「{{app.presets.3g}}」のような用意済みのプロファイルを選び、{{app.buttons.start}} を押して、アプリを使います。</li>
   </ol>
+  <p>Linuxでも試験的に動き、.tar.gzパッケージから使えます。必要なものと違う点は<a href="linux-de-nettowaku-moni/">Linuxで悪いネットワーク</a>のページにあります。</p>
   <p>同じファイルにテキストモードもあるので、すべてパイプラインでも動かせます。サービスが10%のパケットロスに耐えられるかどうかは、1つのコマンドで確認できます：</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>時間が来ると自動的に停止するため、止まってしまったステップが壊れたネットワークを残すことはありません。<code>--simulate</code> を付ければ、実際の通信に触れずにコマンドを試せます。</p>
+</section>
+
+<section>
+  <h2>同じウィンドウのネットワークツール</h2>
+  <p>{{app.app.tabs.tools}}タブは、テストの前後に出てくる疑問に、別のプログラムを入れずに答えます。</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong>：グラフ、ジッター、パケットロス付きの<a href="renzoku-ping/">連続ping</a>。</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong>：ほかのコンピューターを調べる<a href="pooto-sukyanaa/">TCPとUDPのポートスキャナー</a>。</li>
+    <li><strong>{{app.tools.nat.tab}}</strong>：<a href="nat-taipu-tesuto/">NATタイプテスト</a>と、通話で使うTURNサーバーの確認。</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong>と<strong>{{app.tools.portcheck.tab}}</strong>：このコンピューターで<a href="pooto-wo-tsukau-puroguramu/">ポートを使っているプログラム</a>と、ポートが空いているかどうか。</li>
+  </ul>
+  <p>ほかのツールから乗り換えですか？<a href="clumsy-daitai/">Clumsy</a>、<a href="windows-de-netem/">netem</a>、<a href="newt-daitai/">NEWT</a>のページをご覧ください。</p>
 </section>
 
 <section>

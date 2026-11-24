@@ -1,0 +1,69 @@
+<section class="hero">
+  <h1>Un’alternativa a NEWT, il Network Emulator for Windows Toolkit</h1>
+  <p class="lead">NEWT era l’emulatore di rete di Microsoft per Windows. Aggiungeva ritardo, perdita e un limite di velocità al traffico reale, per provare un programma su una rete scadente da un normale PC. Microsoft non lo offre più per il download. Questa pagina riporta ogni impostazione di NEWT su Bean Network Tester, che fa lo stesso lavoro su Windows 10 e 11.</p>
+</section>
+
+<section>
+  <h2>Che fine ha fatto NEWT</h2>
+  <ul>
+    <li>NEWT era incluso nel Games for Windows LIVE SDK e nel kit di sviluppo per Xbox. Il suo driver è poi passato in Visual Studio 2010, come emulazione di rete dei test di carico.</li>
+    <li>Microsoft ha deprecato i test delle prestazioni web e di carico in Visual Studio, emulazione di rete compresa. Visual Studio 2019 è l’ultima versione in cui sono pienamente disponibili.</li>
+    <li>Oggi non c’è un download da Microsoft. Una ricerca trova copie su siti di download e un pacchetto Chocolatey aggiornato l’ultima volta nel 2013.</li>
+  </ul>
+  <p>Un emulatore installa un driver di rete e gira con i diritti di amministratore, quindi conviene sapere da dove arriva un programma di installazione prima di avviarlo.</p>
+</section>
+
+<section>
+  <h2>Le impostazioni di NEWT, una per una</h2>
+  <p>Aggiungi <code>--target</code> e <code>--duration</code> a ogni comando di questa pagina, altrimenti agisce sull’intero computer.</p>
+  <table>
+    <tr><th>In NEWT</th><th>Impostazione nella finestra</th><th>Flag</th></tr>
+    <tr><td>Latenza (Latency)</td><td>{{app.fields.latency}}, e {{app.fields.jitter}} per un ritardo che varia</td><td><code>--latency 100 --jitter 20</code></td></tr>
+    <tr><td>Larghezza di banda (Bandwidth)</td><td>{{app.fields.download}}, {{app.fields.upload}}</td><td><code>--down 1221 --up 1221</code></td></tr>
+    <tr><td>Coda (Queue)</td><td>{{app.fields.buffer}}</td><td><code>--buffer 1000</code></td></tr>
+    <tr><td>Perdita di pacchetti (Packet loss)</td><td>{{app.fields.loss}}, e {{app.fields.loss_burst}} per perdite che arrivano a raffica</td><td><code>--loss 5 --loss-burst 4</code></td></tr>
+    <tr><td>Riordinamento (Reordering)</td><td>{{app.fields.spike_prob}}, {{app.fields.spike_ms}}</td><td><code>--spike-prob 5 --spike-ms 200</code></td></tr>
+    <tr><td>Errori (Errors)</td><td>{{app.fields.corruption}}</td><td><code>--corrupt 0.1</code></td></tr>
+    <tr><td>Disconnessione e riconnessione</td><td>{{app.frames.flapping}}</td><td><code>--flap-period 10 --flap-down 40</code></td></tr>
+    <tr><td>Filtro per indirizzo IP</td><td>{{app.frames.destination}}</td><td><code>--dst-ip 10.0.0.5</code></td></tr>
+    <tr><td>Filtro per protocollo</td><td>{{app.frames.traffic}}: {{app.filters.tcp}}, {{app.filters.udp}} o {{app.filters.ping}}</td><td><code>--filter tcp</code></td></tr>
+  </table>
+  <ul>
+    <li><strong>Velocità.</strong> I campi del limite di velocità sono in KB/s, con K = 1024: 122 è circa 1 Mbit/s e 1221 circa 10 Mbit/s. La <a href="../netem-per-windows/">pagina su netem</a> ha una tabella più lunga.</li>
+    <li><strong>Coda.</strong> {{app.fields.buffer}} è un tempo in millisecondi, non un numero di pacchetti.</li>
+    <li><strong>Riordinamento.</strong> Non esiste una percentuale di riordino. Un picco trattiene un solo pacchetto, così quelli inviati dopo lo superano, e il contatore dei riordinati nella pagina {{app.app.tabs.statistics}} mostra se è successo davvero.</li>
+    <li><strong>Entrambe le direzioni.</strong> Ogni valore vale all’andata e al ritorno, quindi <code>--latency 100</code> aggiunge circa 200 ms a un ping. Per valori diversi in ogni direzione, spunta {{app.fields.asym}}, oppure aggiungi <code>--asym</code> e i flag che finiscono in <code>-up</code>.</li>
+  </ul>
+  <p>Un collegamento NEWT tipico in un solo comando, puntato su un programma per due minuti:</p>
+<pre><code>BeanNetworkTester.exe --latency 100 --jitter 20 --loss 2 --down 1221 --up 1221 --target myapp.exe --duration 120</code></pre>
+</section>
+
+<section>
+  <h2>Cosa porta questo strumento</h2>
+  <ul>
+    <li><strong>Un programma, non l’intero computer.</strong> Oltre a un indirizzo e a un protocollo, un filtro può essere un programma, per nome o per ID di processo. <a href="../puntare-a-una-app/">Punta il degrado a una sola app</a> mentre il resto della macchina resta normale.</li>
+    <li><strong>Una riga di comando con codici di uscita.</strong> Lo stesso eseguibile <a href="../test-di-rete-in-ci/">gira in CI</a> e riferisce ogni esito con il suo codice di uscita.</li>
+    <li><strong>Esecuzioni ripetibili.</strong> Con <code>--seed</code>, la stessa perdita casuale e lo stesso jitter tornano all’esecuzione successiva.</li>
+    <li><strong>Impostazioni che cambiano da sole.</strong> Gli <a href="../scenari-nel-tempo/">scenari temporizzati</a> cambiano le impostazioni a secondi stabiliti mentre osservi il programma.</li>
+    <li><strong>Una vista dal vivo.</strong> Un grafico, dei contatori e una tabella delle connessioni mostrano cosa è stato colpito e quanto.</li>
+    <li><strong>Strumenti di rete nella stessa finestra.</strong> Un <a href="../ping-continuo/">ping continuo</a> con grafico, uno <a href="../scanner-di-porte/">scanner di porte</a> e un <a href="../test-tipo-nat/">test del tipo di NAT</a>.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Quando usare altro</h2>
+  <ul>
+    <li><strong>Ti serve un’intera rete di router e switch.</strong> Quello è un simulatore di rete, come GNS3 o EVE-NG, che esegue dispositivi virtuali. Un emulatore cambia il traffico di un computer reale.</li>
+    <li><strong>Vuoi un prodotto commerciale con assistenza.</strong> SoftPerfect Connection Emulator è un emulatore di rete a pagamento per Windows.</li>
+    <li><strong>Lavori su Linux.</strong> tc netem è integrato, e questo strumento gira anche lì, in via sperimentale. Vedi <a href="../simulare-la-rete-su-linux/">una rete scadente su Linux</a>.</li>
+    <li><strong>Non puoi ottenere i diritti di amministratore.</strong> Cambiare il traffico di altri programmi li richiede, con qualsiasi strumento.</li>
+  </ul>
+  <p>Stai confrontando strumenti gratuiti per Windows? La pagina <a href="../alternativa-a-clumsy/">Alternativa a Clumsy</a> tratta Clumsy, NetLimiter e proxy come Fiddler.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

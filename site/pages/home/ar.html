@@ -53,9 +53,22 @@
     <li>شغّل <code>BeanNetworkTester.exe</code>. يطلب صلاحيات المسؤول بنفسه، لأن التقاط الحركة يحتاج إليها.</li>
     <li>اختر إعدادًا مسبقًا جاهزًا مثل «{{app.presets.3g}}»، واضغط الزر {{app.buttons.start}}، واستخدم تطبيقك.</li>
   </ol>
+  <p>تعمل أيضًا على Linux، بشكل تجريبي، من حزمة .tar.gz. تشرح صفحة <a href="muhakat-alshabaka-ala-linux/">شبكة سيئة على Linux</a> ما تحتاجه وما يختلف هناك.</p>
   <p>هناك وضع نصي في الملف نفسه، فيعمل كل شيء أيضًا في pipeline. يكفي أمر واحد للتحقق من أن خدمتك تصمد أمام فقدان 10% من الحزم:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>يتوقف وحده حين ينتهي الوقت، فلا تستطيع خطوة عالقة أن تترك وراءها شبكة معطلة. أضف <code>--simulate</code> لتجربة أمر دون المساس بالحركة الحقيقية.</p>
+</section>
+
+<section>
+  <h2>أدوات شبكة في النافذة نفسها</h2>
+  <p>يجيب تبويب {{app.app.tabs.tools}} عن الأسئلة التي تأتي قبل الاختبار وبعده، دون تثبيت برنامج ثانٍ:</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong>: <a href="ping-mutawasil/">ping متواصل</a> برسم بياني وتذبذب وفقدان حزم.</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong>: <a href="masih-almanafidh/">ماسح منافذ TCP وUDP</a> لحاسوب آخر.</li>
+    <li><strong>{{app.tools.nat.tab}}</strong>: <a href="ikhtibar-naw-nat/">اختبار نوع NAT</a> وفحص خادم TURN الذي تستخدمه مكالماتك.</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong> و<strong>{{app.tools.portcheck.tab}}</strong>: <a href="ay-barnamaj-yastakhdim-almanfadh/">أي برنامج يحجز منفذًا</a> على هذا الحاسوب، وهل المنفذ متاح.</li>
+  </ul>
+  <p>قادم من أداة أخرى؟ اطّلع على صفحات <a href="badil-clumsy/">Clumsy</a> و<a href="netem-lil-windows/">netem</a> و<a href="badil-newt/">NEWT</a>.</p>
 </section>
 
 <section>

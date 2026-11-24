@@ -1,0 +1,58 @@
+<section class="hero">
+  <h1>別のコンピューターのどのポートが応答するか</h1>
+  <p class="lead">ポートスキャナーは、コンピューターにポートを1つずつ尋ねて、そこで何かが応答するかを調べます。{{app.app.tabs.tools}} タブの {{app.tools.portscan.tab}} ツールは、これを TCP と UDP で、ウィンドウから、Windows でも Linux でも行い、結果の意味をふつうの言葉で伝えます。スキャンするのは、テストしてよいコンピューターだけにしてください。セキュリティソフトやネットワーク管理者にはスキャンが見えます。</p>
+</section>
+
+<section>
+  <h2>スキャンのしかた</h2>
+  <ol>
+    <li>{{app.app.tabs.tools}} タブを開き、{{app.tools.group.network}} の {{app.tools.portscan.tab}} を開きます。</li>
+    <li>相手のアドレスか名前と、ポートを入力します。ポートの書き方はコントロールページと同じです: <code>22</code>、<code>80, 443</code>、<code>8000-8100</code>。<strong>{{app.tools.portscan.common}}</strong> (よく使われるサービスと開発用サーバー)、<strong>{{app.tools.portscan.well_known}}</strong>、<strong>{{app.tools.portscan.all}}</strong> で埋めることもできます。</li>
+    <li><strong>{{app.tools.portscan.tcp}}</strong>、<strong>{{app.tools.portscan.udp}}</strong>、またはその両方にチェックを入れ、<strong>{{app.tools.portscan.scan}}</strong> を押します。<strong>{{app.tools.portscan.stop}}</strong> を押すと、それまでに尋ねたポートの結果を残して早めに終わります。</li>
+  </ol>
+  <p>隣り合っていて結果が同じポートは1行にまとまり、そのポートでよく使われるサービスが横に出ます。表の上の1行が、結果の意味を説明します。</p>
+</section>
+
+<section>
+  <h2>それぞれの結果の意味</h2>
+  <table>
+    <tr><th>結果</th><th>意味</th></tr>
+    <tr><td><strong>{{app.tools.portscan.state.open}}</strong></td><td>TCP では、プログラムがそのポートで接続を受け付けています。UDP では、サービスが要求に応答しました。</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.closed}}</strong></td><td>相手のコンピューターが、そこでは何も待ち受けていないと答えました。</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.silent}}</strong></td><td>時間内に何も返ってきませんでした。TCP ではたいていファイアウォールが要求を捨てています。UDP ではポートが開いている可能性もあります。要求を理解できないサービスは黙ったままだからです。</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.unreachable}}</strong></td><td>システムが、そのコンピューターはいないと言っています。電源が切れているか、そのアドレスではありません。</td></tr>
+    <tr><td><strong>{{app.tools.portscan.state.denied}}</strong></td><td>このコンピューターが要求の送信を拒みました。</td></tr>
+  </table>
+  <p>Windows では、閉じた UDP ポートが {{app.tools.portscan.state.closed}} になるのは、プログラムを管理者として実行したときだけです。Windows ファイアウォールはそのメッセージをプログラムに渡さず、管理者権限があるとツールはネットワーク通信のコピーからそれを読み取ります。権限がなければ、閉じた UDP ポートは {{app.tools.portscan.state.silent}} になります。</p>
+</section>
+
+<section>
+  <h2>何を送り、どのくらいの速さか</h2>
+  <ul>
+    <li>TCP では、何も送らずにすぐ閉じる接続。UDP では、DNS、NTP、NetBIOS、mDNS、SSDP には本物の要求を、それ以外のポートには空のデータグラムを送ります。</li>
+    <li>このコンピューターがつながっているネットワーク内の相手には、一度に 256 ポートを、それぞれ 1 秒待って尋ねます。ルーターの向こうの相手には、一度に 32 ポート、1 秒あたり新規 20 まで、それぞれ 3 秒待って尋ねます。ルーターの接続テーブルをあふれさせないためです。5 分を超えそうなスキャンは、始める前に確認します。</li>
+    <li>64 個のポートが {{app.tools.portscan.state.unreachable}} になり、ほかのポートがどれも応答しなければ、相手はいないと判断してスキャンはそこへの問い合わせをやめます。</li>
+    <li>ほとんどのポートが応答し、数個だけが応答しなかったときは、その数個にもう一度、ゆっくり尋ねます。</li>
+  </ul>
+  <p><strong>{{app.tools.portscan.copy}}</strong> は表を英語でコピーし、<strong>{{app.tools.portscan.export}}</strong> は各行を CSV ファイルに書き出します。</p>
+</section>
+
+<section>
+  <h2>コンソールで1つのポートを</h2>
+  <p>TCP ポートを1つだけ確かめるなら、PowerShell とほとんどの Linux にはすでに必要なものがあります:</p>
+<pre><code>Test-NetConnection example.com -Port 443
+nc -zv example.com 443</code></pre>
+  <p>サービスのバージョンや相手の OS を知りたいなら nmap の出番です。このツールが答えるのはその前の問い、つまり TCP と UDP でどのポートがそもそも応答するかで、ほかに何もインストールする必要はありません。</p>
+</section>
+
+<section>
+  <h2>このコンピューターのポートのこと?</h2>
+  <p>このコンピューターでどのプログラムがポートを使っているか、なぜサーバーがポートを開けないかを知りたいなら、<a href="../pooto-wo-tsukau-puroguramu/">ポートを使っているプログラム</a>を参照してください。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
