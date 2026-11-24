@@ -1,0 +1,108 @@
+<section class="hero">
+  <h1>ไวยากรณ์ตัวกรอง: ชื่อ PID ช่วง IP CIDR และพอร์ต</h1>
+  <p class="lead">ภาษาเล็ก ๆ ภาษาเดียวทำให้เครื่องมือเล็งไปที่โปรแกรม ที่อยู่ และพอร์ต ใช้งานได้เหมือนกันทั้งในหน้าต่างและบนบรรทัดคำสั่ง และทุกตัวอย่างในหน้านี้ผ่านการตรวจด้วยตัวแยกวิเคราะห์ของโปรแกรมเอง</p>
+</section>
+
+<section>
+  <h2>ใช้ที่ไหน</h2>
+  <p>ในหน้าต่าง: ช่องโปรเซสเป้าหมาย ช่องที่อยู่และพอร์ตใต้ {{app.frames.destination}} และใต้ {{app.frames.block}} และช่องขนาดข้อมูลสองช่อง บนบรรทัดคำสั่ง: <code>--target</code>, <code>--dst-ip</code>, <code>--dst-port</code>, <code>--block-ip</code>, <code>--block-port</code>, <code>--payload-udp</code> และ <code>--payload-tcp</code> ช่องว่างหมายถึงทั้งหมด</p>
+</section>
+
+<section>
+  <h2>ส่วนประกอบพื้นฐาน</h2>
+  <table>
+    <tr><th>เขียน</th><th>ความหมาย</th><th>ตัวอย่าง</th></tr>
+    <tr><td><code>a,b,c</code></td><td>รายการ: ตรงตัวใดตัวหนึ่งก็พอ</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>ช่วง รวมทั้งสองปลาย</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>การเปรียบเทียบ สำหรับตัวเลขและที่อยู่</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>ยกเว้นสิ่งนี้</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>ไวลด์การ์ด: อักขระกี่ตัวก็ได้ หรือหนึ่งตัว</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>นิพจน์ปกติ ไม่สนตัวพิมพ์เล็กใหญ่</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>บล็อก CIDR สำหรับที่อยู่เท่านั้น</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>ช่องว่างรอบเครื่องหมายจุลภาคจะถูกละไว้ รวมทั้งที่ว่างระหว่างจุลภาคสองตัว <code>!</code> ที่ไม่มีอะไรตามหลังเป็นข้อผิดพลาด: <code data-kind="port-wrong">80,!</code> จะถูกปฏิเสธ</p>
+</section>
+
+<section>
+  <h2>รายการต่าง ๆ รวมกันอย่างไร</h2>
+  <p>รายการที่ไม่มี <code>!</code> จะรวมกัน: ค่าหนึ่งตรงเมื่อตรงกับรายการใดรายการหนึ่ง หรือเมื่อไม่มีรายการเหล่านั้นเลย จากนั้นรายการที่มี <code>!</code> จะหักออก ลำดับไม่สำคัญ ดังนั้น <code data-kind="port">80,!53</code> กับ <code data-kind="port">!53,80</code> เหมือนกัน</p>
+  <table>
+    <tr><th>เขียน</th><th>ตรงกับ</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>พอร์ต 443 เท่านั้น</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>ทุกอย่างยกเว้น 53 เพราะไม่มีอะไรให้รวม</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>ทุกอย่างยกเว้น 53 และ 443</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>ตั้งแต่ 1000 ถึง 2000 ยกเว้น 1500</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80, 443, 8000 ถึง 8100 และทุกอย่างที่มากกว่า 9000 ยกเว้น 8080</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>โปรแกรม</h2>
+  <p>รายการหนึ่งคือชื่อหรือ PID และช่องเดียวผสมกันได้ ชื่อธรรมดาจะตรงที่ตำแหน่งใดก็ได้ในชื่อโปรแกรมโดยไม่สนตัวพิมพ์ ดังนั้น <code data-kind="process">chrome</code> จับได้ทั้ง <code>chrome.exe</code> และ <code>chromedriver.exe</code> ตัวเลขเดี่ยว ช่วง หรือการเปรียบเทียบคือ PID ไวลด์การ์ดและ <code>re:</code> ใช้กับชื่อ การเปรียบเทียบกับชื่อ เช่น <code data-kind="process-wrong">&gt;chrome</code> จะถูกปฏิเสธ แทนที่จะไม่ตรงกับอะไรเลย</p>
+  <table>
+    <tr><th>เขียน</th><th>ตรงกับ</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>ทุกโปรแกรมที่มี chrome.exe อยู่ในชื่อ</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome แต่ไม่ใช่ chromedriver</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>สองโปรแกรมพร้อมกัน</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>PID หนึ่งตัว</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>ทุก PID ในช่วงนั้น</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>ชื่อที่ขึ้นต้นด้วย firefox</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>chrome.exe หรือ firefox.exe เท่านั้น</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>ชื่อและ PID ในช่องเดียว</td></tr>
+  </table>
+  <p>แพ็กเก็ตมีที่อยู่และพอร์ต ไม่เคยมีชื่อโปรแกรม เครื่องมือจึงหาพอร์ตภายในเครื่องที่แต่ละโปรแกรมที่ตรงถืออยู่ แล้วเล็งไปที่พอร์ตเหล่านั้น พร้อมตามการเชื่อมต่อใหม่ที่โปรแกรมเปิด มีบางพอร์ตที่หลายโปรแกรมใช้ร่วมกันพร้อมกัน (mDNS 5353, SSDP 1900, DHCP 67 และ 68) ที่พอร์ตเหล่านั้นจะเป็นแบบทั้งหมดหรือไม่มีเลย และบันทึกจะบอกว่าเป็นแบบไหน</p>
+</section>
+
+<section>
+  <h2>ที่อยู่</h2>
+  <p>ใช้ได้ทั้ง IPv4 และ IPv6 และช่องเดียวผสมกันได้: กฎของตระกูลหนึ่งไม่มีทางตรงกับที่อยู่ของอีกตระกูล วิธีเขียนที่อยู่ไม่สำคัญ ดังนั้น <code>2001:0db8:0000:0000:0000:0000:0000:0001</code> และ <code>2001:db8::1</code> คือที่อยู่เดียวกัน</p>
+  <table>
+    <tr><th>เขียน</th><th>ตรงกับ</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>สองที่อยู่</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>ช่วงที่มีรูหนึ่งรู</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>ทั้งซับเน็ต</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>ซับเน็ตเดียวกัน ด้วยไวลด์การ์ด</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>ทุกที่อยู่ยกเว้น 8.8.8.8</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>ซับเน็ต IPv6</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>IPv4 และ IPv6 ในช่องเดียว</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>พอร์ต</h2>
+  <p>พอร์ตมีตั้งแต่ 0 ถึง 65535 ค่า <code data-kind="port-wrong">99999</code> จะถูกปฏิเสธ ไม่ใช่ถูกข้ามไป ช่องขนาดข้อมูลใช้ไวยากรณ์เดียวกัน นับเป็นไบต์ของข้อมูล</p>
+  <table>
+    <tr><th>เขียน</th><th>ตรงกับ</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>ช่วง รวมทั้งสองปลาย</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>พอร์ตสูง</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>พอร์ตสิทธิพิเศษ</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>แบบผสม</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>นิพจน์ปกติ</h2>
+  <p>รายการหนึ่งจะเป็นนิพจน์ปกติก็ต่อเมื่อมี <code>re:</code> นำหน้า ดังนั้นจุดใน <code>chrome.exe</code> ยังคงเป็นจุด รูปแบบไม่สนตัวพิมพ์และตรงได้ที่ตำแหน่งใดก็ได้ในข้อความ ใช้ <code>^</code> และ <code>$</code> เพื่อให้ตรงทั้งข้อความ จุลภาคในรูปแบบต้องมีแบ็กสแลชนำหน้า เพราะจุลภาคใช้คั่นรายการ: <code data-kind="process">re:^ch.{1\,8}e\.exe$</code> ใช้ได้ หากไม่มีแบ็กสแลช <code>re:^ch.{1,8}e\.exe$</code> จะถูกตัดที่จุลภาคเป็นสองรายการ ซึ่งโหลดได้ทั้งคู่และไปตรงกับสิ่งอื่น</p>
+  <p>การซ้ำซ้อนในการซ้ำ เช่น <code data-kind="process-wrong">re:^(\w+)+$</code> จะถูกปฏิเสธเพราะช้าเกินไป: อาจใช้เวลาหลายวินาทีกับชื่อเดียวที่เกือบตรง และที่อยู่ถูกตรวจในทุกแพ็กเก็ต ให้เขียนการซ้ำเพียงครั้งเดียว: <code data-kind="process">re:^\w+$</code></p>
+</section>
+
+<section>
+  <h2>จุดที่มักพลาด</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> จับ chromedriver ได้ แต่ <code data-kind="process">chrome.exe</code> จับไม่ได้: ชื่อธรรมดาคือส่วนหนึ่งของชื่อ</li>
+    <li><code data-kind="process">chrome*</code> ก็จับ chromedriver ได้เช่นกัน หากต้องการโปรแกรมเดียวพอดี ให้เขียน <code data-kind="process">re:^chrome\.exe$</code></li>
+    <li><code data-kind="port">8*</code> ในช่องพอร์ตเป็นไวลด์การ์ดบนตัวเลข จึงจับ 8, 80, 8080 และ 8443 แต่ไม่จับ 443 เกือบทุกครั้งสิ่งที่ต้องการคือช่วงอย่าง <code data-kind="port">8000-8999</code></li>
+    <li><code data-kind="port">!53</code> ครอบคลุมทราฟฟิกที่ไม่มีพอร์ตด้วย เช่น ping เพราะแพ็กเก็ต ping ไม่ใช่พอร์ต 53</li>
+    <li>ที่อยู่และพอร์ตที่ตั้งพร้อมกันต้องตรงทั้งคู่ หากต้องการอย่างใดอย่างหนึ่ง ให้รันสองครั้ง</li>
+    <li>ช่วงที่เขียนกลับด้าน <code data-kind="port-wrong">2000-1000</code> จะถูกปฏิเสธ</li>
+    <li>ไวลด์การ์ดไม่ใช่นิพจน์ปกติ: ใน <code>re:chrome*</code> ดาวหมายถึงตัวอักษร e ซ้ำ</li>
+  </ul>
+  <p>ทุกข้อผิดพลาดจะแจ้งทันที: ช่องในหน้าต่างเปลี่ยนเป็นสีแดงพร้อมเหตุผลด้านล่าง และบรรทัดคำสั่งจะหยุดพร้อมข้อความที่อ่านเข้าใจได้</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

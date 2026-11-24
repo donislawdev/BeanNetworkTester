@@ -1037,6 +1037,52 @@ def test_every_command_line_option_is_explained_once(tmp_path):
                   "(missing entry)")
 
 
+_EXAMPLE = re.compile(r'<code data-kind="(process|ip|port)(-wrong)?">(.*?)</code>', re.S)
+
+
+def _example_verdicts(text):
+    """``(kind, expression, meant_to_fail, error)`` for every marked example in a page:
+    ``error`` is the parser's message, or ``None`` when the expression parses."""
+    from beantester import matchers
+    kinds = {"process": (matchers.KIND_PROCESS, None), "ip": (matchers.KIND_IP, None),
+             "port": (matchers.KIND_INT, (0, 65535))}
+    out = []
+    for kind, wrong, raw in _EXAMPLE.findall(text):
+        expression = html.unescape(raw)
+        matcher_kind, bounds = kinds[kind]
+        try:
+            matchers.validate_matcher(expression, matcher_kind, bounds=bounds)
+            error = None
+        except ValueError as exc:
+            error = str(exc)
+        out.append((kind, expression, bool(wrong), error))
+    return out
+
+
+def test_every_syntax_example_says_what_the_parser_does():
+    """An example of the filter syntax is checked against the program's parser, on every
+    language's page: one shown as working must parse, one shown as a mistake must be
+    refused. Prose about syntax rots silently, and an example the program refuses sends
+    a reader looking for a fault in their own typing."""
+    canary = _example_verdicts('<code data-kind="port">80,!</code>'
+                               '<code data-kind="ip-wrong">10.0.0.1</code>')
+    check("canary: a broken example and a working 'mistake' are both caught",
+          [(c[2], c[3] is None) for c in canary] == [(False, False), (True, True)], f"({canary})")
+    pages = sorted(glob.glob(os.path.join(SITE, "pages", "syntax", "*.html")))
+    check("the syntax page exists in every language", len(pages) == 22, f"({len(pages)})")
+    for path in pages:
+        verdicts = _example_verdicts(_read(path))
+        check(f"{os.path.basename(path)}: there are examples to check", len(verdicts) >= 30,
+              f"({len(verdicts)})")
+        for kind, expression, meant_to_fail, error in verdicts:
+            if meant_to_fail:
+                check(f"{os.path.basename(path)}: {expression!r} ({kind}) is refused",
+                      error is not None, "(the parser accepts it)")
+            else:
+                check(f"{os.path.basename(path)}: {expression!r} ({kind}) parses",
+                      error is None, f"({error})")
+
+
 def test_every_scenario_key_action_and_shipped_file_is_explained():
     """The scenarios page explains each key and action the validator accepts and says
     what each shipped file reproduces; a sentence left for a key, an action or a file

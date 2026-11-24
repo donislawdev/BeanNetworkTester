@@ -1,0 +1,151 @@
+<section class="hero">
+  <h1>Filtersyntaxis: namen, PID's, IP-bereiken, CIDR en poorten</h1>
+  <p class="lead">Eén kleine taal richt het hulpmiddel op programma's, adressen en poorten. Hij
+  werkt in het venster en op de opdrachtregel hetzelfde, en elk voorbeeld op deze pagina wordt
+  gecontroleerd met de eigen parser van het programma.</p>
+</section>
+
+<section>
+  <h2>Waar hij gebruikt wordt</h2>
+  <p>In het venster: het veld voor het doelproces, de adres- en poortvelden onder
+  {{app.frames.destination}} en onder {{app.frames.block}}, en de twee velden voor de
+  gegevensgrootte. Op de opdrachtregel: <code>--target</code>, <code>--dst-ip</code>,
+  <code>--dst-port</code>, <code>--block-ip</code>, <code>--block-port</code>,
+  <code>--payload-udp</code> en <code>--payload-tcp</code>. Een leeg veld betekent alles.</p>
+</section>
+
+<section>
+  <h2>Bouwstenen</h2>
+  <table>
+    <tr><th>Schrijf</th><th>Betekent</th><th>Voorbeeld</th></tr>
+    <tr><td><code>a,b,c</code></td><td>een lijst: één ervan is genoeg</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>een bereik, beide uiteinden inbegrepen</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>een vergelijking, voor getallen en adressen</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>laat dit weg</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>een jokerteken: een willekeurige reeks tekens, of één teken</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>een reguliere expressie, hoofdletters maken niet uit</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>een CIDR-blok, alleen voor adressen</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>Spaties rond komma's worden genegeerd, net als een lege plek tussen twee komma's. Een
+  <code>!</code> waar niets op volgt is een fout: <code data-kind="port-wrong">80,!</code> wordt
+  geweigerd.</p>
+</section>
+
+<section>
+  <h2>Hoe termen samengaan</h2>
+  <p>De termen zonder <code>!</code> tellen op: een waarde past als een van hen past, of als er geen
+  zijn. De termen met <code>!</code> halen er daarna iets af. De volgorde maakt niet uit, dus
+  <code data-kind="port">80,!53</code> en <code data-kind="port">!53,80</code> zijn
+  hetzelfde.</p>
+  <table>
+    <tr><th>Schrijf</th><th>Past op</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>alleen poort 443</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>alles behalve 53, want er valt niets op te tellen</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>alles behalve 53 en 443</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>1000 tot en met 2000, zonder 1500</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80, 443, 8000 tot en met 8100 en alles boven 9000, behalve 8080</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Programma's</h2>
+  <p>Een term is een naam of een PID, en één veld mag ze mengen. Een gewone naam past overal in de
+  naam van het programma, zonder op hoofdletters te letten, dus <code data-kind="process">chrome</code>
+  vangt <code>chrome.exe</code> en <code>chromedriver.exe</code>. Een los getal, een bereik of een
+  vergelijking is een PID. Jokertekens en <code>re:</code> gelden voor de naam. Een vergelijking op
+  een naam, zoals <code data-kind="process-wrong">&gt;chrome</code>, wordt geweigerd in plaats van
+  nergens op te passen.</p>
+  <table>
+    <tr><th>Schrijf</th><th>Past op</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>elk programma met chrome.exe in de naam</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome, maar niet chromedriver</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>twee programma's tegelijk</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>één PID</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>elke PID in dat bereik</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>een naam die met firefox begint</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>precies chrome.exe of firefox.exe</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>een naam en een PID in één veld</td></tr>
+  </table>
+  <p>Een pakket draagt adressen en poorten, nooit de naam van een programma. Daarom zoekt het
+  hulpmiddel de lokale poorten die elk passend programma vasthoudt, richt zich daarop en volgt de
+  nieuwe verbindingen die het opent. Een paar poorten worden door meerdere programma's tegelijk
+  gedeeld (mDNS 5353, SSDP 1900, DHCP 67 en 68). Daar is het alles of niets, en het logboek zegt
+  welke van de twee.</p>
+</section>
+
+<section>
+  <h2>Adressen</h2>
+  <p>IPv4 en IPv6 werken allebei, en één veld mag ze mengen: een regel voor de ene familie past
+  nooit op een adres van de andere. Hoe een adres geschreven is, maakt niet uit, dus
+  <code>2001:0db8:0000:0000:0000:0000:0000:0001</code> en <code>2001:db8::1</code> zijn hetzelfde
+  adres.</p>
+  <table>
+    <tr><th>Schrijf</th><th>Past op</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>twee adressen</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>een bereik met een gat</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>een heel subnet</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>hetzelfde subnet, met een jokerteken</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>elk adres behalve 8.8.8.8</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>een IPv6-subnet</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>IPv4 en IPv6 in één veld</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Poorten</h2>
+  <p>Poorten lopen van 0 tot 65535; <code data-kind="port-wrong">99999</code> wordt geweigerd in
+  plaats van overgeslagen. De velden voor de gegevensgrootte nemen dezelfde syntaxis, geteld in bytes
+  aan gegevens.</p>
+  <table>
+    <tr><th>Schrijf</th><th>Past op</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>een bereik, beide uiteinden inbegrepen</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>de hoge poorten</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>de geprivilegieerde poorten</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>een mengeling</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Reguliere expressies</h2>
+  <p>Een term is alleen een reguliere expressie met <code>re:</code> ervoor, dus een punt in
+  <code>chrome.exe</code> blijft een punt. Het patroon let niet op hoofdletters en mag overal in de
+  tekst passen; gebruik <code>^</code> en <code>$</code> om op het geheel te passen. Een komma in een
+  patroon heeft een backslash nodig, omdat een komma termen scheidt:
+  <code data-kind="process">re:^ch.{1\,8}e\.exe$</code> werkt. Zonder backslash wordt
+  <code>re:^ch.{1,8}e\.exe$</code> bij de komma in twee termen geknipt, die allebei laden en op iets
+  anders passen.</p>
+  <p>Een herhaling binnen een herhaling, zoals <code data-kind="process-wrong">re:^(\w+)+$</code>,
+  wordt als te traag geweigerd: die kan seconden duren op één naam die bijna past, en een adres wordt
+  bij elk pakket gecontroleerd. Schrijf de herhaling één keer:
+  <code data-kind="process">re:^\w+$</code>.</p>
+</section>
+
+<section>
+  <h2>Valkuilen</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> vangt chromedriver, en
+    <code data-kind="process">chrome.exe</code> niet: een gewone naam is een stukje van de naam.</li>
+    <li><code data-kind="process">chrome*</code> vangt ook chromedriver. Voor precies één programma
+    schrijf je <code data-kind="process">re:^chrome\.exe$</code>.</li>
+    <li><code data-kind="port">8*</code> in een poortveld is een jokerteken op de cijfers, dus vangt
+    het 8, 80, 8080 en 8443, maar niet 443. Bijna altijd bedoelde je een bereik zoals
+    <code data-kind="port">8000-8999</code>.</li>
+    <li><code data-kind="port">!53</code> omvat ook verkeer zonder poort, zoals ping, want een
+    pingpakket is geen poort 53.</li>
+    <li>Een adres en een poort die samen zijn ingesteld, moeten allebei passen. Voor het een of het
+    ander doe je twee runs.</li>
+    <li><code data-kind="port-wrong">2000-1000</code>, een achterstevoren geschreven bereik, wordt
+    geweigerd.</li>
+    <li>Een jokerteken is geen reguliere expressie: in <code>re:chrome*</code> herhaalt de ster de
+    letter e.</li>
+  </ul>
+  <p>Elke fout wordt meteen gemeld: het veld in het venster wordt rood met de reden eronder, en de
+  opdrachtregel stopt met een leesbare melding.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

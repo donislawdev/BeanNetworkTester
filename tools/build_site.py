@@ -955,8 +955,9 @@ def explained(texts, key, app):
     return PLACEHOLDER_RE.sub(program_word, text)
 
 
-def _setting_values(field, app, texts):
-    """What a setting accepts, read from the registry it is validated against."""
+def _setting_values(field, app, texts, syntax_url=""):
+    """What a setting accepts, read from the registry it is validated against; an
+    expression links to the page that explains the syntax, when there is one."""
     kind = field.kind
     words = {fields.BOOL: "ref.switch", fields.SCHEDULE: "ref.schedule",
              fields.SEED: "ref.seed", fields.CHOICE: "ref.choice"}
@@ -967,7 +968,10 @@ def _setting_values(field, app, texts):
     span = "%s - %s" % (_number(bounds[0]), _number(bounds[1])) if bounds else ""
     parts = [html.escape(p, quote=True) for p in (unit, span) if p]
     if kind == fields.EXPR:
-        parts.insert(0, explained(texts, "ref.expression", app))
+        words = explained(texts, "ref.expression", app)
+        if syntax_url:
+            words = '<a href="%s">%s</a>' % (html.escape(syntax_url, quote=True), words)
+        parts.insert(0, words)
     return ", ".join(parts)
 
 
@@ -1004,7 +1008,7 @@ def _setting_choices(field, app):
     return '<ul class="choices">%s</ul>' % "".join(items)
 
 
-def settings_reference(app, texts):
+def settings_reference(app, texts, syntax_url=""):
     """Every setting, under the part of the window it sits in, from ``fields``.
 
     The label, the flag, the name in a file, the values, the default and when a change
@@ -1030,7 +1034,7 @@ def settings_reference(app, texts):
             meta = ["<code>--%s</code>" % html.escape(field.cli, quote=True),
                     explained(texts, "ref.in_file", app).replace(
                         "{name}", "<code>%s</code>" % html.escape(key, quote=True)),
-                    _setting_values(field, app, texts),
+                    _setting_values(field, app, texts, syntax_url),
                     _setting_when(field, app, texts),
                     _setting_default(field, app, texts)]
             body = '<p class="meta">%s</p><p>%s</p>' % (
@@ -1309,6 +1313,10 @@ def page_context(page, code, registry, texts, home, colours, root, pages):
     repo = registry["repo_url"].rstrip("/")
     context = dict(texts[code])
     app = load_app_strings(root, program_language(root, registry, code))
+    # The reference page links each expression field to the syntax page, in this language.
+    syntax = next((p for p in pages if p["id"] == "syntax"), None)
+    syntax_url = (_relative_url(entry["dir_path"], syntax["languages"][code]["dir_path"])
+                  if syntax and code in syntax["languages"] else "")
     _merge(context, app, "program strings [%s]" % code)
     _merge(context, {
         "site.base_url": registry["base_url"],
@@ -1333,7 +1341,7 @@ def page_context(page, code, registry, texts, home, colours, root, pages):
                                               texts[code]["nav.language"],
                                               _root_prefix(registry)),
         "page.preset_table": preset_table(app, texts[code]),
-        "page.settings_reference": settings_reference(app, texts[code]),
+        "page.settings_reference": settings_reference(app, texts[code], syntax_url),
         "page.cli_reference": cli_reference(app, texts[code]),
         "page.exit_code_table": exit_code_table(texts[code]),
         "page.scenario_table": scenario_table(root, texts[code]),

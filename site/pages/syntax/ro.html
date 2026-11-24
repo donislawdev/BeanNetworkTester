@@ -1,0 +1,151 @@
+<section class="hero">
+  <h1>Sintaxa filtrelor: nume, PID-uri, intervale IP, CIDR și porturi</h1>
+  <p class="lead">Un limbaj mic îndreaptă instrumentul spre programe, adrese și porturi. Funcționează
+  la fel în fereastră și în linia de comandă, iar fiecare exemplu de pe această pagină este verificat
+  cu analizorul programului însuși.</p>
+</section>
+
+<section>
+  <h2>Unde se folosește</h2>
+  <p>În fereastră: câmpul procesului țintă, câmpurile de adresă și port din
+  {{app.frames.destination}} și din {{app.frames.block}}, și cele două câmpuri pentru dimensiunea
+  datelor. În linia de comandă: <code>--target</code>, <code>--dst-ip</code>,
+  <code>--dst-port</code>, <code>--block-ip</code>, <code>--block-port</code>,
+  <code>--payload-udp</code> și <code>--payload-tcp</code>. Un câmp gol înseamnă tot.</p>
+</section>
+
+<section>
+  <h2>Piesele de bază</h2>
+  <table>
+    <tr><th>Scrie</th><th>Înseamnă</th><th>Exemplu</th></tr>
+    <tr><td><code>a,b,c</code></td><td>o listă: ajunge unul dintre ele</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>un interval, cu ambele capete incluse</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>o comparație, pentru numere și adrese</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>lasă asta deoparte</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>un caracter wildcard: orice șir de caractere, sau unul singur</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>o expresie regulată, fără să conteze literele mari</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>un bloc CIDR, doar pentru adrese</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>Spațiile din jurul virgulelor sunt ignorate, la fel și un loc gol între două virgule. Un
+  <code>!</code> după care nu urmează nimic este o greșeală: <code data-kind="port-wrong">80,!</code>
+  este refuzat.</p>
+</section>
+
+<section>
+  <h2>Cum se combină termenii</h2>
+  <p>Termenii fără <code>!</code> se adună: o valoare se potrivește dacă se potrivește oricare
+  dintre ei, sau dacă nu există niciunul. Termenii cu <code>!</code> scad apoi. Ordinea nu contează,
+  deci <code data-kind="port">80,!53</code> și <code data-kind="port">!53,80</code> sunt la
+  fel.</p>
+  <table>
+    <tr><th>Scrie</th><th>Se potrivește cu</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>doar portul 443</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>totul în afară de 53, pentru că nu e nimic de adunat</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>totul în afară de 53 și 443</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>de la 1000 la 2000, fără 1500</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80, 443, de la 8000 la 8100 și tot ce e peste 9000, în afară de 8080</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Programe</h2>
+  <p>Un termen este un nume sau un PID, iar un câmp le poate amesteca. Un nume simplu se potrivește
+  oriunde în numele programului, fără să conteze literele mari, deci
+  <code data-kind="process">chrome</code> prinde <code>chrome.exe</code> și
+  <code>chromedriver.exe</code>. Un număr singur, un interval sau o comparație este un PID.
+  Caracterele wildcard și <code>re:</code> se aplică numelui. O comparație pe un nume, cum ar fi
+  <code data-kind="process-wrong">&gt;chrome</code>, este refuzată în loc să nu se potrivească cu
+  nimic.</p>
+  <table>
+    <tr><th>Scrie</th><th>Se potrivește cu</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>orice program cu chrome.exe în nume</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome, dar nu chromedriver</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>două programe deodată</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>un PID</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>orice PID din acel interval</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>un nume care începe cu firefox</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>exact chrome.exe sau firefox.exe</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>un nume și un PID în același câmp</td></tr>
+  </table>
+  <p>Un pachet poartă adrese și porturi, niciodată numele unui program, așa că instrumentul află
+  porturile locale ocupate de fiecare program care se potrivește, le țintește și urmărește
+  conexiunile noi pe care le deschide. Câteva porturi sunt împărțite de mai multe programe deodată
+  (mDNS 5353, SSDP 1900, DHCP 67 și 68). Pe ele e totul sau nimic, iar jurnalul spune care dintre
+  cele două.</p>
+</section>
+
+<section>
+  <h2>Adrese</h2>
+  <p>Funcționează și IPv4, și IPv6, iar un câmp le poate amesteca: o regulă pentru o familie nu se
+  potrivește niciodată cu o adresă din cealaltă. Felul în care e scrisă o adresă nu contează, deci
+  <code>2001:0db8:0000:0000:0000:0000:0000:0001</code> și <code>2001:db8::1</code> sunt aceeași
+  adresă.</p>
+  <table>
+    <tr><th>Scrie</th><th>Se potrivește cu</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>două adrese</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>un interval cu o gaură</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>o subrețea întreagă</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>aceeași subrețea, prin wildcard</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>orice adresă în afară de 8.8.8.8</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>o subrețea IPv6</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>IPv4 și IPv6 în același câmp</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Porturi</h2>
+  <p>Porturile merg de la 0 la 65535; <code data-kind="port-wrong">99999</code> este refuzat, nu
+  sărit. Câmpurile pentru dimensiunea datelor primesc aceeași sintaxă, numărată în octeți de
+  date.</p>
+  <table>
+    <tr><th>Scrie</th><th>Se potrivește cu</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>un interval, cu ambele capete incluse</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>porturile înalte</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>porturile privilegiate</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>o combinație</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Expresii regulate</h2>
+  <p>Un termen este o expresie regulată doar cu <code>re:</code> în față, așa că punctul din
+  <code>chrome.exe</code> rămâne punct. Modelul nu ține cont de literele mari și se poate potrivi
+  oriunde în text; folosește <code>^</code> și <code>$</code> ca să se potrivească întregul. O virgulă
+  într-un model are nevoie de o bară inversă, pentru că virgula separă termenii:
+  <code data-kind="process">re:^ch.{1\,8}e\.exe$</code> funcționează. Fără bară,
+  <code>re:^ch.{1,8}e\.exe$</code> este tăiat la virgulă în doi termeni care se încarcă amândoi și se
+  potrivesc cu altceva.</p>
+  <p>O repetiție într-o repetiție, cum ar fi <code data-kind="process-wrong">re:^(\w+)+$</code>, este
+  refuzată ca prea lentă: poate dura secunde pe un singur nume care aproape se potrivește, iar o
+  adresă este verificată la fiecare pachet. Scrie repetiția o singură dată:
+  <code data-kind="process">re:^\w+$</code>.</p>
+</section>
+
+<section>
+  <h2>Capcane frecvente</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> prinde chromedriver, iar
+    <code data-kind="process">chrome.exe</code> nu: un nume simplu este o bucată din nume.</li>
+    <li><code data-kind="process">chrome*</code> prinde și el chromedriver. Pentru exact un program,
+    scrie <code data-kind="process">re:^chrome\.exe$</code>.</li>
+    <li><code data-kind="port">8*</code> într-un câmp de port este un wildcard pe cifre, deci prinde
+    8, 80, 8080 și 8443, dar nu 443. Aproape mereu voiai un interval ca
+    <code data-kind="port">8000-8999</code>.</li>
+    <li><code data-kind="port">!53</code> acoperă și traficul fără niciun port, cum ar fi ping-ul,
+    pentru că un pachet de ping nu este portul 53.</li>
+    <li>O adresă și un port setate împreună trebuie să se potrivească amândouă. Pentru unul sau
+    altul, fă două rulări.</li>
+    <li><code data-kind="port-wrong">2000-1000</code>, un interval scris invers, este refuzat.</li>
+    <li>Un wildcard nu este o expresie regulată: în <code>re:chrome*</code> steaua repetă litera
+    e.</li>
+  </ul>
+  <p>Fiecare greșeală e semnalată imediat: câmpul din fereastră devine roșu cu motivul dedesubt, iar
+  linia de comandă se oprește cu un mesaj clar.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

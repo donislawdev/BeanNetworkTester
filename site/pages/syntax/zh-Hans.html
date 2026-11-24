@@ -1,0 +1,108 @@
+<section class="hero">
+  <h1>过滤语法：名称、PID、IP 范围、CIDR 和端口</h1>
+  <p class="lead">一种小小的语言让工具针对程序、地址和端口。它在窗口和命令行中的用法完全一样，本页上的每个示例都由程序自己的解析器检查过。</p>
+</section>
+
+<section>
+  <h2>在哪里使用</h2>
+  <p>在窗口中：目标进程字段、{{app.frames.destination}}和{{app.frames.block}}下的地址与端口字段，以及两个数据长度字段。在命令行中：<code>--target</code>、<code>--dst-ip</code>、<code>--dst-port</code>、<code>--block-ip</code>、<code>--block-port</code>、<code>--payload-udp</code> 和 <code>--payload-tcp</code>。字段留空表示全部。</p>
+</section>
+
+<section>
+  <h2>基本写法</h2>
+  <table>
+    <tr><th>写法</th><th>含义</th><th>示例</th></tr>
+    <tr><td><code>a,b,c</code></td><td>列表：任意一项匹配即可</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>范围，包含两端</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>比较，用于数字和地址</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>排除这一项</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>通配符：任意一串字符，或一个字符</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>正则表达式，不区分大小写</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>CIDR 网段，仅用于地址</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>逗号两侧的空格会被忽略，两个逗号之间的空位也会被忽略。<code>!</code> 后面什么都没有则是错误：<code data-kind="port-wrong">80,!</code> 会被拒绝。</p>
+</section>
+
+<section>
+  <h2>各项如何组合</h2>
+  <p>不带 <code>!</code> 的项相加：只要其中任意一项匹配，或者根本没有这样的项，值就匹配。带 <code>!</code> 的项随后把匹配的去掉。顺序无关，所以 <code data-kind="port">80,!53</code> 与 <code data-kind="port">!53,80</code> 相同。</p>
+  <table>
+    <tr><th>写法</th><th>匹配</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>只有 443 端口</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>除 53 以外的一切，因为没有要相加的项</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>除 53 和 443 以外的一切</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>1000 到 2000，不含 1500</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80、443、8000 到 8100 以及 9000 以上的一切，但不含 8080</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>程序</h2>
+  <p>一项可以是名称或 PID，一个字段中可以混用。普通名称会在程序名的任意位置匹配，不区分大小写，所以 <code data-kind="process">chrome</code> 会匹配 <code>chrome.exe</code> 和 <code>chromedriver.exe</code>。单独的数字、范围或比较表示 PID。通配符和 <code>re:</code> 匹配名称。对名称做比较（例如 <code data-kind="process-wrong">&gt;chrome</code>）会被拒绝，而不是什么都不匹配。</p>
+  <table>
+    <tr><th>写法</th><th>匹配</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>名称中含有 chrome.exe 的所有程序</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome，但不含 chromedriver</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>同时两个程序</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>一个 PID</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>该范围内的所有 PID</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>以 firefox 开头的名称</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>恰好是 chrome.exe 或 firefox.exe</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>一个字段中同时写名称和 PID</td></tr>
+  </table>
+  <p>数据包只携带地址和端口，从不携带程序名称，所以工具会找出每个匹配程序占用的本地端口并针对这些端口，同时跟踪它新打开的连接。少数端口会被多个程序同时共用（mDNS 5353、SSDP 1900、DHCP 67 和 68）。在这些端口上只能全有或全无，日志会说明是哪一种。</p>
+</section>
+
+<section>
+  <h2>地址</h2>
+  <p>IPv4 和 IPv6 都支持，一个字段中可以混用：针对一种地址族的规则永远不会匹配另一种地址族的地址。地址的写法无关紧要，所以 <code>2001:0db8:0000:0000:0000:0000:0000:0001</code> 和 <code>2001:db8::1</code> 是同一个地址。</p>
+  <table>
+    <tr><th>写法</th><th>匹配</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>两个地址</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>中间挖掉一个的范围</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>整个子网</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>同一个子网，用通配符表示</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>除 8.8.8.8 以外的所有地址</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>一个 IPv6 子网</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>一个字段中同时有 IPv4 和 IPv6</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>端口</h2>
+  <p>端口范围是 0 到 65535；<code data-kind="port-wrong">99999</code> 会被拒绝，而不是被跳过。数据长度字段使用相同的语法，按数据字节数计算。</p>
+  <table>
+    <tr><th>写法</th><th>匹配</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>范围，包含两端</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>高位端口</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>特权端口</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>混合写法</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>正则表达式</h2>
+  <p>只有前面加上 <code>re:</code> 的项才是正则表达式，所以 <code>chrome.exe</code> 中的点仍然是点。模式不区分大小写，可以在文本的任意位置匹配；要匹配整个文本，请使用 <code>^</code> 和 <code>$</code>。模式中的逗号需要加反斜杠，因为逗号用来分隔各项：<code data-kind="process">re:^ch.{1\,8}e\.exe$</code> 可以正常使用。如果不加反斜杠，<code>re:^ch.{1,8}e\.exe$</code> 会在逗号处被切成两项，两项都能加载，但匹配的是别的东西。</p>
+  <p>重复里面再套重复，例如 <code data-kind="process-wrong">re:^(\w+)+$</code>，会因为太慢而被拒绝：遇到一个几乎匹配的名称就可能耗费数秒，而地址在每个数据包上都要检查。请只写一次重复：<code data-kind="process">re:^\w+$</code>。</p>
+</section>
+
+<section>
+  <h2>容易踩的坑</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> 会匹配 chromedriver，而 <code data-kind="process">chrome.exe</code> 不会：普通名称只是名称的一部分。</li>
+    <li><code data-kind="process">chrome*</code> 也会匹配 chromedriver。要恰好匹配一个程序，请写 <code data-kind="process">re:^chrome\.exe$</code>。</li>
+    <li>端口字段中的 <code data-kind="port">8*</code> 是针对数字文本的通配符，所以它匹配 8、80、8080 和 8443，但不匹配 443。你几乎总是想要一个范围，例如 <code data-kind="port">8000-8999</code>。</li>
+    <li><code data-kind="port">!53</code> 也包括完全没有端口的流量，例如 ping，因为 ping 数据包不是 53 端口。</li>
+    <li>同时设置了地址和端口时，两者都必须匹配。如果只想满足其中之一，请分两次运行。</li>
+    <li>倒着写的范围 <code data-kind="port-wrong">2000-1000</code> 会被拒绝。</li>
+    <li>通配符不是正则表达式：在 <code>re:chrome*</code> 中，星号重复的是字母 e。</li>
+  </ul>
+  <p>每个错误都会立即报告：窗口中的字段变红，并在下方显示原因；命令行则以一条易读的消息结束。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

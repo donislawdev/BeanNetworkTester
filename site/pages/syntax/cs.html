@@ -1,0 +1,143 @@
+<section class="hero">
+  <h1>Syntaxe filtrů: názvy, PID, rozsahy IP, CIDR a porty</h1>
+  <p class="lead">Jeden malý jazyk míří nástrojem na programy, adresy a porty. Funguje stejně v okně
+  i na příkazovém řádku a každý příklad na této stránce je ověřený vlastním parserem programu.</p>
+</section>
+
+<section>
+  <h2>Kde se používá</h2>
+  <p>V okně: pole cílového procesu, pole adresy a portu v sekcích {{app.frames.destination}}
+  a {{app.frames.block}} a dvě pole velikosti dat. Na příkazovém řádku: <code>--target</code>,
+  <code>--dst-ip</code>, <code>--dst-port</code>, <code>--block-ip</code>,
+  <code>--block-port</code>, <code>--payload-udp</code> a <code>--payload-tcp</code>. Prázdné pole
+  znamená všechno.</p>
+</section>
+
+<section>
+  <h2>Stavební kameny</h2>
+  <table>
+    <tr><th>Napište</th><th>Znamená</th><th>Příklad</th></tr>
+    <tr><td><code>a,b,c</code></td><td>seznam: stačí kterýkoli prvek</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>rozsah, oba konce včetně</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>porovnání, pro čísla a adresy</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>tohle vynechat</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>zástupný znak: libovolná řada znaků, nebo jeden znak</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>regulární výraz, bez ohledu na velikost písmen</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>blok CIDR, jen pro adresy</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>Mezery kolem čárek se ignorují, stejně jako prázdné místo mezi dvěma čárkami. <code>!</code>,
+  za kterým nic není, je chyba: <code data-kind="port-wrong">80,!</code> se odmítne.</p>
+</section>
+
+<section>
+  <h2>Jak se prvky skládají</h2>
+  <p>Prvky bez <code>!</code> se sčítají: hodnota sedí, když sedí kterýkoli z nich, nebo když žádný
+  není. Prvky s <code>!</code> pak ubírají. Na pořadí nezáleží, takže
+  <code data-kind="port">80,!53</code> a <code data-kind="port">!53,80</code> znamenají totéž.</p>
+  <table>
+    <tr><th>Napište</th><th>Sedí na</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>jen port 443</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>všechno kromě 53, protože není co sčítat</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>všechno kromě 53 a 443</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>od 1000 do 2000, bez 1500</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80, 443, od 8000 do 8100 a všechno nad 9000, kromě 8080</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Programy</h2>
+  <p>Prvek je název nebo PID a jedno pole je může míchat. Obyčejný název sedí kdekoli v názvu
+  programu bez ohledu na velikost písmen, takže <code data-kind="process">chrome</code> chytí
+  <code>chrome.exe</code> i <code>chromedriver.exe</code>. Samotné číslo, rozsah nebo porovnání je
+  PID. Zástupné znaky a <code>re:</code> se porovnávají s názvem. Porovnání s názvem, například
+  <code data-kind="process-wrong">&gt;chrome</code>, se odmítne, místo aby na nic nesedělo.</p>
+  <table>
+    <tr><th>Napište</th><th>Sedí na</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>každý program s chrome.exe v názvu</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome, ale ne chromedriver</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>dva programy najednou</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>jeden PID</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>každý PID z tohoto rozsahu</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>název, který začíná na firefox</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>přesně chrome.exe nebo firefox.exe</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>název a PID v jednom poli</td></tr>
+  </table>
+  <p>Paket nese adresy a porty, nikdy název programu, takže nástroj zjistí, které místní porty drží
+  každý odpovídající program, míří na ně a sleduje nová spojení, která otevře. Několik portů sdílí
+  více programů naráz (mDNS 5353, SSDP 1900, DHCP 67 a 68). Na nich platí všechno, nebo nic,
+  a protokol řekne, co z toho.</p>
+</section>
+
+<section>
+  <h2>Adresy</h2>
+  <p>Funguje IPv4 i IPv6 a jedno pole je může míchat: pravidlo pro jednu rodinu nikdy nesedí na
+  adresu z druhé. Na zápisu adresy nezáleží, takže
+  <code>2001:0db8:0000:0000:0000:0000:0000:0001</code> a <code>2001:db8::1</code> jsou stejná
+  adresa.</p>
+  <table>
+    <tr><th>Napište</th><th>Sedí na</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>dvě adresy</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>rozsah s dírou</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>celá podsíť</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>stejná podsíť přes zástupný znak</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>každá adresa kromě 8.8.8.8</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>podsíť IPv6</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>IPv4 i IPv6 v jednom poli</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Porty</h2>
+  <p>Porty jdou od 0 do 65535; <code data-kind="port-wrong">99999</code> se odmítne, ne přeskočí.
+  Pole velikosti dat berou stejnou syntaxi, počítanou v bajtech dat.</p>
+  <table>
+    <tr><th>Napište</th><th>Sedí na</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>rozsah, oba konce včetně</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>vysoké porty</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>privilegované porty</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>směs</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Regulární výrazy</h2>
+  <p>Prvek je regulárním výrazem jen s <code>re:</code> na začátku, takže tečka v
+  <code>chrome.exe</code> zůstává tečkou. Vzor nebere ohled na velikost písmen a může sedět kdekoli
+  v textu; aby seděl na celý text, použijte <code>^</code> a <code>$</code>. Čárka ve vzoru
+  potřebuje zpětné lomítko, protože čárka odděluje prvky:
+  <code data-kind="process">re:^ch.{1\,8}e\.exe$</code> funguje. Bez lomítka se
+  <code>re:^ch.{1,8}e\.exe$</code> na čárce rozdělí na dva prvky, které se oba načtou a sedí na
+  něco jiného.</p>
+  <p>Opakování uvnitř opakování, například <code data-kind="process-wrong">re:^(\w+)+$</code>, se
+  odmítne jako příliš pomalé: na jednom názvu, který skoro sedí, může trvat sekundy, a adresa se
+  kontroluje u každého paketu. Napište opakování jednou:
+  <code data-kind="process">re:^\w+$</code>.</p>
+</section>
+
+<section>
+  <h2>Na co si dát pozor</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> chytí chromedriver, ale
+    <code data-kind="process">chrome.exe</code> ne: obyčejný název je kus názvu.</li>
+    <li><code data-kind="process">chrome*</code> chytí také chromedriver. Pro přesně jeden program
+    napište <code data-kind="process">re:^chrome\.exe$</code>.</li>
+    <li><code data-kind="port">8*</code> v poli portu je zástupný znak na číslice, takže chytí 8, 80,
+    8080 a 8443, ale ne 443. Skoro vždy jste chtěli rozsah, například
+    <code data-kind="port">8000-8999</code>.</li>
+    <li><code data-kind="port">!53</code> zahrnuje i provoz bez portu, například ping, protože paket
+    pingu není port 53.</li>
+    <li>Adresa a port nastavené spolu musí sedět obě. Pro jedno nebo druhé udělejte dva běhy.</li>
+    <li><code data-kind="port-wrong">2000-1000</code>, rozsah zapsaný pozpátku, se odmítne.</li>
+    <li>Zástupný znak není regulární výraz: v <code>re:chrome*</code> hvězdička opakuje písmeno
+    e.</li>
+  </ul>
+  <p>Každá chyba se ohlásí hned: pole v okně zčervená a pod ním se objeví důvod, příkazový řádek
+  skončí srozumitelnou zprávou.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

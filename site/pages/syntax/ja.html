@@ -1,0 +1,108 @@
+<section class="hero">
+  <h1>フィルターの書き方：名前・PID・IP 範囲・CIDR・ポート</h1>
+  <p class="lead">小さな言語ひとつで、プログラム、アドレス、ポートを狙います。ウィンドウでもコマンドラインでも同じように使え、このページの例はすべてプログラム自身のパーサーで確認しています。</p>
+</section>
+
+<section>
+  <h2>どこで使うか</h2>
+  <p>ウィンドウでは、対象プロセスの欄、{{app.frames.destination}} と {{app.frames.block}} のアドレス欄とポート欄、そして 2 つのデータサイズ欄です。コマンドラインでは <code>--target</code>、<code>--dst-ip</code>、<code>--dst-port</code>、<code>--block-ip</code>、<code>--block-port</code>、<code>--payload-udp</code>、<code>--payload-tcp</code> です。空欄はすべてを意味します。</p>
+</section>
+
+<section>
+  <h2>基本の部品</h2>
+  <table>
+    <tr><th>書き方</th><th>意味</th><th>例</th></tr>
+    <tr><td><code>a,b,c</code></td><td>リスト：どれかに一致すればよい</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>範囲、両端を含む</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>比較、数値とアドレスに使える</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>これを除く</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>ワイルドカード：任意の文字列、または 1 文字</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>正規表現、大文字小文字は区別しない</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>CIDR ブロック、アドレス専用</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>カンマの前後の空白は無視され、カンマとカンマの間の空きも無視されます。何も続かない <code>!</code> は間違いで、<code data-kind="port-wrong">80,!</code> は拒否されます。</p>
+</section>
+
+<section>
+  <h2>項目の組み合わせ方</h2>
+  <p><code>!</code> の付かない項目は足し合わされます。どれかに一致するか、そうした項目が 1 つもなければ一致です。<code>!</code> の付いた項目はそこから取り除きます。順序は関係ないので、<code data-kind="port">80,!53</code> と <code data-kind="port">!53,80</code> は同じです。</p>
+  <table>
+    <tr><th>書き方</th><th>一致するもの</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>ポート 443 だけ</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>53 以外のすべて（足し合わせる項目がないため）</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>53 と 443 以外のすべて</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>1000 から 2000 まで、1500 を除く</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80、443、8000 から 8100、9000 より上のすべて、ただし 8080 を除く</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>プログラム</h2>
+  <p>項目は名前か PID で、1 つの欄で混ぜて使えます。普通の名前はプログラム名のどこにでも、大文字小文字を区別せずに一致するので、<code data-kind="process">chrome</code> は <code>chrome.exe</code> にも <code>chromedriver.exe</code> にも一致します。数字だけ、範囲、比較は PID です。ワイルドカードと <code>re:</code> は名前に一致します。<code data-kind="process-wrong">&gt;chrome</code> のような名前への比較は、何にも一致しないまま通るのではなく拒否されます。</p>
+  <table>
+    <tr><th>書き方</th><th>一致するもの</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>名前に chrome.exe を含むすべてのプログラム</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome、ただし chromedriver は除く</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>2 つのプログラムを同時に</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>1 つの PID</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>その範囲のすべての PID</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>firefox で始まる名前</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>ちょうど chrome.exe か firefox.exe</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>1 つの欄に名前と PID</td></tr>
+  </table>
+  <p>パケットが運ぶのはアドレスとポートで、プログラム名は運びません。そこでツールは、一致した各プログラムが持つローカルポートを調べてそれを狙い、新しく開いた接続も追いかけます。いくつかのポートは複数のプログラムに同時に共有されています（mDNS 5353、SSDP 1900、DHCP 67 と 68）。そこではすべてか無かになり、どちらになったかをログが示します。</p>
+</section>
+
+<section>
+  <h2>アドレス</h2>
+  <p>IPv4 も IPv6 も使え、1 つの欄で混ぜられます。一方のファミリーのルールが、もう一方のアドレスに一致することはありません。アドレスの書き方は問わないので、<code>2001:0db8:0000:0000:0000:0000:0000:0001</code> と <code>2001:db8::1</code> は同じアドレスです。</p>
+  <table>
+    <tr><th>書き方</th><th>一致するもの</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>2 つのアドレス</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>穴の空いた範囲</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>サブネット全体</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>同じサブネットをワイルドカードで</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>8.8.8.8 以外のすべてのアドレス</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>IPv6 のサブネット</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>1 つの欄に IPv4 と IPv6</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>ポート</h2>
+  <p>ポートは 0 から 65535 までで、<code data-kind="port-wrong">99999</code> は読み飛ばされずに拒否されます。データサイズ欄も同じ書き方で、データのバイト数を数えます。</p>
+  <table>
+    <tr><th>書き方</th><th>一致するもの</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>範囲、両端を含む</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>上位のポート</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>特権ポート</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>組み合わせ</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>正規表現</h2>
+  <p>項目が正規表現になるのは先頭に <code>re:</code> があるときだけなので、<code>chrome.exe</code> の点は点のままです。パターンは大文字小文字を区別せず、テキストのどこに一致してもかまいません。全体に一致させるには <code>^</code> と <code>$</code> を使います。カンマは項目の区切りなので、パターン内のカンマにはバックスラッシュが必要です。<code data-kind="process">re:^ch.{1\,8}e\.exe$</code> は動きます。バックスラッシュなしの <code>re:^ch.{1,8}e\.exe$</code> はカンマで 2 つの項目に切られ、どちらも読み込まれて別のものに一致します。</p>
+  <p><code data-kind="process-wrong">re:^(\w+)+$</code> のような繰り返しの中の繰り返しは、遅すぎるため拒否されます。ほぼ一致する名前 1 つで何秒もかかることがあり、アドレスはパケットごとに確認されるからです。繰り返しは 1 回だけ書きます：<code data-kind="process">re:^\w+$</code>。</p>
+</section>
+
+<section>
+  <h2>つまずきやすい点</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> は chromedriver にも一致しますが、<code data-kind="process">chrome.exe</code> は一致しません。普通の名前は名前の一部だからです。</li>
+    <li><code data-kind="process">chrome*</code> も chromedriver に一致します。プログラムを 1 つだけ狙うなら <code data-kind="process">re:^chrome\.exe$</code> と書きます。</li>
+    <li>ポート欄の <code data-kind="port">8*</code> は数字の並びに対するワイルドカードなので、8、80、8080、8443 には一致しますが 443 には一致しません。たいていは <code data-kind="port">8000-8999</code> のような範囲のつもりのはずです。</li>
+    <li><code data-kind="port">!53</code> はポートのない通信、たとえば ping も含みます。ping のパケットはポート 53 ではないからです。</li>
+    <li>アドレスとポートを両方設定すると、両方に一致する必要があります。どちらか一方でよいなら、2 回に分けて実行します。</li>
+    <li>逆向きに書いた範囲 <code data-kind="port-wrong">2000-1000</code> は拒否されます。</li>
+    <li>ワイルドカードは正規表現ではありません。<code>re:chrome*</code> では、星印は文字 e の繰り返しを意味します。</li>
+  </ul>
+  <p>間違いはすべてすぐに知らされます。ウィンドウでは欄が赤くなってその下に理由が出て、コマンドラインは読みやすいメッセージで止まります。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

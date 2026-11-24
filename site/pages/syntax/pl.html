@@ -1,0 +1,148 @@
+<section class="hero">
+  <h1>Składnia filtrów: nazwy, PID-y, zakresy IP, CIDR i porty</h1>
+  <p class="lead">Jeden mały język celuje narzędziem w programy, adresy i porty. Działa tak samo
+  w oknie i w linii komend, a każdy przykład na tej stronie jest sprawdzany parserem samego
+  programu.</p>
+</section>
+
+<section>
+  <h2>Gdzie się go używa</h2>
+  <p>W oknie: pole procesu, pola adresu i portu w sekcjach {{app.frames.destination}}
+  i {{app.frames.block}} oraz dwa pola rozmiaru danych. W linii komend: <code>--target</code>,
+  <code>--dst-ip</code>, <code>--dst-port</code>, <code>--block-ip</code>,
+  <code>--block-port</code>, <code>--payload-udp</code> i <code>--payload-tcp</code>. Puste pole
+  znaczy wszystko.</p>
+</section>
+
+<section>
+  <h2>Klocki</h2>
+  <table>
+    <tr><th>Wpisz</th><th>Znaczy</th><th>Przykład</th></tr>
+    <tr><td><code>a,b,c</code></td><td>lista: pasuje dowolny element</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>zakres, oba końce wliczone</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>porównanie, dla liczb i adresów</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>pomiń to</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>symbol wieloznaczny: dowolny ciąg znaków albo jeden znak</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>wyrażenie regularne, wielkość liter bez znaczenia</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>blok CIDR, tylko dla adresów</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>Spacje wokół przecinków są pomijane, tak samo puste miejsce między dwoma przecinkami.
+  <code>!</code>, po którym nic nie ma, to błąd: <code data-kind="port-wrong">80,!</code> zostaje
+  odrzucone.</p>
+</section>
+
+<section>
+  <h2>Jak łączą się elementy</h2>
+  <p>Elementy bez <code>!</code> się sumują: wartość pasuje, gdy pasuje którykolwiek z nich albo
+  gdy nie ma żadnego. Elementy z <code>!</code> potem odejmują. Kolejność nie ma znaczenia, więc
+  <code data-kind="port">80,!53</code> i <code data-kind="port">!53,80</code> znaczą to samo.</p>
+  <table>
+    <tr><th>Wpisz</th><th>Pasuje</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>tylko port 443</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>wszystko oprócz 53, bo nie ma czego sumować</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>wszystko oprócz 53 i 443</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>od 1000 do 2000, bez 1500</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80, 443, od 8000 do 8100 i wszystko powyżej 9000, oprócz 8080</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Programy</h2>
+  <p>Element to nazwa albo PID, a jedno pole może je mieszać. Zwykła nazwa pasuje w dowolnym
+  miejscu nazwy programu, bez względu na wielkość liter, więc <code data-kind="process">chrome</code>
+  łapie <code>chrome.exe</code> i <code>chromedriver.exe</code>. Sama liczba, zakres albo porównanie
+  to PID. Symbole wieloznaczne i <code>re:</code> dopasowują nazwę. Porównanie na nazwie, takie jak
+  <code data-kind="process-wrong">&gt;chrome</code>, zostaje odrzucone, zamiast niczego nie
+  dopasować.</p>
+  <table>
+    <tr><th>Wpisz</th><th>Pasuje</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>każdy program z chrome.exe w nazwie</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome, ale nie chromedriver</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>dwa programy naraz</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>jeden PID</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>każdy PID z tego zakresu</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>nazwa zaczynająca się od firefox</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>dokładnie chrome.exe albo firefox.exe</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>nazwa i PID w jednym polu</td></tr>
+  </table>
+  <p>Pakiet niesie adresy i porty, nigdy nazwę programu, więc narzędzie sprawdza, które lokalne
+  porty trzyma każdy pasujący program, celuje w nie i śledzi nowe połączenia, które ten program
+  otwiera. Kilka portów dzieli naraz kilka programów (mDNS 5353, SSDP 1900, DHCP 67 i 68). Na nich
+  działa to na zasadzie wszystko albo nic, a log mówi, które z dwóch.</p>
+</section>
+
+<section>
+  <h2>Adresy</h2>
+  <p>Działają IPv4 i IPv6, a jedno pole może je mieszać: reguła dla jednej rodziny nigdy nie pasuje
+  do adresu z drugiej. Sposób zapisu adresu nie ma znaczenia, więc
+  <code>2001:0db8:0000:0000:0000:0000:0000:0001</code> i <code>2001:db8::1</code> to ten sam
+  adres.</p>
+  <table>
+    <tr><th>Wpisz</th><th>Pasuje</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>dwa adresy</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>zakres z dziurą</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>cała podsieć</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>ta sama podsieć, symbolem wieloznacznym</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>każdy adres oprócz 8.8.8.8</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>podsieć IPv6</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>IPv4 i IPv6 w jednym polu</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Porty</h2>
+  <p>Porty idą od 0 do 65535; <code data-kind="port-wrong">99999</code> zostaje odrzucone, a nie
+  pominięte. Pola rozmiaru danych przyjmują tę samą składnię, liczoną w bajtach danych.</p>
+  <table>
+    <tr><th>Wpisz</th><th>Pasuje</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>zakres, oba końce wliczone</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>wysokie porty</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>porty uprzywilejowane</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>mieszanka</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Wyrażenia regularne</h2>
+  <p>Element jest wyrażeniem regularnym tylko z <code>re:</code> na początku, więc kropka
+  w <code>chrome.exe</code> zostaje kropką. Wzorzec ignoruje wielkość liter i może pasować
+  w dowolnym miejscu tekstu; żeby dopasować całość, użyj <code>^</code> i <code>$</code>. Przecinek
+  we wzorcu potrzebuje ukośnika wstecznego, bo przecinek rozdziela elementy:
+  <code data-kind="process">re:^ch.{1\,8}e\.exe$</code> działa. Bez ukośnika
+  <code>re:^ch.{1,8}e\.exe$</code> zostaje przecięte na przecinku na dwa elementy, które oba się
+  wczytują i dopasowują coś innego.</p>
+  <p>Powtórzenie wewnątrz powtórzenia, takie jak <code data-kind="process-wrong">re:^(\w+)+$</code>,
+  zostaje odrzucone jako za wolne: na jednej nazwie, która prawie pasuje, potrafi zająć sekundy,
+  a adres jest sprawdzany przy każdym pakiecie. Napisz powtórzenie raz:
+  <code data-kind="process">re:^\w+$</code>.</p>
+</section>
+
+<section>
+  <h2>Pułapki</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> łapie chromedriver, a
+    <code data-kind="process">chrome.exe</code> nie: zwykła nazwa to kawałek nazwy.</li>
+    <li><code data-kind="process">chrome*</code> też łapie chromedriver. Żeby trafić dokładnie
+    jeden program, napisz <code data-kind="process">re:^chrome\.exe$</code>.</li>
+    <li><code data-kind="port">8*</code> w polu portu to symbol wieloznaczny na cyfrach, więc łapie
+    8, 80, 8080 i 8443, ale nie 443. Prawie zawsze chodziło o zakres, na przykład
+    <code data-kind="port">8000-8999</code>.</li>
+    <li><code data-kind="port">!53</code> obejmuje też ruch bez żadnego portu, na przykład ping, bo
+    pakiet pingu nie jest portem 53.</li>
+    <li>Adres i port ustawione razem muszą pasować oba. Dla jednego albo drugiego zrób dwa
+    przebiegi.</li>
+    <li><code data-kind="port-wrong">2000-1000</code>, zakres zapisany od tyłu, zostaje
+    odrzucony.</li>
+    <li>Symbol wieloznaczny to nie wyrażenie regularne: w <code>re:chrome*</code> gwiazdka powtarza
+    literę e.</li>
+  </ul>
+  <p>Każdy błąd jest zgłaszany od razu: pole w oknie robi się czerwone, a pod nim pojawia się
+  powód, a linia komend kończy się czytelnym komunikatem.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

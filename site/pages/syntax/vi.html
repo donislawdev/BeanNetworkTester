@@ -1,0 +1,144 @@
+<section class="hero">
+  <h1>Cú pháp bộ lọc: tên, PID, khoảng IP, CIDR và cổng</h1>
+  <p class="lead">Một ngôn ngữ nhỏ giúp công cụ nhắm vào chương trình, địa chỉ và cổng. Nó hoạt động
+  giống nhau trong cửa sổ và trên dòng lệnh, và mọi ví dụ trên trang này đều được kiểm tra bằng bộ
+  phân tích của chính chương trình.</p>
+</section>
+
+<section>
+  <h2>Dùng ở đâu</h2>
+  <p>Trong cửa sổ: ô tiến trình mục tiêu, các ô địa chỉ và cổng trong {{app.frames.destination}} và
+  {{app.frames.block}}, cùng hai ô kích thước dữ liệu. Trên dòng lệnh: <code>--target</code>,
+  <code>--dst-ip</code>, <code>--dst-port</code>, <code>--block-ip</code>,
+  <code>--block-port</code>, <code>--payload-udp</code> và <code>--payload-tcp</code>. Ô để trống
+  nghĩa là tất cả.</p>
+</section>
+
+<section>
+  <h2>Các thành phần</h2>
+  <table>
+    <tr><th>Viết</th><th>Nghĩa là</th><th>Ví dụ</th></tr>
+    <tr><td><code>a,b,c</code></td><td>danh sách: khớp một mục bất kỳ là đủ</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>khoảng, tính cả hai đầu</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>so sánh, cho số và địa chỉ</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>loại cái này ra</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>ký tự đại diện: một chuỗi ký tự bất kỳ, hoặc một ký tự</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>biểu thức chính quy, không phân biệt hoa thường</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>khối CIDR, chỉ cho địa chỉ</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>Khoảng trắng quanh dấu phẩy bị bỏ qua, chỗ trống giữa hai dấu phẩy cũng vậy. Dấu
+  <code>!</code> mà phía sau không có gì là lỗi: <code data-kind="port-wrong">80,!</code> bị từ
+  chối.</p>
+</section>
+
+<section>
+  <h2>Các mục kết hợp với nhau thế nào</h2>
+  <p>Các mục không có <code>!</code> được cộng lại: một giá trị khớp khi khớp bất kỳ mục nào, hoặc
+  khi không có mục nào. Các mục có <code>!</code> sau đó trừ bớt. Thứ tự không quan trọng, nên
+  <code data-kind="port">80,!53</code> và <code data-kind="port">!53,80</code> là như nhau.</p>
+  <table>
+    <tr><th>Viết</th><th>Khớp với</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>chỉ cổng 443</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>mọi thứ trừ 53, vì không có gì để cộng</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>mọi thứ trừ 53 và 443</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>từ 1000 đến 2000, trừ 1500</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80, 443, từ 8000 đến 8100 và mọi thứ trên 9000, trừ 8080</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Chương trình</h2>
+  <p>Một mục là tên hoặc PID, và một ô có thể trộn cả hai. Tên thường khớp ở bất kỳ chỗ nào trong
+  tên chương trình, không phân biệt hoa thường, nên <code data-kind="process">chrome</code> bắt được
+  cả <code>chrome.exe</code> lẫn <code>chromedriver.exe</code>. Một số đơn lẻ, một khoảng hoặc một
+  phép so sánh là PID. Ký tự đại diện và <code>re:</code> khớp với tên. Phép so sánh trên tên, như
+  <code data-kind="process-wrong">&gt;chrome</code>, bị từ chối thay vì không khớp với gì.</p>
+  <table>
+    <tr><th>Viết</th><th>Khớp với</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>mọi chương trình có chrome.exe trong tên</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome, nhưng không phải chromedriver</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>hai chương trình cùng lúc</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>một PID</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>mọi PID trong khoảng đó</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>tên bắt đầu bằng firefox</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>đúng chrome.exe hoặc firefox.exe</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>một tên và một PID trong cùng một ô</td></tr>
+  </table>
+  <p>Gói tin mang địa chỉ và cổng, không bao giờ mang tên chương trình, nên công cụ tìm các cổng cục
+  bộ mà mỗi chương trình khớp đang giữ, nhắm vào chúng và theo dõi các kết nối mới mà nó mở. Một vài
+  cổng được nhiều chương trình dùng chung cùng lúc (mDNS 5353, SSDP 1900, DHCP 67 và 68). Trên các
+  cổng đó là tất cả hoặc không gì cả, và nhật ký cho biết là trường hợp nào.</p>
+</section>
+
+<section>
+  <h2>Địa chỉ</h2>
+  <p>IPv4 và IPv6 đều dùng được, và một ô có thể trộn cả hai: quy tắc cho một họ địa chỉ không bao
+  giờ khớp với địa chỉ của họ kia. Cách viết địa chỉ không quan trọng, nên
+  <code>2001:0db8:0000:0000:0000:0000:0000:0001</code> và <code>2001:db8::1</code> là cùng một địa
+  chỉ.</p>
+  <table>
+    <tr><th>Viết</th><th>Khớp với</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>hai địa chỉ</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>một khoảng có một lỗ hổng</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>cả một mạng con</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>cùng mạng con đó, bằng ký tự đại diện</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>mọi địa chỉ trừ 8.8.8.8</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>một mạng con IPv6</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>IPv4 và IPv6 trong cùng một ô</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Cổng</h2>
+  <p>Cổng đi từ 0 đến 65535; <code data-kind="port-wrong">99999</code> bị từ chối chứ không bị bỏ
+  qua. Các ô kích thước dữ liệu dùng cùng cú pháp, tính bằng byte dữ liệu.</p>
+  <table>
+    <tr><th>Viết</th><th>Khớp với</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>một khoảng, tính cả hai đầu</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>các cổng cao</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>các cổng đặc quyền</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>một tổ hợp</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Biểu thức chính quy</h2>
+  <p>Một mục chỉ là biểu thức chính quy khi có <code>re:</code> ở đầu, nên dấu chấm trong
+  <code>chrome.exe</code> vẫn là dấu chấm. Mẫu không phân biệt hoa thường và có thể khớp ở bất kỳ
+  đâu trong văn bản; dùng <code>^</code> và <code>$</code> để khớp toàn bộ. Dấu phẩy trong mẫu cần
+  một dấu gạch chéo ngược, vì dấu phẩy ngăn cách các mục:
+  <code data-kind="process">re:^ch.{1\,8}e\.exe$</code> dùng được. Không có dấu gạch chéo,
+  <code>re:^ch.{1,8}e\.exe$</code> bị cắt tại dấu phẩy thành hai mục, cả hai đều được nạp và khớp với
+  thứ khác.</p>
+  <p>Một phép lặp nằm trong phép lặp khác, như <code data-kind="process-wrong">re:^(\w+)+$</code>, bị
+  từ chối vì quá chậm: nó có thể mất vài giây với một cái tên gần khớp, mà địa chỉ thì được kiểm tra
+  ở mọi gói tin. Chỉ viết phép lặp một lần: <code data-kind="process">re:^\w+$</code>.</p>
+</section>
+
+<section>
+  <h2>Những chỗ dễ vấp</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> bắt được chromedriver, còn
+    <code data-kind="process">chrome.exe</code> thì không: tên thường là một phần của tên.</li>
+    <li><code data-kind="process">chrome*</code> cũng bắt được chromedriver. Để nhắm đúng một chương
+    trình, hãy viết <code data-kind="process">re:^chrome\.exe$</code>.</li>
+    <li><code data-kind="port">8*</code> trong ô cổng là ký tự đại diện trên các chữ số, nên nó bắt
+    8, 80, 8080 và 8443, nhưng không bắt 443. Hầu như lúc nào bạn cũng muốn một khoảng như
+    <code data-kind="port">8000-8999</code>.</li>
+    <li><code data-kind="port">!53</code> cũng bao gồm lưu lượng không có cổng nào, như ping, vì gói
+    ping không phải là cổng 53.</li>
+    <li>Địa chỉ và cổng đặt cùng lúc thì phải khớp cả hai. Muốn một trong hai, hãy chạy hai lần.</li>
+    <li><code data-kind="port-wrong">2000-1000</code>, một khoảng viết ngược, bị từ chối.</li>
+    <li>Ký tự đại diện không phải biểu thức chính quy: trong <code>re:chrome*</code> dấu sao lặp lại
+    chữ e.</li>
+  </ul>
+  <p>Mọi lỗi đều được báo ngay: ô trong cửa sổ chuyển sang màu đỏ với lý do bên dưới, còn dòng lệnh
+  dừng lại với một thông báo dễ đọc.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

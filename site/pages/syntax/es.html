@@ -1,0 +1,148 @@
+<section class="hero">
+  <h1>Sintaxis de filtros: nombres, PID, rangos IP, CIDR y puertos</h1>
+  <p class="lead">Un pequeño lenguaje apunta la herramienta a programas, direcciones y puertos.
+  Funciona igual en la ventana y en la línea de comandos, y cada ejemplo de esta página se comprueba
+  con el analizador del propio programa.</p>
+</section>
+
+<section>
+  <h2>Dónde se usa</h2>
+  <p>En la ventana: el campo del proceso objetivo, los campos de dirección y puerto en
+  {{app.frames.destination}} y en {{app.frames.block}}, y los dos campos de tamaño de datos. En la
+  línea de comandos: <code>--target</code>, <code>--dst-ip</code>, <code>--dst-port</code>,
+  <code>--block-ip</code>, <code>--block-port</code>, <code>--payload-udp</code> y
+  <code>--payload-tcp</code>. Un campo vacío significa todo.</p>
+</section>
+
+<section>
+  <h2>Las piezas</h2>
+  <table>
+    <tr><th>Escribe</th><th>Significa</th><th>Ejemplo</th></tr>
+    <tr><td><code>a,b,c</code></td><td>una lista: basta con uno</td><td><code data-kind="port">80,443</code></td></tr>
+    <tr><td><code>a-b</code></td><td>un rango, con ambos extremos</td><td><code data-kind="ip">10.0.0.1-10.0.0.50</code></td></tr>
+    <tr><td><code>&gt; &lt; &gt;= &lt;=</code></td><td>una comparación, para números y direcciones</td><td><code data-kind="port">&gt;1024</code></td></tr>
+    <tr><td><code>!</code></td><td>deja esto fuera</td><td><code data-kind="port">!53</code></td></tr>
+    <tr><td><code>* ?</code></td><td>un comodín: cualquier serie de caracteres, o uno solo</td><td><code data-kind="process">chrome*</code></td></tr>
+    <tr><td><code>re:</code></td><td>una expresión regular, sin distinguir mayúsculas</td><td><code data-kind="process">re:^chrome\.exe$</code></td></tr>
+    <tr><td><code>a.b.c.d/n</code></td><td>un bloque CIDR, solo para direcciones</td><td><code data-kind="ip">192.168.1.0/24</code></td></tr>
+  </table>
+  <p>Los espacios alrededor de las comas se ignoran, igual que un hueco vacío entre dos comas. Un
+  <code>!</code> sin nada detrás es un error: <code data-kind="port-wrong">80,!</code> se
+  rechaza.</p>
+</section>
+
+<section>
+  <h2>Cómo se combinan los términos</h2>
+  <p>Los términos sin <code>!</code> se suman: un valor coincide si coincide alguno de ellos, o si
+  no hay ninguno. Los términos con <code>!</code> restan después. El orden no importa, así que
+  <code data-kind="port">80,!53</code> y <code data-kind="port">!53,80</code> son lo mismo.</p>
+  <table>
+    <tr><th>Escribe</th><th>Coincide con</th></tr>
+    <tr><td><code data-kind="port">443</code></td><td>solo el puerto 443</td></tr>
+    <tr><td><code data-kind="port">!53</code></td><td>todo menos 53, porque no hay nada que sumar</td></tr>
+    <tr><td><code data-kind="port">!53,!443</code></td><td>todo menos 53 y 443</td></tr>
+    <tr><td><code data-kind="port">1000-2000,!1500</code></td><td>de 1000 a 2000, sin 1500</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,&gt;9000,!8080</code></td><td>80, 443, de 8000 a 8100 y todo por encima de 9000, menos 8080</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Programas</h2>
+  <p>Un término es un nombre o un PID, y un campo puede mezclarlos. Un nombre simple coincide en
+  cualquier parte del nombre del programa, sin distinguir mayúsculas, así que
+  <code data-kind="process">chrome</code> atrapa <code>chrome.exe</code> y
+  <code>chromedriver.exe</code>. Un número solo, un rango o una comparación es un PID. Los comodines
+  y <code>re:</code> se aplican al nombre. Una comparación sobre un nombre, como
+  <code data-kind="process-wrong">&gt;chrome</code>, se rechaza en lugar de no coincidir con
+  nada.</p>
+  <table>
+    <tr><th>Escribe</th><th>Coincide con</th></tr>
+    <tr><td><code data-kind="process">chrome.exe</code></td><td>todo programa con chrome.exe en el nombre</td></tr>
+    <tr><td><code data-kind="process">chrome,!chromedriver</code></td><td>Chrome, pero no chromedriver</td></tr>
+    <tr><td><code data-kind="process">chrome.exe,firefox.exe</code></td><td>dos programas a la vez</td></tr>
+    <tr><td><code data-kind="process">12345</code></td><td>un PID</td></tr>
+    <tr><td><code data-kind="process">1000-2000</code></td><td>todos los PID de ese rango</td></tr>
+    <tr><td><code data-kind="process">firefox*</code></td><td>un nombre que empieza por firefox</td></tr>
+    <tr><td><code data-kind="process">re:^(chrome|firefox)\.exe$</code></td><td>exactamente chrome.exe o firefox.exe</td></tr>
+    <tr><td><code data-kind="process">firefox,12345</code></td><td>un nombre y un PID en el mismo campo</td></tr>
+  </table>
+  <p>Un paquete lleva direcciones y puertos, nunca el nombre de un programa, así que la herramienta
+  busca los puertos locales que ocupa cada programa que coincide, apunta a ellos y sigue las nuevas
+  conexiones que abre. Unos pocos puertos los comparten varios programas a la vez (mDNS 5353, SSDP
+  1900, DHCP 67 y 68). En ellos es todo o nada, y el registro dice cuál de los dos.</p>
+</section>
+
+<section>
+  <h2>Direcciones</h2>
+  <p>Funcionan IPv4 e IPv6, y un campo puede mezclarlas: una regla de una familia nunca coincide con
+  una dirección de la otra. Da igual cómo se escriba una dirección, así que
+  <code>2001:0db8:0000:0000:0000:0000:0000:0001</code> y <code>2001:db8::1</code> son la misma
+  dirección.</p>
+  <table>
+    <tr><th>Escribe</th><th>Coincide con</th></tr>
+    <tr><td><code data-kind="ip">1.2.3.4,8.8.8.8</code></td><td>dos direcciones</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.1-10.0.0.50,!10.0.0.7</code></td><td>un rango con un hueco</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.0/24</code></td><td>una subred entera</td></tr>
+    <tr><td><code data-kind="ip">192.168.1.*</code></td><td>la misma subred, con comodín</td></tr>
+    <tr><td><code data-kind="ip">!8.8.8.8</code></td><td>todas las direcciones menos 8.8.8.8</td></tr>
+    <tr><td><code data-kind="ip">2001:db8::/32</code></td><td>una subred IPv6</td></tr>
+    <tr><td><code data-kind="ip">10.0.0.0/8,2001:db8::/32</code></td><td>IPv4 e IPv6 en el mismo campo</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Puertos</h2>
+  <p>Los puertos van de 0 a 65535; <code data-kind="port-wrong">99999</code> se rechaza en vez de
+  saltarse. Los campos de tamaño de datos usan la misma sintaxis, contada en bytes de datos.</p>
+  <table>
+    <tr><th>Escribe</th><th>Coincide con</th></tr>
+    <tr><td><code data-kind="port">8000-8100</code></td><td>un rango, con ambos extremos</td></tr>
+    <tr><td><code data-kind="port">&gt;1024</code></td><td>los puertos altos</td></tr>
+    <tr><td><code data-kind="port">&lt;=1024</code></td><td>los puertos privilegiados</td></tr>
+    <tr><td><code data-kind="port">80,443,8000-8100,!8080</code></td><td>una mezcla</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>Expresiones regulares</h2>
+  <p>Un término solo es una expresión regular con <code>re:</code> delante, así que un punto en
+  <code>chrome.exe</code> sigue siendo un punto. El patrón no distingue mayúsculas y puede coincidir
+  en cualquier parte del texto; usa <code>^</code> y <code>$</code> para que coincida con todo. Una
+  coma dentro de un patrón necesita una barra invertida, porque la coma separa términos:
+  <code data-kind="process">re:^ch.{1\,8}e\.exe$</code> funciona. Sin la barra,
+  <code>re:^ch.{1,8}e\.exe$</code> se corta en la coma en dos términos que se cargan los dos y
+  coinciden con otra cosa.</p>
+  <p>Una repetición dentro de otra, como <code data-kind="process-wrong">re:^(\w+)+$</code>, se
+  rechaza por demasiado lenta: puede tardar segundos con un solo nombre que casi coincide, y una
+  dirección se comprueba en cada paquete. Escribe la repetición una vez:
+  <code data-kind="process">re:^\w+$</code>.</p>
+</section>
+
+<section>
+  <h2>Trampas habituales</h2>
+  <ul>
+    <li><code data-kind="process">chrome</code> atrapa chromedriver, y
+    <code data-kind="process">chrome.exe</code> no: un nombre simple es un trozo del nombre.</li>
+    <li><code data-kind="process">chrome*</code> también atrapa chromedriver. Para un solo programa
+    exacto, escribe <code data-kind="process">re:^chrome\.exe$</code>.</li>
+    <li><code data-kind="port">8*</code> en un campo de puerto es un comodín sobre las cifras, así
+    que atrapa 8, 80, 8080 y 8443, pero no 443. Casi siempre querías un rango como
+    <code data-kind="port">8000-8999</code>.</li>
+    <li><code data-kind="port">!53</code> también cubre el tráfico sin puerto, como el ping, porque
+    un paquete de ping no es el puerto 53.</li>
+    <li>Una dirección y un puerto puestos a la vez tienen que coincidir los dos. Para uno u otro, haz
+    dos ejecuciones.</li>
+    <li><code data-kind="port-wrong">2000-1000</code>, un rango escrito al revés, se rechaza.</li>
+    <li>Un comodín no es una expresión regular: en <code>re:chrome*</code> la estrella repite la
+    letra e.</li>
+  </ul>
+  <p>Cada error se avisa al momento: el campo de la ventana se pone rojo con el motivo debajo, y la
+  línea de comandos termina con un mensaje legible.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
