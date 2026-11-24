@@ -57,11 +57,24 @@
     capturing traffic needs them.</li>
     <li>Pick a ready profile such as "{{app.presets.3g}}", press START, and use your app.</li>
   </ol>
+  <p>On Linux it runs too, as an experiment, from a .tar.gz package. <a href="simulate-network-on-linux/">Bad network on Linux</a> says what it needs and what works differently there.</p>
   <p>There is a text mode in the same file, so the whole thing also runs in a pipeline.
   One command is enough to check that your service survives 10 percent packet loss:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>It stops on its own when the time is up, so a step that hangs cannot leave a broken network
   behind it. Add <code>--simulate</code> to rehearse a command without touching real traffic.</p>
+</section>
+
+<section>
+  <h2>Network tools in the same window</h2>
+  <p>The {{app.app.tabs.tools}} tab answers the questions that come before and after a test, with no second program to install:</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong>: <a href="continuous-ping/">a continuous ping</a> with a chart, jitter and packet loss.</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong>: <a href="port-scanner/">a TCP and UDP port scanner</a> for another computer.</li>
+    <li><strong>{{app.tools.nat.tab}}</strong>: <a href="nat-type-test/">a NAT type test</a>, and a check of the TURN server your calls use.</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong> and <strong>{{app.tools.portcheck.tab}}</strong>: <a href="which-program-uses-a-port/">which program holds a port</a> on this computer, and whether a port is free.</li>
+  </ul>
+  <p>Coming from another tool? See the pages on <a href="clumsy-alternative/">Clumsy</a>, <a href="netem-for-windows/">netem</a> and <a href="newt-alternative/">NEWT</a>.</p>
 </section>
 
 <section>

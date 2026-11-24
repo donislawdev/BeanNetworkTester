@@ -53,9 +53,22 @@
     <li>Pornește <code>BeanNetworkTester.exe</code>. Cere singur drepturile de administrator, pentru că captura traficului are nevoie de ele.</li>
     <li>Alege un profil gata făcut, precum „{{app.presets.3g}}”, apasă {{app.buttons.start}} și folosește-ți aplicația.</li>
   </ol>
+  <p>Rulează și pe Linux, experimental, dintr-un pachet .tar.gz. Pagina <a href="simulare-retea-pe-linux/">Rețea proastă pe Linux</a> spune de ce are nevoie și ce e diferit acolo.</p>
   <p>Există un mod text în același fișier, deci totul merge și într-un pipeline. O singură comandă ajunge ca să verifici dacă serviciul tău rezistă la 10% pierdere de pachete:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>Se oprește singur când se scurge timpul, deci un pas care se blochează nu poate lăsa în urmă o rețea stricată. Adaugă <code>--simulate</code> ca să repeți o comandă fără să atingi traficul real.</p>
+</section>
+
+<section>
+  <h2>Instrumente de rețea în aceeași fereastră</h2>
+  <p>Fila {{app.app.tabs.tools}} răspunde la întrebările de dinainte și de după un test, fără să instalezi un al doilea program:</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong>: un <a href="ping-continuu/">ping continuu</a> cu grafic, jitter și pierdere de pachete.</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong>: un <a href="scanner-de-porturi/">scanner de porturi TCP și UDP</a> pentru alt computer.</li>
+    <li><strong>{{app.tools.nat.tab}}</strong>: un <a href="test-tip-nat/">test al tipului de NAT</a> și o verificare a serverului TURN folosit de apelurile tale.</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong> și <strong>{{app.tools.portcheck.tab}}</strong>: <a href="ce-program-foloseste-un-port/">ce program ține un port</a> pe acest computer și dacă un port e liber.</li>
+  </ul>
+  <p>Vii de la alt instrument? Vezi paginile despre <a href="alternativa-clumsy/">Clumsy</a>, <a href="netem-pentru-windows/">netem</a> și <a href="alternativa-newt/">NEWT</a>.</p>
 </section>
 
 <section>

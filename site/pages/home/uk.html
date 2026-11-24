@@ -53,9 +53,22 @@
     <li>Запустіть <code>BeanNetworkTester.exe</code>. Він сам просить права адміністратора, бо для перехоплення трафіку вони потрібні.</li>
     <li>Оберіть готовий профіль, наприклад «{{app.presets.3g}}», натисніть {{app.buttons.start}} і користуйтеся своїм застосунком.</li>
   </ol>
+  <p>У Linux він теж працює, експериментально, з пакета .tar.gz. На сторінці <a href="symulyaciya-merezhi-v-linux/">Погана мережа в Linux</a> сказано, що йому потрібно і що там працює інакше.</p>
   <p>У тому самому файлі є текстовий режим, тож усе це працює і в pipeline. Однієї команди досить, щоб перевірити, чи витримує ваша служба 10 % втрати пакетів:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>Він сам зупиняється, коли час спливає, тож крок, що завис, не залишить по собі зламану мережу. Додайте <code>--simulate</code>, щоб прогнати команду, не чіпаючи справжній трафік.</p>
+</section>
+
+<section>
+  <h2>Мережеві інструменти в тому самому вікні</h2>
+  <p>Вкладка {{app.app.tabs.tools}} відповідає на питання, що виникають до і після тесту, без встановлення другої програми:</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong>: <a href="bezperervnyi-ping/">безперервний пінг</a> із графіком, джитером і втратою пакетів.</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong>: <a href="skaner-portiv/">сканер портів TCP і UDP</a> для іншого комп’ютера.</li>
+    <li><strong>{{app.tools.nat.tab}}</strong>: <a href="test-typu-nat/">тест типу NAT</a> і перевірка TURN-сервера, через який ідуть ваші дзвінки.</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong> і <strong>{{app.tools.portcheck.tab}}</strong>: <a href="yaka-prohrama-vykorystovuye-port/">яка програма тримає порт</a> на цьому комп’ютері і чи вільний порт.</li>
+  </ul>
+  <p>Переходите з іншого інструмента? Загляньте на сторінки про <a href="alternatyva-clumsy/">Clumsy</a>, <a href="netem-dlya-windows/">netem</a> і <a href="alternatyva-newt/">NEWT</a>.</p>
 </section>
 
 <section>

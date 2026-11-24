@@ -53,9 +53,22 @@
     <li>Inicia <code>BeanNetworkTester.exe</code>. Pide por sí mismo permisos de administrador, porque capturar el tráfico los necesita.</li>
     <li>Elige un perfil listo para usar, como «{{app.presets.3g}}», pulsa {{app.buttons.start}} y usa tu aplicación.</li>
   </ol>
+  <p>También funciona en Linux, de forma experimental, desde un paquete .tar.gz. <a href="simular-red-en-linux/">Mala red en Linux</a> explica qué necesita y qué cambia allí.</p>
   <p>Hay un modo de texto en el mismo archivo, así que todo también funciona en un pipeline. Un solo comando basta para comprobar que tu servicio sobrevive a un 10 % de pérdida de paquetes:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>Se detiene solo cuando se acaba el tiempo, así que un paso que se cuelga no puede dejar tras de sí una red rota. Añade <code>--simulate</code> para ensayar un comando sin tocar el tráfico real.</p>
+</section>
+
+<section>
+  <h2>Herramientas de red en la misma ventana</h2>
+  <p>La pestaña {{app.app.tabs.tools}} responde a las preguntas de antes y después de una prueba, sin instalar un segundo programa:</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong>: un <a href="ping-continuo/">ping continuo</a> con gráfico, jitter y pérdida de paquetes.</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong>: un <a href="escaner-de-puertos/">escáner de puertos TCP y UDP</a> para otro equipo.</li>
+    <li><strong>{{app.tools.nat.tab}}</strong>: una <a href="prueba-tipo-nat/">prueba del tipo de NAT</a> y una comprobación del servidor TURN de tus llamadas.</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong> y <strong>{{app.tools.portcheck.tab}}</strong>: <a href="que-programa-usa-un-puerto/">qué programa ocupa un puerto</a> en este equipo, y si un puerto está libre.</li>
+  </ul>
+  <p>¿Vienes de otra herramienta? Mira las páginas sobre <a href="alternativa-a-clumsy/">Clumsy</a>, <a href="netem-para-windows/">netem</a> y <a href="alternativa-a-newt/">NEWT</a>.</p>
 </section>
 
 <section>

@@ -61,11 +61,24 @@
     przechwytywanie ruchu ich wymaga.</li>
     <li>Wybierz gotowy profil, na przykład "{{app.presets.3g}}", wciśnij START i korzystaj z aplikacji.</li>
   </ol>
+  <p>Na Linuksie też działa, eksperymentalnie, z paczki .tar.gz. Strona <a href="symulacja-sieci-w-linuksie/">Zła sieć w Linuksie</a> mówi, czego potrzebuje i co tam działa inaczej.</p>
   <p>W tym samym pliku jest tryb tekstowy, więc całość działa też w pipeline. Jedna komenda
   wystarczy, żeby sprawdzić, czy Twoja usługa przetrwa 10 procent utraty pakietów:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>Zatrzyma się sam po zadanym czasie, więc zawieszony krok nie zostawi po sobie zepsutej sieci.
   Dopisz <code>--simulate</code>, żeby przećwiczyć komendę bez ruszania prawdziwego ruchu.</p>
+</section>
+
+<section>
+  <h2>Narzędzia sieciowe w tym samym oknie</h2>
+  <p>Karta {{app.app.tabs.tools}} odpowiada na pytania, które padają przed testem i po nim, bez instalowania drugiego programu:</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong>: <a href="ciagly-ping/">ciągły ping</a> z wykresem, wahaniami opóźnienia i utratą pakietów.</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong>: <a href="skaner-portow/">skaner portów TCP i UDP</a> innego komputera.</li>
+    <li><strong>{{app.tools.nat.tab}}</strong>: <a href="test-typu-nat/">test typu NAT</a> i sprawdzenie serwera TURN, z którego korzystają Twoje rozmowy.</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong> i <strong>{{app.tools.portcheck.tab}}</strong>: <a href="ktory-program-uzywa-portu/">który program trzyma port</a> na tym komputerze i czy port jest wolny.</li>
+  </ul>
+  <p>Znasz inne narzędzie? Zajrzyj na strony o <a href="alternatywa-dla-clumsy/">Clumsy</a>, <a href="netem-dla-windows/">netem</a> i <a href="alternatywa-dla-newt/">NEWT</a>.</p>
 </section>
 
 <section>

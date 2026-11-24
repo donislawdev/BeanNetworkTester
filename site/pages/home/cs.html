@@ -53,9 +53,22 @@
     <li>Spusťte <code>BeanNetworkTester.exe</code>. Práva správce si vyžádá sám, protože je zachytávání provozu potřebuje.</li>
     <li>Vyberte hotový profil, například „{{app.presets.3g}}“, stiskněte {{app.buttons.start}} a používejte svou aplikaci.</li>
   </ol>
+  <p>Běží i v Linuxu, experimentálně, z balíčku .tar.gz. Stránka <a href="simulace-site-v-linuxu/">Špatná síť v Linuxu</a> říká, co potřebuje a co je tam jinak.</p>
   <p>Ve stejném souboru je textový režim, takže celé to běží i v pipeline. Stačí jediný příkaz, abyste ověřili, že vaše služba přežije 10 % ztrátu paketů:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>Po uplynutí času se sám zastaví, takže krok, který se zasekne, za sebou nemůže nechat rozbitou síť. Přidejte <code>--simulate</code>, abyste si příkaz vyzkoušeli bez zásahu do skutečného provozu.</p>
+</section>
+
+<section>
+  <h2>Síťové nástroje ve stejném okně</h2>
+  <p>Karta {{app.app.tabs.tools}} odpovídá na otázky, které přicházejí před testem a po něm, bez instalace dalšího programu:</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong>: <a href="neprerusovany-ping/">nepřerušovaný ping</a> s grafem, jitterem a ztrátou paketů.</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong>: <a href="skener-portu/">skener portů TCP a UDP</a> pro jiný počítač.</li>
+    <li><strong>{{app.tools.nat.tab}}</strong>: <a href="test-typu-nat/">test typu NAT</a> a kontrola serveru TURN, přes který jdou vaše hovory.</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong> a <strong>{{app.tools.portcheck.tab}}</strong>: <a href="ktery-program-pouziva-port/">který program drží port</a> na tomto počítači a jestli je port volný.</li>
+  </ul>
+  <p>Přecházíte z jiného nástroje? Podívejte se na stránky o <a href="alternativa-ke-clumsy/">Clumsy</a>, <a href="netem-pro-windows/">netem</a> a <a href="alternativa-k-newt/">NEWT</a>.</p>
 </section>
 
 <section>

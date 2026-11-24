@@ -53,9 +53,22 @@
     <li>启动 <code>BeanNetworkTester.exe</code>。它会自行请求管理员权限，因为捕获流量需要这些权限。</li>
     <li>选择一个现成的配置方案，例如“{{app.presets.3g}}”，点击 {{app.buttons.start}}，然后使用你的应用。</li>
   </ol>
+  <p>它也能在 Linux 上运行，属于实验性支持，使用 .tar.gz 包。<a href="linux-ruowang-moni/">Linux 上的弱网</a>一页说明了它需要什么，以及那里有哪些不同。</p>
   <p>同一个文件里还有文本模式，所以整个流程也能在流水线中运行。只需一条命令，就能检查你的服务能否扛住 10% 的丢包：</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>时间一到它会自行停止，因此卡住的步骤不会留下一个被破坏的网络。加上 <code>--simulate</code> 可以演练命令，而不触碰真实流量。</p>
+</section>
+
+<section>
+  <h2>同一窗口里的网络工具</h2>
+  <p>{{app.app.tabs.tools}} 标签页回答测试前后会遇到的问题，无需再安装第二个程序：</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong>：带图表、抖动和丢包统计的<a href="chixu-ping/">持续 ping</a>。</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong>：针对另一台电脑的 <a href="duankou-saomiao/">TCP 和 UDP 端口扫描</a>。</li>
+    <li><strong>{{app.tools.nat.tab}}</strong>：<a href="nat-leixing-ceshi/">NAT 类型测试</a>，以及通话所用 TURN 服务器的检查。</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong> 和 <strong>{{app.tools.portcheck.tab}}</strong>：这台电脑上<a href="nage-chengxu-zhanyong-duankou/">哪个程序占用端口</a>，以及端口是否空闲。</li>
+  </ul>
+  <p>从别的工具转过来？请看 <a href="clumsy-tidai-fangan/">Clumsy</a>、<a href="netem-zai-windows-shang/">netem</a> 和 <a href="newt-tidai-fangan/">NEWT</a> 的页面。</p>
 </section>
 
 <section>

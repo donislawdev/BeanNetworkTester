@@ -53,9 +53,22 @@
     <li>Lancez <code>BeanNetworkTester.exe</code>. Il demande lui-même les droits d’administrateur, car la capture du trafic en a besoin.</li>
     <li>Choisissez un profil prêt à l’emploi comme « {{app.presets.3g}} », appuyez sur {{app.buttons.start}} et utilisez votre application.</li>
   </ol>
+  <p>Il tourne aussi sous Linux, à titre expérimental, depuis un paquet .tar.gz. <a href="simuler-un-reseau-sous-linux/">Mauvais réseau sous Linux</a> dit ce qu’il lui faut et ce qui change là-bas.</p>
   <p>Le même fichier propose un mode texte : l’ensemble fonctionne donc aussi dans un pipeline. Une seule commande suffit pour vérifier que votre service résiste à 10 % de perte de paquets :</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>Il s’arrête tout seul quand le temps est écoulé, si bien qu’une étape bloquée ne peut pas laisser derrière elle un réseau cassé. Ajoutez <code>--simulate</code> pour répéter une commande sans toucher au trafic réel.</p>
+</section>
+
+<section>
+  <h2>Des outils réseau dans la même fenêtre</h2>
+  <p>L’onglet {{app.app.tabs.tools}} répond aux questions qui viennent avant et après un test, sans second programme à installer :</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong> : un <a href="ping-continu/">ping continu</a> avec graphique, gigue et perte de paquets.</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong> : un <a href="scanner-de-ports/">scanner de ports TCP et UDP</a> pour un autre ordinateur.</li>
+    <li><strong>{{app.tools.nat.tab}}</strong> : un <a href="test-type-nat/">test du type de NAT</a> et une vérification du serveur TURN de vos appels.</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong> et <strong>{{app.tools.portcheck.tab}}</strong> : <a href="quel-programme-utilise-un-port/">quel programme tient un port</a> sur cet ordinateur, et si un port est libre.</li>
+  </ul>
+  <p>Vous venez d’un autre outil ? Voyez les pages sur <a href="alternative-a-clumsy/">Clumsy</a>, <a href="netem-pour-windows/">netem</a> et <a href="alternative-a-newt/">NEWT</a>.</p>
 </section>
 
 <section>

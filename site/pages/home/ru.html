@@ -53,9 +53,22 @@
     <li>Запустите <code>BeanNetworkTester.exe</code>. Он сам запрашивает права администратора, потому что для перехвата трафика они нужны.</li>
     <li>Выберите готовый профиль, например «{{app.presets.3g}}», нажмите {{app.buttons.start}} и пользуйтесь приложением.</li>
   </ol>
+  <p>В Linux она тоже работает, экспериментально, из пакета .tar.gz. На странице <a href="simulyaciya-seti-v-linux/">Плохая сеть в Linux</a> сказано, что ей нужно и что там работает иначе.</p>
   <p>В том же файле есть текстовый режим, так что всё это работает и в пайплайне. Одной команды достаточно, чтобы проверить, переживёт ли ваш сервис 10 % потери пакетов:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>Он останавливается сам, когда время вышло, поэтому зависший шаг не оставит после себя сломанную сеть. Добавьте <code>--simulate</code>, чтобы прорепетировать команду, не трогая реальный трафик.</p>
+</section>
+
+<section>
+  <h2>Сетевые инструменты в том же окне</h2>
+  <p>Вкладка {{app.app.tabs.tools}} отвечает на вопросы, которые возникают до и после теста, без установки второй программы:</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong>: <a href="nepreryvnyj-ping/">непрерывный пинг</a> с графиком, джиттером и потерей пакетов.</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong>: <a href="skaner-portov/">сканер портов TCP и UDP</a> для другого компьютера.</li>
+    <li><strong>{{app.tools.nat.tab}}</strong>: <a href="test-tipa-nat/">тест типа NAT</a> и проверка TURN-сервера, через который идут ваши звонки.</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong> и <strong>{{app.tools.portcheck.tab}}</strong>: <a href="kakaya-programma-zanimaet-port/">какая программа занимает порт</a> на этом компьютере и свободен ли порт.</li>
+  </ul>
+  <p>Переходите с другого инструмента? Загляните на страницы про <a href="alternativa-clumsy/">Clumsy</a>, <a href="netem-dlya-windows/">netem</a> и <a href="alternativa-newt/">NEWT</a>.</p>
 </section>
 
 <section>

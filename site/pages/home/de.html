@@ -53,9 +53,22 @@
     <li>Starte <code>BeanNetworkTester.exe</code>. Es fragt selbst nach Administratorrechten, weil das Abfangen von Datenverkehr sie braucht.</li>
     <li>Wähle ein fertiges Profil wie „{{app.presets.3g}}“, drücke {{app.buttons.start}} und benutze deine App.</li>
   </ol>
+  <p>Unter Linux läuft es auch, als Experiment, aus einem .tar.gz-Paket. <a href="netzwerk-simulieren-unter-linux/">Schlechtes Netz unter Linux</a> sagt, was es dort braucht und was anders ist.</p>
   <p>Dieselbe Datei hat auch einen Textmodus, sodass das Ganze in einer Pipeline läuft. Ein einziger Befehl genügt, um zu prüfen, ob dein Dienst 10 % Paketverlust übersteht:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --target myapp.exe --duration 60</code></pre>
   <p>Es stoppt von selbst, wenn die Zeit abgelaufen ist, sodass ein hängender Schritt kein kaputtes Netzwerk hinterlassen kann. Mit <code>--simulate</code> probst du einen Befehl, ohne echten Datenverkehr anzufassen.</p>
+</section>
+
+<section>
+  <h2>Netzwerkwerkzeuge im selben Fenster</h2>
+  <p>Der Tab {{app.app.tabs.tools}} beantwortet die Fragen vor und nach einem Test, ohne dass du ein zweites Programm installierst:</p>
+  <ul>
+    <li><strong>{{app.tools.ping.tab}}</strong>: ein <a href="dauer-ping/">Dauer-Ping</a> mit Diagramm, Jitter und Paketverlust.</li>
+    <li><strong>{{app.tools.portscan.tab}}</strong>: ein <a href="portscanner/">TCP- und UDP-Portscanner</a> für einen anderen Computer.</li>
+    <li><strong>{{app.tools.nat.tab}}</strong>: ein <a href="nat-typ-testen/">NAT-Typ-Test</a> und eine Prüfung des TURN-Servers deiner Anrufe.</li>
+    <li><strong>{{app.tools.sockets.tab}}</strong> und <strong>{{app.tools.portcheck.tab}}</strong>: <a href="welches-programm-nutzt-den-port/">welches Programm einen Port belegt</a> auf diesem Computer, und ob ein Port frei ist.</li>
+  </ul>
+  <p>Du kommst von einem anderen Tool? Sieh dir die Seiten zu <a href="alternative-zu-clumsy/">Clumsy</a>, <a href="netem-fuer-windows/">netem</a> und <a href="alternative-zu-newt/">NEWT</a> an.</p>
 </section>
 
 <section>
