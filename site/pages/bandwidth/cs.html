@@ -40,6 +40,11 @@
   <p>Při běžícím limitu může čítač zahozených paketů zůstat na nule. Není to chyba: limit nejdřív nechá pakety čekat a zahodí je, teprve když je fronta opravdu plná. Dejte mu malý buffer a zahazování se objeví.</p>
 </section>
 
+<section>
+  <h2>Omezovač pro testy, ne správce šířky pásma</h2>
+  <p>NetLimiter a další správci šířky pásma drží limity pro vaše programy pořád, při běžném používání. Tento nástroj omezí jednu aplikaci jen po dobu testu: sám skončí, když vyprší čas, a stejný test může přidat i zbytek špatné sítě, například zpoždění, ztráty a výpadky. Pro trvalý limit u programu, který používáte každý den, je lepší volbou správce šířky pásma.</p>
+</section>
+
 <section class="closing">
   <h2>{{cta.closing}}</h2>
   <p class="actions">

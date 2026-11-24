@@ -5,133 +5,133 @@
     "en": {
       "slug": "bandwidth-limit",
       "link_text": "Speed limit",
-      "title": "Limit download and upload speed on Windows",
-      "description": "Throttle one Windows app to a set number of KB per second, in either direction, and see what a 56k modem or in-flight WiFi does to it."
+      "title": "Bandwidth limiter for one app on Windows 10 and 11",
+      "description": "A bandwidth limiter for one app on Windows 10 and 11: cap download and upload to a set KB per second and see what a 56k modem does to it."
     },
     "pl": {
       "slug": "limit-predkosci",
       "link_text": "Limit prędkości",
-      "title": "Limit prędkości pobierania i wysyłania aplikacji",
-      "description": "Dław jedną aplikację na Windows do zadanej liczby KB na sekundę, w wybranym kierunku, i sprawdź, co robi z nią modem 56k."
+      "title": "Ogranicznik prędkości dla jednej aplikacji w Windows 10 i 11",
+      "description": "Ogranicznik przepustowości dla jednej aplikacji w Windows 10 i 11: ustaw pobieranie i wysyłanie w KB/s i sprawdź, co robi z nią modem 56k."
     },
     "zh-Hans": {
       "slug": "xianzhi-wangsu",
-      "title": "在 Windows 上限制下载和上传速度",
-      "description": "把单个 Windows 应用限制在指定的每秒 KB 数，上下行可分别设置，看看 56k 调制解调器或机上 Wi-Fi 会对它造成什么影响。",
+      "title": "Windows 10 和 11 单个应用带宽限制器",
+      "description": "适用于 Windows 10 和 11 的单应用带宽限制器：把下载和上传限制在指定的每秒 KB 数，看看 56k 调制解调器会对它造成什么影响。",
       "link_text": "限速"
     },
     "ja": {
       "slug": "sokudo-seigen",
-      "title": "Windowsでダウンロードとアップロードの速度を制限",
-      "description": "Windowsの1つのアプリを毎秒のKB数で制限します。上りと下りは別々に設定でき、56kモデムや機内Wi-Fiのような環境を試せます。",
+      "title": "Windows 10と11でアプリ1つの帯域を制限するツール",
+      "description": "Windows 10と11で1つのアプリの帯域を制限するツール。ダウンロードとアップロードを毎秒のKB数で抑え、56kモデムの環境を試せます。",
       "link_text": "速度制限"
     },
     "de": {
       "slug": "geschwindigkeitslimit",
-      "title": "Download- und Upload-Tempo unter Windows begrenzen",
-      "description": "Drossle eine Windows-App auf eine feste Zahl KB pro Sekunde, getrennt für beide Richtungen, und sieh, was ein 56k-Modem oder WLAN im Flugzeug mit ihr macht.",
+      "title": "Bandbreitenbegrenzer für eine App unter Windows 10 und 11",
+      "description": "Ein Bandbreitenbegrenzer für eine App unter Windows 10 und 11: Download und Upload auf feste KB/s drosseln und sehen, was ein 56k-Modem mit ihr macht.",
       "link_text": "Geschwindigkeitslimit"
     },
     "fr": {
       "slug": "limite-de-debit",
-      "title": "Limiter le débit de téléchargement et d’envoi sous Windows",
-      "description": "Bridez une application Windows à un nombre fixe de KB/s, dans chaque sens, et voyez ce que lui font un modem 56k ou le Wi-Fi d’un avion.",
+      "title": "Limiteur de bande passante pour une app sous Windows 10 et 11",
+      "description": "Un limiteur de bande passante pour une application sous Windows 10 et 11 : bridez le débit en KB/s dans chaque sens et voyez l’effet d’un modem 56k.",
       "link_text": "Limite de débit"
     },
     "es": {
       "slug": "limite-de-velocidad",
-      "title": "Limita la velocidad de descarga y subida en Windows",
-      "description": "Limita una aplicación de Windows a un número fijo de KB/s, en cada sentido, y comprueba qué le hacen un módem de 56k o el Wi-Fi de un avión.",
+      "title": "Limitador de ancho de banda para una app en Windows 10 y 11",
+      "description": "Un limitador de ancho de banda para una app en Windows 10 y 11: fija la descarga y la subida en KB/s y mira qué le hace un módem de 56k.",
       "link_text": "Límite de velocidad"
     },
     "pt-BR": {
       "slug": "limite-de-velocidade",
-      "title": "Limite a velocidade de download e upload no Windows",
-      "description": "Limite um aplicativo do Windows a um número fixo de KB/s, em cada sentido, e veja o que um modem de 56k ou o Wi-Fi de um avião fazem com ele.",
+      "title": "Limitador de banda para um app no Windows 10 e 11",
+      "description": "Um limitador de banda para um app no Windows 10 e 11: fixe o download e o upload em KB/s e veja o que um modem de 56k faz com ele.",
       "link_text": "Limite de velocidade"
     },
     "it": {
       "slug": "limite-di-velocita",
-      "title": "Limita la velocità di download e upload su Windows",
-      "description": "Limita un’app Windows a un numero fisso di KB/s, in ciascuna direzione, e scopri cosa le fanno un modem a 56k o il Wi-Fi di un aereo.",
+      "title": "Limitatore di banda per una sola app su Windows 10 e 11",
+      "description": "Un limitatore di banda per una sola app su Windows 10 e 11: fissa download e upload in KB/s e scopri cosa le fa un modem a 56k.",
       "link_text": "Limite di velocità"
     },
     "id": {
       "slug": "batas-kecepatan",
-      "title": "Batasi kecepatan unduh dan unggah di Windows",
-      "description": "Batasi satu aplikasi Windows pada sejumlah KB/s tertentu, di tiap arah, dan lihat dampak modem 56k atau Wi-Fi pesawat terhadapnya.",
+      "title": "Pembatas bandwidth untuk satu aplikasi di Windows 10 dan 11",
+      "description": "Pembatas bandwidth untuk satu aplikasi di Windows 10 dan 11: atur unduh dan unggah dalam KB/s dan lihat dampak modem 56k terhadapnya.",
       "link_text": "Batas kecepatan"
     },
     "ru": {
       "slug": "ogranichenie-skorosti",
-      "title": "Ограничение скорости загрузки и отдачи в Windows",
-      "description": "Ограничьте приложение в Windows заданным числом КБ/с в каждом направлении и посмотрите, что с ним сделают модем 56k или Wi-Fi в самолёте.",
+      "title": "Ограничитель скорости для одного приложения в Windows 10 и 11",
+      "description": "Ограничитель скорости для одного приложения в Windows 10 и 11: задайте загрузку и отдачу в КБ/с и посмотрите, что с ним сделает модем 56k.",
       "link_text": "Ограничение скорости"
     },
     "tr": {
       "slug": "hiz-siniri",
-      "title": "Windows’ta indirme ve yükleme hızını sınırlayın",
-      "description": "Bir Windows uygulamasını her yönde saniyede belirli KB ile sınırlayın ve 56k modemin ya da uçak Wi-Fi’ının ona ne yaptığını görün.",
+      "title": "Windows 10 ve 11 için tek uygulamaya bant genişliği sınırlayıcı",
+      "description": "Windows 10 ve 11’de tek bir uygulama için bant genişliği sınırlayıcı: indirme ve yüklemeyi KB/s ile sınırlayın, 56k modemin ona ne yaptığını görün.",
       "link_text": "Hız sınırı"
     },
     "cs": {
       "slug": "omezeni-rychlosti",
-      "title": "Omezení rychlosti stahování a odesílání ve Windows",
-      "description": "Omezte jednu aplikaci ve Windows na zadaný počet KB za sekundu v obou směrech a zjistěte, co s ní udělá modem 56k nebo WiFi v letadle.",
+      "title": "Omezovač rychlosti pro jednu aplikaci ve Windows 10 a 11",
+      "description": "Omezovač rychlosti pro jednu aplikaci ve Windows 10 a 11: nastavte stahování a odesílání v KB/s a zjistěte, co s ní udělá modem 56k.",
       "link_text": "Omezení rychlosti"
     },
     "vi": {
       "slug": "gioi-han-toc-do",
-      "title": "Giới hạn tốc độ tải xuống và tải lên trên Windows",
-      "description": "Giới hạn một ứng dụng Windows ở số KB mỗi giây nhất định theo từng chiều, và xem modem 56k hay wifi trên máy bay làm gì với nó.",
+      "title": "Giới hạn băng thông cho một ứng dụng trên Windows 10 và 11",
+      "description": "Công cụ giới hạn băng thông cho một ứng dụng trên Windows 10 và 11: đặt tốc độ tải xuống và tải lên theo KB/s, rồi xem modem 56k làm gì với nó.",
       "link_text": "Giới hạn tốc độ"
     },
     "hi": {
       "slug": "speed-seema",
-      "title": "Windows पर डाउनलोड और अपलोड स्पीड सीमित करें",
-      "description": "किसी Windows ऐप को हर दिशा में तय KB प्रति सेकंड तक सीमित करें और देखें कि 56k मॉडेम या विमान का वाई-फ़ाई उसके साथ क्या करता है।",
+      "title": "Windows 10 और 11 पर एक ऐप के लिए बैंडविड्थ लिमिटर",
+      "description": "Windows 10 और 11 पर एक ऐप के लिए बैंडविड्थ लिमिटर: डाउनलोड और अपलोड को KB/s में सीमित करें और देखें कि 56k मॉडेम उसके साथ क्या करता है।",
       "link_text": "स्पीड सीमा"
     },
     "ko": {
       "slug": "sokdo-jehan",
-      "title": "Windows에서 다운로드와 업로드 속도 제한",
-      "description": "Windows 앱 하나의 방향별 속도를 초당 KB로 제한하고, 56k 모뎀이나 기내 와이파이가 앱에 미치는 영향을 확인하세요.",
+      "title": "Windows 10과 11에서 앱 하나의 대역폭 제한",
+      "description": "Windows 10과 11에서 앱 하나의 대역폭을 제한하는 도구입니다. 다운로드와 업로드를 초당 KB로 정하고 56k 모뎀이 앱에 미치는 영향을 확인하세요.",
       "link_text": "속도 제한"
     },
     "ar": {
       "slug": "taqyid-alsurea",
-      "title": "تحديد سرعة التنزيل والرفع على Windows",
-      "description": "حدّد تطبيقًا على Windows بعدد معين من كيلوبايت في الثانية في كل اتجاه، وانظر ماذا يفعل به مودم 56k أو واي فاي الطائرة.",
+      "title": "محدد عرض النطاق لتطبيق واحد على Windows 10 و11",
+      "description": "محدد عرض النطاق لتطبيق واحد على Windows 10 و11: اضبط سرعة التنزيل والرفع بالكيلوبايت في الثانية، وانظر ماذا يفعل به مودم 56k.",
       "link_text": "تحديد السرعة"
     },
     "ro": {
       "slug": "limitare-viteza",
-      "title": "Limitează viteza de descărcare și încărcare în Windows",
-      "description": "Limitează o aplicație Windows la un număr de KB pe secundă, în ambele sensuri, și vezi ce îi face un modem de 56k sau wifi-ul din avion.",
+      "title": "Limitator de bandă pentru o aplicație în Windows 10 și 11",
+      "description": "Un limitator de bandă pentru o aplicație în Windows 10 și 11: fixează descărcarea și încărcarea în KB/s și vezi ce îi face un modem de 56k.",
       "link_text": "Limitare viteză"
     },
     "nl": {
       "slug": "snelheidslimiet",
-      "title": "Download- en uploadsnelheid beperken op Windows",
-      "description": "Beperk één Windows-app tot een vast aantal KB per seconde, per richting, en zie wat een 56k-modem of vliegtuig-wifi ermee doet.",
+      "title": "Bandbreedtebegrenzer voor één app op Windows 10 en 11",
+      "description": "Een bandbreedtebegrenzer voor één app op Windows 10 en 11: zet download en upload op een vast aantal KB/s en zie wat een 56k-modem ermee doet.",
       "link_text": "Snelheidslimiet"
     },
     "zh-Hant": {
       "slug": "xianzhi-wangsu",
-      "title": "在 Windows 上限制下載和上傳速度",
-      "description": "把單一 Windows 應用限制在指定的每秒 KB 數，上下行可分別設定，看看 56k 數據機或機上 Wi-Fi 會對它造成什麼影響。",
+      "title": "Windows 10 和 11 單一應用頻寬限制器",
+      "description": "適用於 Windows 10 和 11 的單一應用頻寬限制器：把下載和上傳限制在指定的每秒 KB 數，看看 56k 數據機會對它造成什麼影響。",
       "link_text": "限速"
     },
     "uk": {
       "slug": "obmezhennya-shvydkosti",
-      "title": "Обмеження швидкості завантаження й вивантаження у Windows",
-      "description": "Обмежте застосунок у Windows заданою кількістю КБ за секунду в кожен бік і подивіться, що з ним робить модем 56k чи вайфай у літаку.",
+      "title": "Обмежувач швидкості для одного застосунку у Windows 10 і 11",
+      "description": "Обмежувач швидкості для одного застосунку у Windows 10 і 11: задайте завантаження й вивантаження в КБ/с і подивіться, що з ним робить модем 56k.",
       "link_text": "Обмеження швидкості"
     },
     "th": {
       "slug": "chamkat-khwamreo",
-      "title": "จำกัดความเร็วดาวน์โหลดและอัปโหลดบน Windows",
-      "description": "จำกัดแอปบน Windows ให้ได้ KB ต่อวินาทีตามที่ตั้งในแต่ละทิศทาง แล้วดูว่าโมเด็ม 56k หรือ Wi-Fi บนเครื่องบินทำอะไรกับแอป",
+      "title": "ตัวจำกัดแบนด์วิดท์สำหรับแอปเดียวบน Windows 10 และ 11",
+      "description": "ตัวจำกัดแบนด์วิดท์สำหรับแอปเดียวบน Windows 10 และ 11 ตั้งความเร็วดาวน์โหลดและอัปโหลดเป็น KB/s แล้วดูว่าโมเด็ม 56k ทำอะไรกับแอป",
       "link_text": "จำกัดความเร็ว"
     }
   }

@@ -40,6 +40,11 @@
   <p>Com um limite em execução, o contador de pacotes descartados pode ficar em zero. Isso não é um bug: um limite primeiro faz os pacotes esperarem e só os descarta quando a fila está realmente cheia. Dê a ele um buffer pequeno e os descartes aparecem.</p>
 </section>
 
+<section>
+  <h2>Um limitador para testes, não um gerenciador de banda</h2>
+  <p>O NetLimiter e outros gerenciadores de banda mantêm limites nos seus programas o tempo todo, no uso do dia a dia. Esta ferramenta limita um app só enquanto um teste roda: ela para sozinha quando o tempo acaba, e o mesmo teste pode adicionar o resto de uma rede ruim, como latência, perda e quedas. Para um limite permanente em um programa que você usa todo dia, um gerenciador de banda é a melhor escolha.</p>
+</section>
+
 <section class="closing">
   <h2>{{cta.closing}}</h2>
   <p class="actions">

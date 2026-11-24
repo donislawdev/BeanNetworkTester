@@ -40,6 +40,11 @@
   <p>Quand une limite est active, le compteur de paquets abandonnés peut rester à zéro. Ce n’est pas un bug : une limite fait d’abord attendre les paquets, et ne les abandonne que lorsque la file est vraiment pleine. Donnez-lui un petit tampon et les pertes apparaissent.</p>
 </section>
 
+<section>
+  <h2>Un limiteur pour les tests, pas un gestionnaire de bande passante</h2>
+  <p>NetLimiter et les autres gestionnaires de bande passante gardent des limites sur vos programmes en permanence, au quotidien. Cet outil limite une application le temps d’un test : il s’arrête tout seul quand le temps est écoulé, et le même test peut ajouter le reste d’un mauvais réseau, comme la latence, la perte et les coupures. Pour une limite durable sur un programme que vous utilisez chaque jour, un gestionnaire de bande passante est le meilleur choix.</p>
+</section>
+
 <section class="closing">
   <h2>{{cta.closing}}</h2>
   <p class="actions">

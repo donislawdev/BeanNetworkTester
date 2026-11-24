@@ -40,6 +40,11 @@
   <p>Saat batas berjalan, penghitung paket yang dibuang bisa tetap nol. Itu bukan bug: batas lebih dulu membuat paket menunggu, dan baru membuangnya saat antrean benar-benar penuh. Beri buffer kecil dan pembuangan akan muncul.</p>
 </section>
 
+<section>
+  <h2>Pembatas untuk pengujian, bukan pengelola bandwidth</h2>
+  <p>NetLimiter dan pengelola bandwidth lainnya menjaga batas pada program Anda sepanjang waktu, sebagai bagian dari pemakaian sehari-hari. Alat ini membatasi satu aplikasi hanya selama pengujian berjalan: alat ini berhenti sendiri saat waktunya habis, dan pengujian yang sama bisa menambahkan sisi lain dari jaringan buruk, seperti latensi, kehilangan paket, dan putus sambungan. Untuk batas tetap pada program yang Anda pakai setiap hari, pengelola bandwidth adalah pilihan yang lebih baik.</p>
+</section>
+
 <section class="closing">
   <h2>{{cta.closing}}</h2>
   <p class="actions">
