@@ -1,0 +1,83 @@
+<section class="hero">
+  <h1>在 Playwright 测试中模拟慢网络和丢包</h1>
+  <p class="lead">Playwright 可以让页面离线，也可以通过 DevTools 让 Chromium 变慢。npm 上的 <code>beannetworktester</code> 软件包则是在浏览器之下拖慢真实的网络：为测试所连接的服务器加入延迟、丢包、限速或完全断网。Chromium、Firefox 和 WebKit 以同样的方式变慢，WebSocket 也一样。软件包自带 Bean Network Tester 的程序，并在测试期间于 Windows 和 Linux 上运行它。从 1.1.0 起，每个稳定版本都会发布它。</p>
+</section>
+
+<section>
+  <h2>安装</h2>
+<pre><code>npm install -D @playwright/test beannetworktester
+npx playwright install chromium</code></pre>
+  <p>需要 Windows x64 或 Linux x64（glibc 2.39 或更新，例如 Ubuntu 24.04），以及 Node 20 或更新版本。npm 会把适合你系统的程序作为可选依赖安装，所以不要排除可选依赖。</p>
+  <p>在 Windows 上更改网络需要管理员权限：用“以管理员身份运行”打开终端。在 Linux 上需要 root，或可以免密码运行 <code>sudo</code> 的用户，这时只有程序在 <code>sudo</code> 下运行。GitHub 托管的 Windows 运行器以提升的权限运行，Ubuntu 运行器允许 <code>sudo</code>，所以工作流不需要额外步骤。</p>
+</section>
+
+<section>
+  <h2>在慢网络上的测试</h2>
+  <p>把它保存为 <code>tests/slow.spec.js</code>，然后运行 <code>npx playwright test</code>：</p>
+<pre><code>import http from 'node:http';
+import { test, expect } from 'beannetworktester/playwright';
+
+let server;
+test.beforeAll(async () =&gt; {
+  server = http.createServer((request, response) =&gt; response.end('&lt;h1&gt;Hello&lt;/h1&gt;'));
+  await new Promise((done) =&gt; server.listen(8000, done));
+});
+test.afterAll(() =&gt; server.close());
+
+test('a page takes longer on a slow network', async ({ page, badNetwork }) =&gt; {
+  await badNetwork({ server: 'http://localhost:8000', latency: 500 });
+  const started = Date.now();
+  await page.goto('http://localhost:8000');
+  await expect(page.locator('h1')).toHaveText('Hello');
+  expect(Date.now() - started).toBeGreaterThanOrEqual(500);
+});</code></pre>
+  <p>测试能通过，是因为页面确实来得更晚：进出该服务器的每个数据包都要等 500 ms。测试结束后，网络恢复正常。在 Windows 上用 <code>latency: 200</code> 实测：对目标服务器的请求从 0.8 ms 变为 404 ms，因为请求和回复都要等待；Chromium 中的页面从 13 ms 变为 416 ms。同时，目标之外的另一个本地服务器在 1.6 ms 内响应。</p>
+  <p>手头没有权限？<code>badNetwork({ simulate: true, latency: 500 })</code> 会用虚构的流量运行程序，不改变网络上的任何东西。它用来检查软件包是否装好，不会拖慢任何东西。</p>
+</section>
+
+<section>
+  <h2>badNetwork fixture</h2>
+  <p>从 <code>beannetworktester/playwright</code> 而不是 <code>@playwright/test</code> 导入 <code>test</code> 和 <code>expect</code>。调用 <code>badNetwork</code> 时会启动一个会话，网络变慢后即完成。无论测试通过、失败还是崩溃，会话都会在测试结束时停止，程序的摘要会以 <code>bad-network</code> 附在测试报告中。要在测试中途改变条件，请先停止第一个会话，再启动下一个：</p>
+<pre><code>test('the app recovers when the API comes back', async ({ page, badNetwork }) =&gt; {
+  const outage = await badNetwork({ server: 'http://localhost:8000', loss: 100 });
+  await page.goto('http://localhost:3000');
+  await expect(page.getByText('Offline')).toBeVisible();
+  await outage.stop();
+  await expect(page.getByText('Offline')).toBeHidden();
+});</code></pre>
+  <p>在 Playwright Test 之外，<code>require('beannetworktester')</code> 中的 <code>badNetwork</code> 会启动同样的会话：<code>const session = await badNetwork({ ... })</code>，而 <code>await session.stop()</code> 会结束它并返回摘要。</p>
+</section>
+
+<section>
+  <h2>会话针对什么</h2>
+  <p>每个会话都针对某个目标，只有这部分流量会改变。没有目标的会话会拖慢这台机器的所有连接，连测试运行器自己的连接也不例外，所以它不会启动。</p>
+  <ul>
+    <li><strong><code>server: 'http://localhost:3000'</code></strong> 会拖慢到该地址和端口的每个连接，无论来自浏览器、你的 API 服务器还是其他任何程序。<code>'db.local:5432'</code> 和服务器列表也可以。这是首选，在 Windows 和 Linux 上都很精确。</li>
+    <li><strong><code>process: 'self'</code></strong> 会拖慢测试 worker 以及它启动的每个程序，例如它的浏览器。测试自己启动的进程，以它的 <code>ChildProcess</code> 传入。</li>
+    <li><strong><code>dstPort</code>、<code>dstIp</code> 和 <code>target</code></strong> 是程序自己的目标，用<a href="../minglinghang/">它的语法</a>书写，适用于已知端口或地址上的 API。它们会作用于所有匹配的东西：<code>dstPort: 443</code> 是这台机器的每个 HTTPS 连接，包括你的编辑器的连接；<code>target: 'node'</code> 是名字里含有“node”的每个程序。</li>
+  </ul>
+  <p>同时给出的目标会相互收窄：<code>server</code> 加上 <code>process: 'self'</code>，只会拖慢这个 worker 到该服务器的连接。在 Linux 上，<code>process</code> 和 <code>target</code> 最多要在新连接打开约 0.2 秒后才生效，所以当第一个请求很重要时，请针对服务器。</p>
+</section>
+
+<section>
+  <h2>会话能做什么</h2>
+  <p>每个设置都是程序的一个<a href="../minglinghang/">命令行选项</a>。<code>latency: 300</code> 给每个数据包加 300 ms，<code>jitter: 100</code> 让这个延迟波动，<code>loss: 5</code> 丢弃 5 % 的数据包，<code>down</code> 和 <code>up</code> 以 KB/s 限制速度，<code>loss: 100</code> 则切断服务器。<code>preset: 'presets.3g'</code> 是一整套链路配置，<code>seed: 42</code> 让每次运行做出相同的随机选择。<a href="../dingshi-changjing/">场景</a>会随着秒数推移改变条件：<code>scenario: 'scenarios/cafe-wifi.json'</code>。场景中的步骤可以改变网络的表现，但不能改变会话针对的目标。</p>
+</section>
+
+<section>
+  <h2>并行 worker 与限制</h2>
+  <ul>
+    <li><strong>一次一个。</strong>同一流量上的两个会话会叠加，所以并行 worker 会轮流进行，每个最多等待 <code>wait</code> 秒（不另行指定时为 600）。同一测试中的第二个会话会被立即拒绝。</li>
+    <li><strong>随测试一起结束。</strong>如果测试 worker 崩溃，程序会察觉并立即停止。<code>duration</code>（不另行指定时为 300 秒）在任何情况下都是会话的最长运行时间。</li>
+    <li><strong>什么都没做时会告诉你。</strong>没有任何流量到达目标、因而什么也没拖慢的会话，会以 <code>BadNetworkWarning</code> 结束。常见原因是应用连接的地址不是目标，例如一个容器。</li>
+    <li><strong>macOS。</strong>程序在 Windows 和 Linux 上运行。在 Mac 上，请在 Linux x86_64 容器或虚拟机中，或在 CI 运行器上运行测试。</li>
+  </ul>
+  <p>软件包在 <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/npm/beannetworktester">GitHub</a> 上的 README 列出了每个选项，并解释了每条消息。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

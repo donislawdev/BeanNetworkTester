@@ -1,0 +1,83 @@
+<section class="hero">
+  <h1>Simula una red lenta y pérdida de paquetes en pruebas Playwright</h1>
+  <p class="lead">Playwright puede dejar una página sin conexión y ralentizar Chromium mediante DevTools. El paquete <code>beannetworktester</code> de npm ralentiza en cambio la red real, por debajo del navegador: latencia, pérdida de paquetes, un límite de velocidad o un corte total, para el servidor con el que habla tu prueba. Chromium, Firefox y WebKit se ralentizan igual, WebSockets incluidos. El paquete lleva el programa de Bean Network Tester y lo ejecuta mientras dura la prueba, en Windows y Linux. Se publica con cada versión estable a partir de la 1.1.0.</p>
+</section>
+
+<section>
+  <h2>Instalación</h2>
+<pre><code>npm install -D @playwright/test beannetworktester
+npx playwright install chromium</code></pre>
+  <p>Necesita Windows x64 o Linux x64 (glibc 2.39 o más reciente, como Ubuntu 24.04) y Node 20 o más reciente. npm instala el programa para tu sistema como dependencia opcional, así que no dejes fuera las dependencias opcionales.</p>
+  <p>Cambiar la red requiere derechos de administrador en Windows: abre la terminal con «Ejecutar como administrador». En Linux requiere root, o un usuario que pueda usar <code>sudo</code> sin contraseña, y entonces solo el programa corre con <code>sudo</code>. Los runners de Windows alojados por GitHub corren con privilegios elevados y sus runners de Ubuntu permiten <code>sudo</code>, así que un workflow no necesita ningún paso extra.</p>
+</section>
+
+<section>
+  <h2>Una prueba en una red lenta</h2>
+  <p>Guarda esto como <code>tests/slow.spec.js</code> y ejecuta <code>npx playwright test</code>:</p>
+<pre><code>import http from 'node:http';
+import { test, expect } from 'beannetworktester/playwright';
+
+let server;
+test.beforeAll(async () =&gt; {
+  server = http.createServer((request, response) =&gt; response.end('&lt;h1&gt;Hello&lt;/h1&gt;'));
+  await new Promise((done) =&gt; server.listen(8000, done));
+});
+test.afterAll(() =&gt; server.close());
+
+test('a page takes longer on a slow network', async ({ page, badNetwork }) =&gt; {
+  await badNetwork({ server: 'http://localhost:8000', latency: 500 });
+  const started = Date.now();
+  await page.goto('http://localhost:8000');
+  await expect(page.locator('h1')).toHaveText('Hello');
+  expect(Date.now() - started).toBeGreaterThanOrEqual(500);
+});</code></pre>
+  <p>La prueba pasa porque la página de verdad llega más tarde: cada paquete hacia ese servidor y desde él espera 500 ms. Cuando la prueba termina, la red vuelve a la normalidad. Medido en Windows con <code>latency: 200</code>: una petición al servidor del objetivo pasó de 0,8 ms a 404 ms, porque esperan tanto la petición como la respuesta, y una página en Chromium de 13 ms a 416 ms. Otro servidor local, fuera del objetivo, respondía mientras tanto en 1,6 ms.</p>
+  <p>¿No tienes los derechos a mano? <code>badNetwork({ simulate: true, latency: 500 })</code> ejecuta el programa con tráfico inventado y no cambia nada en la red. Comprueba que el paquete está bien instalado y no ralentiza nada.</p>
+</section>
+
+<section>
+  <h2>El fixture badNetwork</h2>
+  <p>Importa <code>test</code> y <code>expect</code> desde <code>beannetworktester/playwright</code> en lugar de <code>@playwright/test</code>. <code>badNetwork</code> inicia una sesión cuando lo llamas y se resuelve en cuanto la red está lenta. La sesión se detiene cuando termina la prueba, haya pasado, fallado o se haya caído, y el resumen del programa se adjunta al informe de la prueba como <code>bad-network</code>. Para cambiar las condiciones a mitad de la prueba, detén la primera sesión antes de iniciar la siguiente:</p>
+<pre><code>test('the app recovers when the API comes back', async ({ page, badNetwork }) =&gt; {
+  const outage = await badNetwork({ server: 'http://localhost:8000', loss: 100 });
+  await page.goto('http://localhost:3000');
+  await expect(page.getByText('Offline')).toBeVisible();
+  await outage.stop();
+  await expect(page.getByText('Offline')).toBeHidden();
+});</code></pre>
+  <p>Fuera de Playwright Test, <code>badNetwork</code> de <code>require('beannetworktester')</code> inicia la misma sesión: <code>const session = await badNetwork({ ... })</code>, y <code>await session.stop()</code> la termina y devuelve el resumen.</p>
+</section>
+
+<section>
+  <h2>A qué apunta una sesión</h2>
+  <p>Cada sesión apunta a algo, y solo ese tráfico cambia. Una sesión sin objetivo ralentizaría todas las conexiones de la máquina, incluidas las del propio ejecutor de pruebas, así que no arranca.</p>
+  <ul>
+    <li><strong><code>server: 'http://localhost:3000'</code></strong> ralentiza cada conexión a esa dirección y ese puerto, desde el navegador, desde tu servidor de API o desde cualquier otro programa. También sirven <code>'db.local:5432'</code> y una lista de servidores. Es la primera opción, y es exacta en Windows y Linux.</li>
+    <li><strong><code>process: 'self'</code></strong> ralentiza el worker de pruebas y cada programa que inició, como su navegador. Un proceso que tu prueba inició por su cuenta se pasa como su <code>ChildProcess</code>.</li>
+    <li><strong><code>dstPort</code>, <code>dstIp</code> y <code>target</code></strong> son los objetivos propios del programa, escritos en <a href="../linea-de-comandos/">su sintaxis</a>, para una API en un puerto o una dirección conocidos. Alcanzan todo lo que coincida: <code>dstPort: 443</code> es cada conexión HTTPS de la máquina, incluidas las de tu editor, y <code>target: 'node'</code> cada programa con «node» en el nombre.</li>
+  </ul>
+  <p>Los objetivos dados juntos se acotan entre sí: <code>server</code> con <code>process: 'self'</code> ralentiza solo las conexiones de este worker a ese servidor. En Linux, <code>process</code> y <code>target</code> alcanzan una conexión nueva hasta unos 0,2 segundos después de abrirse, así que apunta al servidor cuando cuenta la primera petición.</p>
+</section>
+
+<section>
+  <h2>Qué puede hacer una sesión</h2>
+  <p>Cada ajuste es una de las <a href="../linea-de-comandos/">opciones de línea de comandos</a> del programa. <code>latency: 300</code> añade 300 ms a cada paquete, <code>jitter: 100</code> hace variar ese retardo, <code>loss: 5</code> descarta el 5 % de los paquetes, <code>down</code> y <code>up</code> limitan la velocidad en KB/s, y <code>loss: 100</code> corta el servidor. <code>preset: 'presets.3g'</code> es un perfil de enlace completo, y <code>seed: 42</code> repite las mismas elecciones al azar en cada ejecución. Un <a href="../escenarios-en-el-tiempo/">escenario</a> cambia las condiciones a medida que pasan los segundos: <code>scenario: 'scenarios/cafe-wifi.json'</code>. Un paso del escenario puede cambiar cómo se comporta la red, pero no a qué apunta la sesión.</p>
+</section>
+
+<section>
+  <h2>Workers en paralelo y límites</h2>
+  <ul>
+    <li><strong>Una a la vez.</strong> Dos sesiones sobre el mismo tráfico se sumarían, así que los workers en paralelo se turnan, cada uno esperando hasta <code>wait</code> segundos (600 si no indicas otro valor). Una segunda sesión en la misma prueba se rechaza al instante.</li>
+    <li><strong>Termina con la prueba.</strong> Si el worker de pruebas muere, el programa lo nota y se detiene al instante. <code>duration</code> (300 segundos si no indicas otro valor) es en todo caso lo máximo que puede durar una sesión.</li>
+    <li><strong>Avisa cuando no hizo nada.</strong> Una sesión que no ralentizó nada, porque nada llegó a su objetivo, termina con un <code>BadNetworkWarning</code>. Lo habitual es que la aplicación hable con otra dirección distinta del objetivo, como un contenedor.</li>
+    <li><strong>macOS.</strong> El programa funciona en Windows y Linux. En un Mac, ejecuta las pruebas en un contenedor o una máquina virtual Linux x86_64, o en un runner de CI.</li>
+  </ul>
+  <p>El README del paquete en <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/npm/beannetworktester">GitHub</a> enumera cada opción y explica cada mensaje.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

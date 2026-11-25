@@ -1,0 +1,83 @@
+<section class="hero">
+  <h1>Simulează o rețea lentă și pierderi de pachete în Playwright</h1>
+  <p class="lead">Playwright poate scoate o pagină offline și poate încetini Chromium prin DevTools. Pachetul <code>beannetworktester</code> de pe npm încetinește în schimb rețeaua reală, sub browser: latență, pierderi de pachete, o limită de viteză sau o întrerupere totală, pentru serverul cu care vorbește testul tău. Chromium, Firefox și WebKit sunt încetinite la fel, inclusiv WebSocket-urile. Pachetul conține programul Bean Network Tester și îl rulează cât durează un test, pe Windows și Linux. Apare cu fiecare versiune stabilă începând cu 1.1.0.</p>
+</section>
+
+<section>
+  <h2>Instalare</h2>
+<pre><code>npm install -D @playwright/test beannetworktester
+npx playwright install chromium</code></pre>
+  <p>Are nevoie de Windows x64 sau Linux x64 (glibc 2.39 sau mai nou, de exemplu Ubuntu 24.04) și Node 20 sau mai nou. npm instalează programul pentru sistemul tău ca dependență opțională, deci nu lăsa deoparte dependențele opționale.</p>
+  <p>Schimbarea rețelei cere drepturi de administrator pe Windows: deschide terminalul cu „Executare ca administrator”. Pe Linux cere root sau un utilizator care poate rula <code>sudo</code> fără parolă, și atunci doar programul rulează cu <code>sudo</code>. Runnerele Windows găzduite de GitHub rulează cu drepturi ridicate, iar runnerele Ubuntu permit <code>sudo</code>, deci un workflow nu are nevoie de niciun pas în plus.</p>
+</section>
+
+<section>
+  <h2>Un test pe o rețea lentă</h2>
+  <p>Salvează asta ca <code>tests/slow.spec.js</code> și rulează <code>npx playwright test</code>:</p>
+<pre><code>import http from 'node:http';
+import { test, expect } from 'beannetworktester/playwright';
+
+let server;
+test.beforeAll(async () =&gt; {
+  server = http.createServer((request, response) =&gt; response.end('&lt;h1&gt;Hello&lt;/h1&gt;'));
+  await new Promise((done) =&gt; server.listen(8000, done));
+});
+test.afterAll(() =&gt; server.close());
+
+test('a page takes longer on a slow network', async ({ page, badNetwork }) =&gt; {
+  await badNetwork({ server: 'http://localhost:8000', latency: 500 });
+  const started = Date.now();
+  await page.goto('http://localhost:8000');
+  await expect(page.locator('h1')).toHaveText('Hello');
+  expect(Date.now() - started).toBeGreaterThanOrEqual(500);
+});</code></pre>
+  <p>Testul trece pentru că pagina chiar ajunge mai târziu: fiecare pachet spre acel server și dinspre el așteaptă 500 ms. Când testul se termină, rețeaua revine la normal. Măsurat pe Windows cu <code>latency: 200</code>: o cerere către serverul din țintă a crescut de la 0,8 ms la 404 ms, pentru că așteaptă și cererea, și răspunsul, iar o pagină în Chromium de la 13 ms la 416 ms. Un alt server local, în afara țintei, răspundea între timp în 1,6 ms.</p>
+  <p>Nu ai drepturile la îndemână? <code>badNetwork({ simulate: true, latency: 500 })</code> rulează programul pe trafic inventat și nu schimbă nimic în rețea. Verifică faptul că pachetul e instalat corect și nu încetinește nimic.</p>
+</section>
+
+<section>
+  <h2>Fixture-ul badNetwork</h2>
+  <p>Importă <code>test</code> și <code>expect</code> din <code>beannetworktester/playwright</code> în loc de <code>@playwright/test</code>. <code>badNetwork</code> pornește o sesiune când îl apelezi și se rezolvă imediat ce rețeaua e lentă. Sesiunea se oprește când testul se termină, fie că a trecut, a picat sau s-a prăbușit, iar rezumatul programului e atașat la raportul testului ca <code>bad-network</code>. Ca să schimbi condițiile la jumătatea testului, oprește prima sesiune înainte s-o pornești pe următoarea:</p>
+<pre><code>test('the app recovers when the API comes back', async ({ page, badNetwork }) =&gt; {
+  const outage = await badNetwork({ server: 'http://localhost:8000', loss: 100 });
+  await page.goto('http://localhost:3000');
+  await expect(page.getByText('Offline')).toBeVisible();
+  await outage.stop();
+  await expect(page.getByText('Offline')).toBeHidden();
+});</code></pre>
+  <p>În afara Playwright Test, <code>badNetwork</code> din <code>require('beannetworktester')</code> pornește aceeași sesiune: <code>const session = await badNetwork({ ... })</code>, iar <code>await session.stop()</code> o încheie și întoarce rezumatul.</p>
+</section>
+
+<section>
+  <h2>Spre ce țintește o sesiune</h2>
+  <p>Fiecare sesiune țintește ceva și doar acel trafic se schimbă. O sesiune fără țintă ar încetini fiecare conexiune a mașinii, inclusiv pe cele ale rulatorului de teste, așa că nu pornește.</p>
+  <ul>
+    <li><strong><code>server: 'http://localhost:3000'</code></strong> încetinește fiecare conexiune către acea adresă și acel port, din browser, din serverul tău de API sau din orice alt program. Merg și <code>'db.local:5432'</code> și o listă de servere. Aceasta e prima alegere și e exactă pe Windows și Linux.</li>
+    <li><strong><code>process: 'self'</code></strong> încetinește workerul de teste și fiecare program pornit de el, de exemplu browserul lui. Un proces pornit chiar de test se dă ca <code>ChildProcess</code>-ul lui.</li>
+    <li><strong><code>dstPort</code>, <code>dstIp</code> și <code>target</code></strong> sunt țintele proprii ale programului, scrise în <a href="../linia-de-comanda/">sintaxa lui</a>, pentru un API pe un port sau o adresă cunoscute. Ele ajung la tot ce se potrivește: <code>dstPort: 443</code> înseamnă fiecare conexiune HTTPS a mașinii, inclusiv cele ale editorului tău, iar <code>target: 'node'</code> fiecare program cu „node” în nume.</li>
+  </ul>
+  <p>Țintele date împreună se restrâng una pe alta: <code>server</code> cu <code>process: 'self'</code> încetinește doar conexiunile acestui worker către acel server. Pe Linux, <code>process</code> și <code>target</code> ajung la o conexiune nouă până la circa 0,2 secunde după deschiderea ei, așa că țintește serverul când contează prima cerere.</p>
+</section>
+
+<section>
+  <h2>Ce poate face o sesiune</h2>
+  <p>Fiecare setare este una dintre <a href="../linia-de-comanda/">opțiunile din linia de comandă</a> ale programului. <code>latency: 300</code> adaugă 300 ms fiecărui pachet, <code>jitter: 100</code> face să varieze acea întârziere, <code>loss: 5</code> aruncă 5 % din pachete, <code>down</code> și <code>up</code> limitează viteza în KB/s, iar <code>loss: 100</code> taie serverul. <code>preset: 'presets.3g'</code> e un profil de legătură întreg, iar <code>seed: 42</code> face aceleași alegeri aleatorii la fiecare rulare. Un <a href="../scenarii-in-timp/">scenariu</a> schimbă condițiile pe măsură ce trec secundele: <code>scenario: 'scenarios/cafe-wifi.json'</code>. Un pas din scenariu poate schimba cum se comportă rețeaua, dar nu și spre ce țintește sesiunea.</p>
+</section>
+
+<section>
+  <h2>Workeri în paralel și limite</h2>
+  <ul>
+    <li><strong>Câte una.</strong> Două sesiuni pe același trafic s-ar aduna, așa că workerii în paralel își așteaptă rândul, fiecare până la <code>wait</code> secunde (600 dacă nu dai altă valoare). O a doua sesiune în același test e refuzată imediat.</li>
+    <li><strong>Se termină odată cu testul.</strong> Dacă workerul de teste moare, programul observă și se oprește imediat. <code>duration</code> (300 de secunde dacă nu dai altă valoare) e, în orice caz, cel mai mult cât poate rula o sesiune.</li>
+    <li><strong>Spune când n-a făcut nimic.</strong> O sesiune care n-a încetinit nimic, pentru că nimic n-a ajuns la ținta ei, se încheie cu un <code>BadNetworkWarning</code>. De obicei aplicația vorbește cu altă adresă decât ținta, de exemplu un container.</li>
+    <li><strong>macOS.</strong> Programul rulează pe Windows și Linux. Pe un Mac, rulează testele într-un container sau o mașină virtuală Linux x86_64 ori pe un runner de CI.</li>
+  </ul>
+  <p>README-ul pachetului de pe <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/npm/beannetworktester">GitHub</a> enumeră fiecare opțiune și explică fiecare mesaj.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

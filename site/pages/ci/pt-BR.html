@@ -7,14 +7,14 @@
   <h2>O formato de uma etapa</h2>
   <p>Degrade durante o tempo do teste e deixe parar sozinho. Sem etapa de limpeza para esquecer:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>Em um job do GitHub Actions, em um runner Windows auto-hospedado:</p>
+  <p>Num job do GitHub Actions em um runner Windows:</p>
 <pre><code>- name: Test the app on a poor connection
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>Duas coisas sobre o runner: capturar tráfego exige permissões de administrador, e um runner hospedado não vai dá-las a você, então isto pertence a uma máquina Windows auto-hospedada.</p>
+  <p>Capturar tráfego exige direitos de administrador. Os runners Windows hospedados pelo GitHub rodam com privilégios elevados, então o passo funciona lá do jeito que está, e um runner próprio precisa rodar como administrador. Um teste em Playwright ou pytest também pode iniciar e parar o programa sozinho: veja <a href="../rede-lenta-no-playwright/">Playwright</a> e <a href="../latencia-de-rede-no-pytest/">pytest</a>.</p>
 </section>
 
 <section>

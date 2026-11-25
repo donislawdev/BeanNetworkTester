@@ -1,0 +1,96 @@
+<section class="hero">
+  <h1>Затримка мережі і втрата пакетів у pytest</h1>
+  <p class="lead">Жодних моків: пакет <code>beannetworktester</code> з PyPI дає pytest фікстуру <code>bad_network</code>, яка сповільнює справжню мережу на час тесту. Затримка, втрата пакетів, обмеження швидкості або повний обрив, для одного сервера чи одного процесу, поки ваш застосунок, браузер і сервер справді говорять один з одним. Пакет містить програму Bean Network Tester і запускає її у Windows і Linux. Він виходить з кожним стабільним випуском, починаючи з 1.1.0.</p>
+</section>
+
+<section>
+  <h2>Встановлення</h2>
+<pre><code>pip install beannetworktester</code></pre>
+  <p>Потрібні Windows x64 або Linux x64 (glibc 2.39 або новіша, наприклад Ubuntu 24.04) і Python 3.10 або новіший.</p>
+  <p>Щоб змінювати мережу, у Windows потрібні права адміністратора: відкрийте термінал через «Запуск від імені адміністратора». У Linux потрібен root або користувач, якому дозволено <code>sudo</code> без пароля, і тоді під <code>sudo</code> працює лише програма. Розміщені ранери GitHub з Windows працюють із підвищеними правами, а ранери з Ubuntu дозволяють <code>sudo</code>, тож workflow не потребує додаткового кроку.</p>
+</section>
+
+<section>
+  <h2>Тест на повільній мережі</h2>
+  <p>Збережіть це як <code>test_slow.py</code> і запустіть <code>pytest</code>:</p>
+<pre><code>import subprocess
+import sys
+import time
+import urllib.request
+
+import pytest
+
+
+@pytest.fixture
+def web_server():
+    server = subprocess.Popen([sys.executable, "-m", "http.server", "8000"])
+    time.sleep(1)
+    yield "http://localhost:8000"
+    server.terminate()
+
+
+def test_a_page_takes_longer_on_a_slow_network(bad_network, web_server):
+    bad_network(server=web_server, latency=500)
+    started = time.monotonic()
+    urllib.request.urlopen(web_server).read()
+    assert time.monotonic() - started &gt;= 0.5</code></pre>
+  <p>Тест проходить, бо відповідь справді приходить пізніше: кожен пакет до цього сервера й від нього чекає 500 мс. Коли тест закінчується, мережа знову працює як звичайно. Виміряно у Windows з <code>latency=200</code>: запит до сервера в цілі зріс з 4 мс до 404 мс, бо чекають і запит, і відповідь, а сторінка в Chromium з 61 мс до 412 мс. Інший локальний сервер, поза ціллю, відповідав тим часом за 11 мс.</p>
+  <p>Прав під рукою немає? <code>bad_network(simulate=True, latency=500)</code> запускає програму на вигаданому трафіку й нічого не змінює в мережі. Це перевіряє, що пакет установлено правильно, і нічого не сповільнює.</p>
+</section>
+
+<section>
+  <h2>Фікстура bad_network</h2>
+  <p>pytest сам знаходить фікстуру, щойно пакет установлено. <code>bad_network</code> починає сесію, коли ви її викликаєте, і повертається, щойно мережа стала повільною. Сесія зупиняється разом із кінцем тесту, чи він пройшов, чи впав, чи аварійно завершився, а підсумок програми потрапляє до <code>user_properties</code> тесту, а звідти до звіту JUnit XML. Щоб змінити умови посеред тесту, зупиніть першу сесію, перш ніж починати наступну:</p>
+<pre><code>def test_the_app_recovers_when_the_api_comes_back(bad_network):
+    outage = bad_network(server="http://localhost:8000", loss=100)
+    assert app_shows_offline_banner()
+    outage.stop()
+    assert app_hides_offline_banner()</code></pre>
+  <p>Поза pytest ту саму сесію починає <code>from beannetworktester import bad_network</code>, а <code>with bad_network(...) as session:</code> зупиняє її в кінці блоку.</p>
+</section>
+
+<section>
+  <h2>Playwright для Python</h2>
+  <p>Playwright для Python працює на pytest, тож фікстура та сама. Chromium, Firefox і WebKit сповільнюються однаково, разом із WebSocket, бо повільна сама мережа, а не уявлення браузера про неї:</p>
+<pre><code>from playwright.sync_api import expect
+
+
+def test_the_spinner_shows_on_a_slow_network(bad_network, page):
+    bad_network(server="http://localhost:3000", latency=800)
+    page.goto("http://localhost:3000")
+    expect(page.get_by_role("progressbar")).to_be_visible()</code></pre>
+</section>
+
+<section>
+  <h2>На що націлена сесія</h2>
+  <p>Кожна сесія на щось націлена, і змінюється лише цей трафік. Сесія без цілі сповільнила б кожне з'єднання машини, зокрема з'єднання самого запускача тестів, тому вона не запускається.</p>
+  <ul>
+    <li><strong><code>server="http://localhost:3000"</code></strong> сповільнює кожне з'єднання з цією адресою та портом, з вашого застосунку, браузера чи будь-якої іншої програми. Підходять і <code>"db.local:5432"</code>, <code>("10.0.0.5", 443)</code>, і список серверів. Це перший вибір, і він точний у Windows і Linux.</li>
+    <li><strong><code>process="self"</code></strong> сповільнює тестовий процес і кожну програму, яку він запустив, наприклад браузер Playwright. Процес, який запустив сам тест, передається як його <code>subprocess.Popen</code>.</li>
+    <li><strong><code>dst_port</code>, <code>dst_ip</code> і <code>target</code></strong> це власні цілі програми, записані в <a href="../komandnyi-riadok/">її синтаксисі</a>, для API на відомому порту чи адресі. Вони дістають усе, що підходить: <code>dst_port=443</code> це кожне HTTPS-з'єднання машини, зокрема з'єднання вашого редактора, а <code>target="python"</code> кожна програма з «python» в назві.</li>
+  </ul>
+  <p>Цілі, задані разом, звужують одна одну: <code>server=</code> з <code>process="self"</code> сповільнює лише з'єднання цього тесту з цим сервером. У Linux <code>process=</code> і <code>target</code> починають діяти на нове з'єднання із запізненням приблизно до 0,2 секунди після його відкриття, тож цільтеся в сервер, коли важливий перший запит.</p>
+</section>
+
+<section>
+  <h2>Що вміє сесія</h2>
+  <p>Кожне налаштування це один із <a href="../komandnyi-riadok/">параметрів командного рядка</a> програми, записаний через <code>_</code> замість <code>-</code>. <code>latency=300</code> додає 300 мс кожному пакету, <code>jitter=100</code> робить цю затримку змінною, <code>loss=5</code> губить 5 % пакетів, <code>down</code> і <code>up</code> обмежують швидкість у КБ/с, а <code>loss=100</code> відрізає сервер. <code>preset="presets.3g"</code> це цілий профіль каналу, а <code>seed=42</code> дає ті самі випадкові рішення під час кожного запуску. <a href="../stsenarii-v-chasi/">Сценарій</a> змінює умови з плином секунд: <code>scenario="scenarios/cafe-wifi.json"</code>. Крок сценарію може змінити поведінку мережі, але не те, на що націлена сесія.</p>
+</section>
+
+<section>
+  <h2>pytest-xdist і обмеження</h2>
+  <ul>
+    <li><strong>По одній.</strong> Дві сесії на одному трафіку додалися б, тому воркери pytest-xdist чекають своєї черги, кожен до <code>wait</code> секунд (600, якщо не задати інше значення). Друга сесія в тому самому тесті одразу відхиляється.</li>
+    <li><strong>Вона закінчується разом із тестом.</strong> Якщо тестовий процес помирає, програма це бачить і одразу зупиняється. <code>duration</code> (300 секунд, якщо не задати інше значення) у будь-якому разі найдовший час роботи сесії.</li>
+    <li><strong>Вона каже, коли нічого не зробила.</strong> Сесія, яка нічого не сповільнила, бо до її цілі нічого не дійшло, завершується попередженням <code>BadNetworkWarning</code>. Зазвичай це означає, що застосунок говорить з іншою адресою, ніж ціль, наприклад з контейнером.</li>
+    <li><strong>macOS.</strong> Програма працює у Windows і Linux. На Mac запускайте тести в контейнері чи віртуальній машині з Linux x86_64 або на ранері CI.</li>
+  </ul>
+  <p>README пакета на <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/python/beannetworktester">GitHub</a> перелічує кожен параметр і пояснює кожне повідомлення.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

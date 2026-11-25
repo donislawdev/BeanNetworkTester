@@ -7,14 +7,14 @@
   <h2>Podoba kroku</h2>
   <p>Zhoršujte po dobu testu a pak nechte nástroj skončit samotný. Žádný úklidový krok, na který by se dalo zapomenout:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>V úloze GitHub Actions na vlastním (self-hosted) runneru s Windows:</p>
+  <p>V úloze GitHub Actions na runneru s Windows:</p>
 <pre><code>- name: Test the app on a poor connection
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>Dvě věci o runneru: zachytávání provozu vyžaduje práva správce a hostovaný runner vám je nedá, takže tohle patří na vlastní počítač s Windows.</p>
+  <p>Zachytávání provozu potřebuje práva správce. Hostované runnery GitHubu s Windows běží se zvýšenými právy, takže tam krok funguje tak, jak je, a vlastní (self-hosted) runner musí běžet jako správce. Test v Playwrightu nebo pytestu může program spouštět a zastavovat i sám: viz <a href="../pomala-sit-v-playwright/">Playwright</a> a <a href="../latence-site-v-pytest/">pytest</a>.</p>
 </section>
 
 <section>

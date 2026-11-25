@@ -1,0 +1,96 @@
+<section class="hero">
+  <h1>Simulace latence sítě a ztráty paketů v pytest</h1>
+  <p class="lead">Nic se nepředstírá: balíček <code>beannetworktester</code> z PyPI dává pytestu fixture <code>bad_network</code>, která zpomalí skutečnou síť po dobu testu. Latence, ztráta paketů, omezení rychlosti nebo úplný výpadek, pro jeden server nebo jeden proces, zatímco vaše aplikace, prohlížeč a server spolu opravdu mluví. Balíček obsahuje program Bean Network Tester a spouští ho ve Windows i v Linuxu. Vychází s každou stabilní verzí od 1.1.0.</p>
+</section>
+
+<section>
+  <h2>Instalace</h2>
+<pre><code>pip install beannetworktester</code></pre>
+  <p>Potřebuje Windows x64 nebo Linux x64 (glibc 2.39 nebo novější, například Ubuntu 24.04) a Python 3.10 nebo novější.</p>
+  <p>Změna sítě potřebuje ve Windows práva správce: otevřete terminál přes „Spustit jako správce“. V Linuxu potřebuje root nebo uživatele, který smí spouštět <code>sudo</code> bez hesla, a pak pod <code>sudo</code> běží jen program. Hostované runnery GitHubu s Windows běží se zvýšenými právy a ty s Ubuntu povolují <code>sudo</code>, takže workflow nepotřebuje žádný krok navíc.</p>
+</section>
+
+<section>
+  <h2>Test na pomalé síti</h2>
+  <p>Uložte to jako <code>test_slow.py</code> a spusťte <code>pytest</code>:</p>
+<pre><code>import subprocess
+import sys
+import time
+import urllib.request
+
+import pytest
+
+
+@pytest.fixture
+def web_server():
+    server = subprocess.Popen([sys.executable, "-m", "http.server", "8000"])
+    time.sleep(1)
+    yield "http://localhost:8000"
+    server.terminate()
+
+
+def test_a_page_takes_longer_on_a_slow_network(bad_network, web_server):
+    bad_network(server=web_server, latency=500)
+    started = time.monotonic()
+    urllib.request.urlopen(web_server).read()
+    assert time.monotonic() - started &gt;= 0.5</code></pre>
+  <p>Test projde, protože odpověď opravdu přijde později: každý paket k tomu serveru a od něj čeká 500 ms. Po skončení testu je síť zase normální. Změřeno ve Windows s <code>latency=200</code>: požadavek na server v cíli trval místo 4 ms 404 ms, protože čeká požadavek i odpověď, a stránka v Chromiu místo 61 ms 412 ms. Jiný místní server, mimo cíl, mezitím odpovídal za 11 ms.</p>
+  <p>Nemáte práva po ruce? <code>bad_network(simulate=True, latency=500)</code> spustí program na vymyšleném provozu a na síti nic nezmění. Ověří, že je balíček správně nainstalovaný, a nic nezpomalí.</p>
+</section>
+
+<section>
+  <h2>Fixture bad_network</h2>
+  <p>pytest fixture najde sám, jakmile je balíček nainstalovaný. <code>bad_network</code> spustí sezení, když ho zavoláte, a vrátí se, jakmile je síť pomalá. Sezení skončí s koncem testu, ať prošel, selhal, nebo spadl, a souhrn programu jde do <code>user_properties</code> testu a odtud do zprávy JUnit XML. Chcete-li uprostřed testu změnit podmínky, zastavte první sezení dřív, než spustíte další:</p>
+<pre><code>def test_the_app_recovers_when_the_api_comes_back(bad_network):
+    outage = bad_network(server="http://localhost:8000", loss=100)
+    assert app_shows_offline_banner()
+    outage.stop()
+    assert app_hides_offline_banner()</code></pre>
+  <p>Mimo pytest spustí stejné sezení <code>from beannetworktester import bad_network</code> a <code>with bad_network(...) as session:</code> ho zastaví na konci bloku.</p>
+</section>
+
+<section>
+  <h2>Playwright pro Python</h2>
+  <p>Playwright pro Python běží na pytestu, takže fixture je stejná. Chromium, Firefox i WebKit se zpomalí stejně, včetně WebSocketů, protože pomalá je sama síť, ne představa prohlížeče o ní:</p>
+<pre><code>from playwright.sync_api import expect
+
+
+def test_the_spinner_shows_on_a_slow_network(bad_network, page):
+    bad_network(server="http://localhost:3000", latency=800)
+    page.goto("http://localhost:3000")
+    expect(page.get_by_role("progressbar")).to_be_visible()</code></pre>
+</section>
+
+<section>
+  <h2>Na co sezení míří</h2>
+  <p>Každé sezení na něco míří a mění se jen tento provoz. Sezení bez cíle by zpomalilo každé spojení počítače, i spojení samotného spouštěče testů, a proto se vůbec nespustí.</p>
+  <ul>
+    <li><strong><code>server="http://localhost:3000"</code></strong> zpomalí každé spojení s touto adresou a portem, z vaší aplikace, prohlížeče nebo jakéhokoli jiného programu. Funguje i <code>"db.local:5432"</code>, <code>("10.0.0.5", 443)</code> a seznam serverů. To je první volba a ve Windows i v Linuxu je přesná.</li>
+    <li><strong><code>process="self"</code></strong> zpomalí testovací proces a každý program, který spustil, například prohlížeč Playwrightu. Proces, který spustil sám test, předáte jako jeho <code>subprocess.Popen</code>.</li>
+    <li><strong><code>dst_port</code>, <code>dst_ip</code> a <code>target</code></strong> jsou vlastní cíle programu, zapsané v <a href="../prikazovy-radek/">jeho syntaxi</a>, pro API na známém portu nebo adrese. Zasáhnou všechno, co odpovídá: <code>dst_port=443</code> je každé spojení HTTPS počítače, i spojení vašeho editoru, a <code>target="python"</code> každý program s „python“ v názvu.</li>
+  </ul>
+  <p>Cíle zadané spolu se navzájem zužují: <code>server=</code> s <code>process="self"</code> zpomalí jen spojení tohoto testu s tím serverem. V Linuxu <code>process=</code> a <code>target</code> zasáhnou nové spojení až asi 0,2 sekundy po jeho otevření, takže miřte na server, když záleží na prvním požadavku.</p>
+</section>
+
+<section>
+  <h2>Co sezení umí</h2>
+  <p>Každé nastavení je jedna z <a href="../prikazovy-radek/">voleb příkazového řádku</a> programu, zapsaná s <code>_</code> místo <code>-</code>. <code>latency=300</code> přidá každému paketu 300 ms, <code>jitter=100</code> tuto prodlevu mění, <code>loss=5</code> zahodí 5 % paketů, <code>down</code> a <code>up</code> omezí rychlost v KB/s a <code>loss=100</code> server odřízne. <code>preset="presets.3g"</code> je celý profil linky a <code>seed=42</code> udělá při každém běhu stejné náhodné volby. <a href="../scenare-v-case/">Scénář</a> mění podmínky, jak běží sekundy: <code>scenario="scenarios/cafe-wifi.json"</code>. Krok scénáře smí změnit, jak se síť chová, ale ne to, na co sezení míří.</p>
+</section>
+
+<section>
+  <h2>pytest-xdist a meze</h2>
+  <ul>
+    <li><strong>Jedno po druhém.</strong> Dvě sezení na stejném provozu by se sčítala, takže workery pytest-xdist se střídají a každý čeká až <code>wait</code> sekund (600, pokud nezadáte jinak). Druhé sezení ve stejném testu je hned odmítnuto.</li>
+    <li><strong>Končí s testem.</strong> Když testovací proces zanikne, program to pozná a hned se zastaví. <code>duration</code> (300 sekund, pokud nezadáte jinak) je v každém případě nejdelší doba sezení.</li>
+    <li><strong>Řekne, když nic neudělalo.</strong> Sezení, které nic nezpomalilo, protože do jeho cíle nic nedorazilo, skončí varováním <code>BadNetworkWarning</code>. Obvykle aplikace mluví s jinou adresou, než je cíl, například s kontejnerem.</li>
+    <li><strong>macOS.</strong> Program běží ve Windows a v Linuxu. Na Macu spusťte testy v kontejneru nebo virtuálním počítači s Linuxem x86_64, nebo na runneru CI.</li>
+  </ul>
+  <p>README balíčku na <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/python/beannetworktester">GitHubu</a> uvádí každou volbu a vysvětluje každou zprávu.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

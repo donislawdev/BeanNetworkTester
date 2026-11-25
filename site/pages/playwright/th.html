@@ -1,0 +1,83 @@
+<section class="hero">
+  <h1>จำลองเครือข่ายช้าและแพ็กเก็ตสูญหายในการทดสอบ Playwright</h1>
+  <p class="lead">Playwright ทำให้หน้าเว็บออฟไลน์ได้ และทำให้ Chromium ช้าลงผ่าน DevTools ได้ ส่วนแพ็กเกจ <code>beannetworktester</code> บน npm จะทำให้เครือข่ายจริงช้าลงแทน ใต้เบราว์เซอร์ลงไป: ความหน่วง แพ็กเก็ตสูญหาย การจำกัดความเร็ว หรือการขาดการเชื่อมต่อทั้งหมด สำหรับเซิร์ฟเวอร์ที่การทดสอบของคุณคุยด้วย Chromium, Firefox และ WebKit ช้าลงแบบเดียวกัน รวมถึง WebSocket แพ็กเกจนี้มีโปรแกรมของ Bean Network Tester อยู่ในตัว และรันโปรแกรมนั้นตลอดการทดสอบ บน Windows และ Linux แพ็กเกจนี้เผยแพร่พร้อมทุกรุ่นเสถียรตั้งแต่ 1.1.0 เป็นต้นไป</p>
+</section>
+
+<section>
+  <h2>ติดตั้ง</h2>
+<pre><code>npm install -D @playwright/test beannetworktester
+npx playwright install chromium</code></pre>
+  <p>ต้องใช้ Windows x64 หรือ Linux x64 (glibc 2.39 ขึ้นไป เช่น Ubuntu 24.04) และ Node 20 ขึ้นไป npm ติดตั้งโปรแกรมสำหรับระบบของคุณเป็น dependency แบบเลือกได้ จึงอย่าตัด dependency แบบเลือกได้ออก</p>
+  <p>การเปลี่ยนเครือข่ายบน Windows ต้องใช้สิทธิ์ผู้ดูแลระบบ: เปิดเทอร์มินัลด้วย "เรียกใช้ในฐานะผู้ดูแลระบบ" บน Linux ต้องใช้ root หรือผู้ใช้ที่รัน <code>sudo</code> ได้โดยไม่ต้องใส่รหัสผ่าน และเมื่อนั้นจะมีเพียงโปรแกรมที่รันภายใต้ <code>sudo</code> รันเนอร์ Windows ที่ GitHub โฮสต์ทำงานด้วยสิทธิ์ยกระดับ และรันเนอร์ Ubuntu อนุญาตให้ใช้ <code>sudo</code> ดังนั้น workflow จึงไม่ต้องมีขั้นตอนเพิ่ม</p>
+</section>
+
+<section>
+  <h2>การทดสอบบนเครือข่ายช้า</h2>
+  <p>บันทึกโค้ดนี้เป็น <code>tests/slow.spec.js</code> แล้วรัน <code>npx playwright test</code>:</p>
+<pre><code>import http from 'node:http';
+import { test, expect } from 'beannetworktester/playwright';
+
+let server;
+test.beforeAll(async () =&gt; {
+  server = http.createServer((request, response) =&gt; response.end('&lt;h1&gt;Hello&lt;/h1&gt;'));
+  await new Promise((done) =&gt; server.listen(8000, done));
+});
+test.afterAll(() =&gt; server.close());
+
+test('a page takes longer on a slow network', async ({ page, badNetwork }) =&gt; {
+  await badNetwork({ server: 'http://localhost:8000', latency: 500 });
+  const started = Date.now();
+  await page.goto('http://localhost:8000');
+  await expect(page.locator('h1')).toHaveText('Hello');
+  expect(Date.now() - started).toBeGreaterThanOrEqual(500);
+});</code></pre>
+  <p>การทดสอบผ่านเพราะหน้าเว็บมาถึงช้าลงจริง: ทุกแพ็กเก็ตที่ไปและกลับจากเซิร์ฟเวอร์นั้นต้องรอ 500 ms เมื่อการทดสอบจบ เครือข่ายจะกลับเป็นปกติ วัดบน Windows ด้วย <code>latency: 200</code>: คำขอไปยังเซิร์ฟเวอร์ในเป้าหมายเพิ่มจาก 0.8 ms เป็น 404 ms เพราะทั้งคำขอและคำตอบต้องรอ และหน้าเว็บใน Chromium เพิ่มจาก 13 ms เป็น 416 ms ระหว่างนั้นเซิร์ฟเวอร์ภายในเครื่องอีกตัวที่อยู่นอกเป้าหมายตอบใน 1.6 ms</p>
+  <p>ยังไม่มีสิทธิ์ในมือ? <code>badNetwork({ simulate: true, latency: 500 })</code> รันโปรแกรมกับทราฟฟิกที่สร้างขึ้นและไม่เปลี่ยนอะไรในเครือข่าย ใช้ตรวจว่าแพ็กเกจติดตั้งถูกต้อง โดยไม่ทำให้อะไรช้าลง</p>
+</section>
+
+<section>
+  <h2>fixture ชื่อ badNetwork</h2>
+  <p>นำเข้า <code>test</code> และ <code>expect</code> จาก <code>beannetworktester/playwright</code> แทน <code>@playwright/test</code> เมื่อเรียก <code>badNetwork</code> จะเริ่มเซสชัน และเสร็จทันทีที่เครือข่ายช้าลงแล้ว เซสชันหยุดเมื่อการทดสอบจบ ไม่ว่าจะผ่าน ล้มเหลว หรือแครช และสรุปของโปรแกรมจะแนบไปกับรายงานการทดสอบในชื่อ <code>bad-network</code> หากต้องการเปลี่ยนสภาพเครือข่ายกลางการทดสอบ ให้หยุดเซสชันแรกก่อนเริ่มเซสชันถัดไป:</p>
+<pre><code>test('the app recovers when the API comes back', async ({ page, badNetwork }) =&gt; {
+  const outage = await badNetwork({ server: 'http://localhost:8000', loss: 100 });
+  await page.goto('http://localhost:3000');
+  await expect(page.getByText('Offline')).toBeVisible();
+  await outage.stop();
+  await expect(page.getByText('Offline')).toBeHidden();
+});</code></pre>
+  <p>นอก Playwright Test ให้ใช้ <code>badNetwork</code> จาก <code>require('beannetworktester')</code> เพื่อเริ่มเซสชันเดียวกัน: <code>const session = await badNetwork({ ... })</code> และ <code>await session.stop()</code> จะจบเซสชันพร้อมคืนสรุป</p>
+</section>
+
+<section>
+  <h2>เซสชันเล็งไปที่อะไร</h2>
+  <p>ทุกเซสชันเล็งไปที่บางสิ่ง และมีเพียงทราฟฟิกนั้นที่เปลี่ยน เซสชันที่ไม่มีเป้าหมายจะทำให้ทุกการเชื่อมต่อของเครื่องช้าลง รวมถึงของตัวรันการทดสอบเอง จึงไม่เริ่มทำงานเลย</p>
+  <ul>
+    <li><strong><code>server: 'http://localhost:3000'</code></strong> ทำให้ทุกการเชื่อมต่อไปยังที่อยู่และพอร์ตนั้นช้าลง ไม่ว่าจะมาจากเบราว์เซอร์ จากเซิร์ฟเวอร์ API ของคุณ หรือจากโปรแกรมอื่นใด ใช้ <code>'db.local:5432'</code> และรายการเซิร์ฟเวอร์ได้เช่นกัน นี่คือตัวเลือกแรก และแม่นยำทั้งบน Windows และ Linux</li>
+    <li><strong><code>process: 'self'</code></strong> ทำให้ worker ของการทดสอบและทุกโปรแกรมที่มันเริ่ม เช่น เบราว์เซอร์ ช้าลง โปรเซสที่การทดสอบของคุณเริ่มเองให้ส่งเป็น <code>ChildProcess</code> ของมัน</li>
+    <li><strong><code>dstPort</code>, <code>dstIp</code> และ <code>target</code></strong> คือเป้าหมายของโปรแกรมเอง เขียนด้วย<a href="../banthat-kham-sang/">ไวยากรณ์ของโปรแกรม</a> สำหรับ API บนพอร์ตหรือที่อยู่ที่รู้จัก มันเข้าถึงทุกอย่างที่ตรงกัน: <code>dstPort: 443</code> คือทุกการเชื่อมต่อ HTTPS ของเครื่อง รวมถึงของโปรแกรมแก้ไขโค้ดของคุณ และ <code>target: 'node'</code> คือทุกโปรแกรมที่มี "node" อยู่ในชื่อ</li>
+  </ul>
+  <p>เป้าหมายที่ให้มาพร้อมกันจะจำกัดกันและกัน: <code>server</code> คู่กับ <code>process: 'self'</code> จะทำให้ช้าลงเฉพาะการเชื่อมต่อของ worker นี้ไปยังเซิร์ฟเวอร์นั้น บน Linux <code>process</code> และ <code>target</code> จะเริ่มมีผลกับการเชื่อมต่อใหม่ช้าได้ถึงราว 0.2 วินาทีหลังเปิด ดังนั้นเมื่อคำขอแรกสำคัญ ให้เล็งไปที่เซิร์ฟเวอร์</p>
+</section>
+
+<section>
+  <h2>เซสชันทำอะไรได้บ้าง</h2>
+  <p>ทุกการตั้งค่าคือหนึ่งใน<a href="../banthat-kham-sang/">ตัวเลือกบรรทัดคำสั่ง</a>ของโปรแกรม <code>latency: 300</code> เพิ่ม 300 ms ให้ทุกแพ็กเก็ต <code>jitter: 100</code> ทำให้ความหน่วงนั้นแกว่ง <code>loss: 5</code> ทิ้งแพ็กเก็ต 5 % <code>down</code> และ <code>up</code> จำกัดความเร็วเป็น KB/s และ <code>loss: 100</code> ตัดเซิร์ฟเวอร์ออก <code>preset: 'presets.3g'</code> คือโปรไฟล์ลิงก์ทั้งชุด และ <code>seed: 42</code> ทำให้สุ่มเหมือนเดิมทุกครั้งที่รัน <a href="../senario-tam-wela/">สถานการณ์</a>จะเปลี่ยนสภาพเครือข่ายตามวินาทีที่ผ่านไป: <code>scenario: 'scenarios/cafe-wifi.json'</code> ขั้นตอนในสถานการณ์เปลี่ยนพฤติกรรมของเครือข่ายได้ แต่เปลี่ยนสิ่งที่เซสชันเล็งไม่ได้</p>
+</section>
+
+<section>
+  <h2>worker แบบขนานและข้อจำกัด</h2>
+  <ul>
+    <li><strong>ทีละหนึ่ง</strong> สองเซสชันบนทราฟฟิกเดียวกันจะซ้อนกัน worker แบบขนานจึงผลัดกันทำ แต่ละตัวรอได้สูงสุด <code>wait</code> วินาที (600 ถ้าไม่ได้กำหนดค่าอื่น) เซสชันที่สองในการทดสอบเดียวกันจะถูกปฏิเสธทันที</li>
+    <li><strong>จบพร้อมการทดสอบ</strong> ถ้า worker ของการทดสอบตาย โปรแกรมจะรู้และหยุดทันที <code>duration</code> (300 วินาที ถ้าไม่ได้กำหนดค่าอื่น) คือเวลานานที่สุดที่เซสชันรันได้ไม่ว่ากรณีใด</li>
+    <li><strong>บอกเมื่อไม่ได้ทำอะไร</strong> เซสชันที่ไม่ได้ทำให้อะไรช้าลง เพราะไม่มีอะไรไปถึงเป้าหมาย จะจบด้วย <code>BadNetworkWarning</code> สาเหตุที่พบบ่อยคือแอปคุยกับที่อยู่อื่นที่ไม่ใช่เป้าหมาย เช่น คอนเทนเนอร์</li>
+    <li><strong>macOS</strong> โปรแกรมทำงานบน Windows และ Linux บน Mac ให้รันการทดสอบในคอนเทนเนอร์หรือเครื่องเสมือน Linux x86_64 หรือบนรันเนอร์ CI</li>
+  </ul>
+  <p>README ของแพ็กเกจบน <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/npm/beannetworktester">GitHub</a> แสดงทุกตัวเลือกและอธิบายทุกข้อความ</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

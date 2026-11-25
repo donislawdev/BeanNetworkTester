@@ -1,0 +1,96 @@
+<section class="hero">
+  <h1>Simulasikan latensi jaringan dan packet loss di pytest</h1>
+  <p class="lead">Tanpa mock: paket <code>beannetworktester</code> di PyPI memberi pytest fixture <code>bad_network</code> yang memperlambat jaringan sebenarnya selama tes berlangsung. Latensi, packet loss, batas kecepatan, atau pemutusan total, untuk satu server atau satu proses, sementara aplikasi, browser, dan server Anda benar-benar saling berbicara. Paket ini membawa program Bean Network Tester dan menjalankannya di Windows dan Linux. Paket ini terbit bersama setiap rilis stabil mulai 1.1.0.</p>
+</section>
+
+<section>
+  <h2>Instalasi</h2>
+<pre><code>pip install beannetworktester</code></pre>
+  <p>Butuh Windows x64 atau Linux x64 (glibc 2.39 atau lebih baru, seperti Ubuntu 24.04) dan Python 3.10 atau lebih baru.</p>
+  <p>Mengubah jaringan butuh hak administrator di Windows: buka terminal dengan "Jalankan sebagai administrator". Di Linux butuh root, atau pengguna yang boleh menjalankan <code>sudo</code> tanpa kata sandi, dan saat itu hanya programnya yang berjalan dengan <code>sudo</code>. Runner Windows yang di-host GitHub berjalan dengan hak tinggi dan runner Ubuntu-nya mengizinkan <code>sudo</code>, jadi workflow tidak butuh langkah tambahan.</p>
+</section>
+
+<section>
+  <h2>Tes di jaringan yang lambat</h2>
+  <p>Simpan ini sebagai <code>test_slow.py</code> lalu jalankan <code>pytest</code>:</p>
+<pre><code>import subprocess
+import sys
+import time
+import urllib.request
+
+import pytest
+
+
+@pytest.fixture
+def web_server():
+    server = subprocess.Popen([sys.executable, "-m", "http.server", "8000"])
+    time.sleep(1)
+    yield "http://localhost:8000"
+    server.terminate()
+
+
+def test_a_page_takes_longer_on_a_slow_network(bad_network, web_server):
+    bad_network(server=web_server, latency=500)
+    started = time.monotonic()
+    urllib.request.urlopen(web_server).read()
+    assert time.monotonic() - started &gt;= 0.5</code></pre>
+  <p>Tes lulus karena jawaban memang tiba lebih lambat: setiap paket ke server itu dan darinya menunggu 500 ms. Saat tes selesai, jaringan kembali normal. Diukur di Windows dengan <code>latency=200</code>: permintaan ke server dalam tujuan naik dari 4 ms ke 404 ms, karena permintaan dan jawabannya sama-sama menunggu, dan halaman di Chromium dari 61 ms ke 412 ms. Server lokal lain, di luar tujuan, menjawab dalam 11 ms selama itu.</p>
+  <p>Tidak punya hak akses? <code>bad_network(simulate=True, latency=500)</code> menjalankan program pada lalu lintas buatan dan tidak mengubah apa pun di jaringan. Ini memeriksa bahwa paket terpasang dengan benar, tanpa memperlambat apa pun.</p>
+</section>
+
+<section>
+  <h2>Fixture bad_network</h2>
+  <p>pytest menemukan fixture itu sendiri begitu paket terpasang. <code>bad_network</code> memulai sesi saat Anda memanggilnya dan kembali begitu jaringan sudah lambat. Sesi berhenti saat tes selesai, entah lulus, gagal, atau crash, dan ringkasan program masuk ke <code>user_properties</code> tes, lalu dari sana ke laporan JUnit XML. Untuk mengubah kondisi di tengah tes, hentikan sesi pertama sebelum memulai yang berikutnya:</p>
+<pre><code>def test_the_app_recovers_when_the_api_comes_back(bad_network):
+    outage = bad_network(server="http://localhost:8000", loss=100)
+    assert app_shows_offline_banner()
+    outage.stop()
+    assert app_hides_offline_banner()</code></pre>
+  <p>Di luar pytest, <code>from beannetworktester import bad_network</code> memulai sesi yang sama, dan <code>with bad_network(...) as session:</code> menghentikannya di akhir blok.</p>
+</section>
+
+<section>
+  <h2>Playwright untuk Python</h2>
+  <p>Playwright untuk Python berjalan di atas pytest, jadi fixture-nya sama. Chromium, Firefox, dan WebKit diperlambat dengan cara yang sama, termasuk WebSocket, karena jaringannya sendiri yang lambat, bukan anggapan browser tentangnya:</p>
+<pre><code>from playwright.sync_api import expect
+
+
+def test_the_spinner_shows_on_a_slow_network(bad_network, page):
+    bad_network(server="http://localhost:3000", latency=800)
+    page.goto("http://localhost:3000")
+    expect(page.get_by_role("progressbar")).to_be_visible()</code></pre>
+</section>
+
+<section>
+  <h2>Apa yang dituju sebuah sesi</h2>
+  <p>Setiap sesi menuju sesuatu, dan hanya lalu lintas itu yang berubah. Sesi tanpa tujuan akan memperlambat setiap koneksi mesin, termasuk milik test runner sendiri, jadi sesi itu tidak dimulai.</p>
+  <ul>
+    <li><strong><code>server="http://localhost:3000"</code></strong> memperlambat setiap koneksi ke alamat dan port itu, dari aplikasi Anda, browser Anda, atau program lain mana pun. <code>"db.local:5432"</code>, <code>("10.0.0.5", 443)</code>, dan daftar server juga bisa. Ini pilihan pertama, dan tepat di Windows maupun Linux.</li>
+    <li><strong><code>process="self"</code></strong> memperlambat proses tes dan setiap program yang dijalankannya, seperti browser Playwright. Proses yang dijalankan sendiri oleh tes Anda diberikan sebagai <code>subprocess.Popen</code>-nya.</li>
+    <li><strong><code>dst_port</code>, <code>dst_ip</code>, dan <code>target</code></strong> adalah tujuan milik program sendiri, ditulis dalam <a href="../baris-perintah/">sintaksnya</a>, untuk API di port atau alamat yang diketahui. Semuanya menjangkau apa pun yang cocok: <code>dst_port=443</code> adalah setiap koneksi HTTPS mesin, termasuk milik editor Anda, dan <code>target="python"</code> setiap program dengan "python" di namanya.</li>
+  </ul>
+  <p>Tujuan yang diberikan bersama saling mempersempit: <code>server=</code> dengan <code>process="self"</code> hanya memperlambat koneksi tes ini ke server itu. Di Linux, <code>process=</code> dan <code>target</code> menjangkau koneksi baru hingga sekitar 0,2 detik setelah koneksi dibuka, jadi tujukan ke server bila permintaan pertama penting.</p>
+</section>
+
+<section>
+  <h2>Apa yang bisa dilakukan sebuah sesi</h2>
+  <p>Setiap pengaturan adalah salah satu <a href="../baris-perintah/">opsi baris perintah</a> program, ditulis dengan <code>_</code> sebagai ganti <code>-</code>. <code>latency=300</code> menambah 300 ms ke setiap paket, <code>jitter=100</code> membuat jeda itu bervariasi, <code>loss=5</code> membuang 5 % paket, <code>down</code> dan <code>up</code> membatasi kecepatan dalam KB/s, dan <code>loss=100</code> memutus server. <code>preset="presets.3g"</code> adalah profil koneksi utuh, dan <code>seed=42</code> membuat pilihan acak yang sama di setiap jalannya tes. Sebuah <a href="../skenario-berbasis-waktu/">skenario</a> mengubah kondisi seiring detik berjalan: <code>scenario="scenarios/cafe-wifi.json"</code>. Langkah skenario boleh mengubah perilaku jaringan, tetapi tidak mengubah apa yang dituju sesi.</p>
+</section>
+
+<section>
+  <h2>pytest-xdist dan batasan</h2>
+  <ul>
+    <li><strong>Satu per satu.</strong> Dua sesi pada lalu lintas yang sama akan saling menambah, jadi worker pytest-xdist bergantian, masing-masing menunggu hingga <code>wait</code> detik (600 kecuali Anda memberi nilai lain). Sesi kedua dalam tes yang sama langsung ditolak.</li>
+    <li><strong>Ia berakhir bersama tes.</strong> Jika proses tes mati, program melihatnya dan langsung berhenti. <code>duration</code> (300 detik kecuali Anda memberi nilai lain) adalah waktu terlama sebuah sesi boleh berjalan dalam keadaan apa pun.</li>
+    <li><strong>Ia memberi tahu saat tidak melakukan apa pun.</strong> Sesi yang tidak memperlambat apa pun, karena tidak ada yang sampai ke tujuannya, berakhir dengan <code>BadNetworkWarning</code>. Biasanya aplikasi berbicara dengan alamat lain selain tujuan, misalnya sebuah kontainer.</li>
+    <li><strong>macOS.</strong> Programnya berjalan di Windows dan Linux. Di Mac, jalankan tes di kontainer atau mesin virtual Linux x86_64, atau di runner CI.</li>
+  </ul>
+  <p>README paket di <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/python/beannetworktester">GitHub</a> mencantumkan setiap opsi dan menjelaskan setiap pesan.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

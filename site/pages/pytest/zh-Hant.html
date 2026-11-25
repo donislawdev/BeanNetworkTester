@@ -1,0 +1,96 @@
+<section class="hero">
+  <h1>在 pytest 中模擬網路延遲和封包遺失</h1>
+  <p class="lead">不用任何模擬程式碼：PyPI 上的 <code>beannetworktester</code> 套件為 pytest 提供 <code>bad_network</code> fixture，在測試期間拖慢真實的網路。在你的應用程式、瀏覽器和伺服器真正互相溝通時，為一個伺服器或一個處理程序加入延遲、封包遺失、限速或完全斷線。套件內含 Bean Network Tester 的程式，並在 Windows 和 Linux 上執行它。從 1.1.0 起，每個穩定版本都會發布它。</p>
+</section>
+
+<section>
+  <h2>安裝</h2>
+<pre><code>pip install beannetworktester</code></pre>
+  <p>需要 Windows x64 或 Linux x64（glibc 2.39 或更新，例如 Ubuntu 24.04），以及 Python 3.10 或更新版本。</p>
+  <p>在 Windows 上變更網路需要系統管理員權限：用「以系統管理員身分執行」開啟終端機。在 Linux 上需要 root，或可以免密碼執行 <code>sudo</code> 的使用者，這時只有程式在 <code>sudo</code> 下執行。GitHub 代管的 Windows 執行器以提升的權限執行，Ubuntu 執行器允許 <code>sudo</code>，所以工作流程不需要額外步驟。</p>
+</section>
+
+<section>
+  <h2>在慢網路上的測試</h2>
+  <p>把它儲存為 <code>test_slow.py</code>，然後執行 <code>pytest</code>：</p>
+<pre><code>import subprocess
+import sys
+import time
+import urllib.request
+
+import pytest
+
+
+@pytest.fixture
+def web_server():
+    server = subprocess.Popen([sys.executable, "-m", "http.server", "8000"])
+    time.sleep(1)
+    yield "http://localhost:8000"
+    server.terminate()
+
+
+def test_a_page_takes_longer_on_a_slow_network(bad_network, web_server):
+    bad_network(server=web_server, latency=500)
+    started = time.monotonic()
+    urllib.request.urlopen(web_server).read()
+    assert time.monotonic() - started &gt;= 0.5</code></pre>
+  <p>測試能通過，是因為回應確實來得更晚：進出該伺服器的每個封包都要等 500 ms。測試結束後，網路恢復正常。在 Windows 上用 <code>latency=200</code> 實測：對目標伺服器的請求從 4 ms 變為 404 ms，因為請求和回應都要等待；Chromium 中的頁面從 61 ms 變為 412 ms。同時，目標之外的另一個本機伺服器在 11 ms 內回應。</p>
+  <p>手邊沒有權限？<code>bad_network(simulate=True, latency=500)</code> 會用虛構的流量執行程式，不改變網路上的任何東西。它用來檢查套件是否裝好，不會拖慢任何東西。</p>
+</section>
+
+<section>
+  <h2>bad_network fixture</h2>
+  <p>安裝套件後，pytest 會自動找到這個 fixture。呼叫 <code>bad_network</code> 時會啟動一個工作階段，網路變慢後即返回。無論測試通過、失敗還是當掉，工作階段都會在測試結束時停止，程式的摘要會寫入測試的 <code>user_properties</code>，再進入 JUnit XML 報告。要在測試中途改變條件，請先停止第一個工作階段，再啟動下一個：</p>
+<pre><code>def test_the_app_recovers_when_the_api_comes_back(bad_network):
+    outage = bad_network(server="http://localhost:8000", loss=100)
+    assert app_shows_offline_banner()
+    outage.stop()
+    assert app_hides_offline_banner()</code></pre>
+  <p>在 pytest 之外，<code>from beannetworktester import bad_network</code> 會啟動同樣的工作階段，<code>with bad_network(...) as session:</code> 會在程式區塊結束時停止它。</p>
+</section>
+
+<section>
+  <h2>Playwright for Python</h2>
+  <p>Playwright for Python 執行在 pytest 之上，所以 fixture 相同。Chromium、Firefox 和 WebKit 以同樣的方式變慢，WebSocket 也一樣，因為慢的是網路本身，而不是瀏覽器以為的網路：</p>
+<pre><code>from playwright.sync_api import expect
+
+
+def test_the_spinner_shows_on_a_slow_network(bad_network, page):
+    bad_network(server="http://localhost:3000", latency=800)
+    page.goto("http://localhost:3000")
+    expect(page.get_by_role("progressbar")).to_be_visible()</code></pre>
+</section>
+
+<section>
+  <h2>工作階段針對什麼</h2>
+  <p>每個工作階段都針對某個目標，只有這部分流量會改變。沒有目標的工作階段會拖慢這台電腦的所有連線，連測試執行器自己的連線也不例外，所以它不會啟動。</p>
+  <ul>
+    <li><strong><code>server="http://localhost:3000"</code></strong> 會拖慢到該位址和連接埠的每個連線，無論來自你的應用程式、瀏覽器還是其他任何程式。<code>"db.local:5432"</code>、<code>("10.0.0.5", 443)</code> 和伺服器清單也可以。這是首選，在 Windows 和 Linux 上都很精確。</li>
+    <li><strong><code>process="self"</code></strong> 會拖慢測試處理程序以及它啟動的每個程式，例如 Playwright 的瀏覽器。測試自己啟動的處理程序，以它的 <code>subprocess.Popen</code> 傳入。</li>
+    <li><strong><code>dst_port</code>、<code>dst_ip</code> 和 <code>target</code></strong> 是程式自己的目標，用<a href="../minglinglie/">它的語法</a>書寫，適用於已知連接埠或位址上的 API。它們會作用於所有符合的東西：<code>dst_port=443</code> 是這台電腦的每個 HTTPS 連線，包括你的編輯器的連線；<code>target="python"</code> 是名稱裡含有「python」的每個程式。</li>
+  </ul>
+  <p>同時給出的目標會互相收窄：<code>server=</code> 加上 <code>process="self"</code>，只會拖慢這個測試到該伺服器的連線。在 Linux 上，<code>process=</code> 和 <code>target</code> 最多要在新連線開啟約 0.2 秒後才生效，所以當第一個請求很重要時，請針對伺服器。</p>
+</section>
+
+<section>
+  <h2>工作階段能做什麼</h2>
+  <p>每個設定都是程式的一個<a href="../minglinglie/">命令列選項</a>，用 <code>_</code> 代替 <code>-</code> 書寫。<code>latency=300</code> 為每個封包加 300 ms，<code>jitter=100</code> 讓這個延遲波動，<code>loss=5</code> 丟棄 5 % 的封包，<code>down</code> 和 <code>up</code> 以 KB/s 限制速度，<code>loss=100</code> 則切斷伺服器。<code>preset="presets.3g"</code> 是一整套連結設定，<code>seed=42</code> 讓每次執行做出相同的隨機選擇。<a href="../dingshi-changjing/">情境</a>會隨著秒數推移改變條件：<code>scenario="scenarios/cafe-wifi.json"</code>。情境中的步驟可以改變網路的表現，但不能改變工作階段針對的目標。</p>
+</section>
+
+<section>
+  <h2>pytest-xdist 與限制</h2>
+  <ul>
+    <li><strong>一次一個。</strong>同一流量上的兩個工作階段會疊加，所以 pytest-xdist 的 worker 會輪流進行，每個最多等待 <code>wait</code> 秒（未另行指定時為 600）。同一測試中的第二個工作階段會被立即拒絕。</li>
+    <li><strong>隨測試一起結束。</strong>如果測試處理程序當掉，程式會察覺並立即停止。<code>duration</code>（未另行指定時為 300 秒）在任何情況下都是工作階段的最長執行時間。</li>
+    <li><strong>什麼都沒做時會告訴你。</strong>沒有任何流量到達目標、因而什麼也沒拖慢的工作階段，會以 <code>BadNetworkWarning</code> 結束。常見原因是應用程式連線的位址不是目標，例如一個容器。</li>
+    <li><strong>macOS。</strong>程式在 Windows 和 Linux 上執行。在 Mac 上，請在 Linux x86_64 容器或虛擬機器中，或在 CI 執行器上執行測試。</li>
+  </ul>
+  <p>套件在 <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/python/beannetworktester">GitHub</a> 上的 README 列出了每個選項，並說明了每則訊息。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

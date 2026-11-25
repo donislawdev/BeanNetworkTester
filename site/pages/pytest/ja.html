@@ -1,0 +1,96 @@
+<section class="hero">
+  <h1>pytest でネットワーク遅延とパケットロスを再現</h1>
+  <p class="lead">モックは使いません。PyPI の <code>beannetworktester</code> パッケージは pytest に <code>bad_network</code> フィクスチャを追加し、テストの間だけ本物のネットワークを遅くします。アプリ、ブラウザー、サーバーが実際に通信している間に、1 つのサーバーや 1 つのプロセスに対して、遅延、パケットロス、速度制限、完全な切断を加えます。パッケージには Bean Network Tester のプログラムが入っており、Windows と Linux で実行します。1.1.0 以降の安定版リリースごとに公開されます。</p>
+</section>
+
+<section>
+  <h2>インストール</h2>
+<pre><code>pip install beannetworktester</code></pre>
+  <p>Windows x64 または Linux x64（glibc 2.39 以降、たとえば Ubuntu 24.04）と Python 3.10 以降が必要です。</p>
+  <p>ネットワークを変えるには、Windows では管理者権限が必要です。ターミナルを「管理者として実行」で開いてください。Linux では root か、パスワードなしで <code>sudo</code> を実行できるユーザーが必要で、その場合 <code>sudo</code> で動くのはプログラムだけです。GitHub がホストする Windows ランナーは昇格した権限で動き、Ubuntu ランナーは <code>sudo</code> を許可しているので、ワークフローに追加の手順は要りません。</p>
+</section>
+
+<section>
+  <h2>遅いネットワークでのテスト</h2>
+  <p>これを <code>test_slow.py</code> として保存し、<code>pytest</code> を実行します。</p>
+<pre><code>import subprocess
+import sys
+import time
+import urllib.request
+
+import pytest
+
+
+@pytest.fixture
+def web_server():
+    server = subprocess.Popen([sys.executable, "-m", "http.server", "8000"])
+    time.sleep(1)
+    yield "http://localhost:8000"
+    server.terminate()
+
+
+def test_a_page_takes_longer_on_a_slow_network(bad_network, web_server):
+    bad_network(server=web_server, latency=500)
+    started = time.monotonic()
+    urllib.request.urlopen(web_server).read()
+    assert time.monotonic() - started &gt;= 0.5</code></pre>
+  <p>テストが通るのは、応答が本当に遅れて届くからです。そのサーバーとの間のすべてのパケットが 500 ms 待ちます。テストが終わるとネットワークは元に戻ります。Windows で <code>latency=200</code> にして測定すると、対象のサーバーへのリクエストは 4 ms から 404 ms になり（リクエストと応答の両方が待つため）、Chromium のページは 61 ms から 412 ms になりました。対象外の別のローカルサーバーは、その間 11 ms で応答していました。</p>
+  <p>権限がすぐに使えない場合は、<code>bad_network(simulate=True, latency=500)</code> を使います。作り物の通信でプログラムを動かし、ネットワークには何も変更を加えません。パッケージが正しく入っているかの確認用で、何も遅くしません。</p>
+</section>
+
+<section>
+  <h2>bad_network フィクスチャ</h2>
+  <p>パッケージをインストールすれば、pytest がフィクスチャを自動で見つけます。<code>bad_network</code> を呼ぶとセッションが始まり、ネットワークが遅くなった時点で戻ります。セッションはテストが成功しても失敗してもクラッシュしても、テストの終わりに止まり、プログラムのサマリーはテストの <code>user_properties</code> に入り、そこから JUnit XML レポートに入ります。途中で条件を変えるには、次のセッションを始める前に最初のセッションを止めます。</p>
+<pre><code>def test_the_app_recovers_when_the_api_comes_back(bad_network):
+    outage = bad_network(server="http://localhost:8000", loss=100)
+    assert app_shows_offline_banner()
+    outage.stop()
+    assert app_hides_offline_banner()</code></pre>
+  <p>pytest の外では、<code>from beannetworktester import bad_network</code> で同じセッションを始められ、<code>with bad_network(...) as session:</code> はブロックの終わりで止めます。</p>
+</section>
+
+<section>
+  <h2>Playwright for Python</h2>
+  <p>Playwright for Python は pytest の上で動くので、フィクスチャは同じです。Chromium、Firefox、WebKit は WebSocket も含めて同じように遅くなります。遅いのはブラウザーの想定ではなく、ネットワークそのものだからです。</p>
+<pre><code>from playwright.sync_api import expect
+
+
+def test_the_spinner_shows_on_a_slow_network(bad_network, page):
+    bad_network(server="http://localhost:3000", latency=800)
+    page.goto("http://localhost:3000")
+    expect(page.get_by_role("progressbar")).to_be_visible()</code></pre>
+</section>
+
+<section>
+  <h2>セッションの対象</h2>
+  <p>どのセッションも何かを対象にし、変わるのはその通信だけです。対象のないセッションはマシンのすべての接続を、テストランナー自身の接続まで遅くしてしまうため、開始しません。</p>
+  <ul>
+    <li><strong><code>server="http://localhost:3000"</code></strong> は、そのアドレスとポートへのすべての接続を遅くします。アプリからでも、ブラウザーからでも、ほかのどのプログラムからでもです。<code>"db.local:5432"</code>、<code>("10.0.0.5", 443)</code>、サーバーのリストも使えます。これが第一の選択肢で、Windows でも Linux でも正確です。</li>
+    <li><strong><code>process="self"</code></strong> は、テストプロセスと、それが起動したすべてのプログラム（Playwright のブラウザーなど）を遅くします。テスト自身が起動したプロセスは、その <code>subprocess.Popen</code> を渡します。</li>
+    <li><strong><code>dst_port</code>、<code>dst_ip</code>、<code>target</code></strong> はプログラム自身の対象で、<a href="../komando-rain/">その構文</a>で書きます。既知のポートやアドレスにある API 向けです。一致するものすべてに届きます。<code>dst_port=443</code> はエディターの通信も含むマシンのすべての HTTPS 接続、<code>target="python"</code> は名前に「python」を含むすべてのプログラムです。</li>
+  </ul>
+  <p>一緒に指定した対象は互いを絞り込みます。<code>server=</code> と <code>process="self"</code> を合わせると、このテストからそのサーバーへの接続だけが遅くなります。Linux では、<code>process=</code> と <code>target</code> が新しい接続に効くのは、開いてから最大で約 0.2 秒後です。最初のリクエストが大事なときはサーバーを対象にしてください。</p>
+</section>
+
+<section>
+  <h2>セッションでできること</h2>
+  <p>各設定はプログラムの<a href="../komando-rain/">コマンドラインオプション</a>のひとつで、<code>-</code> の代わりに <code>_</code> で書きます。<code>latency=300</code> はすべてのパケットに 300 ms を加え、<code>jitter=100</code> はその遅延を揺らし、<code>loss=5</code> はパケットの 5 % を落とし、<code>down</code> と <code>up</code> は速度を KB/s で制限し、<code>loss=100</code> はサーバーを切り離します。<code>preset="presets.3g"</code> は回線プロファイル一式で、<code>seed=42</code> は毎回同じランダムな選択をします。<a href="../jikan-henka-shinario/">シナリオ</a>は秒ごとに条件を変えます：<code>scenario="scenarios/cafe-wifi.json"</code>。シナリオのステップはネットワークの振る舞いを変えられますが、セッションの対象は変えられません。</p>
+</section>
+
+<section>
+  <h2>pytest-xdist と上限</h2>
+  <ul>
+    <li><strong>一度にひとつ。</strong>同じ通信に 2 つのセッションをかけると効果が重なるため、pytest-xdist のワーカーは順番待ちをし、それぞれ最大 <code>wait</code> 秒（指定しなければ 600）待ちます。同じテスト内の 2 つ目のセッションはすぐに拒否されます。</li>
+    <li><strong>テストとともに終わります。</strong>テストプロセスが落ちると、プログラムはそれに気づいてすぐ止まります。<code>duration</code>（指定しなければ 300 秒）は、どんな場合でもセッションが動ける最長時間です。</li>
+    <li><strong>何もしなかったときは知らせます。</strong>対象に何も届かず、何も遅くしなかったセッションは <code>BadNetworkWarning</code> で終わります。よくある原因は、アプリが対象とは別のアドレス、たとえばコンテナと通信していることです。</li>
+    <li><strong>macOS。</strong>プログラムは Windows と Linux で動きます。Mac では、Linux x86_64 のコンテナや仮想マシン、または CI ランナーでテストを実行してください。</li>
+  </ul>
+  <p>パッケージの README（<a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/python/beannetworktester">GitHub</a>）に、すべてのオプションと各メッセージの意味が載っています。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

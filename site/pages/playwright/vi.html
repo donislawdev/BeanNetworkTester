@@ -1,0 +1,83 @@
+<section class="hero">
+  <h1>Mô phỏng mạng chậm và mất gói trong kiểm thử Playwright</h1>
+  <p class="lead">Playwright có thể đưa một trang về ngoại tuyến và làm chậm Chromium qua DevTools. Gói <code>beannetworktester</code> trên npm thì làm chậm mạng thật, bên dưới trình duyệt: độ trễ, mất gói, giới hạn tốc độ hoặc mất kết nối hoàn toàn, cho máy chủ mà bài kiểm thử của bạn nói chuyện. Chromium, Firefox và WebKit bị làm chậm như nhau, kể cả WebSocket. Gói mang theo chương trình của Bean Network Tester và chạy nó trong suốt một bài kiểm thử, trên Windows và Linux. Gói được phát hành cùng mỗi bản ổn định từ 1.1.0 trở đi.</p>
+</section>
+
+<section>
+  <h2>Cài đặt</h2>
+<pre><code>npm install -D @playwright/test beannetworktester
+npx playwright install chromium</code></pre>
+  <p>Cần Windows x64 hoặc Linux x64 (glibc 2.39 trở lên, như Ubuntu 24.04) và Node 20 trở lên. npm cài chương trình cho hệ thống của bạn dưới dạng phụ thuộc tùy chọn, nên đừng bỏ qua các phụ thuộc tùy chọn.</p>
+  <p>Thay đổi mạng cần quyền quản trị trên Windows: mở terminal bằng "Chạy với tư cách quản trị viên". Trên Linux cần root, hoặc một người dùng được chạy <code>sudo</code> không cần mật khẩu, và khi đó chỉ chương trình chạy dưới <code>sudo</code>. Các runner Windows do GitHub lưu trữ chạy với quyền nâng cao và runner Ubuntu của GitHub cho phép <code>sudo</code>, nên workflow không cần thêm bước nào.</p>
+</section>
+
+<section>
+  <h2>Một bài kiểm thử trên mạng chậm</h2>
+  <p>Lưu đoạn này thành <code>tests/slow.spec.js</code> rồi chạy <code>npx playwright test</code>:</p>
+<pre><code>import http from 'node:http';
+import { test, expect } from 'beannetworktester/playwright';
+
+let server;
+test.beforeAll(async () =&gt; {
+  server = http.createServer((request, response) =&gt; response.end('&lt;h1&gt;Hello&lt;/h1&gt;'));
+  await new Promise((done) =&gt; server.listen(8000, done));
+});
+test.afterAll(() =&gt; server.close());
+
+test('a page takes longer on a slow network', async ({ page, badNetwork }) =&gt; {
+  await badNetwork({ server: 'http://localhost:8000', latency: 500 });
+  const started = Date.now();
+  await page.goto('http://localhost:8000');
+  await expect(page.locator('h1')).toHaveText('Hello');
+  expect(Date.now() - started).toBeGreaterThanOrEqual(500);
+});</code></pre>
+  <p>Bài kiểm thử đạt vì trang thật sự đến muộn hơn: mọi gói tin đến và đi từ máy chủ đó đều chờ 500 ms. Khi bài kiểm thử kết thúc, mạng trở lại bình thường. Đo trên Windows với <code>latency: 200</code>: một yêu cầu tới máy chủ trong mục tiêu tăng từ 0,8 ms lên 404 ms, vì cả yêu cầu lẫn câu trả lời đều chờ, và một trang trong Chromium từ 13 ms lên 416 ms. Một máy chủ cục bộ khác, ngoài mục tiêu, trong lúc đó trả lời trong 1,6 ms.</p>
+  <p>Chưa có quyền trong tay? <code>badNetwork({ simulate: true, latency: 500 })</code> chạy chương trình trên lưu lượng giả và không thay đổi gì trên mạng. Nó kiểm tra rằng gói đã được cài đúng, và không làm chậm gì.</p>
+</section>
+
+<section>
+  <h2>Fixture badNetwork</h2>
+  <p>Import <code>test</code> và <code>expect</code> từ <code>beannetworktester/playwright</code> thay vì <code>@playwright/test</code>. <code>badNetwork</code> bắt đầu một phiên khi bạn gọi nó và hoàn tất ngay khi mạng đã chậm. Phiên dừng khi bài kiểm thử kết thúc, dù đạt, trượt hay bị sập, và bản tóm tắt của chương trình được đính kèm vào báo cáo của bài kiểm thử với tên <code>bad-network</code>. Để đổi điều kiện giữa chừng, hãy dừng phiên đầu trước khi bắt đầu phiên tiếp theo:</p>
+<pre><code>test('the app recovers when the API comes back', async ({ page, badNetwork }) =&gt; {
+  const outage = await badNetwork({ server: 'http://localhost:8000', loss: 100 });
+  await page.goto('http://localhost:3000');
+  await expect(page.getByText('Offline')).toBeVisible();
+  await outage.stop();
+  await expect(page.getByText('Offline')).toBeHidden();
+});</code></pre>
+  <p>Ngoài Playwright Test, <code>badNetwork</code> từ <code>require('beannetworktester')</code> bắt đầu cùng một phiên: <code>const session = await badNetwork({ ... })</code>, và <code>await session.stop()</code> kết thúc nó và trả về bản tóm tắt.</p>
+</section>
+
+<section>
+  <h2>Một phiên nhắm vào đâu</h2>
+  <p>Mỗi phiên nhắm vào một thứ, và chỉ lưu lượng đó thay đổi. Một phiên không có mục tiêu sẽ làm chậm mọi kết nối của máy, kể cả của chính trình chạy kiểm thử, nên nó không khởi động.</p>
+  <ul>
+    <li><strong><code>server: 'http://localhost:3000'</code></strong> làm chậm mọi kết nối tới địa chỉ và cổng đó, từ trình duyệt, từ máy chủ API của bạn hay từ bất kỳ chương trình nào khác. <code>'db.local:5432'</code> và một danh sách máy chủ cũng dùng được. Đây là lựa chọn đầu tiên, và chính xác trên cả Windows lẫn Linux.</li>
+    <li><strong><code>process: 'self'</code></strong> làm chậm worker kiểm thử và mọi chương trình nó đã khởi chạy, như trình duyệt của nó. Một tiến trình do chính bài kiểm thử khởi chạy được truyền vào dưới dạng <code>ChildProcess</code> của nó.</li>
+    <li><strong><code>dstPort</code>, <code>dstIp</code> và <code>target</code></strong> là các mục tiêu riêng của chương trình, viết theo <a href="../dong-lenh/">cú pháp của nó</a>, dành cho một API trên cổng hay địa chỉ đã biết. Chúng chạm tới mọi thứ khớp: <code>dstPort: 443</code> là mọi kết nối HTTPS của máy, kể cả của trình soạn thảo, và <code>target: 'node'</code> là mọi chương trình có "node" trong tên.</li>
+  </ul>
+  <p>Các mục tiêu đưa cùng nhau sẽ thu hẹp lẫn nhau: <code>server</code> với <code>process: 'self'</code> chỉ làm chậm các kết nối của worker này tới máy chủ đó. Trên Linux, <code>process</code> và <code>target</code> chạm tới một kết nối mới trong vòng khoảng 0,2 giây sau khi nó mở, nên hãy nhắm vào máy chủ khi yêu cầu đầu tiên quan trọng.</p>
+</section>
+
+<section>
+  <h2>Một phiên làm được gì</h2>
+  <p>Mỗi thiết lập là một trong các <a href="../dong-lenh/">tùy chọn dòng lệnh</a> của chương trình. <code>latency: 300</code> thêm 300 ms cho mỗi gói tin, <code>jitter: 100</code> làm độ trễ đó dao động, <code>loss: 5</code> bỏ 5 % gói tin, <code>down</code> và <code>up</code> giới hạn tốc độ theo KB/s, và <code>loss: 100</code> cắt hẳn máy chủ. <code>preset: 'presets.3g'</code> là cả một hồ sơ đường truyền, và <code>seed: 42</code> lặp lại cùng những lựa chọn ngẫu nhiên ở mỗi lần chạy. Một <a href="../kich-ban-theo-thoi-gian/">kịch bản</a> thay đổi điều kiện theo từng giây: <code>scenario: 'scenarios/cafe-wifi.json'</code>. Một bước của kịch bản có thể đổi cách mạng hoạt động, nhưng không đổi được thứ mà phiên nhắm vào.</p>
+</section>
+
+<section>
+  <h2>Worker song song và giới hạn</h2>
+  <ul>
+    <li><strong>Mỗi lần một phiên.</strong> Hai phiên trên cùng lưu lượng sẽ cộng dồn, nên các worker song song lần lượt chờ đến lượt, mỗi worker chờ tối đa <code>wait</code> giây (600 nếu bạn không đặt giá trị khác). Phiên thứ hai trong cùng bài kiểm thử bị từ chối ngay.</li>
+    <li><strong>Nó kết thúc cùng bài kiểm thử.</strong> Nếu worker kiểm thử chết, chương trình nhận ra và dừng ngay. <code>duration</code> (300 giây nếu bạn không đặt giá trị khác) là thời gian lâu nhất một phiên được chạy trong mọi trường hợp.</li>
+    <li><strong>Nó báo khi không làm gì.</strong> Một phiên không làm chậm gì, vì không có gì tới mục tiêu của nó, sẽ kết thúc với <code>BadNetworkWarning</code>. Thường là ứng dụng nói chuyện với một địa chỉ khác mục tiêu, như một container.</li>
+    <li><strong>macOS.</strong> Chương trình chạy trên Windows và Linux. Trên máy Mac, hãy chạy kiểm thử trong container hoặc máy ảo Linux x86_64, hoặc trên một runner CI.</li>
+  </ul>
+  <p>README của gói trên <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/npm/beannetworktester">GitHub</a> liệt kê mọi tùy chọn và giải thích mọi thông báo.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

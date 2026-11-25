@@ -7,14 +7,14 @@
   <h2>Forma unui pas</h2>
   <p>Degradează pe durata testului, apoi lasă-l să se oprească singur. Niciun pas de curățare de uitat:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>Într-un job GitHub Actions, pe un runner Windows găzduit de tine (self-hosted):</p>
+  <p>Într-un job GitHub Actions pe un runner Windows:</p>
 <pre><code>- name: Test the app on a poor connection
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>Două lucruri despre runner: captura traficului cere drepturi de administrator, iar un runner găzduit nu ți le dă, deci asta aparține unei mașini Windows self-hosted.</p>
+  <p>Capturarea traficului cere drepturi de administrator. Runnerele Windows găzduite de GitHub rulează cu drepturi ridicate, deci pasul merge acolo așa cum e, iar un runner self-hosted trebuie să ruleze ca administrator. Un test în Playwright sau pytest poate și să pornească și să oprească singur programul: vezi <a href="../retea-lenta-in-playwright/">Playwright</a> și <a href="../latenta-retelei-in-pytest/">pytest</a>.</p>
 </section>
 
 <section>

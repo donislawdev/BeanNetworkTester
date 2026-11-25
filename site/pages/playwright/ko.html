@@ -1,0 +1,83 @@
+<section class="hero">
+  <h1>Playwright 테스트에서 느린 네트워크와 패킷 손실 시뮬레이션</h1>
+  <p class="lead">Playwright는 페이지를 오프라인으로 만들고 DevTools로 Chromium을 느리게 할 수 있습니다. npm의 <code>beannetworktester</code> 패키지는 대신 브라우저 아래에서 실제 네트워크를 느리게 합니다. 테스트가 통신하는 서버에 지연, 패킷 손실, 속도 제한, 완전한 끊김을 더합니다. Chromium, Firefox, WebKit은 WebSocket까지 똑같이 느려집니다. 패키지에는 Bean Network Tester 프로그램이 들어 있으며, 테스트 동안 Windows와 Linux에서 이를 실행합니다. 1.1.0부터 모든 안정 릴리스와 함께 게시됩니다.</p>
+</section>
+
+<section>
+  <h2>설치</h2>
+<pre><code>npm install -D @playwright/test beannetworktester
+npx playwright install chromium</code></pre>
+  <p>Windows x64 또는 Linux x64(glibc 2.39 이상, 예: Ubuntu 24.04)와 Node 20 이상이 필요합니다. npm은 시스템에 맞는 프로그램을 선택적 의존성으로 설치하므로, 선택적 의존성을 빼지 마세요.</p>
+  <p>네트워크를 바꾸려면 Windows에서는 관리자 권한이 필요합니다. 터미널을 "관리자 권한으로 실행"으로 여세요. Linux에서는 root 또는 비밀번호 없이 <code>sudo</code>를 쓸 수 있는 사용자가 필요하며, 이때 <code>sudo</code>로 실행되는 것은 프로그램뿐입니다. GitHub가 호스팅하는 Windows 러너는 높은 권한으로 실행되고 Ubuntu 러너는 <code>sudo</code>를 허용하므로, 워크플로에 추가 단계가 필요 없습니다.</p>
+</section>
+
+<section>
+  <h2>느린 네트워크에서 하는 테스트</h2>
+  <p>이것을 <code>tests/slow.spec.js</code>로 저장하고 <code>npx playwright test</code>를 실행하세요.</p>
+<pre><code>import http from 'node:http';
+import { test, expect } from 'beannetworktester/playwright';
+
+let server;
+test.beforeAll(async () =&gt; {
+  server = http.createServer((request, response) =&gt; response.end('&lt;h1&gt;Hello&lt;/h1&gt;'));
+  await new Promise((done) =&gt; server.listen(8000, done));
+});
+test.afterAll(() =&gt; server.close());
+
+test('a page takes longer on a slow network', async ({ page, badNetwork }) =&gt; {
+  await badNetwork({ server: 'http://localhost:8000', latency: 500 });
+  const started = Date.now();
+  await page.goto('http://localhost:8000');
+  await expect(page.locator('h1')).toHaveText('Hello');
+  expect(Date.now() - started).toBeGreaterThanOrEqual(500);
+});</code></pre>
+  <p>테스트가 통과하는 이유는 페이지가 실제로 늦게 도착하기 때문입니다. 그 서버를 오가는 모든 패킷이 500 ms씩 기다립니다. 테스트가 끝나면 네트워크는 정상으로 돌아옵니다. Windows에서 <code>latency: 200</code>으로 측정한 결과, 대상 서버로 보낸 요청은 요청과 응답이 모두 기다리므로 0.8 ms에서 404 ms가 되었고, Chromium의 페이지는 13 ms에서 416 ms가 되었습니다. 대상이 아닌 다른 로컬 서버는 그동안 1.6 ms 안에 응답했습니다.</p>
+  <p>당장 권한이 없나요? <code>badNetwork({ simulate: true, latency: 500 })</code>는 지어낸 트래픽으로 프로그램을 실행하며 네트워크에는 아무것도 바꾸지 않습니다. 패키지가 제대로 설치되었는지 확인하는 용도이고, 아무것도 느리게 하지 않습니다.</p>
+</section>
+
+<section>
+  <h2>badNetwork fixture</h2>
+  <p><code>test</code>와 <code>expect</code>를 <code>@playwright/test</code> 대신 <code>beannetworktester/playwright</code>에서 가져오세요. <code>badNetwork</code>를 호출하면 세션이 시작되고, 네트워크가 느려지면 완료됩니다. 세션은 테스트가 통과하든 실패하든 중단되든 테스트가 끝날 때 멈추며, 프로그램의 요약은 <code>bad-network</code>라는 이름으로 테스트 보고서에 첨부됩니다. 테스트 도중 조건을 바꾸려면, 다음 세션을 시작하기 전에 첫 세션을 멈추세요.</p>
+<pre><code>test('the app recovers when the API comes back', async ({ page, badNetwork }) =&gt; {
+  const outage = await badNetwork({ server: 'http://localhost:8000', loss: 100 });
+  await page.goto('http://localhost:3000');
+  await expect(page.getByText('Offline')).toBeVisible();
+  await outage.stop();
+  await expect(page.getByText('Offline')).toBeHidden();
+});</code></pre>
+  <p>Playwright Test 밖에서는 <code>require('beannetworktester')</code>의 <code>badNetwork</code>가 같은 세션을 시작합니다. <code>const session = await badNetwork({ ... })</code>로 시작하고, <code>await session.stop()</code>이 세션을 끝내고 요약을 돌려줍니다.</p>
+</section>
+
+<section>
+  <h2>세션이 겨냥하는 대상</h2>
+  <p>모든 세션은 무언가를 겨냥하며, 그 트래픽만 바뀝니다. 대상이 없는 세션은 테스트 러너 자신의 연결까지 포함해 컴퓨터의 모든 연결을 느리게 만들 것이므로, 아예 시작하지 않습니다.</p>
+  <ul>
+    <li><strong><code>server: 'http://localhost:3000'</code></strong>는 그 주소와 포트로 가는 모든 연결을 느리게 합니다. 브라우저든, API 서버든, 다른 어떤 프로그램이든 마찬가지입니다. <code>'db.local:5432'</code>와 서버 목록도 쓸 수 있습니다. 이것이 첫 번째 선택이며, Windows와 Linux에서 정확합니다.</li>
+    <li><strong><code>process: 'self'</code></strong>는 테스트 worker와 그것이 시작한 모든 프로그램(예: 브라우저)을 느리게 합니다. 테스트가 직접 시작한 프로세스는 그 <code>ChildProcess</code>로 넘깁니다.</li>
+    <li><strong><code>dstPort</code>, <code>dstIp</code>, <code>target</code></strong>은 프로그램 자체의 대상으로, <a href="../myeongnyeongjul/">프로그램의 문법</a>으로 쓰며 알려진 포트나 주소의 API를 위한 것입니다. 일치하는 모든 것에 닿습니다. <code>dstPort: 443</code>은 편집기의 연결까지 포함한 컴퓨터의 모든 HTTPS 연결이고, <code>target: 'node'</code>는 이름에 "node"가 들어간 모든 프로그램입니다.</li>
+  </ul>
+  <p>함께 준 대상은 서로를 좁힙니다. <code>server</code>와 <code>process: 'self'</code>를 함께 쓰면 이 worker에서 그 서버로 가는 연결만 느려집니다. Linux에서 <code>process</code>와 <code>target</code>은 새 연결이 열린 뒤 최대 약 0.2초가 지나서야 적용되므로, 첫 요청이 중요하면 서버를 겨냥하세요.</p>
+</section>
+
+<section>
+  <h2>세션으로 할 수 있는 일</h2>
+  <p>모든 설정은 프로그램의 <a href="../myeongnyeongjul/">명령줄 옵션</a> 중 하나입니다. <code>latency: 300</code>은 모든 패킷에 300 ms를 더하고, <code>jitter: 100</code>은 그 지연을 흔들고, <code>loss: 5</code>는 패킷의 5 %를 버리고, <code>down</code>과 <code>up</code>은 속도를 KB/s로 제한하며, <code>loss: 100</code>은 서버를 끊습니다. <code>preset: 'presets.3g'</code>는 회선 프로필 전체이고, <code>seed: 42</code>는 실행할 때마다 같은 무작위 선택을 합니다. <a href="../sigan-byeol-sinario/">시나리오</a>는 초가 흐름에 따라 조건을 바꿉니다: <code>scenario: 'scenarios/cafe-wifi.json'</code>. 시나리오의 단계는 네트워크의 동작을 바꿀 수 있지만, 세션의 대상은 바꿀 수 없습니다.</p>
+</section>
+
+<section>
+  <h2>병렬 worker와 제한</h2>
+  <ul>
+    <li><strong>한 번에 하나.</strong> 같은 트래픽에 두 세션이 걸리면 효과가 더해지므로, 병렬 worker는 차례를 기다리며 각각 최대 <code>wait</code>초(따로 정하지 않으면 600) 동안 기다립니다. 같은 테스트 안의 두 번째 세션은 바로 거부됩니다.</li>
+    <li><strong>테스트와 함께 끝납니다.</strong> 테스트 worker가 죽으면 프로그램이 이를 알아채고 바로 멈춥니다. <code>duration</code>(따로 정하지 않으면 300초)은 어떤 경우에도 세션이 실행될 수 있는 가장 긴 시간입니다.</li>
+    <li><strong>아무 일도 하지 않았으면 알려 줍니다.</strong> 대상에 아무것도 닿지 않아 아무것도 느리게 하지 않은 세션은 <code>BadNetworkWarning</code>으로 끝납니다. 보통은 앱이 대상이 아닌 다른 주소, 예를 들어 컨테이너와 통신하는 경우입니다.</li>
+    <li><strong>macOS.</strong> 프로그램은 Windows와 Linux에서 실행됩니다. Mac에서는 Linux x86_64 컨테이너나 가상 머신, 또는 CI 러너에서 테스트를 실행하세요.</li>
+  </ul>
+  <p><a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/npm/beannetworktester">GitHub</a>에 있는 패키지 README에 모든 옵션과 각 메시지의 뜻이 나와 있습니다.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

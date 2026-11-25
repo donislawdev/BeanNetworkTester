@@ -9,15 +9,14 @@
   <p>Psuj sieć na czas testu i pozwól narzędziu zatrzymać się samo. Nie ma kroku sprzątającego, o
   którym można zapomnieć:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>W zadaniu GitHub Actions, na własnym runnerze z Windows:</p>
+  <p>W zadaniu GitHub Actions na runnerze z Windows:</p>
 <pre><code>- name: Test aplikacji na słabym łączu
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>Dwie rzeczy o runnerze: przechwytywanie ruchu wymaga praw administratora, a runner hostowany
-  przez GitHuba ich nie da, więc to zadanie należy do własnej maszyny z Windows.</p>
+  <p>Przechwytywanie ruchu wymaga praw administratora. Runnery GitHuba z Windows działają z tymi prawami, więc krok działa tam bez zmian, a własny runner musi działać jako administrator. Test w Playwright albo pyteście może też sam uruchamiać i zatrzymywać program: zobacz <a href="../wolna-siec-w-playwright/">Playwright</a> i <a href="../opoznienie-sieci-w-pytest/">pytest</a>.</p>
 </section>
 
 <section>

@@ -1,0 +1,96 @@
+<section class="hero">
+  <h1>Simulate network latency and packet loss in pytest</h1>
+  <p class="lead">Nothing mocked: the <code>beannetworktester</code> package on PyPI gives pytest a <code>bad_network</code> fixture that slows the real network for the length of a test. Latency, packet loss, a speed limit or a whole outage, for one server or one process, while your app, your browser and your server really talk to each other. The package carries Bean Network Tester's own program and runs it on Windows and Linux. It is published with every stable release from 1.1.0 on.</p>
+</section>
+
+<section>
+  <h2>Install it</h2>
+<pre><code>pip install beannetworktester</code></pre>
+  <p>It needs Windows x64 or Linux x64 (glibc 2.39 or newer, such as Ubuntu 24.04) and Python 3.10 or newer.</p>
+  <p>Changing the network needs administrator rights on Windows: open the terminal with Run as administrator. On Linux it needs root, or a user who may run <code>sudo</code> without a password, and then only the program runs under <code>sudo</code>. GitHub's hosted Windows runners run elevated and its Ubuntu runners allow <code>sudo</code>, so a workflow needs no extra step.</p>
+</section>
+
+<section>
+  <h2>A test on a slow network</h2>
+  <p>Save this as <code>test_slow.py</code> and run <code>pytest</code>:</p>
+<pre><code>import subprocess
+import sys
+import time
+import urllib.request
+
+import pytest
+
+
+@pytest.fixture
+def web_server():
+    server = subprocess.Popen([sys.executable, "-m", "http.server", "8000"])
+    time.sleep(1)
+    yield "http://localhost:8000"
+    server.terminate()
+
+
+def test_a_page_takes_longer_on_a_slow_network(bad_network, web_server):
+    bad_network(server=web_server, latency=500)
+    started = time.monotonic()
+    urllib.request.urlopen(web_server).read()
+    assert time.monotonic() - started &gt;= 0.5</code></pre>
+  <p>The test passes because the answer really arrives later: every packet to and from that server waits 500 ms. When the test ends, the network is back to normal. Measured on Windows with <code>latency=200</code>: a request to the server in the aim went from 4 ms to 404 ms, because the request and the answer both wait, and a page in Chromium from 61 ms to 412 ms. Another local server, outside the aim, answered in 11 ms meanwhile.</p>
+  <p>No rights at hand? <code>bad_network(simulate=True, latency=500)</code> runs the program on made-up traffic and changes nothing on the network. It checks that the package is set up, and slows nothing.</p>
+</section>
+
+<section>
+  <h2>The bad_network fixture</h2>
+  <p>pytest finds the fixture on its own once the package is installed. <code>bad_network</code> starts a session when you call it and returns once the network is slow. The session stops when the test ends, whether it passed, failed or crashed, and the program's summary goes into the test's <code>user_properties</code>, and from there into a JUnit XML report. To change the conditions halfway, stop the first session before you start the next:</p>
+<pre><code>def test_the_app_recovers_when_the_api_comes_back(bad_network):
+    outage = bad_network(server="http://localhost:8000", loss=100)
+    assert app_shows_offline_banner()
+    outage.stop()
+    assert app_hides_offline_banner()</code></pre>
+  <p>Outside pytest, <code>from beannetworktester import bad_network</code> starts the same session, and <code>with bad_network(...) as session:</code> stops it at the end of the block.</p>
+</section>
+
+<section>
+  <h2>Playwright for Python</h2>
+  <p>Playwright for Python runs on pytest, so the fixture is the same. Chromium, Firefox and WebKit are slowed the same way, WebSockets included, because the network itself is slow, not the browser's idea of it:</p>
+<pre><code>from playwright.sync_api import expect
+
+
+def test_the_spinner_shows_on_a_slow_network(bad_network, page):
+    bad_network(server="http://localhost:3000", latency=800)
+    page.goto("http://localhost:3000")
+    expect(page.get_by_role("progressbar")).to_be_visible()</code></pre>
+</section>
+
+<section>
+  <h2>What a session aims at</h2>
+  <p>Every session aims at something, and only that traffic changes. A session without an aim would slow every connection of the machine, the test runner's own included, so it does not start.</p>
+  <ul>
+    <li><strong><code>server="http://localhost:3000"</code></strong> slows every connection to that address and port, from your app, your browser or any other program. <code>"db.local:5432"</code>, <code>("10.0.0.5", 443)</code> and a list of servers work too. This is the first choice, and it is exact on Windows and Linux.</li>
+    <li><strong><code>process="self"</code></strong> slows the test process and every program it started, such as Playwright's browser. A process your test started itself is given as its <code>subprocess.Popen</code>.</li>
+    <li><strong><code>dst_port</code>, <code>dst_ip</code> and <code>target</code></strong> are the program's own aims, written in <a href="../command-line/">its syntax</a>, for an API on a known port or address. They reach everything that matches: <code>dst_port=443</code> is every HTTPS connection of the machine, your editor's included, and <code>target="python"</code> every program with "python" in its name.</li>
+  </ul>
+  <p>Aims given together narrow each other: <code>server=</code> with <code>process="self"</code> slows only this test's connections to that server. On Linux, <code>process=</code> and <code>target</code> reach a new connection up to about 0.2 seconds after it opens, so aim at the server when the first request counts.</p>
+</section>
+
+<section>
+  <h2>What a session can do</h2>
+  <p>Every setting is one of the program's <a href="../command-line/">command-line options</a>, written with <code>_</code> instead of <code>-</code>. <code>latency=300</code> adds 300 ms to every packet, <code>jitter=100</code> varies that delay, <code>loss=5</code> drops 5 % of the packets, <code>down</code> and <code>up</code> limit the speed in KB/s, and <code>loss=100</code> cuts the server off. <code>preset="presets.3g"</code> is a whole link profile, and <code>seed=42</code> makes the same random choices on every run. A <a href="../scenarios-over-time/">scenario</a> changes the conditions as the seconds pass: <code>scenario="scenarios/cafe-wifi.json"</code>. A scenario step may change how the network behaves, but not what the session aims at.</p>
+</section>
+
+<section>
+  <h2>pytest-xdist and limits</h2>
+  <ul>
+    <li><strong>One at a time.</strong> Two sessions over the same traffic would add up, so pytest-xdist workers take turns, each waiting up to <code>wait</code> seconds (600 unless you give another). A second session in the same test is refused at once.</li>
+    <li><strong>It ends with the test.</strong> If the test process dies, the program sees it and stops at once. <code>duration</code> (300 seconds unless you give another) is the most a session may run in any case.</li>
+    <li><strong>It says when it did nothing.</strong> A session that slowed nothing, because nothing reached its aim, ends with a <code>BadNetworkWarning</code>. The usual cause is an app that talks to another address than the aim, such as a container.</li>
+    <li><strong>macOS.</strong> The program runs on Windows and Linux. On a Mac, run the tests in a Linux x86_64 container or virtual machine, or on a CI runner.</li>
+  </ul>
+  <p>The package's README on <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/python/beannetworktester">GitHub</a> lists every option and what each message means.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

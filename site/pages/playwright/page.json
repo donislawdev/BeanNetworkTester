@@ -1,0 +1,138 @@
+{
+  "id": "playwright",
+  "order": 61,
+  "languages": {
+    "en": {
+      "slug": "playwright-slow-network",
+      "link_text": "Slow network in Playwright",
+      "title": "Simulate a slow network and packet loss in Playwright tests",
+      "description": "A Playwright Test fixture that adds real latency, packet loss or an outage to one server, in Chromium, Firefox and WebKit alike, on Windows and Linux."
+    },
+    "pl": {
+      "slug": "wolna-siec-w-playwright",
+      "link_text": "Wolna sieć w Playwright",
+      "title": "Wolna sieć i utrata pakietów w testach Playwright",
+      "description": "Fixture do Playwright Test, który dodaje jednemu serwerowi prawdziwe opóźnienie, utratę pakietów albo awarię, tak samo w Chromium, Firefoksie i WebKicie."
+    },
+    "zh-Hans": {
+      "slug": "playwright-man-wangluo",
+      "link_text": "Playwright 中的慢网络",
+      "title": "在 Playwright 测试中模拟慢网络和丢包",
+      "description": "一个 Playwright Test fixture，为单个服务器加入真实的延迟、丢包或断网，在 Chromium、Firefox 和 WebKit 中效果相同，支持 Windows 和 Linux。"
+    },
+    "ja": {
+      "slug": "playwright-osoi-nettowaku",
+      "link_text": "Playwright で遅いネットワーク",
+      "title": "Playwright のテストで遅いネットワークとパケットロスを再現",
+      "description": "1つのサーバーに本物の遅延、パケットロス、切断を加える Playwright Test のフィクスチャ。Chromium、Firefox、WebKit で同じように効きます。"
+    },
+    "de": {
+      "slug": "langsames-netz-in-playwright",
+      "link_text": "Langsames Netz in Playwright",
+      "title": "Langsames Netz und Paketverlust in Playwright-Tests simulieren",
+      "description": "Eine Playwright-Test-Fixture, die einem Server echte Latenz, Paketverlust oder einen Ausfall gibt, in Chromium, Firefox und WebKit gleich."
+    },
+    "fr": {
+      "slug": "reseau-lent-dans-playwright",
+      "link_text": "Réseau lent dans Playwright",
+      "title": "Simuler un réseau lent et des pertes de paquets dans Playwright",
+      "description": "Une fixture Playwright Test qui ajoute une vraie latence, des pertes de paquets ou une coupure à un serveur, dans Chromium, Firefox et WebKit."
+    },
+    "es": {
+      "slug": "red-lenta-en-playwright",
+      "link_text": "Red lenta en Playwright",
+      "title": "Simula una red lenta y pérdida de paquetes en pruebas Playwright",
+      "description": "Un fixture de Playwright Test que añade latencia real, pérdida de paquetes o un corte a un servidor, igual en Chromium, Firefox y WebKit, en Windows y Linux."
+    },
+    "pt-BR": {
+      "slug": "rede-lenta-no-playwright",
+      "link_text": "Rede lenta no Playwright",
+      "title": "Simule rede lenta e perda de pacotes em testes Playwright",
+      "description": "Uma fixture do Playwright Test que adiciona latência real, perda de pacotes ou uma queda a um servidor, igual no Chromium, Firefox e WebKit, no Windows e Linux."
+    },
+    "it": {
+      "slug": "rete-lenta-in-playwright",
+      "link_text": "Rete lenta in Playwright",
+      "title": "Simulare rete lenta e perdita di pacchetti nei test Playwright",
+      "description": "Una fixture di Playwright Test che aggiunge latenza reale, perdita di pacchetti o un'interruzione a un server, in Chromium, Firefox e WebKit."
+    },
+    "id": {
+      "slug": "jaringan-lambat-di-playwright",
+      "link_text": "Jaringan lambat di Playwright",
+      "title": "Simulasikan jaringan lambat dan packet loss di tes Playwright",
+      "description": "Fixture Playwright Test yang menambah latensi nyata, packet loss, atau pemutusan ke satu server, sama di Chromium, Firefox, dan WebKit, di Windows dan Linux."
+    },
+    "ru": {
+      "slug": "medlennaya-set-v-playwright",
+      "link_text": "Медленная сеть в Playwright",
+      "title": "Медленная сеть и потеря пакетов в тестах Playwright",
+      "description": "Фикстура Playwright Test, которая добавляет одному серверу настоящую задержку, потерю пакетов или обрыв: одинаково в Chromium, Firefox и WebKit."
+    },
+    "tr": {
+      "slug": "playwright-yavas-ag",
+      "link_text": "Playwright içinde yavaş ağ",
+      "title": "Playwright testlerinde yavaş ağ ve paket kaybı simülasyonu",
+      "description": "Tek bir sunucuya gerçek gecikme, paket kaybı veya kesinti ekleyen bir Playwright Test fixture'ı: Chromium, Firefox ve WebKit'te aynı."
+    },
+    "cs": {
+      "slug": "pomala-sit-v-playwright",
+      "link_text": "Pomalá síť v Playwright",
+      "title": "Simulace pomalé sítě a ztráty paketů v testech Playwright",
+      "description": "Fixture pro Playwright Test, která jednomu serveru přidá skutečnou latenci, ztrátu paketů nebo výpadek, stejně v Chromiu, Firefoxu i WebKitu."
+    },
+    "vi": {
+      "slug": "mang-cham-trong-playwright",
+      "link_text": "Mạng chậm trong Playwright",
+      "title": "Mô phỏng mạng chậm và mất gói trong kiểm thử Playwright",
+      "description": "Một fixture Playwright Test thêm độ trễ thật, mất gói hoặc mất kết nối cho một máy chủ, như nhau trên Chromium, Firefox và WebKit, trên Windows và Linux."
+    },
+    "hi": {
+      "slug": "playwright-mein-dhima-network",
+      "link_text": "Playwright में धीमा नेटवर्क",
+      "title": "Playwright टेस्ट में धीमा नेटवर्क और पैकेट लॉस",
+      "description": "एक Playwright Test fixture जो एक सर्वर पर असली लेटेंसी, पैकेट लॉस या आउटेज जोड़ता है, Chromium, Firefox और WebKit में एक जैसा, Windows और Linux पर।"
+    },
+    "ko": {
+      "slug": "playwright-neurin-neteuwokeu",
+      "link_text": "Playwright의 느린 네트워크",
+      "title": "Playwright 테스트에서 느린 네트워크와 패킷 손실 시뮬레이션",
+      "description": "한 서버에 실제 지연, 패킷 손실, 끊김을 더하는 Playwright Test fixture. Chromium, Firefox, WebKit에서 똑같이 작동합니다."
+    },
+    "ar": {
+      "slug": "shabaka-batia-fi-playwright",
+      "link_text": "شبكة بطيئة في Playwright",
+      "title": "محاكاة شبكة بطيئة وفقدان الحزم في اختبارات Playwright",
+      "description": "أداة fixture لـ Playwright Test تضيف تأخيرًا حقيقيًا أو فقدان حزم أو انقطاعًا لخادم واحد، بالطريقة نفسها في Chromium وFirefox وWebKit، على Windows وLinux."
+    },
+    "ro": {
+      "slug": "retea-lenta-in-playwright",
+      "link_text": "Rețea lentă în Playwright",
+      "title": "Simulează o rețea lentă și pierderi de pachete în Playwright",
+      "description": "Un fixture Playwright Test care adaugă latență reală, pierderi de pachete sau o întrerupere unui server, la fel în Chromium, Firefox și WebKit."
+    },
+    "nl": {
+      "slug": "traag-netwerk-in-playwright",
+      "link_text": "Traag netwerk in Playwright",
+      "title": "Een traag netwerk en pakketverlies simuleren in Playwright-tests",
+      "description": "Een Playwright Test-fixture die één server echte latentie, pakketverlies of een storing geeft, gelijk in Chromium, Firefox en WebKit, op Windows en Linux."
+    },
+    "zh-Hant": {
+      "slug": "playwright-man-wanglu",
+      "link_text": "Playwright 中的慢網路",
+      "title": "在 Playwright 測試中模擬慢網路和封包遺失",
+      "description": "一個 Playwright Test fixture，為單一伺服器加入真實的延遲、封包遺失或斷線，在 Chromium、Firefox 和 WebKit 中效果相同，支援 Windows 和 Linux。"
+    },
+    "uk": {
+      "slug": "povilna-merezha-v-playwright",
+      "link_text": "Повільна мережа в Playwright",
+      "title": "Повільна мережа і втрата пакетів у тестах Playwright",
+      "description": "Фікстура Playwright Test, що додає одному серверу справжню затримку, втрату пакетів або обрив: однаково в Chromium, Firefox і WebKit, на Windows і Linux."
+    },
+    "th": {
+      "slug": "khruea-khai-cha-nai-playwright",
+      "link_text": "เครือข่ายช้าใน Playwright",
+      "title": "จำลองเครือข่ายช้าและแพ็กเก็ตสูญหายในการทดสอบ Playwright",
+      "description": "fixture ของ Playwright Test ที่เพิ่มความหน่วงจริง แพ็กเก็ตสูญหาย หรือการตัดการเชื่อมต่อให้เซิร์ฟเวอร์เดียว ได้ผลเหมือนกันใน Chromium, Firefox และ WebKit"
+    }
+  }
+}

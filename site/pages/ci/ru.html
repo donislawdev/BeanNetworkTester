@@ -7,14 +7,14 @@
   <h2>Как выглядит шаг</h2>
   <p>Портите сеть на время теста, а затем дайте ей остановиться самой. Нет шага очистки, о котором можно забыть:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>В задаче GitHub Actions на собственном (self-hosted) раннере Windows:</p>
+  <p>В задании GitHub Actions на раннере с Windows:</p>
 <pre><code>- name: Test the app on a poor connection
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>Два замечания о раннере: для перехвата трафика нужны права администратора, а размещённый раннер их не даст, поэтому это место для собственной машины Windows.</p>
+  <p>Для перехвата трафика нужны права администратора. Размещённые раннеры GitHub с Windows работают с повышенными правами, так что шаг работает там как есть, а собственный раннер должен работать от имени администратора. Тест в Playwright или pytest может и сам запускать и останавливать программу: см. <a href="../medlennaya-set-v-playwright/">Playwright</a> и <a href="../zaderzhka-seti-v-pytest/">pytest</a>.</p>
 </section>
 
 <section>

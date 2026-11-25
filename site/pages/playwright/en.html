@@ -1,0 +1,83 @@
+<section class="hero">
+  <h1>Simulate a slow network and packet loss in Playwright tests</h1>
+  <p class="lead">Playwright can take a page offline, and slow Chromium through DevTools. The <code>beannetworktester</code> package on npm slows the real network instead, below the browser: latency, packet loss, a speed limit or a whole outage, for the server your test talks to. Chromium, Firefox and WebKit are slowed the same way, WebSockets included. The package carries Bean Network Tester's own program and runs it for the length of a test, on Windows and Linux. It is published with every stable release from 1.1.0 on.</p>
+</section>
+
+<section>
+  <h2>Install it</h2>
+<pre><code>npm install -D @playwright/test beannetworktester
+npx playwright install chromium</code></pre>
+  <p>It needs Windows x64 or Linux x64 (glibc 2.39 or newer, such as Ubuntu 24.04) and Node 20 or newer. npm installs the program for your system as an optional dependency, so do not leave optional dependencies out.</p>
+  <p>Changing the network needs administrator rights on Windows: open the terminal with Run as administrator. On Linux it needs root, or a user who may run <code>sudo</code> without a password, and then only the program runs under <code>sudo</code>. GitHub's hosted Windows runners run elevated and its Ubuntu runners allow <code>sudo</code>, so a workflow needs no extra step.</p>
+</section>
+
+<section>
+  <h2>A test on a slow network</h2>
+  <p>Save this as <code>tests/slow.spec.js</code> and run <code>npx playwright test</code>:</p>
+<pre><code>import http from 'node:http';
+import { test, expect } from 'beannetworktester/playwright';
+
+let server;
+test.beforeAll(async () =&gt; {
+  server = http.createServer((request, response) =&gt; response.end('&lt;h1&gt;Hello&lt;/h1&gt;'));
+  await new Promise((done) =&gt; server.listen(8000, done));
+});
+test.afterAll(() =&gt; server.close());
+
+test('a page takes longer on a slow network', async ({ page, badNetwork }) =&gt; {
+  await badNetwork({ server: 'http://localhost:8000', latency: 500 });
+  const started = Date.now();
+  await page.goto('http://localhost:8000');
+  await expect(page.locator('h1')).toHaveText('Hello');
+  expect(Date.now() - started).toBeGreaterThanOrEqual(500);
+});</code></pre>
+  <p>The test passes because the page really arrives later: every packet to and from that server waits 500 ms. When the test ends, the network is back to normal. Measured on Windows with <code>latency: 200</code>: a request to the server in the aim went from 0.8 ms to 404 ms, because the request and the answer both wait, and a page in Chromium from 13 ms to 416 ms. Another local server, outside the aim, answered in 1.6 ms meanwhile.</p>
+  <p>No rights at hand? <code>badNetwork({ simulate: true, latency: 500 })</code> runs the program on made-up traffic and changes nothing on the network. It checks that the package is set up, and slows nothing.</p>
+</section>
+
+<section>
+  <h2>The badNetwork fixture</h2>
+  <p>Import <code>test</code> and <code>expect</code> from <code>beannetworktester/playwright</code> instead of <code>@playwright/test</code>. <code>badNetwork</code> starts a session when you call it and resolves once the network is slow. The session stops when the test ends, whether it passed, failed or crashed, and the program's summary is attached to the test's report as <code>bad-network</code>. To change the conditions halfway, stop the first session before you start the next:</p>
+<pre><code>test('the app recovers when the API comes back', async ({ page, badNetwork }) =&gt; {
+  const outage = await badNetwork({ server: 'http://localhost:8000', loss: 100 });
+  await page.goto('http://localhost:3000');
+  await expect(page.getByText('Offline')).toBeVisible();
+  await outage.stop();
+  await expect(page.getByText('Offline')).toBeHidden();
+});</code></pre>
+  <p>Outside Playwright Test, <code>badNetwork</code> from <code>require('beannetworktester')</code> starts the same session: <code>const session = await badNetwork({ ... })</code>, and <code>await session.stop()</code> ends it and returns the summary.</p>
+</section>
+
+<section>
+  <h2>What a session aims at</h2>
+  <p>Every session aims at something, and only that traffic changes. A session without an aim would slow every connection of the machine, the test runner's own included, so it does not start.</p>
+  <ul>
+    <li><strong><code>server: 'http://localhost:3000'</code></strong> slows every connection to that address and port, from the browser, from your API server or from any other program. <code>'db.local:5432'</code> and a list of servers work too. This is the first choice, and it is exact on Windows and Linux.</li>
+    <li><strong><code>process: 'self'</code></strong> slows the test worker and every program it started, such as its browser. A process your test started itself is given as its <code>ChildProcess</code>.</li>
+    <li><strong><code>dstPort</code>, <code>dstIp</code> and <code>target</code></strong> are the program's own aims, written in <a href="../command-line/">its syntax</a>, for an API on a known port or address. They reach everything that matches: <code>dstPort: 443</code> is every HTTPS connection of the machine, your editor's included, and <code>target: 'node'</code> every program with "node" in its name.</li>
+  </ul>
+  <p>Aims given together narrow each other: <code>server</code> with <code>process: 'self'</code> slows only this worker's connections to that server. On Linux, <code>process</code> and <code>target</code> reach a new connection up to about 0.2 seconds after it opens, so aim at the server when the first request counts.</p>
+</section>
+
+<section>
+  <h2>What a session can do</h2>
+  <p>Every setting is one of the program's <a href="../command-line/">command-line options</a>. <code>latency: 300</code> adds 300 ms to every packet, <code>jitter: 100</code> varies that delay, <code>loss: 5</code> drops 5 % of the packets, <code>down</code> and <code>up</code> limit the speed in KB/s, and <code>loss: 100</code> cuts the server off. <code>preset: 'presets.3g'</code> is a whole link profile, and <code>seed: 42</code> makes the same random choices on every run. A <a href="../scenarios-over-time/">scenario</a> changes the conditions as the seconds pass: <code>scenario: 'scenarios/cafe-wifi.json'</code>. A scenario step may change how the network behaves, but not what the session aims at.</p>
+</section>
+
+<section>
+  <h2>Parallel workers and limits</h2>
+  <ul>
+    <li><strong>One at a time.</strong> Two sessions over the same traffic would add up, so parallel workers take turns, each waiting up to <code>wait</code> seconds (600 unless you give another). A second session in the same test is refused at once.</li>
+    <li><strong>It ends with the test.</strong> If the test worker dies, the program sees it and stops at once. <code>duration</code> (300 seconds unless you give another) is the most a session may run in any case.</li>
+    <li><strong>It says when it did nothing.</strong> A session that slowed nothing, because nothing reached its aim, ends with a <code>BadNetworkWarning</code>. The usual cause is an app that talks to another address than the aim, such as a container.</li>
+    <li><strong>macOS.</strong> The program runs on Windows and Linux. On a Mac, run the tests in a Linux x86_64 container or virtual machine, or on a CI runner.</li>
+  </ul>
+  <p>The package's README on <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/npm/beannetworktester">GitHub</a> lists every option and what each message means.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

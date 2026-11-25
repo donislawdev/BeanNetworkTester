@@ -7,14 +7,14 @@
   <h2>Bir adımın biçimi</h2>
   <p>Testin süresi boyunca bozun, sonra kendiliğinden durmasına izin verin. Unutulacak bir temizlik adımı yok:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>Bir GitHub Actions işinde, kendi barındırdığınız bir Windows runner üzerinde:</p>
+  <p>Windows runner'ı üzerindeki bir GitHub Actions işinde:</p>
 <pre><code>- name: Test the app on a poor connection
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>Runner hakkında iki şey: trafiği yakalamak yönetici hakları gerektirir ve barındırılan bir runner bunları vermez; bu yüzden bu, kendi barındırdığınız bir Windows makinesine aittir.</p>
+  <p>Trafiği yakalamak yönetici hakları ister. GitHub'ın barındırılan Windows runner'ları yükseltilmiş haklarla çalışır, yani adım orada olduğu gibi çalışır, kendi barındırdığınız bir runner ise yönetici olarak çalışmalıdır. Playwright ya da pytest ile yazılmış bir test programı kendisi de başlatıp durdurabilir: bkz. <a href="../playwright-yavas-ag/">Playwright</a> ve <a href="../pytest-ag-gecikmesi/">pytest</a>.</p>
 </section>
 
 <section>

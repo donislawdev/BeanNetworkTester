@@ -1,0 +1,83 @@
+<section class="hero">
+  <h1>محاكاة شبكة بطيئة وفقدان الحزم في اختبارات Playwright</h1>
+  <p class="lead">يستطيع Playwright فصل صفحة عن الشبكة وإبطاء Chromium عبر DevTools. أما حزمة <code>beannetworktester</code> على npm فتبطئ الشبكة الحقيقية نفسها، تحت المتصفح: تأخير، أو فقدان حزم، أو حد للسرعة، أو انقطاع كامل، للخادم الذي يتحدث إليه اختبارك. يتباطأ Chromium وFirefox وWebKit بالطريقة نفسها، بما في ذلك WebSocket. تحمل الحزمة برنامج Bean Network Tester نفسه وتشغّله طوال مدة الاختبار، على Windows وLinux. تُنشر الحزمة مع كل إصدار مستقر بدءًا من 1.1.0.</p>
+</section>
+
+<section>
+  <h2>التثبيت</h2>
+<pre><code>npm install -D @playwright/test beannetworktester
+npx playwright install chromium</code></pre>
+  <p>تحتاج إلى Windows x64 أو Linux x64 (glibc 2.39 أو أحدث، مثل Ubuntu 24.04) وإلى Node 20 أو أحدث. يثبّت npm البرنامج الخاص بنظامك كاعتمادية اختيارية، لذا لا تستبعد الاعتماديات الاختيارية.</p>
+  <p>تغيير الشبكة يحتاج إلى صلاحيات المسؤول على Windows: افتح الطرفية عبر "تشغيل كمسؤول". وعلى Linux يحتاج إلى root، أو إلى مستخدم يستطيع تشغيل <code>sudo</code> دون كلمة مرور، وعندها لا يعمل تحت <code>sudo</code> إلا البرنامج. مشغّلات Windows التي يستضيفها GitHub تعمل بصلاحيات مرتفعة، ومشغّلات Ubuntu لديه تسمح بـ <code>sudo</code>، لذا لا يحتاج سير العمل إلى أي خطوة إضافية.</p>
+</section>
+
+<section>
+  <h2>اختبار على شبكة بطيئة</h2>
+  <p>احفظ هذا باسم <code>tests/slow.spec.js</code> وشغّل <code>npx playwright test</code>:</p>
+<pre><code>import http from 'node:http';
+import { test, expect } from 'beannetworktester/playwright';
+
+let server;
+test.beforeAll(async () =&gt; {
+  server = http.createServer((request, response) =&gt; response.end('&lt;h1&gt;Hello&lt;/h1&gt;'));
+  await new Promise((done) =&gt; server.listen(8000, done));
+});
+test.afterAll(() =&gt; server.close());
+
+test('a page takes longer on a slow network', async ({ page, badNetwork }) =&gt; {
+  await badNetwork({ server: 'http://localhost:8000', latency: 500 });
+  const started = Date.now();
+  await page.goto('http://localhost:8000');
+  await expect(page.locator('h1')).toHaveText('Hello');
+  expect(Date.now() - started).toBeGreaterThanOrEqual(500);
+});</code></pre>
+  <p>ينجح الاختبار لأن الصفحة تصل فعلًا متأخرة: كل حزمة ذاهبة إلى ذلك الخادم أو آتية منه تنتظر 500 ms. عند انتهاء الاختبار تعود الشبكة إلى طبيعتها. القياس على Windows مع <code>latency: 200</code>: ارتفع طلب إلى الخادم المستهدف من 0.8 ms إلى 404 ms، لأن الطلب والرد ينتظران كلاهما، وارتفعت صفحة في Chromium من 13 ms إلى 416 ms. وفي الأثناء كان خادم محلي آخر خارج الهدف يرد في 1.6 ms.</p>
+  <p>لا تملك الصلاحيات الآن؟ <code>badNetwork({ simulate: true, latency: 500 })</code> يشغّل البرنامج على حركة مختلقة ولا يغيّر شيئًا في الشبكة. إنه يتحقق من أن الحزمة مثبتة كما يجب، ولا يبطئ شيئًا.</p>
+</section>
+
+<section>
+  <h2>الـ fixture المسمى badNetwork</h2>
+  <p>استورد <code>test</code> و<code>expect</code> من <code>beannetworktester/playwright</code> بدلًا من <code>@playwright/test</code>. يبدأ <code>badNetwork</code> جلسة عند استدعائه، ويكتمل حالما تصبح الشبكة بطيئة. تتوقف الجلسة عند انتهاء الاختبار، سواء نجح أو فشل أو تعطّل، ويُرفق ملخص البرنامج بتقرير الاختبار باسم <code>bad-network</code>. لتغيير الظروف في منتصف الاختبار، أوقف الجلسة الأولى قبل أن تبدأ التالية:</p>
+<pre><code>test('the app recovers when the API comes back', async ({ page, badNetwork }) =&gt; {
+  const outage = await badNetwork({ server: 'http://localhost:8000', loss: 100 });
+  await page.goto('http://localhost:3000');
+  await expect(page.getByText('Offline')).toBeVisible();
+  await outage.stop();
+  await expect(page.getByText('Offline')).toBeHidden();
+});</code></pre>
+  <p>خارج Playwright Test، يبدأ <code>badNetwork</code> من <code>require('beannetworktester')</code> الجلسة نفسها: <code>const session = await badNetwork({ ... })</code>، ثم ينهيها <code>await session.stop()</code> ويعيد الملخص.</p>
+</section>
+
+<section>
+  <h2>ما الذي تستهدفه الجلسة</h2>
+  <p>كل جلسة تستهدف شيئًا ما، ولا يتغير إلا تلك الحركة. الجلسة التي بلا هدف كانت ستبطئ كل اتصال في الجهاز، بما فيها اتصالات مشغّل الاختبارات نفسه، لذلك لا تبدأ أصلًا.</p>
+  <ul>
+    <li><strong><code>server: 'http://localhost:3000'</code></strong> يبطئ كل اتصال بهذا العنوان وهذا المنفذ، من المتصفح أو من خادم API لديك أو من أي برنامج آخر. ويصلح أيضًا <code>'db.local:5432'</code> وقائمة من الخوادم. هذا هو الخيار الأول، وهو دقيق على Windows وLinux.</li>
+    <li><strong><code>process: 'self'</code></strong> يبطئ عامل الاختبار وكل برنامج بدأه، مثل متصفحه. أما العملية التي بدأها اختبارك بنفسه فتُمرَّر على هيئة <code>ChildProcess</code> الخاص بها.</li>
+    <li><strong><code>dstPort</code> و<code>dstIp</code> و<code>target</code></strong> هي أهداف البرنامج نفسه، تُكتب <a href="../satr-al-awamir/">بصيغته</a>، وهي لواجهة API على منفذ أو عنوان معروف. تصل إلى كل ما يطابقها: <code>dstPort: 443</code> هو كل اتصال HTTPS في الجهاز، بما فيها اتصالات المحرر لديك، و<code>target: 'node'</code> هو كل برنامج في اسمه "node".</li>
+  </ul>
+  <p>الأهداف المعطاة معًا يضيّق بعضها بعضًا: <code>server</code> مع <code>process: 'self'</code> يبطئ فقط اتصالات هذا العامل بذلك الخادم. على Linux لا يبدأ <code>process</code> و<code>target</code> بالتأثير في اتصال جديد إلا بعد فتحه بنحو 0.2 ثانية في أقصى حد، لذا استهدف الخادم حين يهم الطلب الأول.</p>
+</section>
+
+<section>
+  <h2>ما الذي تستطيعه الجلسة</h2>
+  <p>كل إعداد هو أحد <a href="../satr-al-awamir/">خيارات سطر الأوامر</a> في البرنامج. <code>latency: 300</code> يضيف 300 ms إلى كل حزمة، و<code>jitter: 100</code> يجعل هذا التأخير متفاوتًا، و<code>loss: 5</code> يُسقط 5 % من الحزم، و<code>down</code> و<code>up</code> يحدّان السرعة بالكيلوبايت في الثانية، و<code>loss: 100</code> يقطع الخادم. <code>preset: 'presets.3g'</code> ملف تعريف كامل للاتصال، و<code>seed: 42</code> يعيد الاختيارات العشوائية نفسها في كل تشغيل. أما <a href="../sinaryuhat-zamaniya/">السيناريو</a> فيغيّر الظروف مع مرور الثواني: <code>scenario: 'scenarios/cafe-wifi.json'</code>. يمكن لخطوة في السيناريو أن تغيّر سلوك الشبكة، لكن لا يمكنها تغيير ما تستهدفه الجلسة.</p>
+</section>
+
+<section>
+  <h2>العمّال المتوازيون والحدود</h2>
+  <ul>
+    <li><strong>واحدة في كل مرة.</strong> جلستان على الحركة نفسها ستتراكمان، لذلك ينتظر العمّال المتوازيون دورهم، وينتظر كل منهم حتى <code>wait</code> ثانية (600 ما لم تحدد قيمة أخرى). وتُرفض الجلسة الثانية في الاختبار نفسه فورًا.</li>
+    <li><strong>تنتهي مع الاختبار.</strong> إذا مات عامل الاختبار، يلاحظ البرنامج ذلك ويتوقف فورًا. و<code>duration</code> (300 ثانية ما لم تحدد قيمة أخرى) هو أطول ما يمكن أن تستمر فيه الجلسة في كل الأحوال.</li>
+    <li><strong>تخبرك حين لا تفعل شيئًا.</strong> الجلسة التي لم تبطئ شيئًا، لأن شيئًا لم يصل إلى هدفها، تنتهي بتحذير <code>BadNetworkWarning</code>. السبب المعتاد أن التطبيق يتحدث إلى عنوان غير الهدف، مثل حاوية.</li>
+    <li><strong>macOS.</strong> يعمل البرنامج على Windows وLinux. على جهاز Mac، شغّل الاختبارات في حاوية أو آلة افتراضية بنظام Linux x86_64، أو على مشغّل CI.</li>
+  </ul>
+  <p>ملف README الخاص بالحزمة على <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/npm/beannetworktester">GitHub</a> يسرد كل خيار ويشرح كل رسالة.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

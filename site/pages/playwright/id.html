@@ -1,0 +1,83 @@
+<section class="hero">
+  <h1>Simulasikan jaringan lambat dan packet loss di tes Playwright</h1>
+  <p class="lead">Playwright bisa membuat halaman offline dan memperlambat Chromium lewat DevTools. Paket <code>beannetworktester</code> di npm justru memperlambat jaringan yang sebenarnya, di bawah browser: latensi, packet loss, batas kecepatan, atau pemutusan total, untuk server yang diajak bicara oleh tes Anda. Chromium, Firefox, dan WebKit diperlambat dengan cara yang sama, termasuk WebSocket. Paket ini membawa program Bean Network Tester dan menjalankannya selama tes berlangsung, di Windows dan Linux. Paket ini terbit bersama setiap rilis stabil mulai 1.1.0.</p>
+</section>
+
+<section>
+  <h2>Instalasi</h2>
+<pre><code>npm install -D @playwright/test beannetworktester
+npx playwright install chromium</code></pre>
+  <p>Butuh Windows x64 atau Linux x64 (glibc 2.39 atau lebih baru, seperti Ubuntu 24.04) dan Node 20 atau lebih baru. npm memasang program untuk sistem Anda sebagai dependensi opsional, jadi jangan lewatkan dependensi opsional.</p>
+  <p>Mengubah jaringan butuh hak administrator di Windows: buka terminal dengan "Jalankan sebagai administrator". Di Linux butuh root, atau pengguna yang boleh menjalankan <code>sudo</code> tanpa kata sandi, dan saat itu hanya programnya yang berjalan dengan <code>sudo</code>. Runner Windows yang di-host GitHub berjalan dengan hak tinggi dan runner Ubuntu-nya mengizinkan <code>sudo</code>, jadi workflow tidak butuh langkah tambahan.</p>
+</section>
+
+<section>
+  <h2>Tes di jaringan yang lambat</h2>
+  <p>Simpan ini sebagai <code>tests/slow.spec.js</code> lalu jalankan <code>npx playwright test</code>:</p>
+<pre><code>import http from 'node:http';
+import { test, expect } from 'beannetworktester/playwright';
+
+let server;
+test.beforeAll(async () =&gt; {
+  server = http.createServer((request, response) =&gt; response.end('&lt;h1&gt;Hello&lt;/h1&gt;'));
+  await new Promise((done) =&gt; server.listen(8000, done));
+});
+test.afterAll(() =&gt; server.close());
+
+test('a page takes longer on a slow network', async ({ page, badNetwork }) =&gt; {
+  await badNetwork({ server: 'http://localhost:8000', latency: 500 });
+  const started = Date.now();
+  await page.goto('http://localhost:8000');
+  await expect(page.locator('h1')).toHaveText('Hello');
+  expect(Date.now() - started).toBeGreaterThanOrEqual(500);
+});</code></pre>
+  <p>Tes lulus karena halaman memang tiba lebih lambat: setiap paket ke server itu dan darinya menunggu 500 ms. Saat tes selesai, jaringan kembali normal. Diukur di Windows dengan <code>latency: 200</code>: permintaan ke server dalam tujuan naik dari 0,8 ms ke 404 ms, karena permintaan dan jawabannya sama-sama menunggu, dan halaman di Chromium dari 13 ms ke 416 ms. Server lokal lain, di luar tujuan, menjawab dalam 1,6 ms selama itu.</p>
+  <p>Tidak punya hak akses? <code>badNetwork({ simulate: true, latency: 500 })</code> menjalankan program pada lalu lintas buatan dan tidak mengubah apa pun di jaringan. Ini memeriksa bahwa paket terpasang dengan benar, tanpa memperlambat apa pun.</p>
+</section>
+
+<section>
+  <h2>Fixture badNetwork</h2>
+  <p>Impor <code>test</code> dan <code>expect</code> dari <code>beannetworktester/playwright</code>, bukan dari <code>@playwright/test</code>. <code>badNetwork</code> memulai sesi saat Anda memanggilnya dan selesai menunggu begitu jaringan sudah lambat. Sesi berhenti saat tes selesai, entah lulus, gagal, atau crash, dan ringkasan program dilampirkan ke laporan tes sebagai <code>bad-network</code>. Untuk mengubah kondisi di tengah tes, hentikan sesi pertama sebelum memulai yang berikutnya:</p>
+<pre><code>test('the app recovers when the API comes back', async ({ page, badNetwork }) =&gt; {
+  const outage = await badNetwork({ server: 'http://localhost:8000', loss: 100 });
+  await page.goto('http://localhost:3000');
+  await expect(page.getByText('Offline')).toBeVisible();
+  await outage.stop();
+  await expect(page.getByText('Offline')).toBeHidden();
+});</code></pre>
+  <p>Di luar Playwright Test, <code>badNetwork</code> dari <code>require('beannetworktester')</code> memulai sesi yang sama: <code>const session = await badNetwork({ ... })</code>, dan <code>await session.stop()</code> mengakhirinya serta mengembalikan ringkasan.</p>
+</section>
+
+<section>
+  <h2>Apa yang dituju sebuah sesi</h2>
+  <p>Setiap sesi menuju sesuatu, dan hanya lalu lintas itu yang berubah. Sesi tanpa tujuan akan memperlambat setiap koneksi mesin, termasuk milik test runner sendiri, jadi sesi itu tidak dimulai.</p>
+  <ul>
+    <li><strong><code>server: 'http://localhost:3000'</code></strong> memperlambat setiap koneksi ke alamat dan port itu, dari browser, dari server API Anda, atau dari program lain mana pun. <code>'db.local:5432'</code> dan daftar server juga bisa. Ini pilihan pertama, dan tepat di Windows maupun Linux.</li>
+    <li><strong><code>process: 'self'</code></strong> memperlambat worker tes dan setiap program yang dijalankannya, seperti browsernya. Proses yang dijalankan sendiri oleh tes Anda diberikan sebagai <code>ChildProcess</code>-nya.</li>
+    <li><strong><code>dstPort</code>, <code>dstIp</code>, dan <code>target</code></strong> adalah tujuan milik program sendiri, ditulis dalam <a href="../baris-perintah/">sintaksnya</a>, untuk API di port atau alamat yang diketahui. Semuanya menjangkau apa pun yang cocok: <code>dstPort: 443</code> adalah setiap koneksi HTTPS mesin, termasuk milik editor Anda, dan <code>target: 'node'</code> setiap program dengan "node" di namanya.</li>
+  </ul>
+  <p>Tujuan yang diberikan bersama saling mempersempit: <code>server</code> dengan <code>process: 'self'</code> hanya memperlambat koneksi worker ini ke server itu. Di Linux, <code>process</code> dan <code>target</code> menjangkau koneksi baru hingga sekitar 0,2 detik setelah koneksi dibuka, jadi tujukan ke server bila permintaan pertama penting.</p>
+</section>
+
+<section>
+  <h2>Apa yang bisa dilakukan sebuah sesi</h2>
+  <p>Setiap pengaturan adalah salah satu <a href="../baris-perintah/">opsi baris perintah</a> program. <code>latency: 300</code> menambah 300 ms ke setiap paket, <code>jitter: 100</code> membuat jeda itu bervariasi, <code>loss: 5</code> membuang 5 % paket, <code>down</code> dan <code>up</code> membatasi kecepatan dalam KB/s, dan <code>loss: 100</code> memutus server. <code>preset: 'presets.3g'</code> adalah profil koneksi utuh, dan <code>seed: 42</code> membuat pilihan acak yang sama di setiap jalannya tes. Sebuah <a href="../skenario-berbasis-waktu/">skenario</a> mengubah kondisi seiring detik berjalan: <code>scenario: 'scenarios/cafe-wifi.json'</code>. Langkah skenario boleh mengubah perilaku jaringan, tetapi tidak mengubah apa yang dituju sesi.</p>
+</section>
+
+<section>
+  <h2>Worker paralel dan batasan</h2>
+  <ul>
+    <li><strong>Satu per satu.</strong> Dua sesi pada lalu lintas yang sama akan saling menambah, jadi worker paralel bergantian, masing-masing menunggu hingga <code>wait</code> detik (600 kecuali Anda memberi nilai lain). Sesi kedua dalam tes yang sama langsung ditolak.</li>
+    <li><strong>Ia berakhir bersama tes.</strong> Jika worker tes mati, program melihatnya dan langsung berhenti. <code>duration</code> (300 detik kecuali Anda memberi nilai lain) adalah waktu terlama sebuah sesi boleh berjalan dalam keadaan apa pun.</li>
+    <li><strong>Ia memberi tahu saat tidak melakukan apa pun.</strong> Sesi yang tidak memperlambat apa pun, karena tidak ada yang sampai ke tujuannya, berakhir dengan <code>BadNetworkWarning</code>. Biasanya aplikasi berbicara dengan alamat lain selain tujuan, misalnya sebuah kontainer.</li>
+    <li><strong>macOS.</strong> Programnya berjalan di Windows dan Linux. Di Mac, jalankan tes di kontainer atau mesin virtual Linux x86_64, atau di runner CI.</li>
+  </ul>
+  <p>README paket di <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/npm/beannetworktester">GitHub</a> mencantumkan setiap opsi dan menjelaskan setiap pesan.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

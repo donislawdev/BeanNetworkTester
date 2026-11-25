@@ -1,0 +1,96 @@
+<section class="hero">
+  <h1>Simula latencia de red y pérdida de paquetes en pytest</h1>
+  <p class="lead">Nada simulado en el código: el paquete <code>beannetworktester</code> de PyPI le da a pytest un fixture <code>bad_network</code> que ralentiza la red real mientras dura una prueba. Latencia, pérdida de paquetes, un límite de velocidad o un corte total, para un servidor o un proceso, mientras tu aplicación, tu navegador y tu servidor hablan de verdad entre sí. El paquete lleva el programa de Bean Network Tester y lo ejecuta en Windows y Linux. Se publica con cada versión estable a partir de la 1.1.0.</p>
+</section>
+
+<section>
+  <h2>Instalación</h2>
+<pre><code>pip install beannetworktester</code></pre>
+  <p>Necesita Windows x64 o Linux x64 (glibc 2.39 o más reciente, como Ubuntu 24.04) y Python 3.10 o más reciente.</p>
+  <p>Cambiar la red requiere derechos de administrador en Windows: abre la terminal con «Ejecutar como administrador». En Linux requiere root, o un usuario que pueda usar <code>sudo</code> sin contraseña, y entonces solo el programa corre con <code>sudo</code>. Los runners de Windows alojados por GitHub corren con privilegios elevados y sus runners de Ubuntu permiten <code>sudo</code>, así que un workflow no necesita ningún paso extra.</p>
+</section>
+
+<section>
+  <h2>Una prueba en una red lenta</h2>
+  <p>Guarda esto como <code>test_slow.py</code> y ejecuta <code>pytest</code>:</p>
+<pre><code>import subprocess
+import sys
+import time
+import urllib.request
+
+import pytest
+
+
+@pytest.fixture
+def web_server():
+    server = subprocess.Popen([sys.executable, "-m", "http.server", "8000"])
+    time.sleep(1)
+    yield "http://localhost:8000"
+    server.terminate()
+
+
+def test_a_page_takes_longer_on_a_slow_network(bad_network, web_server):
+    bad_network(server=web_server, latency=500)
+    started = time.monotonic()
+    urllib.request.urlopen(web_server).read()
+    assert time.monotonic() - started &gt;= 0.5</code></pre>
+  <p>La prueba pasa porque la respuesta de verdad llega más tarde: cada paquete hacia ese servidor y desde él espera 500 ms. Cuando la prueba termina, la red vuelve a la normalidad. Medido en Windows con <code>latency=200</code>: una petición al servidor del objetivo pasó de 4 ms a 404 ms, porque esperan tanto la petición como la respuesta, y una página en Chromium de 61 ms a 412 ms. Otro servidor local, fuera del objetivo, respondía mientras tanto en 11 ms.</p>
+  <p>¿No tienes los derechos a mano? <code>bad_network(simulate=True, latency=500)</code> ejecuta el programa con tráfico inventado y no cambia nada en la red. Comprueba que el paquete está bien instalado y no ralentiza nada.</p>
+</section>
+
+<section>
+  <h2>El fixture bad_network</h2>
+  <p>pytest encuentra el fixture solo en cuanto el paquete está instalado. <code>bad_network</code> inicia una sesión cuando lo llamas y vuelve en cuanto la red está lenta. La sesión se detiene cuando termina la prueba, haya pasado, fallado o se haya caído, y el resumen del programa va a las <code>user_properties</code> de la prueba y de ahí a un informe JUnit XML. Para cambiar las condiciones a mitad de la prueba, detén la primera sesión antes de iniciar la siguiente:</p>
+<pre><code>def test_the_app_recovers_when_the_api_comes_back(bad_network):
+    outage = bad_network(server="http://localhost:8000", loss=100)
+    assert app_shows_offline_banner()
+    outage.stop()
+    assert app_hides_offline_banner()</code></pre>
+  <p>Fuera de pytest, <code>from beannetworktester import bad_network</code> inicia la misma sesión, y <code>with bad_network(...) as session:</code> la detiene al final del bloque.</p>
+</section>
+
+<section>
+  <h2>Playwright para Python</h2>
+  <p>Playwright para Python funciona sobre pytest, así que el fixture es el mismo. Chromium, Firefox y WebKit se ralentizan igual, WebSockets incluidos, porque la que es lenta es la red misma, no la idea que el navegador tiene de ella:</p>
+<pre><code>from playwright.sync_api import expect
+
+
+def test_the_spinner_shows_on_a_slow_network(bad_network, page):
+    bad_network(server="http://localhost:3000", latency=800)
+    page.goto("http://localhost:3000")
+    expect(page.get_by_role("progressbar")).to_be_visible()</code></pre>
+</section>
+
+<section>
+  <h2>A qué apunta una sesión</h2>
+  <p>Cada sesión apunta a algo, y solo ese tráfico cambia. Una sesión sin objetivo ralentizaría todas las conexiones de la máquina, incluidas las del propio ejecutor de pruebas, así que no arranca.</p>
+  <ul>
+    <li><strong><code>server="http://localhost:3000"</code></strong> ralentiza cada conexión a esa dirección y ese puerto, desde tu aplicación, tu navegador o cualquier otro programa. También sirven <code>"db.local:5432"</code>, <code>("10.0.0.5", 443)</code> y una lista de servidores. Es la primera opción, y es exacta en Windows y Linux.</li>
+    <li><strong><code>process="self"</code></strong> ralentiza el proceso de pruebas y cada programa que inició, como el navegador de Playwright. Un proceso que tu prueba inició por su cuenta se pasa como su <code>subprocess.Popen</code>.</li>
+    <li><strong><code>dst_port</code>, <code>dst_ip</code> y <code>target</code></strong> son los objetivos propios del programa, escritos en <a href="../linea-de-comandos/">su sintaxis</a>, para una API en un puerto o una dirección conocidos. Alcanzan todo lo que coincida: <code>dst_port=443</code> es cada conexión HTTPS de la máquina, incluidas las de tu editor, y <code>target="python"</code> cada programa con «python» en el nombre.</li>
+  </ul>
+  <p>Los objetivos dados juntos se acotan entre sí: <code>server=</code> con <code>process="self"</code> ralentiza solo las conexiones de esta prueba a ese servidor. En Linux, <code>process=</code> y <code>target</code> alcanzan una conexión nueva hasta unos 0,2 segundos después de abrirse, así que apunta al servidor cuando cuenta la primera petición.</p>
+</section>
+
+<section>
+  <h2>Qué puede hacer una sesión</h2>
+  <p>Cada ajuste es una de las <a href="../linea-de-comandos/">opciones de línea de comandos</a> del programa, escrita con <code>_</code> en lugar de <code>-</code>. <code>latency=300</code> añade 300 ms a cada paquete, <code>jitter=100</code> hace variar ese retardo, <code>loss=5</code> descarta el 5 % de los paquetes, <code>down</code> y <code>up</code> limitan la velocidad en KB/s, y <code>loss=100</code> corta el servidor. <code>preset="presets.3g"</code> es un perfil de enlace completo, y <code>seed=42</code> repite las mismas elecciones al azar en cada ejecución. Un <a href="../escenarios-en-el-tiempo/">escenario</a> cambia las condiciones a medida que pasan los segundos: <code>scenario="scenarios/cafe-wifi.json"</code>. Un paso del escenario puede cambiar cómo se comporta la red, pero no a qué apunta la sesión.</p>
+</section>
+
+<section>
+  <h2>pytest-xdist y límites</h2>
+  <ul>
+    <li><strong>Una a la vez.</strong> Dos sesiones sobre el mismo tráfico se sumarían, así que los workers de pytest-xdist se turnan, cada uno esperando hasta <code>wait</code> segundos (600 si no indicas otro valor). Una segunda sesión en la misma prueba se rechaza al instante.</li>
+    <li><strong>Termina con la prueba.</strong> Si el proceso de pruebas muere, el programa lo nota y se detiene al instante. <code>duration</code> (300 segundos si no indicas otro valor) es en todo caso lo máximo que puede durar una sesión.</li>
+    <li><strong>Avisa cuando no hizo nada.</strong> Una sesión que no ralentizó nada, porque nada llegó a su objetivo, termina con un <code>BadNetworkWarning</code>. Lo habitual es que la aplicación hable con otra dirección distinta del objetivo, como un contenedor.</li>
+    <li><strong>macOS.</strong> El programa funciona en Windows y Linux. En un Mac, ejecuta las pruebas en un contenedor o una máquina virtual Linux x86_64, o en un runner de CI.</li>
+  </ul>
+  <p>El README del paquete en <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/python/beannetworktester">GitHub</a> enumera cada opción y explica cada mensaje.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

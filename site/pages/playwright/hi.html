@@ -1,0 +1,83 @@
+<section class="hero">
+  <h1>Playwright टेस्ट में धीमा नेटवर्क और पैकेट लॉस</h1>
+  <p class="lead">Playwright किसी पेज को ऑफ़लाइन कर सकता है और DevTools के ज़रिए Chromium को धीमा कर सकता है। npm का <code>beannetworktester</code> पैकेज इसके बजाय ब्राउज़र के नीचे असली नेटवर्क को धीमा करता है: लेटेंसी, पैकेट लॉस, स्पीड लिमिट या पूरा आउटेज, उस सर्वर के लिए जिससे आपका टेस्ट बात करता है। Chromium, Firefox और WebKit एक ही तरह धीमे होते हैं, WebSocket समेत। पैकेज में Bean Network Tester का अपना प्रोग्राम है, और वह इसे टेस्ट की अवधि तक Windows और Linux पर चलाता है। यह 1.1.0 से हर स्थिर रिलीज़ के साथ प्रकाशित होता है।</p>
+</section>
+
+<section>
+  <h2>इंस्टॉल करें</h2>
+<pre><code>npm install -D @playwright/test beannetworktester
+npx playwright install chromium</code></pre>
+  <p>इसके लिए Windows x64 या Linux x64 (glibc 2.39 या नया, जैसे Ubuntu 24.04) और Node 20 या नया चाहिए। npm आपके सिस्टम का प्रोग्राम वैकल्पिक निर्भरता के रूप में इंस्टॉल करता है, इसलिए वैकल्पिक निर्भरताओं को बाहर न छोड़ें।</p>
+  <p>Windows पर नेटवर्क बदलने के लिए एडमिनिस्ट्रेटर अधिकार चाहिए: टर्मिनल को "व्यवस्थापक के रूप में चलाएँ" से खोलें। Linux पर root चाहिए, या ऐसा उपयोगकर्ता जो बिना पासवर्ड <code>sudo</code> चला सके, और तब <code>sudo</code> के तहत सिर्फ़ प्रोग्राम चलता है। GitHub के होस्ट किए गए Windows रनर ऊँचे अधिकारों के साथ चलते हैं और उसके Ubuntu रनर <code>sudo</code> की अनुमति देते हैं, इसलिए workflow को किसी अतिरिक्त कदम की ज़रूरत नहीं।</p>
+</section>
+
+<section>
+  <h2>धीमे नेटवर्क पर एक टेस्ट</h2>
+  <p>इसे <code>tests/slow.spec.js</code> के रूप में सहेजें और <code>npx playwright test</code> चलाएँ:</p>
+<pre><code>import http from 'node:http';
+import { test, expect } from 'beannetworktester/playwright';
+
+let server;
+test.beforeAll(async () =&gt; {
+  server = http.createServer((request, response) =&gt; response.end('&lt;h1&gt;Hello&lt;/h1&gt;'));
+  await new Promise((done) =&gt; server.listen(8000, done));
+});
+test.afterAll(() =&gt; server.close());
+
+test('a page takes longer on a slow network', async ({ page, badNetwork }) =&gt; {
+  await badNetwork({ server: 'http://localhost:8000', latency: 500 });
+  const started = Date.now();
+  await page.goto('http://localhost:8000');
+  await expect(page.locator('h1')).toHaveText('Hello');
+  expect(Date.now() - started).toBeGreaterThanOrEqual(500);
+});</code></pre>
+  <p>टेस्ट पास होता है क्योंकि पेज सचमुच देर से पहुँचता है: उस सर्वर तक जाने और वहाँ से आने वाला हर पैकेट 500 ms रुकता है। टेस्ट ख़त्म होने पर नेटवर्क सामान्य हो जाता है। Windows पर <code>latency: 200</code> के साथ मापा गया: लक्ष्य वाले सर्वर को भेजा गया अनुरोध 0.8 ms से 404 ms हो गया, क्योंकि अनुरोध और जवाब दोनों रुकते हैं, और Chromium में एक पेज 13 ms से 416 ms। इस दौरान लक्ष्य से बाहर का एक दूसरा लोकल सर्वर 1.6 ms में जवाब देता रहा।</p>
+  <p>अधिकार अभी हाथ में नहीं? <code>badNetwork({ simulate: true, latency: 500 })</code> प्रोग्राम को गढ़े हुए ट्रैफ़िक पर चलाता है और नेटवर्क में कुछ नहीं बदलता। यह जाँचता है कि पैकेज ठीक से सेट है, और कुछ भी धीमा नहीं करता।</p>
+</section>
+
+<section>
+  <h2>badNetwork fixture</h2>
+  <p><code>test</code> और <code>expect</code> को <code>@playwright/test</code> के बजाय <code>beannetworktester/playwright</code> से इंपोर्ट करें। <code>badNetwork</code> को बुलाने पर सेशन शुरू होता है, और नेटवर्क धीमा होते ही वह पूरा हो जाता है। टेस्ट ख़त्म होने पर सेशन रुक जाता है, चाहे टेस्ट पास हुआ, फ़ेल हुआ या क्रैश हुआ, और प्रोग्राम का सारांश टेस्ट की रिपोर्ट में <code>bad-network</code> नाम से जुड़ जाता है। टेस्ट के बीच में हालात बदलने के लिए, अगला सेशन शुरू करने से पहले पहला सेशन रोकें:</p>
+<pre><code>test('the app recovers when the API comes back', async ({ page, badNetwork }) =&gt; {
+  const outage = await badNetwork({ server: 'http://localhost:8000', loss: 100 });
+  await page.goto('http://localhost:3000');
+  await expect(page.getByText('Offline')).toBeVisible();
+  await outage.stop();
+  await expect(page.getByText('Offline')).toBeHidden();
+});</code></pre>
+  <p>Playwright Test के बाहर, <code>require('beannetworktester')</code> का <code>badNetwork</code> वही सेशन शुरू करता है: <code>const session = await badNetwork({ ... })</code>, और <code>await session.stop()</code> उसे ख़त्म करके सारांश लौटाता है।</p>
+</section>
+
+<section>
+  <h2>सेशन किस पर निशाना साधता है</h2>
+  <p>हर सेशन किसी चीज़ पर निशाना साधता है, और सिर्फ़ वही ट्रैफ़िक बदलता है। बिना लक्ष्य वाला सेशन मशीन के हर कनेक्शन को धीमा कर देता, टेस्ट रनर के अपने कनेक्शन समेत, इसलिए वह शुरू ही नहीं होता।</p>
+  <ul>
+    <li><strong><code>server: 'http://localhost:3000'</code></strong> उस पते और पोर्ट तक के हर कनेक्शन को धीमा करता है, चाहे ब्राउज़र से हो, आपके API सर्वर से या किसी भी दूसरे प्रोग्राम से। <code>'db.local:5432'</code> और सर्वरों की सूची भी चलती है। यह पहली पसंद है, और Windows और Linux पर सटीक है।</li>
+    <li><strong><code>process: 'self'</code></strong> टेस्ट worker को और उसके शुरू किए हर प्रोग्राम को धीमा करता है, जैसे उसका ब्राउज़र। जो प्रोसेस आपके टेस्ट ने ख़ुद शुरू किया, उसे उसके <code>ChildProcess</code> के रूप में दें।</li>
+    <li><strong><code>dstPort</code>, <code>dstIp</code> और <code>target</code></strong> प्रोग्राम के अपने लक्ष्य हैं, <a href="../kamand-lain/">उसके सिंटैक्स</a> में लिखे जाते हैं, और किसी जाने-पहचाने पोर्ट या पते पर चल रहे API के लिए हैं। ये हर मिलती-जुलती चीज़ तक पहुँचते हैं: <code>dstPort: 443</code> मशीन का हर HTTPS कनेक्शन है, आपके एडिटर का भी, और <code>target: 'node'</code> हर वह प्रोग्राम जिसके नाम में "node" है।</li>
+  </ul>
+  <p>साथ दिए गए लक्ष्य एक-दूसरे को संकरा करते हैं: <code>server</code> के साथ <code>process: 'self'</code> सिर्फ़ इस worker के उस सर्वर तक के कनेक्शन धीमे करता है। Linux पर <code>process</code> और <code>target</code> किसी नए कनेक्शन पर उसके खुलने के लगभग 0.2 सेकंड बाद तक असर करना शुरू करते हैं, इसलिए जब पहला अनुरोध मायने रखता हो तो सर्वर पर निशाना साधें।</p>
+</section>
+
+<section>
+  <h2>सेशन क्या कर सकता है</h2>
+  <p>हर सेटिंग प्रोग्राम के <a href="../kamand-lain/">कमांड-लाइन विकल्पों</a> में से एक है। <code>latency: 300</code> हर पैकेट में 300 ms जोड़ता है, <code>jitter: 100</code> उस देरी को ऊपर-नीचे करता है, <code>loss: 5</code> 5 % पैकेट गिराता है, <code>down</code> और <code>up</code> स्पीड को KB/s में सीमित करते हैं, और <code>loss: 100</code> सर्वर को काट देता है। <code>preset: 'presets.3g'</code> एक पूरा लिंक प्रोफ़ाइल है, और <code>seed: 42</code> हर बार वही रैंडम चुनाव करता है। एक <a href="../samay-ke-anusar-scenario/">सिनेरियो</a> सेकंड बीतने के साथ हालात बदलता है: <code>scenario: 'scenarios/cafe-wifi.json'</code>। सिनेरियो का कोई कदम नेटवर्क का बर्ताव बदल सकता है, पर यह नहीं कि सेशन किस पर निशाना साधता है।</p>
+</section>
+
+<section>
+  <h2>समानांतर worker और सीमाएँ</h2>
+  <ul>
+    <li><strong>एक बार में एक।</strong> एक ही ट्रैफ़िक पर दो सेशन जुड़ जाते, इसलिए समानांतर worker बारी-बारी से चलते हैं, हर एक <code>wait</code> सेकंड तक रुकता है (कोई और मान न दें तो 600)। उसी टेस्ट में दूसरा सेशन तुरंत ठुकरा दिया जाता है।</li>
+    <li><strong>टेस्ट के साथ ख़त्म होता है।</strong> अगर टेस्ट worker मर जाए, तो प्रोग्राम यह देखकर तुरंत रुक जाता है। <code>duration</code> (कोई और मान न दें तो 300 सेकंड) हर हाल में किसी सेशन का सबसे लंबा समय है।</li>
+    <li><strong>कुछ न करने पर बताता है।</strong> जिस सेशन ने कुछ भी धीमा नहीं किया, क्योंकि उसके लक्ष्य तक कुछ नहीं पहुँचा, वह <code>BadNetworkWarning</code> के साथ ख़त्म होता है। आम वजह यह होती है कि ऐप लक्ष्य के बजाय किसी दूसरे पते से बात कर रहा है, जैसे किसी कंटेनर से।</li>
+    <li><strong>macOS.</strong> प्रोग्राम Windows और Linux पर चलता है। Mac पर टेस्ट किसी Linux x86_64 कंटेनर या वर्चुअल मशीन में, या किसी CI रनर पर चलाएँ।</li>
+  </ul>
+  <p><a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/npm/beannetworktester">GitHub</a> पर पैकेज का README हर विकल्प गिनाता है और हर संदेश का मतलब बताता है।</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

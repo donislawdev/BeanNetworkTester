@@ -7,14 +7,14 @@
   <h2>Вигляд кроку</h2>
   <p>Погіршуйте на час тесту, а потім дайте йому зупинитися самому. Жодного кроку очищення, про який можна забути:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>У завданні GitHub Actions на власному (self-hosted) раннері Windows:</p>
+  <p>У завданні GitHub Actions на ранері з Windows:</p>
 <pre><code>- name: Test the app on a poor connection
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>Дві речі про раннер: для перехоплення трафіку потрібні права адміністратора, а розміщений раннер їх не дасть, тож це місце для власної машини Windows.</p>
+  <p>Для перехоплення трафіку потрібні права адміністратора. Розміщені ранери GitHub з Windows працюють із підвищеними правами, тож крок працює там як є, а власний ранер має працювати від імені адміністратора. Тест у Playwright чи pytest може й сам запускати та зупиняти програму: див. <a href="../povilna-merezha-v-playwright/">Playwright</a> і <a href="../zatrymka-merezhi-v-pytest/">pytest</a>.</p>
 </section>
 
 <section>

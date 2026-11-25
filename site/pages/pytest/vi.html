@@ -1,0 +1,96 @@
+<section class="hero">
+  <h1>Mô phỏng độ trễ mạng và mất gói trong pytest</h1>
+  <p class="lead">Không giả lập gì trong mã: gói <code>beannetworktester</code> trên PyPI cho pytest một fixture <code>bad_network</code> làm chậm mạng thật trong suốt một bài kiểm thử. Độ trễ, mất gói, giới hạn tốc độ hoặc mất kết nối hoàn toàn, cho một máy chủ hay một tiến trình, trong khi ứng dụng, trình duyệt và máy chủ của bạn thật sự nói chuyện với nhau. Gói mang theo chương trình của Bean Network Tester và chạy nó trên Windows và Linux. Gói được phát hành cùng mỗi bản ổn định từ 1.1.0 trở đi.</p>
+</section>
+
+<section>
+  <h2>Cài đặt</h2>
+<pre><code>pip install beannetworktester</code></pre>
+  <p>Cần Windows x64 hoặc Linux x64 (glibc 2.39 trở lên, như Ubuntu 24.04) và Python 3.10 trở lên.</p>
+  <p>Thay đổi mạng cần quyền quản trị trên Windows: mở terminal bằng "Chạy với tư cách quản trị viên". Trên Linux cần root, hoặc một người dùng được chạy <code>sudo</code> không cần mật khẩu, và khi đó chỉ chương trình chạy dưới <code>sudo</code>. Các runner Windows do GitHub lưu trữ chạy với quyền nâng cao và runner Ubuntu của GitHub cho phép <code>sudo</code>, nên workflow không cần thêm bước nào.</p>
+</section>
+
+<section>
+  <h2>Một bài kiểm thử trên mạng chậm</h2>
+  <p>Lưu đoạn này thành <code>test_slow.py</code> rồi chạy <code>pytest</code>:</p>
+<pre><code>import subprocess
+import sys
+import time
+import urllib.request
+
+import pytest
+
+
+@pytest.fixture
+def web_server():
+    server = subprocess.Popen([sys.executable, "-m", "http.server", "8000"])
+    time.sleep(1)
+    yield "http://localhost:8000"
+    server.terminate()
+
+
+def test_a_page_takes_longer_on_a_slow_network(bad_network, web_server):
+    bad_network(server=web_server, latency=500)
+    started = time.monotonic()
+    urllib.request.urlopen(web_server).read()
+    assert time.monotonic() - started &gt;= 0.5</code></pre>
+  <p>Bài kiểm thử đạt vì câu trả lời thật sự đến muộn hơn: mọi gói tin đến và đi từ máy chủ đó đều chờ 500 ms. Khi bài kiểm thử kết thúc, mạng trở lại bình thường. Đo trên Windows với <code>latency=200</code>: một yêu cầu tới máy chủ trong mục tiêu tăng từ 4 ms lên 404 ms, vì cả yêu cầu lẫn câu trả lời đều chờ, và một trang trong Chromium từ 61 ms lên 412 ms. Một máy chủ cục bộ khác, ngoài mục tiêu, trong lúc đó trả lời trong 11 ms.</p>
+  <p>Chưa có quyền trong tay? <code>bad_network(simulate=True, latency=500)</code> chạy chương trình trên lưu lượng giả và không thay đổi gì trên mạng. Nó kiểm tra rằng gói đã được cài đúng, và không làm chậm gì.</p>
+</section>
+
+<section>
+  <h2>Fixture bad_network</h2>
+  <p>pytest tự tìm thấy fixture sau khi gói được cài. <code>bad_network</code> bắt đầu một phiên khi bạn gọi nó và trả về ngay khi mạng đã chậm. Phiên dừng khi bài kiểm thử kết thúc, dù đạt, trượt hay bị sập, và bản tóm tắt của chương trình đi vào <code>user_properties</code> của bài kiểm thử, rồi từ đó vào báo cáo JUnit XML. Để đổi điều kiện giữa chừng, hãy dừng phiên đầu trước khi bắt đầu phiên tiếp theo:</p>
+<pre><code>def test_the_app_recovers_when_the_api_comes_back(bad_network):
+    outage = bad_network(server="http://localhost:8000", loss=100)
+    assert app_shows_offline_banner()
+    outage.stop()
+    assert app_hides_offline_banner()</code></pre>
+  <p>Ngoài pytest, <code>from beannetworktester import bad_network</code> bắt đầu cùng một phiên, và <code>with bad_network(...) as session:</code> dừng nó ở cuối khối lệnh.</p>
+</section>
+
+<section>
+  <h2>Playwright cho Python</h2>
+  <p>Playwright cho Python chạy trên pytest, nên fixture là một. Chromium, Firefox và WebKit bị làm chậm như nhau, kể cả WebSocket, vì chính mạng chậm, không phải điều trình duyệt nghĩ về nó:</p>
+<pre><code>from playwright.sync_api import expect
+
+
+def test_the_spinner_shows_on_a_slow_network(bad_network, page):
+    bad_network(server="http://localhost:3000", latency=800)
+    page.goto("http://localhost:3000")
+    expect(page.get_by_role("progressbar")).to_be_visible()</code></pre>
+</section>
+
+<section>
+  <h2>Một phiên nhắm vào đâu</h2>
+  <p>Mỗi phiên nhắm vào một thứ, và chỉ lưu lượng đó thay đổi. Một phiên không có mục tiêu sẽ làm chậm mọi kết nối của máy, kể cả của chính trình chạy kiểm thử, nên nó không khởi động.</p>
+  <ul>
+    <li><strong><code>server="http://localhost:3000"</code></strong> làm chậm mọi kết nối tới địa chỉ và cổng đó, từ ứng dụng, trình duyệt của bạn hay bất kỳ chương trình nào khác. <code>"db.local:5432"</code>, <code>("10.0.0.5", 443)</code> và một danh sách máy chủ cũng dùng được. Đây là lựa chọn đầu tiên, và chính xác trên cả Windows lẫn Linux.</li>
+    <li><strong><code>process="self"</code></strong> làm chậm tiến trình kiểm thử và mọi chương trình nó đã khởi chạy, như trình duyệt của Playwright. Một tiến trình do chính bài kiểm thử khởi chạy được truyền vào dưới dạng <code>subprocess.Popen</code> của nó.</li>
+    <li><strong><code>dst_port</code>, <code>dst_ip</code> và <code>target</code></strong> là các mục tiêu riêng của chương trình, viết theo <a href="../dong-lenh/">cú pháp của nó</a>, dành cho một API trên cổng hay địa chỉ đã biết. Chúng chạm tới mọi thứ khớp: <code>dst_port=443</code> là mọi kết nối HTTPS của máy, kể cả của trình soạn thảo, và <code>target="python"</code> là mọi chương trình có "python" trong tên.</li>
+  </ul>
+  <p>Các mục tiêu đưa cùng nhau sẽ thu hẹp lẫn nhau: <code>server=</code> với <code>process="self"</code> chỉ làm chậm các kết nối của bài kiểm thử này tới máy chủ đó. Trên Linux, <code>process=</code> và <code>target</code> chạm tới một kết nối mới trong vòng khoảng 0,2 giây sau khi nó mở, nên hãy nhắm vào máy chủ khi yêu cầu đầu tiên quan trọng.</p>
+</section>
+
+<section>
+  <h2>Một phiên làm được gì</h2>
+  <p>Mỗi thiết lập là một trong các <a href="../dong-lenh/">tùy chọn dòng lệnh</a> của chương trình, viết với <code>_</code> thay cho <code>-</code>. <code>latency=300</code> thêm 300 ms cho mỗi gói tin, <code>jitter=100</code> làm độ trễ đó dao động, <code>loss=5</code> bỏ 5 % gói tin, <code>down</code> và <code>up</code> giới hạn tốc độ theo KB/s, và <code>loss=100</code> cắt hẳn máy chủ. <code>preset="presets.3g"</code> là cả một hồ sơ đường truyền, và <code>seed=42</code> lặp lại cùng những lựa chọn ngẫu nhiên ở mỗi lần chạy. Một <a href="../kich-ban-theo-thoi-gian/">kịch bản</a> thay đổi điều kiện theo từng giây: <code>scenario="scenarios/cafe-wifi.json"</code>. Một bước của kịch bản có thể đổi cách mạng hoạt động, nhưng không đổi được thứ mà phiên nhắm vào.</p>
+</section>
+
+<section>
+  <h2>pytest-xdist và giới hạn</h2>
+  <ul>
+    <li><strong>Mỗi lần một phiên.</strong> Hai phiên trên cùng lưu lượng sẽ cộng dồn, nên các worker của pytest-xdist lần lượt chờ đến lượt, mỗi worker chờ tối đa <code>wait</code> giây (600 nếu bạn không đặt giá trị khác). Phiên thứ hai trong cùng bài kiểm thử bị từ chối ngay.</li>
+    <li><strong>Nó kết thúc cùng bài kiểm thử.</strong> Nếu tiến trình kiểm thử chết, chương trình nhận ra và dừng ngay. <code>duration</code> (300 giây nếu bạn không đặt giá trị khác) là thời gian lâu nhất một phiên được chạy trong mọi trường hợp.</li>
+    <li><strong>Nó báo khi không làm gì.</strong> Một phiên không làm chậm gì, vì không có gì tới mục tiêu của nó, sẽ kết thúc với <code>BadNetworkWarning</code>. Thường là ứng dụng nói chuyện với một địa chỉ khác mục tiêu, như một container.</li>
+    <li><strong>macOS.</strong> Chương trình chạy trên Windows và Linux. Trên máy Mac, hãy chạy kiểm thử trong container hoặc máy ảo Linux x86_64, hoặc trên một runner CI.</li>
+  </ul>
+  <p>README của gói trên <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/python/beannetworktester">GitHub</a> liệt kê mọi tùy chọn và giải thích mọi thông báo.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

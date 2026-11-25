@@ -1,0 +1,83 @@
+<section class="hero">
+  <h1>Playwright testlerinde yavaş ağ ve paket kaybı simülasyonu</h1>
+  <p class="lead">Playwright bir sayfayı çevrimdışı yapabilir ve Chromium'u DevTools üzerinden yavaşlatabilir. npm'deki <code>beannetworktester</code> paketi ise tarayıcının altında gerçek ağı yavaşlatır: gecikme, paket kaybı, hız sınırı ya da tam kesinti, testinizin konuştuğu sunucu için. Chromium, Firefox ve WebKit aynı şekilde yavaşlar, WebSocket'ler de dahil. Paket Bean Network Tester'ın kendi programını içerir ve bir test süresince Windows ve Linux'ta çalıştırır. 1.1.0'dan itibaren her kararlı sürümle yayımlanır.</p>
+</section>
+
+<section>
+  <h2>Kurulum</h2>
+<pre><code>npm install -D @playwright/test beannetworktester
+npx playwright install chromium</code></pre>
+  <p>Windows x64 ya da Linux x64 (glibc 2.39 veya daha yenisi, örneğin Ubuntu 24.04) ve Node 20 veya daha yenisi gerekir. npm, sisteminize uygun programı isteğe bağlı bağımlılık olarak kurar, bu yüzden isteğe bağlı bağımlılıkları dışarıda bırakmayın.</p>
+  <p>Ağı değiştirmek Windows'ta yönetici hakları ister: terminali "Yönetici olarak çalıştır" ile açın. Linux'ta root ya da parolasız <code>sudo</code> çalıştırabilen bir kullanıcı gerekir, o zaman <code>sudo</code> altında yalnızca program çalışır. GitHub'ın barındırılan Windows runner'ları yükseltilmiş haklarla çalışır, Ubuntu runner'ları da <code>sudo</code> izni verir, yani bir workflow'un fazladan bir adıma ihtiyacı yoktur.</p>
+</section>
+
+<section>
+  <h2>Yavaş bir ağda test</h2>
+  <p>Bunu <code>tests/slow.spec.js</code> olarak kaydedin ve <code>npx playwright test</code> çalıştırın:</p>
+<pre><code>import http from 'node:http';
+import { test, expect } from 'beannetworktester/playwright';
+
+let server;
+test.beforeAll(async () =&gt; {
+  server = http.createServer((request, response) =&gt; response.end('&lt;h1&gt;Hello&lt;/h1&gt;'));
+  await new Promise((done) =&gt; server.listen(8000, done));
+});
+test.afterAll(() =&gt; server.close());
+
+test('a page takes longer on a slow network', async ({ page, badNetwork }) =&gt; {
+  await badNetwork({ server: 'http://localhost:8000', latency: 500 });
+  const started = Date.now();
+  await page.goto('http://localhost:8000');
+  await expect(page.locator('h1')).toHaveText('Hello');
+  expect(Date.now() - started).toBeGreaterThanOrEqual(500);
+});</code></pre>
+  <p>Test geçer, çünkü sayfa gerçekten daha geç gelir: o sunucuya giden ve ondan gelen her paket 500 ms bekler. Test bitince ağ normale döner. Windows'ta <code>latency: 200</code> ile ölçüldü: hedefteki sunucuya bir istek 0,8 ms'den 404 ms'ye çıktı, çünkü hem istek hem yanıt bekler, Chromium'da bir sayfa da 13 ms'den 416 ms'ye. Hedefin dışındaki başka bir yerel sunucu bu sırada 1,6 ms'de yanıt verdi.</p>
+  <p>Haklarınız el altında değil mi? <code>badNetwork({ simulate: true, latency: 500 })</code> programı uydurma trafikle çalıştırır ve ağda hiçbir şeyi değiştirmez. Paketin doğru kurulduğunu denetler, hiçbir şeyi yavaşlatmaz.</p>
+</section>
+
+<section>
+  <h2>badNetwork fixture'ı</h2>
+  <p><code>test</code> ve <code>expect</code> öğelerini <code>@playwright/test</code> yerine <code>beannetworktester/playwright</code> içinden içe aktarın. <code>badNetwork</code> onu çağırdığınızda bir oturum başlatır ve ağ yavaşladığı anda tamamlanır. Oturum test bitince durur, test geçmiş, kalmış ya da çökmüş olsun, ve programın özeti testin raporuna <code>bad-network</code> olarak eklenir. Koşulları testin ortasında değiştirmek için, sonrakini başlatmadan önce ilk oturumu durdurun:</p>
+<pre><code>test('the app recovers when the API comes back', async ({ page, badNetwork }) =&gt; {
+  const outage = await badNetwork({ server: 'http://localhost:8000', loss: 100 });
+  await page.goto('http://localhost:3000');
+  await expect(page.getByText('Offline')).toBeVisible();
+  await outage.stop();
+  await expect(page.getByText('Offline')).toBeHidden();
+});</code></pre>
+  <p>Playwright Test dışında, <code>require('beannetworktester')</code> içindeki <code>badNetwork</code> aynı oturumu başlatır: <code>const session = await badNetwork({ ... })</code>, ve <code>await session.stop()</code> onu bitirip özeti döndürür.</p>
+</section>
+
+<section>
+  <h2>Bir oturum neyi hedefler</h2>
+  <p>Her oturum bir şeyi hedefler ve yalnızca o trafik değişir. Hedefi olmayan bir oturum makinenin her bağlantısını, test çalıştırıcısının kendi bağlantıları dahil, yavaşlatırdı, bu yüzden hiç başlamaz.</p>
+  <ul>
+    <li><strong><code>server: 'http://localhost:3000'</code></strong> o adres ve porta giden her bağlantıyı yavaşlatır; tarayıcıdan, API sunucunuzdan ya da başka herhangi bir programdan. <code>'db.local:5432'</code> ve bir sunucu listesi de çalışır. İlk tercih budur ve Windows ile Linux'ta tam isabetlidir.</li>
+    <li><strong><code>process: 'self'</code></strong> test worker'ını ve onun başlattığı her programı, örneğin tarayıcısını yavaşlatır. Testinizin kendi başlattığı bir süreç, <code>ChildProcess</code> nesnesiyle verilir.</li>
+    <li><strong><code>dstPort</code>, <code>dstIp</code> ve <code>target</code></strong> programın kendi hedefleridir, <a href="../komut-satiri/">onun sözdizimiyle</a> yazılır ve bilinen bir port ya da adresteki bir API içindir. Eşleşen her şeye ulaşırlar: <code>dstPort: 443</code> makinenin her HTTPS bağlantısıdır, editörünüzünkiler dahil, <code>target: 'node'</code> ise adında "node" geçen her programdır.</li>
+  </ul>
+  <p>Birlikte verilen hedefler birbirini daraltır: <code>server</code> ile <code>process: 'self'</code> yalnızca bu worker'ın o sunucuya bağlantılarını yavaşlatır. Linux'ta <code>process</code> ve <code>target</code> yeni bir bağlantıya açıldıktan sonra yaklaşık 0,2 saniyeye kadar ulaşır, bu yüzden ilk istek önemliyse sunucuyu hedefleyin.</p>
+</section>
+
+<section>
+  <h2>Bir oturum neler yapabilir</h2>
+  <p>Her ayar programın <a href="../komut-satiri/">komut satırı seçeneklerinden</a> biridir. <code>latency: 300</code> her pakete 300 ms ekler, <code>jitter: 100</code> bu gecikmeyi değiştirir, <code>loss: 5</code> paketlerin %5'ini düşürür, <code>down</code> ve <code>up</code> hızı KB/s cinsinden sınırlar, <code>loss: 100</code> ise sunucuyu keser. <code>preset: 'presets.3g'</code> eksiksiz bir bağlantı profilidir, <code>seed: 42</code> ise her çalıştırmada aynı rastgele seçimleri yapar. Bir <a href="../zamana-bagli-senaryolar/">senaryo</a> koşulları saniyeler geçtikçe değiştirir: <code>scenario: 'scenarios/cafe-wifi.json'</code>. Senaryonun bir adımı ağın nasıl davrandığını değiştirebilir ama oturumun neyi hedeflediğini değiştiremez.</p>
+</section>
+
+<section>
+  <h2>Paralel worker'lar ve sınırlar</h2>
+  <ul>
+    <li><strong>Bir seferde bir tane.</strong> Aynı trafikteki iki oturum birbirine eklenirdi, bu yüzden paralel worker'lar sırayla çalışır ve her biri <code>wait</code> saniyeye kadar bekler (başka bir değer vermezseniz 600). Aynı testteki ikinci bir oturum hemen reddedilir.</li>
+    <li><strong>Testle birlikte biter.</strong> Test worker'ı ölürse program bunu görür ve hemen durur. <code>duration</code> (başka bir değer vermezseniz 300 saniye) her durumda bir oturumun en uzun süresidir.</li>
+    <li><strong>Hiçbir şey yapmadığında söyler.</strong> Hedefine hiçbir şey ulaşmadığı için hiçbir şeyi yavaşlatmayan bir oturum <code>BadNetworkWarning</code> ile biter. Genellikle uygulama hedeften başka bir adresle, örneğin bir konteynerle konuşuyordur.</li>
+    <li><strong>macOS.</strong> Program Windows ve Linux'ta çalışır. Mac'te testleri bir Linux x86_64 konteynerinde, sanal makinede ya da bir CI runner'ında çalıştırın.</li>
+  </ul>
+  <p>Paketin <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/npm/beannetworktester">GitHub</a> üzerindeki README dosyası her seçeneği listeler ve her mesajı açıklar.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
