@@ -91,7 +91,12 @@ from fakes import ROOT, check
 # `gui/banners.py` (UX audit, the reach banner joined them), so `_build_ui` is 112
 # and the ceiling is the next function down, `cli.build_arg_parser`. The band falls
 # to 81.2 and `App.__init__` is 81 - its next line puts it in the crowd.
-FUNCTION_CEILING = 116          # beantester/cli.py::build_arg_parser
+# Lowered 2026-11-25 from 116: `--stop-on-stdin-close` took `build_arg_parser` to 120,
+# so it was split along seams its comments already drew - the output and CI/CD
+# groups, the upload-direction flags, and (from `_add_scope_arguments`) the flags that
+# look inside a packet. `_build_ui` is the ceiling again, the band falls to 78.4 and
+# the crowd is `_build_ui` and `App.__init__` at 81, with `build_arg_parser` at 77.
+FUNCTION_CEILING = 112          # beantester/gui/app.py::_build_ui
 # Lowered 2026-09-02 from 1192, the routine door again: the four GUI lifecycle fixes
 # needed room in `app.py`, which was pinned to the ceiling exactly, so the log box's
 # own bookkeeping moved to `gui/logview.py` and the fixes went in under the number
@@ -181,7 +186,7 @@ CROWD_BAND = 0.70
 # came down onto two files when `app.py` lost 107 lines, and the alternative was an
 # `app.py` kept longer than it needs to be to hold the count.
 FILES_NEAR_CEILING = 5          # gui/app.py, cli.py, engine.py, portmap.py, nettools/nat.py
-FUNCTIONS_NEAR_CEILING = 2      # _build_ui, build_arg_parser
+FUNCTIONS_NEAR_CEILING = 2      # _build_ui, App.__init__
 
 # 🔴 THE THIRD AXIS, added 2026-08-21 - and this file used to say, in the paragraph
 # above, that nesting depth was not measured. It is now, because nothing else can

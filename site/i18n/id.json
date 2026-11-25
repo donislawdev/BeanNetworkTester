@@ -99,6 +99,7 @@
   "flag.save_config": "Menulis pengaturan hasil baris perintah ini ke berkas JSON dan keluar tanpa memulai apa pun. Jendela dan --config bisa memuat berkas itu.",
   "flag.scenario": "Memutar berkas skenario, yaitu lini waktu yang mengubah pengaturan pada detik yang disebutnya. Skenario siap pakai bisa disebut sebagai scenarios/cafe-wifi.json dari folder mana pun.",
   "flag.simulate": "Berjalan dengan lalu lintas buatan, bukan penangkapan sungguhan: tanpa driver, tanpa hak administrator atau root, dan tidak ada yang berubah di jaringan. Untuk mencoba pengaturan dan untuk pengujian.",
+  "flag.stop_on_stdin_close": "Mengakhiri jalannya saat standard input ditutup, sebagai akhir normal beserta ringkasannya. Program yang memulai program ini menghentikannya dengan menutup pipe, dan jika program itu mati, jalannya langsung berakhir alih-alih menunggu --duration.",
   "flag.verbose": "Mencatat apa yang dilakukan alat ini: pengaturan yang dipakai, port yang ditemukan untuk sebuah program, langkah skenario, serta pembukaan dan penutupan driver.",
   "flag.version": "Mencetak versi program, lalu keluar.",
   "footer.author": "Dibuat oleh DonislawDev.",

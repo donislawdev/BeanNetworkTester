@@ -823,7 +823,8 @@ BeanNetworkTester.exe --preset "3G network" --duration 60
 
 - **stderr**：给人看的日志，以 `[bean]` 为前缀（开始、随机种子、错误、停止原因）。
 - **stdout**：数据，即报告行，使用 `--format json` 时则是 **NDJSON**（每行一个 JSON 对象：
-  一连串的 `sample` 对象，最后是带有退出码、随机种子和复现命令的 `summary`）。
+  捕获开始运行时的 `start` 对象，一连串的 `sample` 对象，最后是带有退出码、随机种子和复现命令的
+  `summary`）。启动本程序的程序可以先等到 `start`，再发送需要变慢的流量。
 
 ```bat
 BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
@@ -925,6 +926,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--print-config` | 以 JSON 打印生效的设置（按 `defaults < file < preset < flags` 合并之后）并退出 |
 | `--min-packets N` | 如果捕获的数据包少于 N 个，以代码 `6` 退出 |
 | `--fail-on-no-traffic` | `--min-packets 1` 的简写，**能发现什么都没捕获到的过滤器** |
+| `--stop-on-stdin-close` | 标准输入关闭时结束会话，按正常结束处理：会写出汇总，其 `stop_reason` 为 `stdin`。启动本程序的程序关闭管道即可停止它。如果那个程序退出，会话会立即结束，而不是一直运行到 `--duration` |
 | `--doctor` | 检查环境（管理员权限、`pydivert`、WinDivert 驱动状态、`%TEMP%` 中的残留、程序文件夹能否在没有管理员权限的情况下写入、时钟的计时精度）并退出 |
 | `--cleanup-driver` | 卸载卡住的 WinDivert 驱动（**无需重启系统**即可释放被锁定的 `.sys` 文件）并退出。每一行说明一个服务的处理结果。即使有服务无法停止，退出码也是 `0` |
 

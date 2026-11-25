@@ -1661,8 +1661,8 @@ def test_json_format_is_parsable_ndjson():
                         "--interval", "1", "--format", "json"])
     records = [json.loads(line) for line in out.strip().splitlines()]
     kinds = [r["event"] for r in records]
-    check("json: samples then a summary", kinds == ["sample", "sample", "summary"],
-          f"({kinds})")
+    check("json: a start, samples, then a summary",
+          kinds == ["start", "sample", "sample", "summary"], f"({kinds})")
     summary = records[-1]
     check("json: the summary carries the exit code",
           summary["exit_code"] == exitcodes.OK and summary["exit_name"] == "OK")

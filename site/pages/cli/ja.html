@@ -30,7 +30,7 @@ BeanNetworkTester.exe --config my-settings.json --dry-run</code></pre>
 
 <section>
   <h2>何が出力されるか</h2>
-  <p>人が読むためのログは標準エラー出力に出て、各行は <code>[bean]</code> で始まります。データは標準出力に出ます。数秒ごとの報告行と、最後のまとめです。<code>--format json</code> を付けると、標準出力は 1 行に 1 つの JSON オブジェクトになります。報告ごとの <code>sample</code> オブジェクトと、最後の <code>summary</code> で、後者には終了コード、シード、実行を繰り返すコマンドが入ります。</p>
+  <p>人が読むためのログは標準エラー出力に出て、各行は <code>[bean]</code> で始まります。データは標準出力に出ます。数秒ごとの報告行と、最後のまとめです。<code>--format json</code> を付けると、標準出力は 1 行に 1 つの JSON オブジェクトになります。報告ごとの <code>sample</code> オブジェクトと、最後の <code>summary</code> で、後者には終了コード、シード、実行を繰り返すコマンドが入ります。最初の報告の前には、キャプチャが動き出した時点で <code>start</code> オブジェクトが出ます。このプログラムを起動するプログラムは、それを待ってから自分の通信を送れます。</p>
 <pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
   <p>実行の終わり方ごとに専用の終了コードがあるので、パイプラインはアプリケーションの失敗と、ツールが起動できなかった場合とを区別できます。コードの一覧は<a href="../rifarensu/">リファレンスのページ</a>にあります。</p>
 </section>

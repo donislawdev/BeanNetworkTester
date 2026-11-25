@@ -52,7 +52,8 @@ BeanNetworkTester.exe --config mijn-instellingen.json --dry-run</code></pre>
   <code>[bean]</code>. Gegevens gaan naar de standaarduitvoer: om de paar seconden een rapportregel en
   aan het eind een samenvatting. Met <code>--format json</code> bevat de standaarduitvoer één
   JSON-object per regel: een <code>sample</code>-object voor elk rapport en een laatste
-  <code>summary</code> met de exitcode, de seed en de opdracht die de run herhaalt.</p>
+  <code>summary</code> met de exitcode, de seed en de opdracht die de run herhaalt.
+  Vóór het eerste rapport komt een <code>start</code>-object, geschreven zodra het opvangen loopt, zodat een programma dat dit programma start, weet wanneer het zijn verkeer kan sturen.</p>
 <pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
   <p>Elke manier waarop een run kan eindigen heeft een eigen exitcode, zodat een pipeline een falende
   applicatie onderscheidt van een hulpmiddel dat niet kon starten. De codes staan op

@@ -885,7 +885,9 @@ BeanNetworkTester.exe --preset "3G network" --duration 60
 
 - **stderr** - 사람이 읽는 로그이며 `[bean]` 접두사가 붙습니다(시작, 시드, 오류, 중지 이유).
 - **stdout** - 데이터입니다. 보고 줄, 그리고 `--format json`에서는 **NDJSON**(한 줄에 JSON 객체 하나)이
-  나옵니다. 연속된 `sample` 객체들과, 종료 코드, 시드, 재현 명령이 담긴 마지막 `summary`입니다.
+  나옵니다. 캡처가 시작되면 나오는 `start` 객체, 연속된 `sample` 객체들, 그리고 종료 코드, 시드,
+  재현 명령이 담긴 마지막 `summary`입니다. 이 프로그램을 실행하는 프로그램은 느리게 만들 트래픽을
+  보내기 전에 `start`를 기다릴 수 있습니다.
 
 ```bat
 BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
@@ -985,6 +987,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--print-config` | 유효 설정(`defaults < file < preset < flags` 적용 후)을 JSON으로 출력하고 종료합니다 |
 | `--min-packets N` | N개보다 적은 패킷이 잡히면 코드 `6`으로 종료합니다 |
 | `--fail-on-no-traffic` | `--min-packets 1`의 줄임 표현 - **아무것도 잡지 못한 필터를 잡아냅니다** |
+| `--stop-on-stdin-close` | 표준 입력이 닫히면 정상 종료로 세션을 끝냅니다. 요약이 기록되고 그 `stop_reason`은 `stdin`입니다. 이 프로그램을 실행한 프로그램은 파이프를 닫아 멈출 수 있고, 그 프로그램이 죽으면 `--duration`까지 기다리지 않고 세션이 바로 끝납니다 |
 | `--doctor` | 환경(관리자 권한, `pydivert`, WinDivert 드라이버 상태, `%TEMP%`에 남은 잔여물, 관리자 권한 없이 프로그램 폴더에 쓸 수 있는지, 시계가 시간을 얼마나 세밀하게 측정하는지)을 검사하고 종료합니다 |
 | `--cleanup-driver` | 걸려 있는 WinDivert 드라이버를 언로드하고(잠긴 `.sys` 파일을 **시스템 재시작 없이** 풀어 줍니다) 종료합니다. 각 줄은 서비스 하나에 어떤 일이 있었는지 알려 줍니다. 서비스를 멈추지 못한 경우에도 종료 코드는 `0`입니다 |
 

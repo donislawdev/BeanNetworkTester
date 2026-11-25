@@ -548,7 +548,7 @@ BeanNetworkTester.exe --preset "3G network" --duration 60
 ### 出力: ログは stderr、データは stdout
 
 - **stderr** - 人間向けのログで、先頭に `[bean]` が付きます (開始、シード、エラー、停止の理由)。
-- **stdout** - データです。レポートの行と、`--format json` のときは **NDJSON** (1行に1つの JSON オブジェクト。連続する `sample` オブジェクトと、終了コード、シード、再現コマンドを含む最後の `summary`) です。
+- **stdout** - データです。レポートの行と、`--format json` のときは **NDJSON** (1行に1つの JSON オブジェクト。キャプチャーが動き出した時点の `start` オブジェクト、連続する `sample` オブジェクト、終了コード、シード、再現コマンドを含む最後の `summary`) です。このプログラムを起動するプログラムは、遅くしたい通信を送る前に `start` を待てます。
 
 ```bat
 BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
@@ -642,6 +642,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--print-config` | 有効な設定 (`defaults < file < preset < flags` の適用後) を JSON で出力して終了する |
 | `--min-packets N` | N 個より少ないパケットしか捕捉されなかった場合、終了コード `6` で終了する |
 | `--fail-on-no-traffic` | `--min-packets 1` の短縮形 - **何も捕捉しなかったフィルターを検出する** |
+| `--stop-on-stdin-close` | 標準入力が閉じられたら、通常の終了としてセッションを終えます。サマリーが書かれ、その `stop_reason` は `stdin` です。このプログラムを起動したプログラムはパイプを閉じれば止められ、そのプログラムが終了した場合も `--duration` まで続けずにすぐ終わります |
 | `--doctor` | 環境 (管理者権限、`pydivert`、WinDivert ドライバーの状態、`%TEMP%` の残骸、管理者権限なしでプログラムのフォルダーに書き込めるか、時計がどれだけ細かく時間を測るか) をチェックして終了する |
 | `--cleanup-driver` | 動かなくなった WinDivert ドライバーをアンロードして (ロックされた `.sys` ファイルを**システムの再起動なしで**解放して) 終了する。各行が、1つのサービスに何が起きたかを伝える。サービスを停止できなかった場合でも、終了コードは `0` |
 

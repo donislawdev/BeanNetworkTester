@@ -1024,8 +1024,9 @@ Chaque façon de se terminer a son propre code - un pipeline n'a pas besoin d'an
 - **stderr** - le journal lisible par l'humain, préfixé `[bean]` (démarrage, graine, erreurs, raison
   de l'arrêt),
 - **stdout** - les données : lignes de rapport, et avec `--format json` du **NDJSON** (un objet JSON
-  par ligne : des objets `sample` successifs, puis un `summary` final avec le code de sortie, la graine
-  et la commande de reproduction).
+  par ligne : un objet `start` dès que la capture tourne, des objets `sample` successifs, puis un
+  `summary` final avec le code de sortie, la graine et la commande de reproduction). Un programme qui
+  lance celui-ci peut attendre `start` avant d'envoyer le trafic qu'il veut ralentir.
 
 ```bat
 BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
@@ -1128,6 +1129,7 @@ connexions qui arrivent de l'extérieur, restent bloqués en silence.
 | `--print-config` | affiche les réglages effectifs (après `defaults < file < preset < flags`) en JSON et quitte |
 | `--min-packets N` | quitte avec le code `6` si moins de N paquets ont été interceptés |
 | `--fail-on-no-traffic` | raccourci pour `--min-packets 1` - **détecte un filtre qui n'a rien intercepté** |
+| `--stop-on-stdin-close` | termine la session quand l'entrée standard se ferme, comme une fin normale : le résumé est écrit et son `stop_reason` vaut `stdin`. Un programme qui lance celui-ci l'arrête en fermant le tube, et si ce programme meurt, la session s'arrête aussitôt au lieu de continuer jusqu'à `--duration` |
 | `--doctor` | vérifie l'environnement (administrateur, `pydivert`, état du pilote WinDivert, restes dans `%TEMP%`, possibilité d'écrire dans le dossier du programme sans droits d'administrateur, finesse de mesure du temps par l'horloge) et quitte |
 | `--cleanup-driver` | décharge un pilote WinDivert bloqué (libère le fichier `.sys` verrouillé **sans redémarrer le système**) et quitte. Chaque ligne dit ce qu'il est advenu d'un service. Le code de sortie est `0` même si un service n'a pas pu être arrêté |
 

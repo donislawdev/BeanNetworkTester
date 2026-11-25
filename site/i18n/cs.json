@@ -99,6 +99,7 @@
   "flag.save_config": "Zapíše do souboru JSON nastavení, která tento příkazový řádek dává dohromady, a skončí, aniž by cokoli spustil. Okno i --config umí tento soubor načíst.",
   "flag.scenario": "Přehraje soubor scénáře, tedy časovou osu, která mění nastavení v uvedených sekundách. Hotový scénář lze z libovolné složky zadat jako scenarios/cafe-wifi.json.",
   "flag.simulate": "Běží na vymyšleném provozu místo skutečného zachytávání: bez ovladače, bez práv správce nebo roota a v síti se nic nezmění. Na zkoušení nastavení a na testy.",
+  "flag.stop_on_stdin_close": "Ukončí běh, když se zavře standardní vstup, jako běžný konec se souhrnem. Program, který tento spustil, ho zastaví zavřením roury, a když ten program spadne, běh skončí hned, a ne až po --duration.",
   "flag.verbose": "Zapisuje do protokolu, co nástroj dělá: nastavení, která používá, porty nalezené pro program, kroky scénáře, otevírání a zavírání ovladače.",
   "flag.version": "Vypíše verzi programu a skončí.",
   "footer.author": "Vytvořil DonislawDev.",

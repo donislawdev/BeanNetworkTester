@@ -993,8 +993,9 @@ Cada forma de terminar tiene su propio código, así que un pipeline no necesita
 - **stderr** - el registro para personas, con el prefijo `[bean]` (inicio, semilla, errores, motivo
   de la parada),
 - **stdout** - datos: líneas de informe y, con `--format json`, **NDJSON** (un objeto JSON por línea:
-  sucesivos objetos `sample` y un `summary` final con el código de salida, la semilla y el comando de
-  reproducción).
+  un objeto `start` en cuanto la captura está en marcha, sucesivos objetos `sample` y un `summary`
+  final con el código de salida, la semilla y el comando de reproducción). Un programa que inicia este
+  puede esperar a `start` antes de enviar el tráfico que quiere ralentizar.
 
 ```bat
 BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
@@ -1096,6 +1097,7 @@ conexiones que llegan desde fuera se siguen bloqueando en silencio.
 | `--print-config` | imprime los ajustes efectivos (tras `defaults < file < preset < flags`) como JSON y termina |
 | `--min-packets N` | termina con el código `6` si se capturaron menos de N paquetes |
 | `--fail-on-no-traffic` | atajo de `--min-packets 1`: **detecta un filtro que no capturó nada** |
+| `--stop-on-stdin-close` | termina la sesión cuando se cierra la entrada estándar, como un final normal: se escribe el resumen y su `stop_reason` es `stdin`. Un programa que inicia este lo detiene cerrando la tubería, y si ese programa muere, la sesión termina al instante en lugar de seguir hasta `--duration` |
 | `--doctor` | comprueba el entorno (administrador, `pydivert`, estado del controlador WinDivert, restos en `%TEMP%`, si se puede escribir en la carpeta del programa sin derechos de administrador, con qué finura mide el tiempo el reloj) y termina |
 | `--cleanup-driver` | descarga un controlador WinDivert atascado (libera el archivo `.sys` bloqueado **sin reiniciar el sistema**) y termina. Cada línea dice qué ocurrió con un servicio. El código de salida es `0` incluso cuando un servicio no se pudo detener |
 

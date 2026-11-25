@@ -1314,7 +1314,9 @@ Every way of ending has its own code - a pipeline does not need to parse text:
 
 - **stderr** - the human log, prefixed `[bean]` (start, seed, errors, stop reason),
 - **stdout** - data: report lines, and with `--format json` **NDJSON** (one JSON object per line:
-  successive `sample` objects, and a final `summary` with the exit code, seed and repro command).
+  a `start` object once the capture is running, successive `sample` objects, and a final
+  `summary` with the exit code, seed and repro command). A program that drives this one can wait
+  for `start` before it sends the traffic it wants slowed.
 
 ```bat
 BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
@@ -1422,6 +1424,7 @@ connections arriving from outside, are still blocked in silence.
 | `--print-config` | print the effective settings (after `defaults < file < preset < flags`) as JSON and exit |
 | `--min-packets N` | exit with code `6` if fewer than N packets were caught |
 | `--fail-on-no-traffic` | shorthand for `--min-packets 1` - **catches a filter that caught nothing** |
+| `--stop-on-stdin-close` | end the session when standard input closes, as a normal end: the summary is written and its `stop_reason` is `stdin`. A program that starts this one stops it by closing the pipe, and the session ends at once if that program dies, instead of running on until `--duration` |
 | `--doctor` | check the environment (admin, `pydivert`, WinDivert driver state, `%TEMP%` leftovers, whether the program folder can be written without admin rights, how finely the clock measures time) and exit |
 | `--cleanup-driver` | unload a stuck WinDivert driver (frees the locked `.sys` file **without a system restart**) and exit. Each line says what happened to one service. The exit code is `0` even when a service could not be stopped |
 

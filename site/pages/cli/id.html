@@ -51,7 +51,8 @@ BeanNetworkTester.exe --config pengaturan-saya.json --dry-run</code></pre>
   <code>[bean]</code>. Data masuk ke standard output: satu baris laporan setiap beberapa detik dan
   ringkasan di akhir. Dengan <code>--format json</code>, standard output membawa satu objek JSON per
   baris: objek <code>sample</code> untuk setiap laporan dan <code>summary</code> terakhir dengan kode
-  keluar, seed, dan perintah yang mengulang jalannya.</p>
+  keluar, seed, dan perintah yang mengulang jalannya.
+  Sebelum laporan pertama datang objek <code>start</code>, ditulis begitu penangkapan berjalan, sehingga program yang memulai program ini tahu kapan mengirim lalu lintasnya.</p>
 <pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
   <p>Setiap cara sebuah jalannya berakhir punya kode keluarnya sendiri, sehingga pipeline bisa
   membedakan aplikasi yang gagal dari alat yang tidak bisa dimulai. Kodenya tercantum di

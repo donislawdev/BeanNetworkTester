@@ -99,6 +99,7 @@
   "flag.save_config": "Ghi các thiết lập mà dòng lệnh này tổng hợp ra vào một tệp JSON rồi thoát, không khởi động gì. Cửa sổ và --config đều nạp được tệp này.",
   "flag.scenario": "Phát một tệp kịch bản, tức một dòng thời gian thay đổi thiết lập ở những giây nó chỉ định. Kịch bản có sẵn có thể gọi là scenarios/cafe-wifi.json từ bất kỳ thư mục nào.",
   "flag.simulate": "Chạy trên lưu lượng giả thay vì bắt gói thật: không driver, không cần quyền quản trị hay root, và không có gì thay đổi trên mạng. Để thử thiết lập và để kiểm thử.",
+  "flag.stop_on_stdin_close": "Kết thúc lượt chạy khi đầu vào chuẩn đóng lại, như một kết thúc bình thường kèm bản tóm tắt. Chương trình đã khởi chạy chương trình này dừng nó bằng cách đóng pipe, và nếu chương trình đó bị tắt đột ngột, lượt chạy kết thúc ngay thay vì chờ đến --duration.",
   "flag.verbose": "Ghi vào nhật ký những gì công cụ đang làm: thiết lập đang dùng, các cổng tìm thấy cho một chương trình, các bước kịch bản, việc mở và đóng driver.",
   "flag.version": "In phiên bản của chương trình, rồi thoát.",
   "footer.author": "Do DonislawDev thực hiện.",

@@ -15,6 +15,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   or `--target` narrow it. It needs `--cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN`, not
   `--privileged`. The README's "Docker image" section covers one program, the Linux host, Docker
   Desktop and Apple silicon.
+- **`--stop-on-stdin-close`, and a `start` record in `--format json`.** For a program that
+  starts this one, such as a test runner. With the flag, the session ends when its standard
+  input closes, as a normal end with a summary whose `stop_reason` is `stdin`. If the program
+  that started it dies, the session ends at once instead of running on until `--duration`. In
+  `--format json` the first line is now a `start` object, written once the capture is running,
+  so that program knows when to send the traffic it wants slowed.
 
 ### Fixed
 

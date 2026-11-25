@@ -974,8 +974,9 @@ Cada forma de terminar tem o seu próprio código - um pipeline não precisa int
 
 - **stderr** - o log para humanos, com o prefixo `[bean]` (início, semente, erros, motivo da parada),
 - **stdout** - dados: linhas de relatório e, com `--format json`, **NDJSON** (um objeto JSON por
-  linha: objetos `sample` sucessivos e um `summary` final com o código de saída, a semente e o
-  comando de reprodução).
+  linha: um objeto `start` assim que a captura está rodando, objetos `sample` sucessivos e um
+  `summary` final com o código de saída, a semente e o comando de reprodução). Um programa que inicia
+  este pode esperar o `start` antes de enviar o tráfego que quer deixar lento.
 
 ```bat
 BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
@@ -1077,6 +1078,7 @@ fora continuam sendo bloqueados em silêncio.
 | `--print-config` | imprime as configurações efetivas (depois de `defaults < file < preset < flags`) como JSON e sai |
 | `--min-packets N` | sai com o código `6` se menos de N pacotes foram capturados |
 | `--fail-on-no-traffic` | atalho para `--min-packets 1` - **pega um filtro que não capturou nada** |
+| `--stop-on-stdin-close` | encerra a sessão quando a entrada padrão é fechada, como um fim normal: o resumo é escrito e o seu `stop_reason` é `stdin`. Um programa que inicia este o para fechando o pipe, e se esse programa morrer, a sessão termina na hora em vez de seguir até o `--duration` |
 | `--doctor` | verifica o ambiente (administrador, `pydivert`, estado do driver WinDivert, sobras em `%TEMP%`, se a pasta do programa pode ser gravada sem permissões de administrador, com que precisão o relógio mede o tempo) e sai |
 | `--cleanup-driver` | descarrega um driver WinDivert travado (libera o arquivo `.sys` bloqueado **sem reiniciar o sistema**) e sai. Cada linha diz o que aconteceu com um serviço. O código de saída é `0` mesmo quando um serviço não pôde ser parado |
 
