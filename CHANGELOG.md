@@ -5,6 +5,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
+### Added
+
+- **A Docker image (experimental).** From 1.1.0 every stable release is also
+  `ghcr.io/donislawdev/beannetworktester`, tagged with its version and `latest`. Release
+  candidates get none. It is the Linux command line, unchanged, for x86_64. Started in another
+  container's network (`--network container:<name>`, or `network_mode: "service:<name>"` in
+  Docker Compose), it slows down that container's traffic and nothing else. It needs
+  `--cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN`, not `--privileged`. The README's
+  "Docker image" section covers one program, the Linux host, Docker Desktop and Apple silicon.
+
 ### Fixed
 
 - **The `--preset` example in `--help` works.** It showed `--preset 3g`, which the program

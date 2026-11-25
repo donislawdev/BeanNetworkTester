@@ -1,0 +1,214 @@
+name: Container image
+
+# The command line as a container image, ghcr.io/donislawdev/beannetworktester,
+# made from a PUBLISHED release rather than built again.
+#
+# The release is the thing people trust, so the image carries its bytes: the
+# Linux package is downloaded, held to the release's SHA256SUMS.txt and to the
+# build provenance release.yml made when it built it, and only then unpacked
+# into the image. The image is then run on the runner's own kernel the way the
+# README and the site tell people to run it (tools/ci_docker_image.py), and only
+# an image that passed is pushed, tagged and attested, in that order, so a
+# failure anywhere leaves no tag pointing at something nobody tried.
+#
+# Only stable releases become images. A release candidate is built and tried
+# like a pull request, and nothing is pushed. A pull request that touches the
+# image tries it with the newest published package, candidates included,
+# because the next stable release will look like that one. It can be run by
+# hand for a stable release published before this file existed: a release event
+# reads the workflow from the tagged commit.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Published stable tag to make the image of, for example v1.1.0"
+        required: true
+  pull_request:
+    paths:
+      - ".github/docker/**"
+      - ".github/workflows/docker.yml"
+      - "tools/ci_docker_image.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/donislawdev/beannetworktester
+
+jobs:
+  which:
+    name: which release, and whether its image may be pushed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.which.outputs.tag }}
+      version: ${{ steps.which.outputs.version }}
+      latest: ${{ steps.which.outputs.latest }}
+      publish: ${{ steps.which.outputs.publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: which release
+        id: which
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        # Draft and pre-release are asked of the API rather than taken from the
+        # event, because a run by hand has no event payload. The rule itself is
+        # tools/ci_docker_image.py decide, where a test can try every case.
+        run: |
+          set -euo pipefail
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          case "$EVENT" in
+            release) tag="$RELEASE_TAG" ;;
+            workflow_dispatch) tag="$INPUT_TAG" ;;
+            *) tag="$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --limit 1 \
+                        --json tagName --jq '.[0].tagName')" ;;
+          esac
+          # An assignment first, so a failed lookup stops the step (set -e) rather
+          # than handing decide two empty answers.
+          state="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,isPrerelease --jq '"\(.isDraft) \(.isPrerelease)"')"
+          read -r draft prerelease <<< "$state"
+          python3 tools/ci_docker_image.py decide --event "$EVENT" --tag "$tag" \
+            --latest "$latest" --draft "$draft" --prerelease "$prerelease" | tee -a "$GITHUB_OUTPUT"
+
+  image:
+    name: the image, tried on the runner's kernel before anything is pushed
+    needs: which
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TAG: ${{ needs.which.outputs.tag }}
+      VERSION: ${{ needs.which.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: the published Linux package, checked before it is opened
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # The checksum says the download is the file the release lists. The
+        # provenance says release.yml built it, and --signer-workflow holds it to
+        # that workflow rather than to anything else in this repository.
+        run: |
+          set -euo pipefail
+          package="BeanNetworkTester-${TAG}-linux-x64.tar.gz"
+          mkdir -p download context
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir download \
+            --pattern "$package" --pattern SHA256SUMS.txt
+          cd download
+          grep -qF " *${package}" SHA256SUMS.txt || {
+            echo "::error::SHA256SUMS.txt of $TAG does not name $package"
+            exit 1
+          }
+          sha256sum -c --ignore-missing SHA256SUMS.txt
+          gh attestation verify "$package" --repo "$GITHUB_REPOSITORY" \
+            --predicate-type https://slsa.dev/provenance/v1 \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml"
+          tar -xzf "$package" -C ../context
+          test -x ../context/BeanNetworkTester/BeanNetworkTester || {
+            echo "::error::$package holds no BeanNetworkTester/BeanNetworkTester"
+            exit 1
+          }
+
+      - name: build
+        # The source label is what ghcr.io links the package to this repository
+        # by, and the licence is the program's own.
+        run: |
+          set -euo pipefail
+          docker build --platform linux/amd64 \
+            --file .github/docker/Dockerfile \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.licenses=GPL-3.0-only" \
+            --label "org.opencontainers.image.version=$VERSION" \
+            --label "org.opencontainers.image.title=Bean Network Tester" \
+            --tag beannetworktester:try context
+
+      - name: run it the way the README says
+        run: python3 -u tools/ci_docker_image.py try beannetworktester:try "$TAG"
+
+      - name: keep the image that was tried
+        if: needs.which.outputs.publish == 'true'
+        run: docker save --output image.tar beannetworktester:try
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        if: needs.which.outputs.publish == 'true'
+        with:
+          name: image
+          path: image.tar
+          retention-days: 1
+
+  publish:
+    name: push and tag the image that was tried, and attest it
+    needs: [which, image]
+    if: needs.which.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Pushing to ghcr.io, and the attestation: id-token signs it,
+      # attestations stores it.
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ needs.which.outputs.version }}
+      LATEST: ${{ needs.which.outputs.latest }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: image
+
+      - name: push, then tag latest
+        id: push
+        env:
+          TOKEN: ${{ github.token }}
+        # latest only for the newest release: a stable release run again by hand
+        # later never takes it away from a newer one.
+        run: |
+          set -euo pipefail
+          echo "$TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker load --input image.tar
+          docker tag beannetworktester:try "$IMAGE:$VERSION"
+          docker push "$IMAGE:$VERSION"
+          if [ "$LATEST" = "true" ]; then
+            docker tag beannetworktester:try "$IMAGE:latest"
+            docker push "$IMAGE:latest"
+          fi
+          # Asked of the registry, not of the local image store: the digest the
+          # attestation names has to be the one people pull.
+          digest="$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest}}' \
+            | jq -r .digest)"
+          test -n "$digest" && test "$digest" != null
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "$IMAGE:$VERSION is $digest"
+
+      # Checked by a person with
+      #     gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:<version> \
+      #       --owner donislawdev --predicate-type https://slsa.dev/provenance/v1
+      # (the README prints it; tests/test_ci_docker_image.py holds the two together)
+      #
+      # Still logged in here, and that is required: with push-to-registry the
+      # action takes its registry credentials from ~/.docker/config.json and stops
+      # with "No credentials found" without them - after the tags are public.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - name: log out of the registry
+        if: always()
+        run: docker logout ghcr.io
