@@ -1,0 +1,75 @@
+<section class="hero">
+  <h1>Symulacja opóźnienia sieci w Dockerze i Docker Compose</h1>
+  <p class="lead">Dodaj opóźnienie, utratę pakietów albo limit prędkości ruchowi jednego kontenera, bez zmiany jego obrazu i bez proxy przed nim. Obraz Bean Network Tester dołącza do sieci tego kontenera, zmienia tylko to, co do niego wchodzi i z niego wychodzi, i sam się wyłącza. To pakiet dla Linuksa, więc jest eksperymentalny.</p>
+</section>
+
+<section>
+  <h2>Spowolnij jeden kontener</h2>
+  <p>Uruchom obraz obok kontenera, który chcesz sprawdzić, tutaj o nazwie <code>api</code>. Potrzebuje trzech uprawnień ponad domyślne Dockera i nie potrzebuje <code>--privileged</code>:</p>
+<pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
+  <p><code>--network container:api</code> wpuszcza program do sieci tego kontenera. Działa na każdy program w tej sieci, także na inny kontener uruchomiony w niej w ten sam sposób, ale nigdy na hosta ani na kontenery z własną siecią. <code>--dst-ip</code> zawęża działanie do jednego adresu. Bez niego zwalnia każde połączenie <code>api</code>. Zmierzone: przy <code>--latency 100</code> ping kontenera do tego adresu wzrósł z 0,07 ms do 200,8 ms, bo opóźnione są i zapytanie, i odpowiedź, a jego ping do innego adresu został poniżej 1 ms.</p>
+  <p>Działa tu każde ustawienie wiersza poleceń: <code>--loss</code>, <code>--jitter</code>, <code>--down</code> i <code>--up</code> dla limitu prędkości, <a href="../linia-komend/">preset albo cały scenariusz</a>. Sesję kończy <code>--duration</code>, a także <code>docker stop</code>.</p>
+</section>
+
+<section>
+  <h2>Docker Compose: opóźnienie sieci dla usługi</h2>
+  <p>W Compose to osobna usługa, która dzieli sieć z tą, którą spowalnia:</p>
+<pre><code>services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]</code></pre>
+  <p>Każda usługa, która rozmawia z <code>api</code>, widzi ją teraz 400 ms dalej i traci 2 % pakietów. Zmierzone z tym plikiem: ping z innej usługi wzrósł z 0,1 ms do 401 ms. <code>docker compose stop slow-network</code> kończy sesję, a ruch od razu wraca do normy.</p>
+</section>
+
+<section>
+  <h2>Jeden program w kontenerze</h2>
+  <p><code>--target</code> wybiera program po nazwie, jak na komputerze. Żeby widzieć procesy innego kontenera, obraz potrzebuje też jego listy procesów: <code>--pid container:api</code>.</p>
+<pre><code>docker run --rm --network container:api --pid container:api \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target nginx --latency 100 --duration 60</code></pre>
+  <p>Bez <code>--pid</code> program nie znajduje takiego procesu i mówi to w logu: <code>Targeting: NO matching process has a connection open - traffic is NOT being impaired.</code> Wtedy nic nie zwalnia.</p>
+</section>
+
+<section>
+  <h2>Program na hoście z Linuksem</h2>
+  <p>Obraz sięga też do programu, który działa na samym hoście, poza kontenerami. Potrzebuje wtedy sieci i listy procesów hosta oraz dwóch dodatkowych opcji: bez obu odczyt połączeń programu spoza kontenera jest zabroniony.</p>
+<pre><code>docker run --rm --network host --pid host \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  --cap-add SYS_PTRACE --security-opt apparmor=unconfined \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target firefox --latency 100 --duration 60</code></pre>
+  <p>Z <code>--network host</code> sesja zmienia ruch samego hosta, razem z Twoją sesją ssh, więc zawęź ją przez <code>--target</code>, <code>--dst-ip</code> albo <code>--dst-port</code> i skróć przez <code>--duration</code>. Zmierzone na Ubuntu 26.04: zapytania wybranego programu wydłużyły się z 3 ms do około 250 ms, a innego programu zostały przy 11 ms. Na komputerze z pulpitem to samo bez Dockera robi <a href="../symulacja-sieci-w-linuksie/">pakiet dla Linuksa</a>.</p>
+</section>
+
+<section>
+  <h2>Docker Desktop na Windows i macOS</h2>
+  <p>Docker Desktop uruchamia kontenery we własnej maszynie wirtualnej z Linuksem i tam „host” oznacza tę maszynę. Obraz zmienia ruch kontenerów, nigdy programów Windows ani macOS. Żeby spowolnić program w Windows, użyj wersji Bean Network Tester dla Windows.</p>
+  <p>Na Macu z Apple silicon i na innych maszynach arm64 Docker uruchamia ten obraz x86_64 w emulacji, a tam przechwytywanie może nie działać. Zmierzone na Macu M2 z emulacją QEMU w Colima: obraz startuje i <code>--simulate</code> działa, ale przechwytywanie od razu kończy się błędem <code>Function not implemented</code>, a <code>--doctor</code> i tak pokazuje OK w każdym wierszu.</p>
+</section>
+
+<section>
+  <h2>Pliki, scenariusze i CI</h2>
+  <ul>
+    <li><strong>Pliki.</strong> Podłącz folder pod <code>/work</code> (<code>-v "$PWD:/work"</code>) dla <code>--log-conns</code>, <code>--repro-out</code>, plików CSV albo pliku <code>--scenario</code>. Program działa w obrazie jako root, więc pliki, które zapisuje, należą do roota.</li>
+    <li><strong>Kody wyjścia.</strong> Obraz kończy się <a href="../tabele/">kodami wyjścia</a> samego programu, więc krok CI może na nich polec. <code>--fail-on-no-traffic</code> oznacza porażkę przebiegu, przez który nic nie przeszło, co zwykle znaczy złą sieć albo zły cel. <code>docker stop</code> kończy się kodem 143, czyli czystym zatrzymaniem.</li>
+    <li><strong>Czego brakuje.</strong> Mówi to <code>--doctor</code>, na przykład uprawnienie, bez którego uruchomiono kontener.</li>
+    <li><strong>Zatrzymanie.</strong> Po <code>docker stop</code> ruch od razu wraca do normy. Po <code>docker kill</code> płynie znowu w ciągu około 3 sekund.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Jakie są obrazy</h2>
+  <p>Każde stabilne wydanie od 1.1.0 jest obrazem, oznaczonym swoją wersją i <code>latest</code>. Wydania RC obrazu nie dostają. Każdy to opublikowany pakiet dla Linuksa bez zmian, na Ubuntu 24.04, dla x86_64. Zanim obraz zostanie wysłany, sprawdzana jest suma kontrolna i pochodzenie pakietu, a sam obraz jest uruchamiany na jądrze Linuksa tak, jak opisuje ta strona. Żeby sprawdzić pobrany obraz:</p>
+<pre><code>gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1</code></pre>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

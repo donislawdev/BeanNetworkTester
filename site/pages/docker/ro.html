@@ -1,0 +1,75 @@
+<section class="hero">
+  <h1>Simularea latenței rețelei în Docker și Docker Compose</h1>
+  <p class="lead">Adăugați întârziere, pierderi de pachete sau o limită de viteză traficului unui singur container, fără să-i schimbați imaginea și fără un proxy în fața lui. Imaginea Bean Network Tester intră în rețeaua acelui container, schimbă doar ce intră și iese din el și se oprește singură. Conține pachetul pentru Linux, deci este experimentală.</p>
+</section>
+
+<section>
+  <h2>Încetinirea unui container</h2>
+  <p>Porniți imaginea lângă containerul pe care vreți să-l testați, aici unul numit <code>api</code>. Are nevoie de trei capabilități în plus față de cele implicite ale Docker și nu are nevoie de <code>--privileged</code>:</p>
+<pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
+  <p><code>--network container:api</code> pune programul în rețeaua acelui container. Ajunge la fiecare program din acea rețea, inclusiv la un alt container pornit în ea în același fel, dar niciodată la gazdă sau la containerele cu rețea proprie. <code>--dst-ip</code> îl restrânge la o adresă. Fără această opțiune, fiecare conexiune a lui <code>api</code> încetinește. Măsurat: la <code>--latency 100</code>, ping-ul containerului spre acea adresă a crescut de la 0,07 ms la 200,8 ms, pentru că sunt întârziate și cererea, și răspunsul, iar ping-ul lui spre altă adresă a rămas sub 1 ms.</p>
+  <p>Aici funcționează orice setare a liniei de comandă: <code>--loss</code>, <code>--jitter</code>, <code>--down</code> și <code>--up</code> pentru o limită de viteză, un <a href="../linia-de-comanda/">preset sau un scenariu întreg</a>. Sesiunea se încheie cu <code>--duration</code>, dar și cu <code>docker stop</code>.</p>
+</section>
+
+<section>
+  <h2>Docker Compose: simularea latenței rețelei pentru un serviciu</h2>
+  <p>În Compose, același lucru este un serviciu separat, care împarte rețeaua cu serviciul pe care îl încetinește:</p>
+<pre><code>services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]</code></pre>
+  <p>Fiecare serviciu care vorbește cu <code>api</code> îl vede acum cu 400 ms mai departe, cu 2 % din pachete pierdute. Măsurat cu acest fișier: ping-ul dintr-un alt serviciu a crescut de la 0,1 ms la 401 ms. <code>docker compose stop slow-network</code> îl oprește, iar traficul revine imediat la normal.</p>
+</section>
+
+<section>
+  <h2>Un program dintr-un container</h2>
+  <p><code>--target</code> alege un program după nume, ca pe un desktop. Pentru a vedea procesele altui container, imaginea are nevoie și de lista lui de procese: <code>--pid container:api</code>.</p>
+<pre><code>docker run --rm --network container:api --pid container:api \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target nginx --latency 100 --duration 60</code></pre>
+  <p>Fără <code>--pid</code>, programul nu găsește acel proces și spune asta în jurnal: <code>Targeting: NO matching process has a connection open - traffic is NOT being impaired.</code> În acest caz nu încetinește nimic.</p>
+</section>
+
+<section>
+  <h2>Un program pe gazda Linux</h2>
+  <p>Imaginea poate ajunge și la un program care rulează direct pe gazdă, în afara oricărui container. Are nevoie atunci de rețeaua și lista de procese ale gazdei și de încă două opțiuni: fără amândouă, citirea conexiunilor unui program din afara containerului este refuzată.</p>
+<pre><code>docker run --rm --network host --pid host \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  --cap-add SYS_PTRACE --security-opt apparmor=unconfined \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target firefox --latency 100 --duration 60</code></pre>
+  <p>Cu <code>--network host</code>, sesiunea schimbă traficul gazdei înseși, inclusiv sesiunea ssh, așa că păstrați-o îngustă cu <code>--target</code>, <code>--dst-ip</code> sau <code>--dst-port</code> și scurtă cu <code>--duration</code>. Măsurat pe Ubuntu 26.04: cererile programului ales au crescut de la 3 ms la aproximativ 250 ms, iar ale altui program au rămas la 11 ms. Pe un desktop, <a href="../simulare-retea-pe-linux/">pachetul pentru Linux</a> face același lucru fără Docker.</p>
+</section>
+
+<section>
+  <h2>Docker Desktop pe Windows și macOS</h2>
+  <p>Docker Desktop rulează containerele într-o mașină virtuală Linux proprie, iar acolo „gazda” înseamnă acea mașină. Imaginea schimbă traficul containerelor, niciodată pe cel al programelor Windows sau macOS. Pentru a încetini un program Windows, folosiți versiunea pentru Windows a Bean Network Tester.</p>
+  <p>Pe un Mac cu Apple silicon și pe alte mașini arm64, Docker rulează această imagine x86_64 prin emulare, iar acolo o captură poate să nu funcționeze. Măsurat pe un Mac M2 cu emularea QEMU din Colima: imaginea pornește și <code>--simulate</code> funcționează, dar o captură se oprește imediat cu <code>Function not implemented</code>, în timp ce <code>--doctor</code> arată totuși OK pe fiecare rând.</p>
+</section>
+
+<section>
+  <h2>Fișiere, scenarii și CI</h2>
+  <ul>
+    <li><strong>Fișiere.</strong> Montați un dosar în <code>/work</code> (<code>-v "$PWD:/work"</code>) pentru <code>--log-conns</code>, <code>--repro-out</code>, fișiere CSV sau un fișier <code>--scenario</code>. Programul rulează ca root în imagine, așa că fișierele pe care le scrie aparțin lui root.</li>
+    <li><strong>Coduri de ieșire.</strong> Imaginea se încheie cu <a href="../tabele-de-referinta/">codurile de ieșire</a> ale programului, așa că un pas de CI poate eșua pe baza lor. <code>--fail-on-no-traffic</code> face să eșueze o rulare prin care nu a trecut nimic, semnul obișnuit al unei rețele sau ținte greșite. <code>docker stop</code> se încheie cu 143, o oprire curată.</li>
+    <li><strong>Ce lipsește.</strong> <code>--doctor</code> spune, de exemplu o capabilitate fără de care a fost pornit containerul.</li>
+    <li><strong>Oprire.</strong> După <code>docker stop</code>, traficul revine imediat la normal. După <code>docker kill</code>, circulă din nou în aproximativ 3 secunde.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Ce imagini există</h2>
+  <p>Fiecare versiune stabilă începând cu 1.1.0 este o imagine, etichetată cu versiunea ei și cu <code>latest</code>. Versiunile candidate nu primesc imagine. Fiecare este pachetul pentru Linux publicat, neschimbat, pe Ubuntu 24.04, pentru x86_64. Înainte de publicare se verifică suma de control și proveniența build-ului pachetului, iar imaginea este rulată pe un nucleu Linux așa cum descrie această pagină. Pentru a verifica o imagine descărcată:</p>
+<pre><code>gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1</code></pre>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

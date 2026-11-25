@@ -183,6 +183,68 @@ et le ciblage continue de fonctionner même si `psutil` est entièrement retiré
 associés, 37 noms sur 37 résolus). C'est la solution de repli pour tout le reste, et c'est ainsi que
 les tests du moteur s'exécutent sous Linux sans aucun pilote.
 
+### Image Docker (expérimentale)
+
+Depuis la 1.1.0, chaque version stable est aussi une image de conteneur,
+`ghcr.io/donislawdev/beannetworktester`, étiquetée avec sa version et `latest`. Les versions
+candidates n'en ont pas. C'est le paquet Linux, inchangé, sur Ubuntu 24.04, pour x86_64, et
+expérimental comme lui. Elle ne contient que la ligne de commande : la fenêtre n'y est pas, et
+sans argument l'image affiche `--help`.
+
+Une capture a besoin de trois capacités en plus de celles de Docker par défaut, et pas de
+`--privileged`. Pour ralentir le trafic d'un conteneur nommé `api` vers une adresse :
+
+```bash
+docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60
+```
+
+La même chose dans Docker Compose, à côté du service qu'elle ralentit. Sans `--dst-ip` ni
+`--dst-port`, comme ici, tout le trafic de ce service est ralenti :
+
+```yaml
+services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]
+```
+
+- **Quel trafic elle atteint.** `--network container:<nom>` (dans Compose `network_mode:
+  "service:<nom>"`) place le programme dans le réseau de ce conteneur. Il atteint chaque programme
+  de ce réseau, y compris un autre conteneur démarré dedans de la même façon, et jamais l'hôte ni
+  les conteneurs qui ont leur propre réseau. `--dst-ip`, `--dst-port` et `--target` le
+  restreignent.
+- **Un programme de ce conteneur.** `--target <nom>` demande aussi `--pid container:<nom>`. Sans
+  cela, le programme ne voit aucun processus de l'autre conteneur et dit qu'il ne ralentit rien.
+- **Un programme de l'hôte Linux lui-même.** Avec `--network host --pid host`, et en plus
+  `--cap-add SYS_PTRACE --security-opt apparmor=unconfined` : sans les deux, la lecture des
+  connexions d'un programme hors du conteneur est refusée (mesuré sous Ubuntu 26.04). Avec
+  `--network host`, la session change le trafic de l'hôte lui-même : gardez-la étroite
+  (`--target`, `--dst-ip`, `--dst-port`) et courte (`--duration`).
+- **Docker Desktop sous Windows et macOS.** Les conteneurs tournent dans la machine virtuelle
+  propre à Docker. L'image change le trafic des conteneurs, jamais celui des programmes Windows ou
+  macOS. Pour un programme Windows, utilisez la version Windows.
+- **Puce Apple et autres machines arm64.** L'image est x86_64, Docker l'exécute donc là en
+  émulation, et une capture peut ne pas fonctionner. Mesuré sur un Mac M2 avec l'émulation QEMU de
+  Colima : l'image démarre et `--simulate` fonctionne, mais une capture s'arrête aussitôt avec
+  `Function not implemented`.
+- **Fichiers.** Montez un dossier sur `/work` (`-v "$PWD:/work"`) pour `--log-conns`,
+  `--repro-out`, des fichiers CSV ou un fichier `--scenario`. Ils appartiennent à root.
+- **Arrêt.** `docker stop` termine la session proprement (code de sortie 143) et le trafic
+  redevient normal aussitôt. Après `docker kill`, il circule de nouveau en 3 secondes environ.
+
+Le guide avec toutes les mesures :
+[Simuler la latence réseau dans Docker](https://beannetworktester.donislawdev.com/fr/latence-reseau-docker/).
+Pour vérifier une image téléchargée :
+
+```bash
+gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1
+```
+
 ## La fenêtre
 
 La fenêtre **s'adapte à l'écran et à la mise à l'échelle du système (DPI)**. La taille initiale est

@@ -592,6 +592,11 @@ SEMGREP_SUPPRESSIONS = {
                            ".dynamic-urllib-use-detected"),
     ("tools/pin_hashes.py", "python.lang.security.audit.dynamic-urllib-use-detected"
                             ".dynamic-urllib-use-detected"),
+    # The container image runs as root because `docker run --cap-add` grants its
+    # capabilities to root only (the Dockerfile's comment, and the README).
+    (".github/docker/Dockerfile", "dockerfile.security.missing-user-entrypoint"
+                                  ".missing-user-entrypoint"),
+    (".github/docker/Dockerfile", "dockerfile.security.missing-user.missing-user"),
 }
 
 
@@ -600,9 +605,10 @@ def test_every_semgrep_suppression_is_named_and_inventoried():
 
     Semgrep takes the comment in two forms: bare, which silences EVERY rule on that
     line for ever, and with a rule id, which silences exactly the one that was
-    audited. This repository had none until 2026-08-24 and now has two, both over a
-    URL whose scheme and host are literals and whose one dynamic part is escaped or
-    regex-checked before it gets there.
+    audited. This repository had none until 2026-08-24. Two sit over a URL whose
+    scheme and host are literals and whose one dynamic part is escaped or
+    regex-checked before it gets there, and two over the container image's
+    entrypoint, which runs as root because only root holds what `--cap-add` grants.
 
     Two things are guarded here, and neither of them is the rule itself:
 
@@ -613,12 +619,13 @@ def test_every_semgrep_suppression_is_named_and_inventoried():
       while somebody was quieting a report.
 
     Removing one is the same edit and equally visible. What this cannot check is
-    whether the audit behind a suppression is still true: that is the job of the two
-    guards named in the comments above them.
+    whether the audit behind a suppression is still true: for the URLs that is the
+    job of the two guards named in the comments above them, and for the image, of
+    its try-out (tools/ci_docker_image.py), whose `--doctor` fails as any other user.
     """
     import re
     pattern = re.compile(r"#\s*nosemgrep(?::\s*(\S+))?")
-    files = repo_text_files((".py", ".yml", ".yaml"))
+    files = repo_text_files((".py", ".yml", ".yaml", "Dockerfile"))
     # A walk that yields nothing passes every check below and looks like it worked.
     check("the scan found files to read", len(files) >= 40, f"({len(files)})")
     found, unnamed = set(), []

@@ -1,0 +1,75 @@
+<section class="hero">
+  <h1>Simulasi latensi jaringan di Docker dan Docker Compose</h1>
+  <p class="lead">Tambahkan jeda, packet loss, atau batas kecepatan pada lalu lintas satu container, tanpa mengubah image-nya dan tanpa proxy di depannya. Image Bean Network Tester bergabung ke jaringan container itu, hanya mengubah yang masuk dan keluar darinya, lalu berhenti sendiri. Ini paket Linux, jadi masih eksperimental.</p>
+</section>
+
+<section>
+  <h2>Memperlambat satu container</h2>
+  <p>Jalankan image di samping container yang ingin diuji, di sini bernama <code>api</code>. Image ini butuh tiga capability di luar bawaan Docker, dan tidak butuh <code>--privileged</code>:</p>
+<pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
+  <p><code>--network container:api</code> memasukkan program ke jaringan container itu. Program ini menjangkau setiap program di jaringan itu, termasuk container lain yang dijalankan di dalamnya dengan cara yang sama, tetapi tidak pernah host atau container yang punya jaringan sendiri. <code>--dst-ip</code> membatasinya ke satu alamat. Tanpa opsi itu, setiap koneksi <code>api</code> melambat. Hasil ukur: pada <code>--latency 100</code>, ping container ke alamat itu naik dari 0,07 ms ke 200,8 ms, karena permintaan dan balasan sama-sama ditunda, sedangkan ping-nya ke alamat lain tetap di bawah 1 ms.</p>
+  <p>Semua pengaturan baris perintah berlaku di sini: <code>--loss</code>, <code>--jitter</code>, <code>--down</code> dan <code>--up</code> untuk batas kecepatan, <a href="../baris-perintah/">preset atau satu skenario utuh</a>. <code>--duration</code> mengakhiri sesi, begitu juga <code>docker stop</code>.</p>
+</section>
+
+<section>
+  <h2>Docker Compose: simulasi latensi jaringan untuk satu layanan</h2>
+  <p>Di Compose, ini adalah layanan tersendiri yang berbagi jaringan dengan layanan yang diperlambatnya:</p>
+<pre><code>services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]</code></pre>
+  <p>Setiap layanan yang berbicara dengan <code>api</code> kini melihatnya 400 ms lebih jauh, dengan 2 % paket hilang. Hasil ukur dengan file ini: ping dari layanan lain naik dari 0,1 ms ke 401 ms. <code>docker compose stop slow-network</code> mengakhirinya, dan lalu lintas langsung normal kembali.</p>
+</section>
+
+<section>
+  <h2>Satu program di dalam container</h2>
+  <p><code>--target</code> memilih program menurut namanya, seperti di desktop. Untuk melihat proses container lain, image juga butuh daftar prosesnya: <code>--pid container:api</code>.</p>
+<pre><code>docker run --rm --network container:api --pid container:api \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target nginx --latency 100 --duration 60</code></pre>
+  <p>Tanpa <code>--pid</code>, program tidak menemukan proses itu dan menyebutkannya di log: <code>Targeting: NO matching process has a connection open - traffic is NOT being impaired.</code> Dalam hal itu tidak ada yang diperlambat.</p>
+</section>
+
+<section>
+  <h2>Program di host Linux</h2>
+  <p>Image ini juga bisa menjangkau program yang berjalan langsung di host, di luar container mana pun. Untuk itu ia butuh jaringan dan daftar proses host, serta dua opsi lagi: tanpa keduanya, membaca koneksi program di luar container ditolak.</p>
+<pre><code>docker run --rm --network host --pid host \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  --cap-add SYS_PTRACE --security-opt apparmor=unconfined \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target firefox --latency 100 --duration 60</code></pre>
+  <p>Dengan <code>--network host</code>, sesi mengubah lalu lintas host itu sendiri, termasuk sesi ssh Anda, jadi persempit dengan <code>--target</code>, <code>--dst-ip</code>, atau <code>--dst-port</code>, dan perpendek dengan <code>--duration</code>. Hasil ukur di Ubuntu 26.04: permintaan program sasaran naik dari 3 ms ke sekitar 250 ms, sedangkan program lain tetap 11 ms. Di desktop, <a href="../simulasi-jaringan-di-linux/">paket Linux</a> melakukan hal yang sama tanpa Docker.</p>
+</section>
+
+<section>
+  <h2>Docker Desktop di Windows dan macOS</h2>
+  <p>Docker Desktop menjalankan container di mesin virtual Linux miliknya sendiri, dan di sana "host" berarti mesin itu. Image ini mengubah lalu lintas container, tidak pernah lalu lintas program Windows atau macOS. Untuk memperlambat program Windows, gunakan versi Windows dari Bean Network Tester.</p>
+  <p>Di Mac dengan Apple silicon dan mesin arm64 lain, Docker menjalankan image x86_64 ini lewat emulasi, dan penangkapan mungkin tidak berjalan di sana. Diukur di Mac M2 dengan emulasi QEMU dari Colima: image tetap berjalan dan <code>--simulate</code> berfungsi, tetapi penangkapan langsung berhenti dengan <code>Function not implemented</code>, sementara <code>--doctor</code> tetap menampilkan OK di setiap baris.</p>
+</section>
+
+<section>
+  <h2>File, skenario, dan CI</h2>
+  <ul>
+    <li><strong>File.</strong> Pasang sebuah folder di <code>/work</code> (<code>-v "$PWD:/work"</code>) untuk <code>--log-conns</code>, <code>--repro-out</code>, file CSV, atau file <code>--scenario</code>. Program berjalan sebagai root di dalam image, jadi file yang ditulisnya milik root.</li>
+    <li><strong>Kode keluar.</strong> Image berakhir dengan <a href="../tabel-referensi/">kode keluar</a> milik program, jadi langkah CI bisa gagal karenanya. <code>--fail-on-no-traffic</code> menggagalkan proses yang tidak dilalui apa pun, tanda umum jaringan atau sasaran yang salah. <code>docker stop</code> berakhir dengan 143, berhenti dengan bersih.</li>
+    <li><strong>Apa yang kurang.</strong> <code>--doctor</code> menyebutkannya, misalnya capability yang tidak diberikan saat container dijalankan.</li>
+    <li><strong>Berhenti.</strong> Setelah <code>docker stop</code>, lalu lintas langsung normal. Setelah <code>docker kill</code>, lalu lintas mengalir lagi dalam sekitar 3 detik.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Image yang tersedia</h2>
+  <p>Setiap rilis stabil mulai 1.1.0 menjadi image, dengan tag versinya dan <code>latest</code>. Kandidat rilis tidak mendapat image. Setiap image adalah paket Linux yang dirilis, tanpa perubahan, di atas Ubuntu 24.04, untuk x86_64. Sebelum diunggah, checksum dan asal build paket diperiksa, dan image dijalankan di kernel Linux seperti yang dijelaskan halaman ini. Untuk memeriksa image yang Anda tarik:</p>
+<pre><code>gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1</code></pre>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

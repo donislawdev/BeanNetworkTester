@@ -35,3 +35,14 @@ updates:
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
+
+  # The container image's base (.github/docker/Dockerfile, pinned by digest).
+  # Ubuntu republishes 24.04 with security fixes under the same tag, so the digest
+  # moves; each move is a pull request, which docker.yml tries before it merges.
+  # The image itself is rebuilt only by the next stable release.
+  - package-ecosystem: docker
+    directory: "/.github/docker"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

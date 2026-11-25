@@ -1,0 +1,75 @@
+<section class="hero">
+  <h1>在 Docker 和 Docker Compose 中模擬網路延遲</h1>
+  <p class="lead">為單一容器的流量加上延遲、封包遺失或限速，不必修改它的映像檔，也不必在它前面放代理。Bean Network Tester 映像檔會加入那個容器的網路，只改變進出它的流量，時間到了就自行停止。這就是 Linux 套件，因此仍屬實驗性質。</p>
+</section>
+
+<section>
+  <h2>讓一個容器變慢</h2>
+  <p>在要測試的容器旁邊啟動映像檔，這裡的容器名為 <code>api</code>。它在 Docker 預設權限之外還需要三項能力，不需要 <code>--privileged</code>：</p>
+<pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
+  <p><code>--network container:api</code> 讓程式進入那個容器的網路。它會影響這個網路裡的每個程式，包括以同樣方式在其中啟動的其他容器，但不會影響主機，也不會影響擁有自己網路的容器。<code>--dst-ip</code> 把範圍縮小到一個位址，不加它則 <code>api</code> 的每個連線都會變慢。實測：在 <code>--latency 100</code> 下，容器 ping 該位址從 0.07 ms 升到 200.8 ms，因為請求和回覆都會延遲；它 ping 另一個位址仍低於 1 ms。</p>
+  <p>命令列的每個設定在這裡都能用：<code>--loss</code>、<code>--jitter</code>、用於限速的 <code>--down</code> 和 <code>--up</code>，以及<a href="../minglinglie/">預設組或整個情境</a>。<code>--duration</code> 會結束工作階段，<code>docker stop</code> 也會。</p>
+</section>
+
+<section>
+  <h2>Docker Compose：為一個服務模擬網路延遲</h2>
+  <p>在 Compose 中，它是一個獨立的服務，與它要減速的服務共用網路：</p>
+<pre><code>services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]</code></pre>
+  <p>現在每個與 <code>api</code> 通訊的服務都會看到它遠了 400 ms，並遺失 2% 的封包。用這個檔案實測：從另一個服務 ping 它，從 0.1 ms 升到 401 ms。<code>docker compose stop slow-network</code> 結束工作階段，流量立即恢復正常。</p>
+</section>
+
+<section>
+  <h2>容器裡的一個程式</h2>
+  <p><code>--target</code> 依名稱選擇程式，和在桌面上一樣。要看到另一個容器的處理程序，映像檔還需要它的處理程序清單：<code>--pid container:api</code>。</p>
+<pre><code>docker run --rm --network container:api --pid container:api \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target nginx --latency 100 --duration 60</code></pre>
+  <p>沒有 <code>--pid</code> 時，程式找不到這個處理程序，並在記錄中寫明：<code>Targeting: NO matching process has a connection open - traffic is NOT being impaired.</code> 這種情況下什麼都不會變慢。</p>
+</section>
+
+<section>
+  <h2>Linux 主機上的程式</h2>
+  <p>映像檔也能作用於直接在主機上執行、不在任何容器中的程式。這需要主機的網路和處理程序清單，再加兩個選項：缺少其中任何一個，讀取容器外程式的連線都會被拒絕。</p>
+<pre><code>docker run --rm --network host --pid host \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  --cap-add SYS_PTRACE --security-opt apparmor=unconfined \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target firefox --latency 100 --duration 60</code></pre>
+  <p>使用 <code>--network host</code> 時，工作階段會改變主機本身的流量，包括你的 ssh 工作階段，所以要用 <code>--target</code>、<code>--dst-ip</code> 或 <code>--dst-port</code> 縮小範圍，並用 <code>--duration</code> 限制時長。在 Ubuntu 26.04 上實測：目標程式的請求從 3 ms 變成約 250 ms，另一個程式的請求仍為 11 ms。在桌面電腦上，<a href="../linux-ruowang-moni/">Linux 套件</a>不用 Docker 也能做到同樣的事。</p>
+</section>
+
+<section>
+  <h2>Windows 和 macOS 上的 Docker Desktop</h2>
+  <p>Docker Desktop 在自己的 Linux 虛擬機器中執行容器，在那裡「主機」指的就是這台虛擬機器。映像檔改變的是容器的流量，永遠不會改變 Windows 或 macOS 程式的流量。要讓 Windows 程式變慢，請使用 Bean Network Tester 的 Windows 版。</p>
+  <p>在 Apple 晶片的 Mac 以及其他 arm64 機器上，Docker 以模擬方式執行這個 x86_64 映像檔，擷取在那裡可能無法運作。在使用 Colima QEMU 模擬的 M2 Mac 上實測：映像檔能啟動，<code>--simulate</code> 也能用，但擷取會立即以 <code>Function not implemented</code> 停止，而 <code>--doctor</code> 仍然每一行都回報 OK。</p>
+</section>
+
+<section>
+  <h2>檔案、情境和 CI</h2>
+  <ul>
+    <li><strong>檔案。</strong>把一個資料夾掛載到 <code>/work</code>（<code>-v "$PWD:/work"</code>），用於 <code>--log-conns</code>、<code>--repro-out</code>、CSV 檔或 <code>--scenario</code> 檔案。程式在映像檔中以 root 執行，所以它寫出的檔案屬於 root。</li>
+    <li><strong>結束代碼。</strong>映像檔以程式本身的<a href="../cankao-biao/">結束代碼</a>結束，所以 CI 步驟可以據此判定失敗。<code>--fail-on-no-traffic</code> 會讓一次沒有任何流量通過的執行失敗，這通常代表網路或目標選錯了。<code>docker stop</code> 以 143 結束，表示正常停止。</li>
+    <li><strong>缺少什麼。</strong><code>--doctor</code> 會指出來，例如啟動容器時沒有給的某項能力。</li>
+    <li><strong>停止。</strong><code>docker stop</code> 之後流量立即恢復正常。<code>docker kill</code> 之後約 3 秒內恢復。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>有哪些映像檔</h2>
+  <p>從 1.1.0 起，每個穩定版本都有一個映像檔，標籤為版本號和 <code>latest</code>。候選版本（RC）沒有映像檔。每個映像檔都是已發布的 Linux 套件，原樣放在 Ubuntu 24.04 上，適用於 x86_64。推送之前，會先檢查套件的總和檢查碼與建置來源，並依本頁描述的方式在 Linux 核心上執行映像檔。檢查你拉取的映像檔：</p>
+<pre><code>gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1</code></pre>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,75 @@
+<section class="hero">
+  <h1>محاكاة تأخير الشبكة في Docker وDocker Compose</h1>
+  <p class="lead">أضف تأخيرًا أو فقدانًا للحزم أو حدًا للسرعة إلى حركة مرور حاوية واحدة، دون تغيير صورتها ودون وكيل أمامها. تنضم صورة Bean Network Tester إلى شبكة تلك الحاوية، وتغيّر فقط ما يدخل إليها ويخرج منها، ثم تتوقف من تلقاء نفسها. إنها حزمة Linux، لذا فهي تجريبية.</p>
+</section>
+
+<section>
+  <h2>إبطاء حاوية واحدة</h2>
+  <p>شغّل الصورة بجوار الحاوية التي تريد اختبارها، وهي هنا حاوية اسمها <code>api</code>. تحتاج الصورة إلى ثلاث قدرات إضافة إلى قدرات Docker الافتراضية، ولا تحتاج إلى <code>--privileged</code>:</p>
+<pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
+  <p>يضع <code>--network container:api</code> البرنامج داخل شبكة تلك الحاوية. وهو يصل إلى كل برنامج في تلك الشبكة، بما في ذلك أي حاوية أخرى شُغّلت فيها بالطريقة نفسها، ولا يصل أبدًا إلى المضيف ولا إلى الحاويات التي لها شبكتها الخاصة. ويحصر <code>--dst-ip</code> التأثير في عنوان واحد. ومن دونه يتباطأ كل اتصال لـ <code>api</code>. القياس: عند <code>--latency 100</code> ارتفع ping الحاوية إلى ذلك العنوان من 0.07 ms إلى 200.8 ms، لأن الطلب والرد يتأخران كلاهما، بينما بقي ping إلى عنوان آخر أقل من 1 ms.</p>
+  <p>كل إعداد في سطر الأوامر يعمل هنا: <code>--loss</code> و<code>--jitter</code> و<code>--down</code> و<code>--up</code> لحد السرعة، و<a href="../satr-al-awamir/">إعداد مسبق أو سيناريو كامل</a>. تنتهي الجلسة بـ <code>--duration</code>، وكذلك بـ <code>docker stop</code>.</p>
+</section>
+
+<section>
+  <h2>Docker Compose: محاكاة تأخير الشبكة لخدمة</h2>
+  <p>في Compose يكون الأمر نفسه خدمة مستقلة تتشارك الشبكة مع الخدمة التي تبطئها:</p>
+<pre><code>services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]</code></pre>
+  <p>كل خدمة تتحدث إلى <code>api</code> تراها الآن أبعد بـ 400 ms، مع فقدان 2% من الحزم. القياس بهذا الملف: ارتفع ping من خدمة أخرى من 0.1 ms إلى 401 ms. ينهيها <code>docker compose stop slow-network</code>، وتعود الحركة إلى طبيعتها فورًا.</p>
+</section>
+
+<section>
+  <h2>برنامج واحد داخل حاوية</h2>
+  <p>يختار <code>--target</code> برنامجًا باسمه، كما على سطح المكتب. ولكي ترى الصورة عمليات حاوية أخرى، تحتاج أيضًا إلى قائمة عملياتها: <code>--pid container:api</code>.</p>
+<pre><code>docker run --rm --network container:api --pid container:api \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target nginx --latency 100 --duration 60</code></pre>
+  <p>من دون <code>--pid</code> لا يجد البرنامج تلك العملية ويقول ذلك في سجله: <code>Targeting: NO matching process has a connection open - traffic is NOT being impaired.</code> وفي هذه الحالة لا يتباطأ شيء.</p>
+</section>
+
+<section>
+  <h2>برنامج على مضيف Linux</h2>
+  <p>يمكن للصورة أيضًا أن تصل إلى برنامج يعمل على المضيف نفسه، خارج أي حاوية. وتحتاج لذلك إلى شبكة المضيف وقائمة عملياته، وإلى خيارين آخرين: من دونهما معًا تُرفض قراءة اتصالات برنامج خارج الحاوية.</p>
+<pre><code>docker run --rm --network host --pid host \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  --cap-add SYS_PTRACE --security-opt apparmor=unconfined \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target firefox --latency 100 --duration 60</code></pre>
+  <p>مع <code>--network host</code> تغيّر الجلسة حركة المضيف نفسه، بما فيها جلسة ssh الخاصة بك، لذا أبقها ضيقة بـ <code>--target</code> أو <code>--dst-ip</code> أو <code>--dst-port</code>، وقصيرة بـ <code>--duration</code>. القياس على Ubuntu 26.04: ارتفعت طلبات البرنامج المستهدف من 3 ms إلى نحو 250 ms، وبقيت طلبات برنامج آخر عند 11 ms. وعلى سطح المكتب تفعل <a href="../muhakat-alshabaka-ala-linux/">حزمة Linux</a> الشيء نفسه دون Docker.</p>
+</section>
+
+<section>
+  <h2>Docker Desktop على Windows وmacOS</h2>
+  <p>يشغّل Docker Desktop الحاويات في آلة Linux افتراضية خاصة به، وهناك يعني "المضيف" تلك الآلة. تغيّر الصورة حركة الحاويات، ولا تغيّر أبدًا حركة برامج Windows أو macOS. لإبطاء برنامج على Windows، استخدم نسخة Windows من Bean Network Tester.</p>
+  <p>على جهاز Mac بمعالج Apple silicon وعلى أجهزة arm64 الأخرى، يشغّل Docker صورة x86_64 هذه عبر المحاكاة، وقد لا يعمل الالتقاط هناك. القياس على جهاز Mac M2 مع محاكاة QEMU في Colima: تبدأ الصورة ويعمل <code>--simulate</code>، لكن الالتقاط يتوقف فورًا مع <code>Function not implemented</code>، بينما يُظهر <code>--doctor</code> مع ذلك OK في كل سطر.</p>
+</section>
+
+<section>
+  <h2>الملفات والسيناريوهات وCI</h2>
+  <ul>
+    <li><strong>الملفات.</strong> اربط مجلدًا على <code>/work</code> (<code>-v "$PWD:/work"</code>) من أجل <code>--log-conns</code> أو <code>--repro-out</code> أو ملفات CSV أو ملف <code>--scenario</code>. يعمل البرنامج داخل الصورة بصلاحيات root، لذا تعود ملكية الملفات التي يكتبها إلى root.</li>
+    <li><strong>رموز الخروج.</strong> تنتهي الصورة بـ <a href="../jadawil-marjiya/">رموز الخروج</a> الخاصة بالبرنامج، فيمكن لخطوة CI أن تفشل بناءً عليها. يجعل <code>--fail-on-no-traffic</code> التشغيل الذي لم يمر عبره شيء فاشلًا، وهي العلامة المعتادة على شبكة أو هدف خاطئ. وينتهي <code>docker stop</code> بالرمز 143، أي توقف نظيف.</li>
+    <li><strong>ما الذي ينقص.</strong> يذكره <code>--doctor</code>، مثل قدرة شُغّلت الحاوية من دونها.</li>
+    <li><strong>الإيقاف.</strong> بعد <code>docker stop</code> تعود الحركة إلى طبيعتها فورًا. وبعد <code>docker kill</code> تتدفق مجددًا خلال نحو 3 ثوانٍ.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>ما الصور المتوفرة</h2>
+  <p>كل إصدار مستقر بدءًا من 1.1.0 هو صورة، موسومة برقم إصدارها وبـ <code>latest</code>. ولا تحصل الإصدارات المرشحة على صورة. كل صورة هي حزمة Linux المنشورة دون تغيير، على Ubuntu 24.04، لمعمارية x86_64. قبل الرفع يُتحقق من المجموع الاختباري للحزمة ومن مصدر بنائها، وتُشغّل الصورة على نواة Linux كما تصف هذه الصفحة. للتحقق من صورة سحبتها:</p>
+<pre><code>gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1</code></pre>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

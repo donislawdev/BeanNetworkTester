@@ -1,0 +1,75 @@
+<section class="hero">
+  <h1>Імітація затримки мережі в Docker і Docker Compose</h1>
+  <p class="lead">Додайте затримку, втрату пакетів або обмеження швидкості трафіку одного контейнера, не змінюючи його образ і не ставлячи перед ним проксі. Образ Bean Network Tester приєднується до мережі цього контейнера, змінює лише те, що в нього входить і з нього виходить, і сам зупиняється. Це пакет для Linux, тому образ експериментальний.</p>
+</section>
+
+<section>
+  <h2>Сповільнити один контейнер</h2>
+  <p>Запустіть образ поруч із контейнером, який хочете перевірити, тут він називається <code>api</code>. Образу потрібні три можливості понад стандартні можливості Docker, а <code>--privileged</code> не потрібен:</p>
+<pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
+  <p><code>--network container:api</code> поміщає програму в мережу цього контейнера. Вона діє на кожну програму в цій мережі, зокрема на інший контейнер, запущений у ній так само, але ніколи на хост чи контейнери з власною мережею. <code>--dst-ip</code> звужує дію до однієї адреси. Без цього параметра сповільнюється кожне з'єднання <code>api</code>. Виміряно: за <code>--latency 100</code> пінг контейнера до цієї адреси зріс з 0,07 мс до 200,8 мс, бо затримуються і запит, і відповідь, а його пінг до іншої адреси лишився меншим за 1 мс.</p>
+  <p>Тут працює будь-який параметр командного рядка: <code>--loss</code>, <code>--jitter</code>, <code>--down</code> і <code>--up</code> для обмеження швидкості, <a href="../komandnyi-riadok/">пресет або цілий сценарій</a>. Сеанс завершує <code>--duration</code>, а також <code>docker stop</code>.</p>
+</section>
+
+<section>
+  <h2>Docker Compose: затримка мережі для сервісу</h2>
+  <p>У Compose це окремий сервіс, який ділить мережу з тим, який він сповільнює:</p>
+<pre><code>services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]</code></pre>
+  <p>Кожен сервіс, який звертається до <code>api</code>, тепер бачить його на 400 мс далі й втрачає 2 % пакетів. Виміряно з цим файлом: пінг з іншого сервісу зріс з 0,1 мс до 401 мс. <code>docker compose stop slow-network</code> завершує сеанс, і трафік одразу стає звичайним.</p>
+</section>
+
+<section>
+  <h2>Одна програма в контейнері</h2>
+  <p><code>--target</code> вибирає програму за назвою, як на робочому столі. Щоб бачити процеси іншого контейнера, образу потрібен і його список процесів: <code>--pid container:api</code>.</p>
+<pre><code>docker run --rm --network container:api --pid container:api \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target nginx --latency 100 --duration 60</code></pre>
+  <p>Без <code>--pid</code> програма не знаходить такий процес і пише про це в журналі: <code>Targeting: NO matching process has a connection open - traffic is NOT being impaired.</code> У цьому разі нічого не сповільнюється.</p>
+</section>
+
+<section>
+  <h2>Програма на хості з Linux</h2>
+  <p>Образ може дістатися й до програми, яка працює на самому хості, поза контейнерами. Для цього потрібні мережа та список процесів хоста і ще два параметри: без обох читання з'єднань програми поза контейнером заборонене.</p>
+<pre><code>docker run --rm --network host --pid host \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  --cap-add SYS_PTRACE --security-opt apparmor=unconfined \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target firefox --latency 100 --duration 60</code></pre>
+  <p>З <code>--network host</code> сеанс змінює трафік самого хоста, разом із вашим сеансом ssh, тож звужуйте його через <code>--target</code>, <code>--dst-ip</code> або <code>--dst-port</code> і обмежуйте в часі через <code>--duration</code>. Виміряно в Ubuntu 26.04: запити вибраної програми зросли з 3 мс приблизно до 250 мс, а в іншої програми лишилися на 11 мс. На настільному комп'ютері те саме без Docker робить <a href="../symulyaciya-merezhi-v-linux/">пакет для Linux</a>.</p>
+</section>
+
+<section>
+  <h2>Docker Desktop у Windows і macOS</h2>
+  <p>Docker Desktop запускає контейнери у власній віртуальній машині Linux, і там «хост» означає цю машину. Образ змінює трафік контейнерів і ніколи не змінює трафік програм Windows або macOS. Щоб сповільнити програму у Windows, використовуйте версію Bean Network Tester для Windows.</p>
+  <p>На Mac з Apple silicon та на інших машинах arm64 Docker запускає цей образ x86_64 в емуляції, і там перехоплення може не працювати. Виміряно на Mac M2 з емуляцією QEMU в Colima: образ стартує, і <code>--simulate</code> працює, але перехоплення одразу зупиняється з помилкою <code>Function not implemented</code>, а <code>--doctor</code> при цьому показує OK у кожному рядку.</p>
+</section>
+
+<section>
+  <h2>Файли, сценарії та CI</h2>
+  <ul>
+    <li><strong>Файли.</strong> Підключіть теку в <code>/work</code> (<code>-v "$PWD:/work"</code>) для <code>--log-conns</code>, <code>--repro-out</code>, файлів CSV або файлу <code>--scenario</code>. Програма працює в образі від root, тому файли, які вона записує, належать root.</li>
+    <li><strong>Коди виходу.</strong> Образ завершується <a href="../dovidkovi-tablytsi/">кодами виходу</a> самої програми, тож крок CI може за ними завершитися помилкою. <code>--fail-on-no-traffic</code> вважає невдалим прогін, через який нічого не пройшло, зазвичай це ознака неправильної мережі чи цілі. <code>docker stop</code> завершується кодом 143, тобто чистою зупинкою.</li>
+    <li><strong>Чого бракує.</strong> Це називає <code>--doctor</code>, наприклад можливість, без якої запустили контейнер.</li>
+    <li><strong>Зупинка.</strong> Після <code>docker stop</code> трафік одразу стає звичайним. Після <code>docker kill</code> він знову йде приблизно за 3 секунди.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Які є образи</h2>
+  <p>Кожен стабільний випуск починаючи з 1.1.0 стає образом із тегами своєї версії та <code>latest</code>. Кандидати у випуск образу не мають. Кожен образ - це опублікований пакет для Linux без змін, на Ubuntu 24.04, для x86_64. Перед надсиланням перевіряються контрольна сума та походження збірки пакета, а сам образ запускається на ядрі Linux так, як описано на цій сторінці. Щоб перевірити завантажений образ:</p>
+<pre><code>gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1</code></pre>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

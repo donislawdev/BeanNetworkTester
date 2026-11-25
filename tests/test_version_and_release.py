@@ -1005,8 +1005,10 @@ def test_the_documented_verify_command_matches_what_we_actually_attest():
         # Every offline command: the Linux package has its own since 2026-10-28, and
         # it comes first in the file, so reading only the first one would leave the
         # Windows line unguarded.
+        # The release ARCHIVES only: an `oci://` line is the container image, whose
+        # build provenance docker.yml makes (tests/test_ci_docker_image.py holds it).
         line = [ln for ln in text.splitlines() if "gh attestation verify" in ln
-                and "--bundle" in ln]
+                and "--bundle" in ln and "oci://" not in ln]
         check(f"{readme} documents the offline verify command", bool(line))
         for command in line:
             check(f"{readme}: it names the repository", "--repo " in command, f"({command[:120]})")
@@ -1023,7 +1025,7 @@ def test_the_documented_verify_command_matches_what_we_actually_attest():
         # provenance and a hand-signed archive deliberately has none. A guard that
         # checks one of two commands is a guard that reports the wrong half is fine.
         online = [ln for ln in text.splitlines() if "gh attestation verify" in ln
-                  and "--bundle" not in ln]
+                  and "--bundle" not in ln and "oci://" not in ln]
         check(f"{readme} documents the online verify command", bool(online))
         for command in online:
             check(f"{readme}: the online command names a predicate type",
@@ -1049,7 +1051,7 @@ def test_the_documented_verify_command_matches_what_we_actually_attest():
             with open(os.path.join(folder, name), encoding="utf-8") as handle:
                 on_site += [(f"site/pages/{page}/{name}", ln)
                             for ln in handle.read().splitlines()
-                            if "gh attestation verify" in ln]
+                            if "gh attestation verify" in ln and "oci://" not in ln]
     check("the website documents the verify command", bool(on_site))
     for rel, command in on_site:
         check(f"{rel}: the command names the repository", "--repo " in command,

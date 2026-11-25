@@ -564,9 +564,13 @@ def test_every_flag_a_page_names_is_one_the_command_line_has():
     known = set(re.findall(r"(?<![\w-])--[a-z][a-z0-9-]*", build_arg_parser().format_help()))
     check("the help lists the command line's flags", len(known) >= 40, f"({len(known)})")
     # The download page shows how to verify the file with the GitHub CLI and, on Linux,
-    # with sha256sum, and these flags are those tools'. Named per page, so a Bean command
-    # on any other page cannot hide behind them.
-    other_tools = {"download": {"--repo", "--predicate-type", "--ignore-missing"}}
+    # with sha256sum, and these flags are those tools'. The Docker page starts the image
+    # with `docker run` and checks it with the GitHub CLI. Named per page, so a Bean
+    # command on any other page cannot hide behind them. On the Docker page itself,
+    # tests/test_ci_docker_image.py holds every flag after the image to this same list.
+    other_tools = {"download": {"--repo", "--predicate-type", "--ignore-missing"},
+                   "docker": {"--rm", "--network", "--cap-add", "--pid", "--security-opt",
+                              "--privileged", "--owner", "--predicate-type"}}
     seen = 0
     for path in sorted(glob.glob(os.path.join(SITE, "pages", "*", "*.html"))):
         rel = os.path.relpath(path, SITE).replace(os.sep, "/")

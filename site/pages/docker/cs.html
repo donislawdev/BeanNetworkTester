@@ -1,0 +1,75 @@
+<section class="hero">
+  <h1>Simulace latence sítě v Dockeru a Docker Compose</h1>
+  <p class="lead">Přidejte zpoždění, ztrátu paketů nebo limit rychlosti provozu jednoho kontejneru, bez změny jeho obrazu a bez proxy před ním. Obraz Bean Network Tester se připojí do sítě toho kontejneru, mění jen to, co do něj vchází a z něj odchází, a sám skončí. Je to balíček pro Linux, takže je experimentální.</p>
+</section>
+
+<section>
+  <h2>Zpomalení jednoho kontejneru</h2>
+  <p>Spusťte obraz vedle kontejneru, který chcete testovat, zde jednoho s názvem <code>api</code>. Potřebuje tři schopnosti navíc k výchozím schopnostem Dockeru a nepotřebuje <code>--privileged</code>:</p>
+<pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
+  <p><code>--network container:api</code> vloží program do sítě toho kontejneru. Zasáhne každý program v této síti, včetně dalšího kontejneru spuštěného v ní stejným způsobem, ale nikdy hostitele ani kontejnery s vlastní sítí. <code>--dst-ip</code> ho omezí na jednu adresu. Bez této volby se zpomalí každé spojení <code>api</code>. Změřeno: při <code>--latency 100</code> vzrostl ping kontejneru na tu adresu z 0,07 ms na 200,8 ms, protože se zpožďuje požadavek i odpověď, a jeho ping na jinou adresu zůstal pod 1 ms.</p>
+  <p>Funguje tu každé nastavení příkazového řádku: <code>--loss</code>, <code>--jitter</code>, <code>--down</code> a <code>--up</code> pro limit rychlosti, <a href="../prikazovy-radek/">předvolba nebo celý scénář</a>. Relaci ukončí <code>--duration</code> a také <code>docker stop</code>.</p>
+</section>
+
+<section>
+  <h2>Docker Compose: simulace latence sítě pro službu</h2>
+  <p>V Compose je to samostatná služba, která sdílí síť se službou, kterou zpomaluje:</p>
+<pre><code>services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]</code></pre>
+  <p>Každá služba, která mluví s <code>api</code>, ji teď vidí o 400 ms dál a ztrácí 2 % paketů. Změřeno s tímto souborem: ping z jiné služby vzrostl z 0,1 ms na 401 ms. <code>docker compose stop slow-network</code> relaci ukončí a provoz je hned normální.</p>
+</section>
+
+<section>
+  <h2>Jeden program v kontejneru</h2>
+  <p><code>--target</code> vybírá program podle názvu, stejně jako na desktopu. Aby obraz viděl procesy jiného kontejneru, potřebuje i jeho seznam procesů: <code>--pid container:api</code>.</p>
+<pre><code>docker run --rm --network container:api --pid container:api \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target nginx --latency 100 --duration 60</code></pre>
+  <p>Bez <code>--pid</code> program takový proces nenajde a řekne to ve svém logu: <code>Targeting: NO matching process has a connection open - traffic is NOT being impaired.</code> V tom případě se nic nezpomalí.</p>
+</section>
+
+<section>
+  <h2>Program na hostiteli s Linuxem</h2>
+  <p>Obraz dosáhne i na program, který běží přímo na hostiteli, mimo jakýkoli kontejner. Potřebuje k tomu síť a seznam procesů hostitele a ještě dvě volby: bez obou je čtení spojení programu mimo kontejner odmítnuto.</p>
+<pre><code>docker run --rm --network host --pid host \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  --cap-add SYS_PTRACE --security-opt apparmor=unconfined \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target firefox --latency 100 --duration 60</code></pre>
+  <p>S <code>--network host</code> relace mění provoz samotného hostitele, včetně vaší relace ssh, takže ji držte úzkou pomocí <code>--target</code>, <code>--dst-ip</code> nebo <code>--dst-port</code> a krátkou pomocí <code>--duration</code>. Změřeno na Ubuntu 26.04: požadavky vybraného programu se prodloužily z 3 ms na asi 250 ms a jiného programu zůstaly na 11 ms. Na desktopu totéž bez Dockeru udělá <a href="../simulace-site-v-linuxu/">balíček pro Linux</a>.</p>
+</section>
+
+<section>
+  <h2>Docker Desktop ve Windows a macOS</h2>
+  <p>Docker Desktop spouští kontejnery ve vlastním virtuálním stroji s Linuxem a tam „hostitel“ znamená tento stroj. Obraz mění provoz kontejnerů, nikdy ne provoz programů Windows nebo macOS. Chcete-li zpomalit program ve Windows, použijte verzi Bean Network Tester pro Windows.</p>
+  <p>Na Macu s Apple silicon a na dalších strojích arm64 spouští Docker tento obraz x86_64 v emulaci a zachytávání tam nemusí fungovat. Změřeno na Macu M2 s emulací QEMU v Colima: obraz se spustí a <code>--simulate</code> funguje, ale zachytávání hned skončí chybou <code>Function not implemented</code>, zatímco <code>--doctor</code> přesto hlásí OK v každém řádku.</p>
+</section>
+
+<section>
+  <h2>Soubory, scénáře a CI</h2>
+  <ul>
+    <li><strong>Soubory.</strong> Připojte složku do <code>/work</code> (<code>-v "$PWD:/work"</code>) pro <code>--log-conns</code>, <code>--repro-out</code>, soubory CSV nebo soubor <code>--scenario</code>. Program v obrazu běží jako root, takže soubory, které zapíše, patří rootovi.</li>
+    <li><strong>Návratové kódy.</strong> Obraz končí <a href="../referencni-tabulky/">návratovými kódy</a> samotného programu, takže krok CI na nich může selhat. <code>--fail-on-no-traffic</code> označí za neúspěch běh, kterým nic neprošlo, což obvykle znamená špatnou síť nebo cíl. <code>docker stop</code> končí kódem 143, čistým zastavením.</li>
+    <li><strong>Co chybí.</strong> Řekne to <code>--doctor</code>, třeba schopnost, bez které byl kontejner spuštěn.</li>
+    <li><strong>Zastavení.</strong> Po <code>docker stop</code> je provoz hned normální. Po <code>docker kill</code> znovu teče přibližně do 3 sekund.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Jaké obrazy existují</h2>
+  <p>Každé stabilní vydání od 1.1.0 je obrazem se štítkem své verze a <code>latest</code>. Kandidáti na vydání obraz nedostanou. Každý je zveřejněný balíček pro Linux beze změn, na Ubuntu 24.04, pro x86_64. Před odesláním se ověří kontrolní součet a původ sestavení balíčku a obraz se spustí na jádře Linuxu tak, jak popisuje tato stránka. Ověření staženého obrazu:</p>
+<pre><code>gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1</code></pre>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

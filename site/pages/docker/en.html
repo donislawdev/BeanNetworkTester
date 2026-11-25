@@ -1,0 +1,75 @@
+<section class="hero">
+  <h1>Simulate network latency in Docker and Docker Compose</h1>
+  <p class="lead">Add delay, packet loss or a speed limit to one container's traffic, without changing its image and without a proxy in front of it. The Bean Network Tester image joins that container's network and changes only what goes in and out of it, then stops on its own. It is the Linux package, so it is experimental.</p>
+</section>
+
+<section>
+  <h2>Slow down one container</h2>
+  <p>Start the image next to the container you want to test, here one named <code>api</code>. It needs three capabilities on top of Docker's defaults, and no <code>--privileged</code>:</p>
+<pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
+  <p><code>--network container:api</code> puts the program into that container's network. It reaches every program in that network, including any other container started in it the same way, and never the host or containers with a network of their own. <code>--dst-ip</code> narrows it to one address. Without it every connection of <code>api</code> is slowed. Measured: at <code>--latency 100</code> the container's ping to the address rose from 0.07 ms to 200.8 ms, because the request and the reply are both delayed, and its ping to another address stayed under 1 ms.</p>
+  <p>Every setting of the command line works here: <code>--loss</code>, <code>--jitter</code>, <code>--down</code> and <code>--up</code> for a speed limit, a <a href="../command-line/">preset or a whole scenario</a>. <code>--duration</code> ends the session, and so does <code>docker stop</code>.</p>
+</section>
+
+<section>
+  <h2>Docker Compose: simulate network latency for a service</h2>
+  <p>In Compose the same thing is a service of its own that shares the network of the one it slows down:</p>
+<pre><code>services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]</code></pre>
+  <p>Every service that talks to <code>api</code> now sees it 400 ms further away, and 2 % of the packets lost. Measured with this file: the ping from another service rose from 0.1 ms to 401 ms. <code>docker compose stop slow-network</code> ends it, and the traffic is normal at once.</p>
+</section>
+
+<section>
+  <h2>One program inside a container</h2>
+  <p><code>--target</code> picks a program by name, as on a desktop. To see the processes of another container, the image also needs its process list: <code>--pid container:api</code>.</p>
+<pre><code>docker run --rm --network container:api --pid container:api \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target nginx --latency 100 --duration 60</code></pre>
+  <p>Without <code>--pid</code> the program finds no such process and says so in its log: <code>Targeting: NO matching process has a connection open - traffic is NOT being impaired.</code> Nothing is slowed in that case.</p>
+</section>
+
+<section>
+  <h2>A program on the Linux host</h2>
+  <p>The image can also reach a program that runs on the host itself, outside any container. It needs the host's network and process list, and two more options: reading the connections of a program outside the container is refused without both of them.</p>
+<pre><code>docker run --rm --network host --pid host \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  --cap-add SYS_PTRACE --security-opt apparmor=unconfined \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target firefox --latency 100 --duration 60</code></pre>
+  <p>With <code>--network host</code> the session changes the host's own traffic, your ssh session included, so keep it narrow with <code>--target</code>, <code>--dst-ip</code> or <code>--dst-port</code>, and short with <code>--duration</code>. Measured on Ubuntu 26.04: the targeted program's requests went from 3 ms to about 250 ms, and another program's stayed at 11 ms. On a desktop the <a href="../simulate-network-on-linux/">Linux package</a> does the same without Docker.</p>
+</section>
+
+<section>
+  <h2>Docker Desktop on Windows and macOS</h2>
+  <p>Docker Desktop runs containers in a Linux virtual machine of its own, and there "host" means that machine. The image changes the traffic of containers, never that of Windows or macOS programs. To slow down a Windows program, use the Windows version of Bean Network Tester.</p>
+  <p>On a Mac with Apple silicon, and on other arm64 machines, Docker runs this x86_64 image under emulation, and a capture may not work there. Measured on an M2 Mac with Colima's QEMU emulation: the image starts and <code>--simulate</code> works, but a capture stops at once with <code>Function not implemented</code>, while <code>--doctor</code> still reports every row OK.</p>
+</section>
+
+<section>
+  <h2>Files, scenarios and CI</h2>
+  <ul>
+    <li><strong>Files.</strong> Mount a folder at <code>/work</code> (<code>-v "$PWD:/work"</code>) for <code>--log-conns</code>, <code>--repro-out</code>, CSV files or a <code>--scenario</code> file. The program runs as root in the image, so the files it writes belong to root.</li>
+    <li><strong>Exit codes.</strong> The image ends with the program's own <a href="../reference/">exit codes</a>, so a CI step can fail on them. <code>--fail-on-no-traffic</code> fails a run in which nothing passed through, the usual sign of a wrong network or target. <code>docker stop</code> ends with 143, a clean stop.</li>
+    <li><strong>What is missing.</strong> <code>--doctor</code> names it, such as a capability the container was started without.</li>
+    <li><strong>Stopping.</strong> After <code>docker stop</code> the traffic is normal at once. After <code>docker kill</code> it flows again within about 3 seconds.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Which images there are</h2>
+  <p>Every stable release from 1.1.0 on is an image, tagged with its version and <code>latest</code>. Release candidates get none. Each is the published Linux package, unchanged, on Ubuntu 24.04, for x86_64. Before it is pushed, the package's checksum and build provenance are checked, and the image is run on a Linux kernel the way this page describes. To check an image you pulled:</p>
+<pre><code>gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1</code></pre>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

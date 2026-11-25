@@ -216,6 +216,72 @@ There is no code signature on Linux. The package is the file the release workflo
 build provenance in this repository's attestation store says which commit and which workflow
 produced it.
 
+### Docker image (experimental)
+
+From 1.1.0 every stable release is also a container image, `ghcr.io/donislawdev/beannetworktester`,
+tagged with its version and `latest`. Release candidates get no image. It is the Linux package
+above, unchanged, on Ubuntu 24.04, for x86_64, and experimental like it. It runs the command line
+only: the window is not in it, and with no arguments the image prints `--help`.
+
+A capture needs three capabilities on top of Docker's defaults, and no `--privileged`. To slow down
+the traffic of a container named `api` to one address:
+
+```bash
+docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60
+```
+
+The same in Docker Compose, next to the service it slows down. With no `--dst-ip` or `--dst-port`,
+as here, all of that service's traffic is slowed:
+
+```yaml
+services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]
+```
+
+- **Which traffic it reaches.** `--network container:<name>` (in Compose `network_mode:
+  "service:<name>"`) puts the program into that container's network. It reaches every program in
+  that network, including any other container started in it the same way, and never the host or
+  containers with a network of their own. `--dst-ip`, `--dst-port` and `--target` narrow it.
+  Measured: at `--latency 100` the container's ping to the address rose from 0.07 ms to 200.8 ms,
+  and its ping to another address stayed under 1 ms.
+- **One program in that container.** `--target <name>` also needs `--pid container:<name>`.
+  Without it the program sees no process of the other container, and says that it impairs nothing.
+- **A program on the Linux host itself.** Run with `--network host --pid host`, and add
+  `--cap-add SYS_PTRACE --security-opt apparmor=unconfined`: reading the connections of a program
+  outside the container is refused without both (measured on Ubuntu 26.04). With `--network host`
+  the session changes the host's own traffic, so keep it narrow (`--target`, `--dst-ip`,
+  `--dst-port`) and short (`--duration`).
+- **Docker Desktop on Windows and macOS.** The containers run in Docker's own virtual machine, and
+  "host" means that machine. The image changes the traffic of containers, never that of Windows or
+  macOS programs. For a Windows program, use the Windows build.
+- **Apple silicon and other arm64 machines.** The image is x86_64, so Docker runs it under
+  emulation there, and a capture may not work. Measured on an M2 Mac with Colima's QEMU emulation:
+  the image starts and `--simulate` works, but a capture stops at once with
+  `Function not implemented`, while `--doctor` still reports every row OK.
+- **Files.** Mount a folder at `/work` (`-v "$PWD:/work"`) for `--log-conns`, `--repro-out`, CSV
+  files or a `--scenario` file. The program runs as root in the image, so the files it writes
+  belong to root.
+- **Stopping.** `docker stop` ends the session cleanly (exit code 143), and the traffic is normal
+  at once. After `docker kill` it flows again within about 3 seconds.
+- `--doctor` names what is missing, such as a capability the container was started without. A
+  **Reproduce** line starts with the program's name, which the image runs by itself: to repeat it,
+  give the image only what follows the name, with the same `docker run` options in front.
+
+Each image is made from the published Linux package after its checksum and build provenance are
+checked, and is run on a Linux kernel the way this section describes before it is pushed. To check
+an image you pulled:
+
+```bash
+gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1
+```
+
 ### Linux (experimental, from source)
 
 The command line and the window also capture on Linux, through pydivert's eBPFDivert backend. It

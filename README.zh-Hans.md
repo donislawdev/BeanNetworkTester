@@ -150,6 +150,62 @@ Python 3.13 及更新版本以及 `.exe` 则以微秒计时。
 （实测：映射了 310 个端口，37 个名称全部解析成功）。它是其他系统上的后备方案，
 引擎的测试正是靠它在没有任何驱动的 Linux 上运行的。
 
+### Docker 镜像（实验性）
+
+从 1.1.0 起，每个稳定版本也是一个容器镜像 `ghcr.io/donislawdev/beannetworktester`，标签为版本号和
+`latest`。候选版本没有镜像。它就是 Linux 软件包，原样放在 Ubuntu 24.04 上，适用于 x86_64，与软件包
+一样是实验性的。镜像里只有命令行，没有窗口，不带参数运行时会显示 `--help`。
+
+捕获在 Docker 默认权限之外还需要三项能力，不需要 `--privileged`。让名为 `api` 的容器到一个地址的
+流量变慢：
+
+```bash
+docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60
+```
+
+在 Docker Compose 中，写在要减速的服务旁边。像这里这样不加 `--dst-ip` 或 `--dst-port` 时，
+那个服务的全部流量都会变慢：
+
+```yaml
+services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]
+```
+
+- **影响哪些流量。** `--network container:<名称>`（Compose 中为 `network_mode: "service:<名称>"`）
+  让程序进入那个容器的网络。它会影响这个网络里的每个程序，包括以同样方式在其中启动的其他容器，
+  但不会影响主机，也不会影响拥有自己网络的容器。`--dst-ip`、`--dst-port` 和 `--target`
+  可以缩小范围。
+- **那个容器里的一个程序。** `--target <名称>` 还需要 `--pid container:<名称>`。没有它，程序看不到
+  另一个容器的进程，并会说明它没有让任何东西变慢。
+- **Linux 主机本身的程序。** 使用 `--network host --pid host`，再加上 `--cap-add SYS_PTRACE
+  --security-opt apparmor=unconfined`：缺少任何一个，读取容器外程序的连接都会被拒绝（在 Ubuntu
+  26.04 上实测）。使用 `--network host` 时会话会改变主机自身的流量，所以要用 `--target`、
+  `--dst-ip`、`--dst-port` 缩小范围，并用 `--duration` 限制时长。
+- **Windows 和 macOS 上的 Docker Desktop。** 容器运行在 Docker 自己的虚拟机里。镜像只改变容器的
+  流量，永远不会改变 Windows 或 macOS 程序的流量。Windows 程序请使用 Windows 版。
+- **Apple 芯片和其他 arm64 机器。** 镜像是 x86_64 的，所以 Docker 在那里以模拟方式运行它，捕获
+  可能无法工作。在使用 Colima QEMU 模拟的 M2 Mac 上实测：镜像能启动，`--simulate` 也能用，但
+  捕获会立即以 `Function not implemented` 停止。
+- **文件。** 把一个文件夹挂载到 `/work`（`-v "$PWD:/work"`），用于 `--log-conns`、`--repro-out`、
+  CSV 文件或 `--scenario` 文件。这些文件属于 root。
+- **停止。** `docker stop` 会正常结束会话（退出码 143），流量立即恢复正常。`docker kill` 之后约
+  3 秒内恢复。
+
+包含全部实测数据的指南：
+[在 Docker 中模拟网络延迟](https://beannetworktester.donislawdev.com/zh-hans/docker-wangluo-yanchi/)。
+检查拉取的镜像：
+
+```bash
+gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1
+```
+
 ## 窗口界面
 
 窗口会**自动适应屏幕和系统缩放（DPI）**。初始大小根据分辨率计算
