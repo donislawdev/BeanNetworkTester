@@ -1,0 +1,234 @@
+name: PyPI package
+
+# beannetworktester on PyPI: the test helper for pytest and Playwright for Python
+# (python/beannetworktester), with the program of a PUBLISHED release inside.
+#
+# The wheels carry the release's bytes: the Windows zip and the Linux package are
+# downloaded, held to the release's SHA256SUMS.txt and to their attestations, and
+# only then laid out into wheels (release/assemble.py). The wheels are installed on
+# Windows and Linux runners the way the package README says and tried with a real
+# pytest run (release/try_package.py), and only wheels that passed are published: in
+# the pypi environment, which waits for the owner's approval, by trusted publishing
+# (no token anywhere), with attestations.
+#
+# Only stable releases go to PyPI (tools/ci_release_channel.py). A release candidate
+# is built and tried, and nothing is published. A pull request that touches the
+# package builds the wheels from the newest published release and tries them with
+# the checkout's own program, because that release may be older than the helper.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Published stable tag to publish the package of, for example v1.1.0"
+        required: true
+  pull_request:
+    paths:
+      - "python/beannetworktester/**"
+      - ".github/workflows/pypi.yml"
+      - "tools/ci_release_channel.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pypi-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  which:
+    name: which release, and whether it may go to PyPI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.which.outputs.tag }}
+      version: ${{ steps.which.outputs.version }}
+      publish: ${{ steps.which.outputs.publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: which release
+        id: which
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        # Draft and pre-release are asked of the API rather than taken from the
+        # event, because a run by hand has no event payload.
+        run: |
+          set -euo pipefail
+          case "$EVENT" in
+            release) tag="$RELEASE_TAG" ;;
+            workflow_dispatch) tag="$INPUT_TAG" ;;
+            *) tag="$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --limit 1 \
+                        --json tagName --jq '.[0].tagName')" ;;
+          esac
+          state="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,isPrerelease --jq '"\(.isDraft) \(.isPrerelease)"')"
+          read -r draft prerelease <<< "$state"
+          python3 tools/ci_release_channel.py decide --channel pypi --event "$EVENT" \
+            --tag "$tag" --draft "$draft" --prerelease "$prerelease" | tee -a "$GITHUB_OUTPUT"
+
+  wheels:
+    name: the wheels, made of the release's checked archives
+    needs: which
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      TAG: ${{ needs.which.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.15"
+
+      - name: the release's archives, checked before they are opened
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # The checksum says each download is the file the release lists. The Linux
+        # package's provenance says release.yml built it. The Windows zip is signed
+        # after the build, so its attestation is the SBOM attest-release.yml made of
+        # the signed file. --signer-workflow holds each to its workflow.
+        run: |
+          set -euo pipefail
+          zip="BeanNetworkTester-${TAG}-windows-x64.zip"
+          tgz="BeanNetworkTester-${TAG}-linux-x64.tar.gz"
+          mkdir -p download
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir download \
+            --pattern "$zip" --pattern "$tgz" --pattern SHA256SUMS.txt
+          cd download
+          for file in "$zip" "$tgz"; do
+            grep -qF " *${file}" SHA256SUMS.txt || {
+              echo "::error::SHA256SUMS.txt of $TAG does not name $file"
+              exit 1
+            }
+          done
+          sha256sum -c --ignore-missing SHA256SUMS.txt
+          gh attestation verify "$tgz" --repo "$GITHUB_REPOSITORY" \
+            --predicate-type https://slsa.dev/provenance/v1 \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml"
+          gh attestation verify "$zip" --repo "$GITHUB_REPOSITORY" \
+            --predicate-type https://spdx.dev/Document/v2.3 \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/attest-release.yml"
+
+      - name: lay them out into wheels
+        run: |
+          set -euo pipefail
+          python python/beannetworktester/release/assemble.py build "$TAG" \
+            "download/BeanNetworkTester-${TAG}-windows-x64.zip" \
+            "download/BeanNetworkTester-${TAG}-linux-x64.tar.gz" wheels
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: wheels
+          path: wheels/*.whl
+          retention-days: 3
+
+  try:
+    name: installed the README's way, tried for real (${{ matrix.os }}, Python ${{ matrix.python }})
+    needs: [which, wheels]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+        # The oldest Python the package declares, and the newest.
+        python: ["3.10", "3.15"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      VERSION: ${{ needs.which.outputs.version }}
+      # A pull request runs the checkout's program, which runs on the Python of the
+      # session - so only on the newest. Playwright is tried there too.
+      PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: wheels
+          path: wheels
+
+      - name: pip install beannetworktester, as the README says
+        shell: bash
+        # From the wheels only, so pip picks the one for this system exactly as it
+        # would from PyPI. In a virtual environment of its own, so nothing of the
+        # checkout can be imported in its place.
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/venv"
+          if [ "$RUNNER_OS" = Windows ]; then bin="$RUNNER_TEMP/venv/Scripts"; else bin="$RUNNER_TEMP/venv/bin"; fi
+          echo "VENV_PYTHON=$bin/python" >> "$GITHUB_ENV"
+          # --pre only for a release candidate's wheels, which are the only ones here
+          # then; a stable release installs the same with or without it.
+          "$bin/python" -m pip install --pre --no-index --find-links wheels beannetworktester
+          "$bin/python" -m pip install pytest
+
+      - name: a pull request runs the checkout's program
+        if: env.PULL_REQUEST == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$VENV_PYTHON" -m pip install --require-hashes -r requirements.txt
+          echo "BEANNETWORKTESTER_PROGRAM=$GITHUB_WORKSPACE/bean_network_tester.py" >> "$GITHUB_ENV"
+
+      - name: the package and its program
+        if: env.PULL_REQUEST != 'true' || matrix.python == '3.15'
+        shell: bash
+        run: '"$VENV_PYTHON" -u python/beannetworktester/release/try_package.py install "$VERSION" .'
+
+      - name: Playwright and its Chromium
+        if: matrix.python == '3.15'
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$VENV_PYTHON" -m pip install playwright==1.65.2
+          "$VENV_PYTHON" -m playwright install --with-deps chromium
+
+      - name: a real session, through the pytest fixture
+        if: env.PULL_REQUEST != 'true' || matrix.python == '3.15'
+        shell: bash
+        env:
+          PYTHON_VERSION: ${{ matrix.python }}
+        run: |
+          set -euo pipefail
+          extra=""
+          if [ "$PYTHON_VERSION" = "3.15" ]; then extra="--playwright"; fi
+          "$VENV_PYTHON" -u python/beannetworktester/release/try_package.py session . $extra
+
+  publish:
+    name: publish the wheels that were tried
+    needs: [which, try]
+    if: needs.which.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # The run waits here until the owner approves it, and PyPI takes the files only
+    # from this workflow in this environment (its trusted publisher).
+    environment:
+      name: pypi
+      url: https://pypi.org/project/beannetworktester/
+    permissions:
+      contents: read
+      # The OIDC token PyPI trusts, and the attestations published beside each file.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: wheels
+          path: dist
+
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086  # v1.14.3
+        with:
+          packages-dir: dist/

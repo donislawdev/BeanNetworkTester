@@ -15,6 +15,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   or `--target` narrow it. It needs `--cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN`, not
   `--privileged`. The README's "Docker image" section covers one program, the Linux host, Docker
   Desktop and Apple silicon.
+- **`beannetworktester` on PyPI, for tests.** From 1.1.0 every stable release is also a Python
+  package: `pip install beannetworktester`. In pytest, the `bad_network` fixture slows the real
+  network for one test, aimed at a server (`server="http://localhost:3000"`) or at a process,
+  and stops when the test ends. It works with Playwright for Python and any Python code, on
+  Windows x64 and Linux x64, and carries the release's own program. It needs administrator
+  rights on Windows, and root or `sudo` without a password on Linux, as on GitHub's runners.
 - **`--stop-on-stdin-close`, and a `start` record in `--format json`.** For a program that
   starts this one, such as a test runner. With the flag, the session ends when its standard
   input closes, as a normal end with a summary whose `stop_reason` is `stdin`. If the program
