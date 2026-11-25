@@ -1,0 +1,75 @@
+<section class="hero">
+  <h1>在 Docker 和 Docker Compose 中模拟网络延迟</h1>
+  <p class="lead">给一个容器的流量加上延迟、丢包或限速，不用改它的镜像，也不用在它前面放代理。Bean Network Tester 镜像加入那个容器的网络，只改变进出它的流量，到时间后自己停止。它就是 Linux 版，所以仍是实验性的。</p>
+</section>
+
+<section>
+  <h2>让一个容器变慢</h2>
+  <p>在要测试的容器旁边启动镜像，这里的容器名为 <code>api</code>。它在 Docker 默认权限之外还需要三项能力，不需要 <code>--privileged</code>：</p>
+<pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
+  <p><code>--network container:api</code> 让程序进入那个容器的网络，其他容器和主机都不受影响。<code>--dst-ip</code> 把范围缩小到一个地址，不加它则 <code>api</code> 的每个连接都会变慢。实测：在 <code>--latency 100</code> 下，容器 ping 该地址从 0.07 ms 升到 200.8 ms，因为请求和回复都被延迟；它 ping 另一个地址仍低于 1 ms。</p>
+  <p>命令行的每个设置在这里都能用：<code>--loss</code>、<code>--jitter</code>、用于限速的 <code>--down</code> 和 <code>--up</code>，以及<a href="../minglinghang/">预设或整个场景</a>。<code>--duration</code> 会结束会话，<code>docker stop</code> 也会。</p>
+</section>
+
+<section>
+  <h2>Docker Compose：为一个服务模拟网络延迟</h2>
+  <p>在 Compose 中，它是一个单独的服务，与它要减速的服务共用网络：</p>
+<pre><code>services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]</code></pre>
+  <p>现在每个与 <code>api</code> 通信的服务都会看到它远了 400 ms，并丢失 2% 的包。用这个文件实测：从另一个服务 ping 它，从 0.1 ms 升到 401 ms。<code>docker compose stop slow-network</code> 结束会话，流量立即恢复正常。</p>
+</section>
+
+<section>
+  <h2>容器里的一个程序</h2>
+  <p><code>--target</code> 按名称选择程序，和在桌面上一样。要看到另一个容器的进程，镜像还需要它的进程列表：<code>--pid container:api</code>。</p>
+<pre><code>docker run --rm --network container:api --pid container:api \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target nginx --latency 100 --duration 60</code></pre>
+  <p>没有 <code>--pid</code> 时，程序找不到这个进程，并在日志中写明：<code>Targeting: NO matching process has a connection open - traffic is NOT being impaired.</code> 这种情况下什么都不会变慢。</p>
+</section>
+
+<section>
+  <h2>Linux 主机上的程序</h2>
+  <p>镜像也能作用于直接运行在主机上、不在任何容器里的程序。这需要主机的网络和进程列表，再加两个选项：缺少其中任何一个，读取容器外程序的连接都会被拒绝。</p>
+<pre><code>docker run --rm --network host --pid host \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  --cap-add SYS_PTRACE --security-opt apparmor=unconfined \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target firefox --latency 100 --duration 60</code></pre>
+  <p>使用 <code>--network host</code> 时，会话会改变主机自身的流量，包括你的 ssh 会话，所以要用 <code>--target</code>、<code>--dst-ip</code> 或 <code>--dst-port</code> 缩小范围，并用 <code>--duration</code> 限制时长。在 Ubuntu 26.04 上实测：目标程序的请求从 3 ms 变成约 250 ms，另一个程序的请求仍为 11 ms。在桌面电脑上，<a href="../linux-ruowang-moni/">Linux 软件包</a>不用 Docker 也能做到同样的事。</p>
+</section>
+
+<section>
+  <h2>Windows 和 macOS 上的 Docker Desktop</h2>
+  <p>Docker Desktop 在自己的 Linux 虚拟机中运行容器，在那里"主机"指的就是这台虚拟机。镜像改变的是容器的流量，永远不会改变 Windows 或 macOS 程序的流量。要让 Windows 程序变慢，请使用 Bean Network Tester 的 Windows 版。</p>
+  <p>在 Apple 芯片的 Mac 以及其他 arm64 机器上，Docker 以模拟方式运行这个 x86_64 镜像，而模拟环境中没有内核的 BPF 调用。镜像能启动，<code>--simulate</code> 也能用，但捕获会立即以 <code>Function not implemented</code> 停止。这是在使用 Colima QEMU 模拟的 M2 Mac 上测得的，当时 <code>--doctor</code> 仍然每一行都报告 OK。</p>
+</section>
+
+<section>
+  <h2>文件、场景和 CI</h2>
+  <ul>
+    <li><strong>文件。</strong>把一个文件夹挂载到 <code>/work</code>（<code>-v "$PWD:/work"</code>），用于 <code>--log-conns</code>、<code>--repro-out</code>、CSV 文件或 <code>--scenario</code> 文件。程序在镜像中以 root 运行，所以它写出的文件属于 root。</li>
+    <li><strong>退出码。</strong>镜像以程序自己的<a href="../cankao-biao/">退出码</a>结束，所以 CI 步骤可以据此判定失败。<code>--fail-on-no-traffic</code> 会让一次没有任何流量通过的运行失败，这通常说明网络或目标选错了。<code>docker stop</code> 以 143 结束，表示正常停止。</li>
+    <li><strong>缺少什么。</strong><code>--doctor</code> 会指出来，例如启动容器时没有给的某项能力。</li>
+    <li><strong>停止。</strong><code>docker stop</code> 之后流量立即恢复正常。<code>docker kill</code> 之后约 3 秒内恢复。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>有哪些镜像</h2>
+  <p>从 1.1.0 起，每个稳定版本都有一个镜像，标签为版本号和 <code>latest</code>。候选版本（RC）没有镜像。每个镜像都是已发布的 Linux 软件包，原样放在 Ubuntu 24.04 上，适用于 x86_64。推送之前，会先检查软件包的校验和与构建来源，并按本页描述的方式在 Linux 内核上运行镜像。检查你拉取的镜像：</p>
+<pre><code>gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1</code></pre>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

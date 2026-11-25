@@ -1,0 +1,75 @@
+<section class="hero">
+  <h1>Docker と Docker Compose でネットワーク遅延を再現</h1>
+  <p class="lead">1つのコンテナの通信に遅延、パケットロス、速度制限を加えます。イメージを変える必要も、前にプロキシを置く必要もありません。Bean Network Tester のイメージはそのコンテナのネットワークに加わり、出入りする通信だけを変え、時間が来ると自分で止まります。Linux 版なので、実験的な扱いです。</p>
+</section>
+
+<section>
+  <h2>1つのコンテナを遅くする</h2>
+  <p>テストしたいコンテナ（ここでは <code>api</code>）の隣でイメージを起動します。Docker の既定に加えて3つのケーパビリティが必要で、<code>--privileged</code> は不要です。</p>
+<pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
+  <p><code>--network container:api</code> でプログラムがそのコンテナのネットワークに入るので、ほかのコンテナとホストには影響しません。<code>--dst-ip</code> は対象を1つのアドレスに絞ります。指定しなければ <code>api</code> のすべての接続が遅くなります。実測では、<code>--latency 100</code> でコンテナからそのアドレスへの ping が 0.07 ms から 200.8 ms に増えました。要求と応答の両方が遅れるためです。別のアドレスへの ping は 1 ms 未満のままでした。</p>
+  <p>コマンドラインの設定はすべて使えます。<code>--loss</code>、<code>--jitter</code>、速度制限の <code>--down</code> と <code>--up</code>、<a href="../komando-rain/">プリセットやシナリオ全体</a>もです。<code>--duration</code> でセッションが終わり、<code>docker stop</code> でも終わります。</p>
+</section>
+
+<section>
+  <h2>Docker Compose：サービスにネットワーク遅延を加える</h2>
+  <p>Compose では、遅くしたいサービスとネットワークを共有する別のサービスとして書きます。</p>
+<pre><code>services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]</code></pre>
+  <p><code>api</code> と通信するすべてのサービスから見て、<code>api</code> は 400 ms 遠くなり、パケットの 2% が失われます。このファイルでの実測では、別のサービスからの ping が 0.1 ms から 401 ms になりました。<code>docker compose stop slow-network</code> で終わり、通信はすぐ元に戻ります。</p>
+</section>
+
+<section>
+  <h2>コンテナ内の1つのプログラム</h2>
+  <p><code>--target</code> はデスクトップと同じく、名前でプログラムを選びます。別のコンテナのプロセスを見るには、そのプロセス一覧も必要です：<code>--pid container:api</code>。</p>
+<pre><code>docker run --rm --network container:api --pid container:api \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target nginx --latency 100 --duration 60</code></pre>
+  <p><code>--pid</code> がないとプログラムはそのプロセスを見つけられず、ログにこう書きます：<code>Targeting: NO matching process has a connection open - traffic is NOT being impaired.</code> この場合、何も遅くなりません。</p>
+</section>
+
+<section>
+  <h2>Linux ホスト上のプログラム</h2>
+  <p>イメージは、コンテナの外、ホスト上で直接動くプログラムにも届きます。ホストのネットワークとプロセス一覧に加えて、2つのオプションが必要です。どちらか一方でも欠けると、コンテナの外のプログラムの接続を読むことが拒否されます。</p>
+<pre><code>docker run --rm --network host --pid host \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  --cap-add SYS_PTRACE --security-opt apparmor=unconfined \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target firefox --latency 100 --duration 60</code></pre>
+  <p><code>--network host</code> ではセッションがホスト自身の通信を変え、ssh のセッションも含まれます。<code>--target</code>、<code>--dst-ip</code>、<code>--dst-port</code> で絞り、<code>--duration</code> で短くしてください。Ubuntu 26.04 での実測では、対象のプログラムのリクエストが 3 ms から約 250 ms になり、別のプログラムは 11 ms のままでした。デスクトップでは <a href="../linux-de-nettowaku-moni/">Linux 版パッケージ</a>が Docker なしで同じことをします。</p>
+</section>
+
+<section>
+  <h2>Windows と macOS の Docker Desktop</h2>
+  <p>Docker Desktop はコンテナを独自の Linux 仮想マシンで動かし、そこでは「ホスト」はその仮想マシンを指します。イメージが変えるのはコンテナの通信だけで、Windows や macOS のプログラムの通信は変えません。Windows のプログラムを遅くするには、Bean Network Tester の Windows 版を使ってください。</p>
+  <p>Apple シリコンの Mac やほかの arm64 マシンでは、Docker はこの x86_64 イメージをエミュレーションで動かし、そこにはカーネルの BPF 呼び出しがありません。イメージは起動し <code>--simulate</code> も動きますが、キャプチャはすぐに <code>Function not implemented</code> で止まります。Colima の QEMU エミュレーションを使った M2 Mac での実測で、そのとき <code>--doctor</code> はすべての行で OK と表示していました。</p>
+</section>
+
+<section>
+  <h2>ファイル、シナリオ、CI</h2>
+  <ul>
+    <li><strong>ファイル。</strong><code>--log-conns</code>、<code>--repro-out</code>、CSV ファイル、<code>--scenario</code> のファイルには、フォルダーを <code>/work</code> にマウントします（<code>-v "$PWD:/work"</code>）。プログラムはイメージ内で root として動くので、書き出したファイルは root のものになります。</li>
+    <li><strong>終了コード。</strong>イメージはプログラム自身の<a href="../rifarensu/">終了コード</a>で終わるので、CI のステップはそれで失敗にできます。<code>--fail-on-no-traffic</code> は何も通過しなかった実行を失敗にします。たいていネットワークか対象の指定ミスです。<code>docker stop</code> は正常停止を示す 143 で終わります。</li>
+    <li><strong>足りないもの。</strong><code>--doctor</code> が教えてくれます。たとえばコンテナの起動時に渡さなかったケーパビリティです。</li>
+    <li><strong>停止。</strong><code>docker stop</code> の後、通信はすぐ元に戻ります。<code>docker kill</code> の後は約 3 秒以内に流れ始めます。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>提供されるイメージ</h2>
+  <p>1.1.0 以降の安定版はすべてイメージになり、バージョンと <code>latest</code> のタグが付きます。リリース候補（RC）にはありません。中身は公開された Linux 版パッケージそのままで、Ubuntu 24.04 上、x86_64 向けです。プッシュの前に、パッケージのチェックサムとビルドの来歴を確認し、このページの説明どおりに Linux カーネル上でイメージを動かします。取得したイメージを確認するには：</p>
+<pre><code>gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1</code></pre>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

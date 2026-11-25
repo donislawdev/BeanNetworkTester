@@ -1,0 +1,75 @@
+<section class="hero">
+  <h1>Simular latencia de red en Docker y Docker Compose</h1>
+  <p class="lead">Añade retardo, pérdida de paquetes o un límite de velocidad al tráfico de un solo contenedor, sin cambiar su imagen y sin un proxy delante. La imagen de Bean Network Tester se une a la red de ese contenedor, cambia solo lo que entra y sale de él y se detiene sola. Es la versión de Linux, así que es experimental.</p>
+</section>
+
+<section>
+  <h2>Ralentizar un contenedor</h2>
+  <p>Inicia la imagen junto al contenedor que quieres probar, aquí uno llamado <code>api</code>. Necesita tres capacidades además de las predeterminadas de Docker, y no necesita <code>--privileged</code>:</p>
+<pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
+  <p><code>--network container:api</code> mete el programa en la red de ese contenedor, así que los demás contenedores y el host no se tocan. <code>--dst-ip</code> lo limita a una dirección. Sin esa opción se ralentiza cada conexión de <code>api</code>. Medido: con <code>--latency 100</code>, el ping del contenedor a esa dirección subió de 0,07 ms a 200,8 ms, porque se retrasan tanto la petición como la respuesta, y su ping a otra dirección se quedó por debajo de 1 ms.</p>
+  <p>Aquí funciona cualquier ajuste de la línea de comandos: <code>--loss</code>, <code>--jitter</code>, <code>--down</code> y <code>--up</code> para un límite de velocidad, un <a href="../linea-de-comandos/">preset o un escenario completo</a>. <code>--duration</code> termina la sesión, y también <code>docker stop</code>.</p>
+</section>
+
+<section>
+  <h2>Docker Compose: simular latencia de red para un servicio</h2>
+  <p>En Compose es un servicio propio que comparte la red del servicio que ralentiza:</p>
+<pre><code>services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]</code></pre>
+  <p>Cada servicio que habla con <code>api</code> lo ve ahora 400 ms más lejos, con un 2 % de paquetes perdidos. Medido con este archivo: el ping desde otro servicio subió de 0,1 ms a 401 ms. <code>docker compose stop slow-network</code> lo termina, y el tráfico vuelve a la normalidad al instante.</p>
+</section>
+
+<section>
+  <h2>Un programa dentro de un contenedor</h2>
+  <p><code>--target</code> elige un programa por su nombre, como en un escritorio. Para ver los procesos de otro contenedor, la imagen necesita también su lista de procesos: <code>--pid container:api</code>.</p>
+<pre><code>docker run --rm --network container:api --pid container:api \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target nginx --latency 100 --duration 60</code></pre>
+  <p>Sin <code>--pid</code>, el programa no encuentra ese proceso y lo dice en su registro: <code>Targeting: NO matching process has a connection open - traffic is NOT being impaired.</code> En ese caso no se ralentiza nada.</p>
+</section>
+
+<section>
+  <h2>Un programa en el host Linux</h2>
+  <p>La imagen también llega a un programa que se ejecuta en el propio host, fuera de cualquier contenedor. Para ello necesita la red y la lista de procesos del host, y dos opciones más: sin ambas, se rechaza la lectura de las conexiones de un programa de fuera del contenedor.</p>
+<pre><code>docker run --rm --network host --pid host \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  --cap-add SYS_PTRACE --security-opt apparmor=unconfined \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target firefox --latency 100 --duration 60</code></pre>
+  <p>Con <code>--network host</code>, la sesión cambia el tráfico del propio host, incluida tu sesión ssh, así que mantenla acotada con <code>--target</code>, <code>--dst-ip</code> o <code>--dst-port</code>, y corta con <code>--duration</code>. Medido en Ubuntu 26.04: las peticiones del programa elegido pasaron de 3 ms a unos 250 ms, y las de otro programa se quedaron en 11 ms. En un escritorio, el <a href="../simular-red-en-linux/">paquete para Linux</a> hace lo mismo sin Docker.</p>
+</section>
+
+<section>
+  <h2>Docker Desktop en Windows y macOS</h2>
+  <p>Docker Desktop ejecuta los contenedores en su propia máquina virtual Linux, y allí «host» significa esa máquina. La imagen cambia el tráfico de los contenedores, nunca el de los programas de Windows o macOS. Para ralentizar un programa de Windows, usa la versión de Windows de Bean Network Tester.</p>
+  <p>En un Mac con Apple silicon y en otras máquinas arm64, Docker ejecuta esta imagen x86_64 con emulación, y ahí no existen las llamadas BPF del kernel. La imagen arranca y <code>--simulate</code> funciona, pero una captura se detiene al instante con <code>Function not implemented</code>. Medido en un Mac M2 con la emulación QEMU de Colima, donde <code>--doctor</code> aun así mostraba OK en cada fila.</p>
+</section>
+
+<section>
+  <h2>Archivos, escenarios y CI</h2>
+  <ul>
+    <li><strong>Archivos.</strong> Monta una carpeta en <code>/work</code> (<code>-v "$PWD:/work"</code>) para <code>--log-conns</code>, <code>--repro-out</code>, archivos CSV o un archivo de <code>--scenario</code>. El programa se ejecuta como root en la imagen, así que los archivos que escribe pertenecen a root.</li>
+    <li><strong>Códigos de salida.</strong> La imagen termina con los <a href="../tablas-de-referencia/">códigos de salida</a> del propio programa, así que un paso de CI puede fallar con ellos. <code>--fail-on-no-traffic</code> hace fallar una ejecución por la que no pasó nada, la señal habitual de una red o un objetivo equivocados. <code>docker stop</code> termina con 143, una parada limpia.</li>
+    <li><strong>Qué falta.</strong> <code>--doctor</code> lo dice, por ejemplo una capacidad con la que no se inició el contenedor.</li>
+    <li><strong>Parada.</strong> Tras <code>docker stop</code>, el tráfico vuelve a la normalidad al instante. Tras <code>docker kill</code>, vuelve a fluir en unos 3 segundos.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Qué imágenes hay</h2>
+  <p>Cada versión estable desde la 1.1.0 es una imagen, etiquetada con su versión y <code>latest</code>. Las versiones candidatas no tienen. Cada una es el paquete de Linux publicado, sin cambios, sobre Ubuntu 24.04, para x86_64. Antes de publicarla se comprueban la suma de verificación y la procedencia del paquete, y la imagen se ejecuta en un kernel Linux tal como describe esta página. Para comprobar una imagen descargada:</p>
+<pre><code>gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1</code></pre>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

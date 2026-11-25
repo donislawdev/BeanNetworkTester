@@ -1,0 +1,75 @@
+<section class="hero">
+  <h1>จำลองความหน่วงเครือข่ายใน Docker และ Docker Compose</h1>
+  <p class="lead">เพิ่มความหน่วง แพ็กเก็ตสูญหาย หรือจำกัดความเร็วให้ทราฟฟิกของคอนเทนเนอร์เดียว โดยไม่ต้องแก้อิมเมจของมันและไม่ต้องวางพร็อกซีไว้ข้างหน้า อิมเมจของ Bean Network Tester จะเข้าร่วมเครือข่ายของคอนเทนเนอร์นั้น เปลี่ยนเฉพาะสิ่งที่เข้าและออกจากมัน แล้วหยุดเองเมื่อถึงเวลา นี่คือเวอร์ชัน Linux จึงยังเป็นรุ่นทดลอง</p>
+</section>
+
+<section>
+  <h2>ทำให้คอนเทนเนอร์เดียวช้าลง</h2>
+  <p>เริ่มอิมเมจข้างคอนเทนเนอร์ที่ต้องการทดสอบ ในที่นี้คือคอนเทนเนอร์ชื่อ <code>api</code> อิมเมจต้องการ capability เพิ่มอีกสามตัวนอกเหนือจากค่าเริ่มต้นของ Docker และไม่ต้องใช้ <code>--privileged</code>:</p>
+<pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
+  <p><code>--network container:api</code> พาโปรแกรมเข้าไปในเครือข่ายของคอนเทนเนอร์นั้น คอนเทนเนอร์อื่นและโฮสต์จึงไม่ถูกแตะต้อง <code>--dst-ip</code> จำกัดผลไว้ที่ที่อยู่เดียว ถ้าไม่ใส่ ทุกการเชื่อมต่อของ <code>api</code> จะช้าลง ผลการวัด: ที่ <code>--latency 100</code> ping จากคอนเทนเนอร์ไปยังที่อยู่นั้นเพิ่มจาก 0.07 ms เป็น 200.8 ms เพราะทั้งคำขอและคำตอบถูกหน่วง ส่วน ping ไปยังที่อยู่อื่นยังต่ำกว่า 1 ms</p>
+  <p>ทุกการตั้งค่าของบรรทัดคำสั่งใช้ได้ที่นี่: <code>--loss</code>, <code>--jitter</code>, <code>--down</code> และ <code>--up</code> สำหรับจำกัดความเร็ว รวมถึง<a href="../banthat-kham-sang/">พรีเซ็ตหรือทั้งสถานการณ์</a> เซสชันจบด้วย <code>--duration</code> และด้วย <code>docker stop</code> ก็ได้</p>
+</section>
+
+<section>
+  <h2>Docker Compose: จำลองความหน่วงเครือข่ายให้บริการหนึ่ง</h2>
+  <p>ใน Compose สิ่งเดียวกันคือบริการแยกต่างหากที่ใช้เครือข่ายร่วมกับบริการที่มันทำให้ช้าลง:</p>
+<pre><code>services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]</code></pre>
+  <p>ทุกบริการที่คุยกับ <code>api</code> จะเห็นมันไกลออกไป 400 ms และสูญเสียแพ็กเก็ต 2% ผลการวัดด้วยไฟล์นี้: ping จากบริการอื่นเพิ่มจาก 0.1 ms เป็น 401 ms คำสั่ง <code>docker compose stop slow-network</code> จะจบเซสชัน และทราฟฟิกกลับเป็นปกติทันที</p>
+</section>
+
+<section>
+  <h2>โปรแกรมเดียวภายในคอนเทนเนอร์</h2>
+  <p><code>--target</code> เลือกโปรแกรมตามชื่อ เหมือนบนเดสก์ท็อป หากต้องการเห็นโปรเซสของคอนเทนเนอร์อื่น อิมเมจต้องมีรายการโปรเซสของมันด้วย: <code>--pid container:api</code></p>
+<pre><code>docker run --rm --network container:api --pid container:api \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target nginx --latency 100 --duration 60</code></pre>
+  <p>ถ้าไม่มี <code>--pid</code> โปรแกรมจะหาโปรเซสนั้นไม่เจอและบอกไว้ในล็อก: <code>Targeting: NO matching process has a connection open - traffic is NOT being impaired.</code> ในกรณีนั้นจะไม่มีอะไรช้าลง</p>
+</section>
+
+<section>
+  <h2>โปรแกรมบนโฮสต์ Linux</h2>
+  <p>อิมเมจยังเข้าถึงโปรแกรมที่รันบนโฮสต์โดยตรงนอกคอนเทนเนอร์ใดๆ ได้ด้วย ซึ่งต้องใช้เครือข่ายและรายการโปรเซสของโฮสต์ และอีกสองตัวเลือก: หากขาดตัวใดตัวหนึ่ง การอ่านการเชื่อมต่อของโปรแกรมนอกคอนเทนเนอร์จะถูกปฏิเสธ</p>
+<pre><code>docker run --rm --network host --pid host \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  --cap-add SYS_PTRACE --security-opt apparmor=unconfined \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target firefox --latency 100 --duration 60</code></pre>
+  <p>เมื่อใช้ <code>--network host</code> เซสชันจะเปลี่ยนทราฟฟิกของโฮสต์เอง รวมถึงเซสชัน ssh ของคุณ จึงควรจำกัดให้แคบด้วย <code>--target</code>, <code>--dst-ip</code> หรือ <code>--dst-port</code> และให้สั้นด้วย <code>--duration</code> ผลการวัดบน Ubuntu 26.04: คำขอของโปรแกรมเป้าหมายเพิ่มจาก 3 ms เป็นประมาณ 250 ms ส่วนของโปรแกรมอื่นยังอยู่ที่ 11 ms บนเดสก์ท็อป <a href="../jamlong-khrueakhai-bon-linux/">แพ็กเกจสำหรับ Linux</a> ทำแบบเดียวกันได้โดยไม่ต้องใช้ Docker</p>
+</section>
+
+<section>
+  <h2>Docker Desktop บน Windows และ macOS</h2>
+  <p>Docker Desktop รันคอนเทนเนอร์ในเครื่องเสมือน Linux ของตัวเอง และที่นั่น "โฮสต์" หมายถึงเครื่องเสมือนนั้น อิมเมจเปลี่ยนทราฟฟิกของคอนเทนเนอร์ ไม่เคยเปลี่ยนทราฟฟิกของโปรแกรม Windows หรือ macOS หากต้องการทำให้โปรแกรม Windows ช้าลง ให้ใช้ Bean Network Tester เวอร์ชัน Windows</p>
+  <p>บน Mac ที่ใช้ Apple silicon และเครื่อง arm64 อื่นๆ Docker รันอิมเมจ x86_64 นี้ผ่านการจำลอง และในนั้นไม่มีการเรียก BPF ของเคอร์เนล อิมเมจเริ่มทำงานได้และ <code>--simulate</code> ใช้ได้ แต่การดักจับจะหยุดทันทีพร้อม <code>Function not implemented</code> วัดบน Mac M2 ที่ใช้การจำลอง QEMU ของ Colima ซึ่ง <code>--doctor</code> ยังคงแสดง OK ทุกบรรทัด</p>
+</section>
+
+<section>
+  <h2>ไฟล์ สถานการณ์ และ CI</h2>
+  <ul>
+    <li><strong>ไฟล์</strong> เมานต์โฟลเดอร์ที่ <code>/work</code> (<code>-v "$PWD:/work"</code>) สำหรับ <code>--log-conns</code>, <code>--repro-out</code>, ไฟล์ CSV หรือไฟล์ <code>--scenario</code> โปรแกรมรันเป็น root ภายในอิมเมจ ไฟล์ที่มันเขียนจึงเป็นของ root</li>
+    <li><strong>รหัสออก</strong> อิมเมจจบด้วย<a href="../tarang-ang-ing/">รหัสออก</a>ของตัวโปรแกรมเอง ขั้นตอน CI จึงล้มเหลวตามรหัสเหล่านี้ได้ <code>--fail-on-no-traffic</code> จะทำให้การรันที่ไม่มีอะไรผ่านเลยล้มเหลว ซึ่งมักเป็นสัญญาณว่าเลือกเครือข่ายหรือเป้าหมายผิด <code>docker stop</code> จบด้วย 143 ซึ่งคือการหยุดอย่างเรียบร้อย</li>
+    <li><strong>สิ่งที่ขาด</strong> <code>--doctor</code> จะบอก เช่น capability ที่ไม่ได้ให้ตอนเริ่มคอนเทนเนอร์</li>
+    <li><strong>การหยุด</strong> หลัง <code>docker stop</code> ทราฟฟิกกลับเป็นปกติทันที หลัง <code>docker kill</code> ทราฟฟิกจะไหลอีกครั้งภายในประมาณ 3 วินาที</li>
+  </ul>
+</section>
+
+<section>
+  <h2>มีอิมเมจอะไรบ้าง</h2>
+  <p>ทุกรุ่นเสถียรตั้งแต่ 1.1.0 จะเป็นอิมเมจ ติดแท็กเวอร์ชันของตัวเองและ <code>latest</code> รุ่นทดสอบก่อนเผยแพร่ (RC) ไม่มีอิมเมจ แต่ละอิมเมจคือแพ็กเกจ Linux ที่เผยแพร่แล้วโดยไม่แก้ไข บน Ubuntu 24.04 สำหรับ x86_64 ก่อนส่งขึ้น จะตรวจ checksum และแหล่งที่มาของการบิลด์ของแพ็กเกจ แล้วรันอิมเมจบนเคอร์เนล Linux ตามที่หน้านี้อธิบาย วิธีตรวจอิมเมจที่ดึงมา:</p>
+<pre><code>gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1</code></pre>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

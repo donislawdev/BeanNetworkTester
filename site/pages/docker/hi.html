@@ -1,0 +1,75 @@
+<section class="hero">
+  <h1>Docker और Docker Compose में नेटवर्क लेटेंसी सिमुलेट करें</h1>
+  <p class="lead">किसी एक कंटेनर के ट्रैफ़िक में देरी, पैकेट लॉस या स्पीड लिमिट जोड़ें, उसकी इमेज बदले बिना और उसके आगे कोई प्रॉक्सी लगाए बिना। Bean Network Tester की इमेज उस कंटेनर के नेटवर्क में जुड़ती है, सिर्फ़ वही बदलती है जो उसमें आता-जाता है, और अपने-आप रुक जाती है। यह Linux वर्शन है, इसलिए प्रायोगिक है।</p>
+</section>
+
+<section>
+  <h2>एक कंटेनर को धीमा करें</h2>
+  <p>जिस कंटेनर को टेस्ट करना है, उसके बगल में इमेज चलाएँ, यहाँ उसका नाम <code>api</code> है। इसे Docker की डिफ़ॉल्ट क्षमताओं के अलावा तीन और क्षमताएँ चाहिए, और <code>--privileged</code> नहीं चाहिए:</p>
+<pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
+  <p><code>--network container:api</code> प्रोग्राम को उस कंटेनर के नेटवर्क में रखता है, इसलिए दूसरे कंटेनर और होस्ट अछूते रहते हैं। <code>--dst-ip</code> असर को एक पते तक सीमित करता है। इसके बिना <code>api</code> का हर कनेक्शन धीमा होता है। मापा गया: <code>--latency 100</code> पर उस पते तक कंटेनर का पिंग 0.07 ms से बढ़कर 200.8 ms हो गया, क्योंकि अनुरोध और जवाब दोनों में देरी होती है, और किसी दूसरे पते तक उसका पिंग 1 ms से कम रहा।</p>
+  <p>कमांड लाइन की हर सेटिंग यहाँ काम करती है: <code>--loss</code>, <code>--jitter</code>, स्पीड लिमिट के लिए <code>--down</code> और <code>--up</code>, एक <a href="../kamand-lain/">प्रीसेट या पूरा सिनेरियो</a>। सत्र <code>--duration</code> से खत्म होता है, और <code>docker stop</code> से भी।</p>
+</section>
+
+<section>
+  <h2>Docker Compose: किसी सर्विस के लिए नेटवर्क लेटेंसी सिमुलेट करें</h2>
+  <p>Compose में यही एक अलग सर्विस है, जो उस सर्विस के साथ नेटवर्क साझा करती है जिसे वह धीमा करती है:</p>
+<pre><code>services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]</code></pre>
+  <p>अब <code>api</code> से बात करने वाली हर सर्विस को वह 400 ms दूर दिखती है, और 2% पैकेट खो जाते हैं। इस फ़ाइल से मापा गया: दूसरी सर्विस से पिंग 0.1 ms से बढ़कर 401 ms हो गया। <code>docker compose stop slow-network</code> इसे खत्म करता है, और ट्रैफ़िक तुरंत सामान्य हो जाता है।</p>
+</section>
+
+<section>
+  <h2>कंटेनर के अंदर एक प्रोग्राम</h2>
+  <p><code>--target</code> प्रोग्राम को नाम से चुनता है, जैसे डेस्कटॉप पर। किसी दूसरे कंटेनर की प्रोसेस देखने के लिए इमेज को उसकी प्रोसेस सूची भी चाहिए: <code>--pid container:api</code>।</p>
+<pre><code>docker run --rm --network container:api --pid container:api \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target nginx --latency 100 --duration 60</code></pre>
+  <p><code>--pid</code> के बिना प्रोग्राम को ऐसी कोई प्रोसेस नहीं मिलती, और वह अपने लॉग में यही कहता है: <code>Targeting: NO matching process has a connection open - traffic is NOT being impaired.</code> उस स्थिति में कुछ भी धीमा नहीं होता।</p>
+</section>
+
+<section>
+  <h2>Linux होस्ट पर चल रहा प्रोग्राम</h2>
+  <p>इमेज उस प्रोग्राम तक भी पहुँच सकती है जो किसी कंटेनर में नहीं, सीधे होस्ट पर चलता है। इसके लिए होस्ट का नेटवर्क और प्रोसेस सूची चाहिए, और दो और विकल्प: दोनों के बिना कंटेनर के बाहर के प्रोग्राम के कनेक्शन पढ़ने से मना कर दिया जाता है।</p>
+<pre><code>docker run --rm --network host --pid host \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  --cap-add SYS_PTRACE --security-opt apparmor=unconfined \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target firefox --latency 100 --duration 60</code></pre>
+  <p><code>--network host</code> के साथ सत्र होस्ट का अपना ट्रैफ़िक बदलता है, आपके ssh सत्र समेत, इसलिए इसे <code>--target</code>, <code>--dst-ip</code> या <code>--dst-port</code> से सीमित और <code>--duration</code> से छोटा रखें। Ubuntu 26.04 पर मापा गया: चुने गए प्रोग्राम के अनुरोध 3 ms से लगभग 250 ms हो गए, और दूसरे प्रोग्राम के 11 ms पर रहे। डेस्कटॉप पर यही काम Docker के बिना <a href="../linux-par-network-simulation/">Linux पैकेज</a> करता है।</p>
+</section>
+
+<section>
+  <h2>Windows और macOS पर Docker Desktop</h2>
+  <p>Docker Desktop कंटेनरों को अपनी Linux वर्चुअल मशीन में चलाता है, और वहाँ "होस्ट" का मतलब वही मशीन है। इमेज कंटेनरों का ट्रैफ़िक बदलती है, Windows या macOS के प्रोग्रामों का कभी नहीं। किसी Windows प्रोग्राम को धीमा करने के लिए Bean Network Tester का Windows वर्शन इस्तेमाल करें।</p>
+  <p>Apple silicon वाले Mac और दूसरी arm64 मशीनों पर Docker इस x86_64 इमेज को इम्यूलेशन में चलाता है, और वहाँ कर्नेल की BPF कॉल उपलब्ध नहीं होतीं। इमेज शुरू होती है और <code>--simulate</code> काम करता है, लेकिन कैप्चर तुरंत <code>Function not implemented</code> के साथ रुक जाता है। Colima के QEMU इम्यूलेशन वाले M2 Mac पर मापा गया, जहाँ <code>--doctor</code> फिर भी हर पंक्ति में OK दिखा रहा था।</p>
+</section>
+
+<section>
+  <h2>फ़ाइलें, सिनेरियो और CI</h2>
+  <ul>
+    <li><strong>फ़ाइलें।</strong> <code>--log-conns</code>, <code>--repro-out</code>, CSV फ़ाइलों या <code>--scenario</code> फ़ाइल के लिए एक फ़ोल्डर <code>/work</code> पर माउंट करें (<code>-v "$PWD:/work"</code>)। प्रोग्राम इमेज में root के रूप में चलता है, इसलिए वह जो फ़ाइलें लिखता है वे root की होती हैं।</li>
+    <li><strong>एग्ज़िट कोड।</strong> इमेज प्रोग्राम के अपने <a href="../sandarbh-talika/">एग्ज़िट कोड</a> के साथ खत्म होती है, इसलिए CI का कोई चरण उन पर फ़ेल हो सकता है। <code>--fail-on-no-traffic</code> उस रन को फ़ेल करता है जिससे कुछ भी नहीं गुज़रा, जो आमतौर पर गलत नेटवर्क या गलत लक्ष्य का संकेत है। <code>docker stop</code> 143 के साथ खत्म होता है, यानी साफ़ तरीके से रुकना।</li>
+    <li><strong>क्या कमी है।</strong> <code>--doctor</code> बताता है, जैसे कोई क्षमता जिसके बिना कंटेनर शुरू किया गया।</li>
+    <li><strong>रोकना।</strong> <code>docker stop</code> के बाद ट्रैफ़िक तुरंत सामान्य हो जाता है। <code>docker kill</code> के बाद यह लगभग 3 सेकंड में फिर से चलने लगता है।</li>
+  </ul>
+</section>
+
+<section>
+  <h2>कौन-सी इमेज उपलब्ध हैं</h2>
+  <p>1.1.0 से हर स्थिर रिलीज़ एक इमेज है, जिस पर उसके वर्शन और <code>latest</code> के टैग होते हैं। रिलीज़ कैंडिडेट को इमेज नहीं मिलती। हर इमेज प्रकाशित Linux पैकेज ही है, बिना बदलाव, Ubuntu 24.04 पर, x86_64 के लिए। पुश से पहले पैकेज का चेकसम और बिल्ड की उत्पत्ति जाँची जाती है, और इमेज को Linux कर्नेल पर वैसे ही चलाया जाता है जैसा यह पेज बताता है। डाउनलोड की गई इमेज जाँचने के लिए:</p>
+<pre><code>gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1</code></pre>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

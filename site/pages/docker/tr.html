@@ -1,0 +1,75 @@
+<section class="hero">
+  <h1>Docker ve Docker Compose içinde ağ gecikmesi simülasyonu</h1>
+  <p class="lead">Tek bir konteynerin trafiğine gecikme, paket kaybı veya hız sınırı ekleyin; imajını değiştirmeden ve önüne bir proxy koymadan. Bean Network Tester imajı o konteynerin ağına katılır, yalnızca ona girip çıkanı değiştirir ve kendiliğinden durur. Linux sürümüdür, bu yüzden deneyseldir.</p>
+</section>
+
+<section>
+  <h2>Tek bir konteyneri yavaşlatmak</h2>
+  <p>İmajı test etmek istediğiniz konteynerin yanında başlatın, burada adı <code>api</code> olan bir konteyner. Docker varsayılanlarına ek olarak üç yetenek gerekir, <code>--privileged</code> gerekmez:</p>
+<pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
+  <p><code>--network container:api</code> programı o konteynerin ağına koyar, böylece diğer konteynerlere ve ana makineye dokunulmaz. <code>--dst-ip</code> etkiyi tek bir adresle sınırlar. Bu seçenek olmadan <code>api</code> konteynerinin her bağlantısı yavaşlar. Ölçüldü: <code>--latency 100</code> ile konteynerin o adrese ping süresi 0,07 ms'den 200,8 ms'ye çıktı, çünkü hem istek hem yanıt geciktirilir; başka bir adrese ping ise 1 ms'nin altında kaldı.</p>
+  <p>Komut satırının her ayarı burada çalışır: <code>--loss</code>, <code>--jitter</code>, hız sınırı için <code>--down</code> ve <code>--up</code>, bir <a href="../komut-satiri/">ön ayar ya da bütün bir senaryo</a>. Oturumu <code>--duration</code> bitirir, <code>docker stop</code> da bitirir.</p>
+</section>
+
+<section>
+  <h2>Docker Compose: bir servis için ağ gecikmesi simülasyonu</h2>
+  <p>Compose içinde bu, yavaşlattığı servisle ağı paylaşan ayrı bir servistir:</p>
+<pre><code>services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]</code></pre>
+  <p><code>api</code> ile konuşan her servis onu artık 400 ms daha uzakta görür ve paketlerin %2'si kaybolur. Bu dosyayla ölçüldü: başka bir servisten ping 0,1 ms'den 401 ms'ye çıktı. <code>docker compose stop slow-network</code> oturumu bitirir ve trafik hemen normale döner.</p>
+</section>
+
+<section>
+  <h2>Konteyner içindeki tek bir program</h2>
+  <p><code>--target</code>, masaüstünde olduğu gibi bir programı adına göre seçer. Başka bir konteynerin süreçlerini görmek için imajın o konteynerin süreç listesine de ihtiyacı vardır: <code>--pid container:api</code>.</p>
+<pre><code>docker run --rm --network container:api --pid container:api \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target nginx --latency 100 --duration 60</code></pre>
+  <p><code>--pid</code> olmadan program böyle bir süreç bulamaz ve bunu günlüğünde söyler: <code>Targeting: NO matching process has a connection open - traffic is NOT being impaired.</code> Bu durumda hiçbir şey yavaşlamaz.</p>
+</section>
+
+<section>
+  <h2>Linux ana makinesindeki bir program</h2>
+  <p>İmaj, herhangi bir konteynerin dışında, doğrudan ana makinede çalışan bir programa da ulaşabilir. Bunun için ana makinenin ağına ve süreç listesine, ayrıca iki seçeneğe daha ihtiyaç duyar: ikisi de olmadan konteyner dışındaki bir programın bağlantılarını okumak reddedilir.</p>
+<pre><code>docker run --rm --network host --pid host \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  --cap-add SYS_PTRACE --security-opt apparmor=unconfined \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target firefox --latency 100 --duration 60</code></pre>
+  <p><code>--network host</code> ile oturum ana makinenin kendi trafiğini, ssh oturumunuz dahil, değiştirir. Bu yüzden <code>--target</code>, <code>--dst-ip</code> veya <code>--dst-port</code> ile dar, <code>--duration</code> ile kısa tutun. Ubuntu 26.04'te ölçüldü: hedef programın istekleri 3 ms'den yaklaşık 250 ms'ye çıktı, başka bir programınkiler 11 ms'de kaldı. Masaüstünde aynı işi Docker olmadan <a href="../linuxta-ag-simulasyonu/">Linux paketi</a> yapar.</p>
+</section>
+
+<section>
+  <h2>Windows ve macOS üzerinde Docker Desktop</h2>
+  <p>Docker Desktop konteynerleri kendi Linux sanal makinesinde çalıştırır ve orada "ana makine" o sanal makine demektir. İmaj konteynerlerin trafiğini değiştirir, Windows veya macOS programlarınınkini asla değiştirmez. Bir Windows programını yavaşlatmak için Bean Network Tester'ın Windows sürümünü kullanın.</p>
+  <p>Apple silicon işlemcili bir Mac'te ve diğer arm64 makinelerde Docker bu x86_64 imajını öykünmeyle çalıştırır ve orada çekirdeğin BPF çağrıları yoktur. İmaj başlar ve <code>--simulate</code> çalışır, ama bir yakalama hemen <code>Function not implemented</code> hatasıyla durur. Colima'nın QEMU öykünmesiyle bir M2 Mac'te ölçüldü; orada <code>--doctor</code> yine de her satırda OK gösteriyordu.</p>
+</section>
+
+<section>
+  <h2>Dosyalar, senaryolar ve CI</h2>
+  <ul>
+    <li><strong>Dosyalar.</strong> <code>--log-conns</code>, <code>--repro-out</code>, CSV dosyaları veya bir <code>--scenario</code> dosyası için bir klasörü <code>/work</code> altına bağlayın (<code>-v "$PWD:/work"</code>). Program imaj içinde root olarak çalışır, bu yüzden yazdığı dosyalar root'a aittir.</li>
+    <li><strong>Çıkış kodları.</strong> İmaj, programın kendi <a href="../basvuru-tablolari/">çıkış kodlarıyla</a> biter; böylece bir CI adımı bunlarla başarısız olabilir. <code>--fail-on-no-traffic</code>, içinden hiçbir şeyin geçmediği bir çalıştırmayı başarısız sayar; bu genellikle yanlış ağın veya hedefin işaretidir. <code>docker stop</code> temiz bir durma olan 143 ile biter.</li>
+    <li><strong>Eksik olan.</strong> <code>--doctor</code> söyler, örneğin konteyner başlatılırken verilmeyen bir yetenek.</li>
+    <li><strong>Durdurma.</strong> <code>docker stop</code> sonrasında trafik hemen normale döner. <code>docker kill</code> sonrasında yaklaşık 3 saniye içinde yeniden akar.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Hangi imajlar var</h2>
+  <p>1.1.0'dan itibaren her kararlı sürüm, kendi sürümü ve <code>latest</code> etiketleriyle bir imajdır. Sürüm adaylarının imajı yoktur. Her biri yayımlanan Linux paketinin kendisidir; değiştirilmeden, Ubuntu 24.04 üzerinde, x86_64 için. Gönderilmeden önce paketin sağlama toplamı ve derleme kaynağı denetlenir, imaj da bu sayfada anlatıldığı gibi bir Linux çekirdeğinde çalıştırılır. Çektiğiniz bir imajı denetlemek için:</p>
+<pre><code>gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1</code></pre>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

@@ -1,0 +1,75 @@
+<section class="hero">
+  <h1>Docker와 Docker Compose에서 네트워크 지연 시뮬레이션</h1>
+  <p class="lead">컨테이너 하나의 트래픽에 지연, 패킷 손실, 속도 제한을 더합니다. 이미지를 바꿀 필요도, 앞에 프록시를 둘 필요도 없습니다. Bean Network Tester 이미지는 그 컨테이너의 네트워크에 합류해 드나드는 트래픽만 바꾸고, 시간이 되면 스스로 멈춥니다. Linux 버전이므로 실험 단계입니다.</p>
+</section>
+
+<section>
+  <h2>컨테이너 하나를 느리게 하기</h2>
+  <p>테스트할 컨테이너 옆에서 이미지를 실행합니다. 여기서는 이름이 <code>api</code>인 컨테이너입니다. Docker 기본값 외에 세 가지 capability가 필요하고, <code>--privileged</code>는 필요 없습니다.</p>
+<pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
+  <p><code>--network container:api</code>는 프로그램을 그 컨테이너의 네트워크에 넣으므로 다른 컨테이너와 호스트는 영향을 받지 않습니다. <code>--dst-ip</code>는 범위를 주소 하나로 좁힙니다. 이 옵션이 없으면 <code>api</code>의 모든 연결이 느려집니다. 측정 결과: <code>--latency 100</code>에서 컨테이너가 그 주소로 보낸 ping은 0.07 ms에서 200.8 ms로 늘었습니다. 요청과 응답이 모두 지연되기 때문입니다. 다른 주소로 보낸 ping은 1 ms 미만에 머물렀습니다.</p>
+  <p>명령줄의 모든 설정을 여기서 쓸 수 있습니다. <code>--loss</code>, <code>--jitter</code>, 속도 제한용 <code>--down</code>과 <code>--up</code>, <a href="../myeongnyeongjul/">프리셋이나 시나리오 전체</a>도 됩니다. 세션은 <code>--duration</code>으로 끝나고, <code>docker stop</code>으로도 끝납니다.</p>
+</section>
+
+<section>
+  <h2>Docker Compose: 서비스에 네트워크 지연 시뮬레이션</h2>
+  <p>Compose에서는 느리게 할 서비스와 네트워크를 공유하는 별도의 서비스로 씁니다.</p>
+<pre><code>services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]</code></pre>
+  <p>이제 <code>api</code>와 통신하는 모든 서비스에는 <code>api</code>가 400 ms 더 멀게 보이고, 패킷의 2%가 손실됩니다. 이 파일로 측정한 결과 다른 서비스에서 보낸 ping이 0.1 ms에서 401 ms로 늘었습니다. <code>docker compose stop slow-network</code>로 끝내면 트래픽은 바로 정상으로 돌아옵니다.</p>
+</section>
+
+<section>
+  <h2>컨테이너 안의 프로그램 하나</h2>
+  <p><code>--target</code>은 데스크톱에서처럼 이름으로 프로그램을 고릅니다. 다른 컨테이너의 프로세스를 보려면 이미지에 그 프로세스 목록도 필요합니다: <code>--pid container:api</code>.</p>
+<pre><code>docker run --rm --network container:api --pid container:api \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target nginx --latency 100 --duration 60</code></pre>
+  <p><code>--pid</code>가 없으면 프로그램은 그런 프로세스를 찾지 못하고 로그에 이렇게 남깁니다: <code>Targeting: NO matching process has a connection open - traffic is NOT being impaired.</code> 이 경우 아무것도 느려지지 않습니다.</p>
+</section>
+
+<section>
+  <h2>Linux 호스트의 프로그램</h2>
+  <p>이미지는 컨테이너 밖, 호스트에서 직접 실행되는 프로그램에도 닿을 수 있습니다. 이때는 호스트의 네트워크와 프로세스 목록, 그리고 옵션 두 개가 더 필요합니다. 둘 중 하나라도 없으면 컨테이너 밖 프로그램의 연결을 읽는 것이 거부됩니다.</p>
+<pre><code>docker run --rm --network host --pid host \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  --cap-add SYS_PTRACE --security-opt apparmor=unconfined \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target firefox --latency 100 --duration 60</code></pre>
+  <p><code>--network host</code>를 쓰면 세션이 호스트 자체의 트래픽을 바꾸고, ssh 세션도 포함됩니다. 그러니 <code>--target</code>, <code>--dst-ip</code>, <code>--dst-port</code>로 좁히고 <code>--duration</code>으로 짧게 유지하세요. Ubuntu 26.04에서 측정한 결과, 대상 프로그램의 요청은 3 ms에서 약 250 ms로 늘었고 다른 프로그램의 요청은 11 ms에 머물렀습니다. 데스크톱에서는 <a href="../linux-neteuwokeu-simyulleisyeon/">Linux 패키지</a>가 Docker 없이 같은 일을 합니다.</p>
+</section>
+
+<section>
+  <h2>Windows와 macOS의 Docker Desktop</h2>
+  <p>Docker Desktop은 자체 Linux 가상 머신에서 컨테이너를 실행하며, 거기서 "호스트"는 그 가상 머신을 뜻합니다. 이미지는 컨테이너의 트래픽만 바꾸고, Windows나 macOS 프로그램의 트래픽은 결코 바꾸지 않습니다. Windows 프로그램을 느리게 하려면 Bean Network Tester의 Windows 버전을 쓰세요.</p>
+  <p>Apple silicon Mac과 다른 arm64 머신에서 Docker는 이 x86_64 이미지를 에뮬레이션으로 실행하며, 그 환경에는 커널의 BPF 호출이 없습니다. 이미지는 시작되고 <code>--simulate</code>도 동작하지만, 캡처는 곧바로 <code>Function not implemented</code>로 멈춥니다. Colima의 QEMU 에뮬레이션을 쓰는 M2 Mac에서 측정했으며, 그때도 <code>--doctor</code>는 모든 줄에 OK를 표시했습니다.</p>
+</section>
+
+<section>
+  <h2>파일, 시나리오, CI</h2>
+  <ul>
+    <li><strong>파일.</strong> <code>--log-conns</code>, <code>--repro-out</code>, CSV 파일, <code>--scenario</code> 파일을 위해 폴더를 <code>/work</code>에 마운트하세요(<code>-v "$PWD:/work"</code>). 프로그램은 이미지 안에서 root로 실행되므로, 프로그램이 쓴 파일은 root 소유가 됩니다.</li>
+    <li><strong>종료 코드.</strong> 이미지는 프로그램 자체의 <a href="../chamjo-pyo/">종료 코드</a>로 끝나므로 CI 단계가 이를 보고 실패할 수 있습니다. <code>--fail-on-no-traffic</code>은 아무것도 통과하지 않은 실행을 실패로 처리합니다. 대개 네트워크나 대상을 잘못 지정했다는 신호입니다. <code>docker stop</code>은 깨끗한 종료를 뜻하는 143으로 끝납니다.</li>
+    <li><strong>빠진 것.</strong> <code>--doctor</code>가 알려 줍니다. 예를 들어 컨테이너를 시작할 때 주지 않은 capability입니다.</li>
+    <li><strong>중지.</strong> <code>docker stop</code> 뒤에는 트래픽이 바로 정상으로 돌아옵니다. <code>docker kill</code> 뒤에는 약 3초 안에 다시 흐릅니다.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>어떤 이미지가 있나요</h2>
+  <p>1.1.0부터 모든 안정 버전은 자기 버전과 <code>latest</code> 태그가 붙은 이미지가 됩니다. 릴리스 후보에는 이미지가 없습니다. 각 이미지는 배포된 Linux 패키지를 그대로 Ubuntu 24.04 위에 올린 x86_64용입니다. 푸시하기 전에 패키지의 체크섬과 빌드 출처를 확인하고, 이 페이지에 적힌 방식대로 Linux 커널에서 이미지를 실행합니다. 받은 이미지를 확인하려면:</p>
+<pre><code>gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1</code></pre>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

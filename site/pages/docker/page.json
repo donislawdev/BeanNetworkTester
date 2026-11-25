@@ -1,0 +1,138 @@
+{
+  "id": "docker",
+  "order": 74,
+  "languages": {
+    "en": {
+      "slug": "docker-network-latency",
+      "link_text": "Bad network in Docker",
+      "title": "Simulate network latency in Docker and Docker Compose",
+      "description": "Add latency, packet loss or a speed limit to one container from a sidecar: docker run and Compose examples, one program, the Linux host, Docker Desktop."
+    },
+    "pl": {
+      "slug": "opoznienie-sieci-w-dockerze",
+      "link_text": "Zła sieć w Dockerze",
+      "title": "Symulacja opóźnienia sieci w Dockerze i Docker Compose",
+      "description": "Opóźnienie, utrata pakietów albo limit prędkości dla jednego kontenera: przykłady docker run i Compose, jeden program, host Linux i Docker Desktop."
+    },
+    "zh-Hans": {
+      "slug": "docker-wangluo-yanchi",
+      "link_text": "Docker 中的弱网",
+      "title": "在 Docker 和 Docker Compose 中模拟网络延迟",
+      "description": "从旁路容器为单个容器加入延迟、丢包或限速：docker run 和 Compose 示例、单个程序、Linux 主机，以及 Docker Desktop 能做到什么。"
+    },
+    "ja": {
+      "slug": "docker-nettowaku-chien",
+      "link_text": "Docker で悪いネットワーク",
+      "title": "Docker と Docker Compose でネットワーク遅延を再現",
+      "description": "サイドカーから1つのコンテナに遅延、パケットロス、速度制限を加える。docker run と Compose の例、1つのプログラム、Linux ホスト、Docker Desktop。"
+    },
+    "de": {
+      "slug": "netzwerklatenz-in-docker",
+      "link_text": "Schlechtes Netz in Docker",
+      "title": "Netzwerklatenz in Docker und Docker Compose simulieren",
+      "description": "Latenz, Paketverlust oder ein Tempolimit für einen Container per Sidecar: Beispiele für docker run und Compose, ein Programm, der Linux-Host, Docker Desktop."
+    },
+    "fr": {
+      "slug": "latence-reseau-docker",
+      "link_text": "Mauvais réseau dans Docker",
+      "title": "Simuler la latence réseau dans Docker et Docker Compose",
+      "description": "Latence, perte de paquets ou limite de débit pour un conteneur via un sidecar : exemples docker run et Compose, un programme, l'hôte Linux, Docker Desktop."
+    },
+    "es": {
+      "slug": "latencia-de-red-en-docker",
+      "link_text": "Mala red en Docker",
+      "title": "Simular latencia de red en Docker y Docker Compose",
+      "description": "Latencia, pérdida de paquetes o un límite de velocidad para un contenedor desde un sidecar: ejemplos de docker run y Compose, un programa, el host Linux."
+    },
+    "pt-BR": {
+      "slug": "latencia-de-rede-no-docker",
+      "link_text": "Rede ruim no Docker",
+      "title": "Simular latência de rede no Docker e no Docker Compose",
+      "description": "Latência, perda de pacotes ou limite de velocidade para um contêiner a partir de um sidecar: exemplos de docker run e Compose, um programa, o host Linux."
+    },
+    "it": {
+      "slug": "latenza-di-rete-in-docker",
+      "link_text": "Rete scadente in Docker",
+      "title": "Simulare la latenza di rete in Docker e Docker Compose",
+      "description": "Latenza, perdita di pacchetti o un limite di velocità per un container da un sidecar: esempi di docker run e Compose, un programma, l'host Linux."
+    },
+    "id": {
+      "slug": "latensi-jaringan-di-docker",
+      "link_text": "Jaringan buruk di Docker",
+      "title": "Simulasi latensi jaringan di Docker dan Docker Compose",
+      "description": "Latensi, packet loss, atau batas kecepatan untuk satu container dari sidecar: contoh docker run dan Compose, satu program, host Linux, Docker Desktop."
+    },
+    "ru": {
+      "slug": "zaderzhka-seti-v-docker",
+      "link_text": "Плохая сеть в Docker",
+      "title": "Имитация задержки сети в Docker и Docker Compose",
+      "description": "Задержка, потеря пакетов или ограничение скорости для одного контейнера из sidecar: примеры docker run и Compose, одна программа, хост Linux."
+    },
+    "tr": {
+      "slug": "docker-ag-gecikmesi",
+      "link_text": "Docker içinde kötü ağ",
+      "title": "Docker ve Docker Compose içinde ağ gecikmesi simülasyonu",
+      "description": "Bir sidecar ile tek bir konteynere gecikme, paket kaybı veya hız sınırı: docker run ve Compose örnekleri, tek bir program, Linux ana makinesi."
+    },
+    "cs": {
+      "slug": "latence-site-v-dockeru",
+      "link_text": "Špatná síť v Dockeru",
+      "title": "Simulace latence sítě v Dockeru a Docker Compose",
+      "description": "Zpoždění, ztráta paketů nebo limit rychlosti pro jeden kontejner ze sidecaru: příklady docker run a Compose, jeden program, hostitel Linux."
+    },
+    "vi": {
+      "slug": "do-tre-mang-trong-docker",
+      "link_text": "Mạng kém trong Docker",
+      "title": "Mô phỏng độ trễ mạng trong Docker và Docker Compose",
+      "description": "Thêm độ trễ, mất gói hoặc giới hạn tốc độ cho một container từ sidecar: ví dụ docker run và Compose, một chương trình, máy chủ Linux, Docker Desktop."
+    },
+    "hi": {
+      "slug": "docker-mein-network-latency",
+      "link_text": "Docker में खराब नेटवर्क",
+      "title": "Docker और Docker Compose में नेटवर्क लेटेंसी सिमुलेट करें",
+      "description": "Sidecar से एक कंटेनर में लेटेंसी, पैकेट लॉस या स्पीड लिमिट जोड़ें: docker run और Compose के उदाहरण, एक प्रोग्राम, Linux होस्ट और Docker Desktop।"
+    },
+    "ko": {
+      "slug": "docker-neteuwokeu-jiyeon",
+      "link_text": "Docker의 나쁜 네트워크",
+      "title": "Docker와 Docker Compose에서 네트워크 지연 시뮬레이션",
+      "description": "사이드카로 컨테이너 하나에 지연, 패킷 손실, 속도 제한을 더합니다. docker run과 Compose 예시, 프로그램 하나, Linux 호스트, Docker Desktop."
+    },
+    "ar": {
+      "slug": "takhir-alshabaka-fi-docker",
+      "link_text": "شبكة سيئة في Docker",
+      "title": "محاكاة تأخير الشبكة في Docker وDocker Compose",
+      "description": "أضف تأخيرًا أو فقدانًا للحزم أو حدًا للسرعة إلى حاوية واحدة من حاوية جانبية: أمثلة docker run وCompose، برنامج واحد، مضيف Linux وDocker Desktop."
+    },
+    "ro": {
+      "slug": "latenta-retelei-in-docker",
+      "link_text": "Rețea proastă în Docker",
+      "title": "Simularea latenței rețelei în Docker și Docker Compose",
+      "description": "Latență, pierderi de pachete sau o limită de viteză pentru un container dintr-un sidecar: exemple docker run și Compose, un program, gazda Linux."
+    },
+    "nl": {
+      "slug": "netwerklatentie-in-docker",
+      "link_text": "Slecht netwerk in Docker",
+      "title": "Netwerklatentie simuleren in Docker en Docker Compose",
+      "description": "Latentie, pakketverlies of een snelheidslimiet voor één container vanuit een sidecar: voorbeelden met docker run en Compose, één programma, de Linux-host."
+    },
+    "zh-Hant": {
+      "slug": "docker-wanglu-yanchi",
+      "link_text": "Docker 中的弱網",
+      "title": "在 Docker 和 Docker Compose 中模擬網路延遲",
+      "description": "從旁路容器為單一容器加入延遲、封包遺失或限速：docker run 與 Compose 範例、單一程式、Linux 主機，以及 Docker Desktop 能做到什麼。"
+    },
+    "uk": {
+      "slug": "zatrymka-merezhi-v-docker",
+      "link_text": "Погана мережа в Docker",
+      "title": "Імітація затримки мережі в Docker і Docker Compose",
+      "description": "Затримка, втрата пакетів або обмеження швидкості для одного контейнера із sidecar: приклади docker run і Compose, одна програма, хост Linux."
+    },
+    "th": {
+      "slug": "khwam-nuang-khruea-khai-docker",
+      "link_text": "เครือข่ายแย่ใน Docker",
+      "title": "จำลองความหน่วงเครือข่ายใน Docker และ Docker Compose",
+      "description": "เพิ่มความหน่วง แพ็กเก็ตสูญหาย หรือจำกัดความเร็วให้คอนเทนเนอร์เดียวจาก sidecar: ตัวอย่าง docker run และ Compose โปรแกรมเดียว โฮสต์ Linux"
+    }
+  }
+}

@@ -180,7 +180,7 @@ def test_the_readme_and_the_site_print_what_the_try_out_runs():
     workflow = _read(WORKFLOW)
     name = re.search(r"^  IMAGE: (\S+)$", workflow, re.M).group(1)
     check("the workflow names its image", name == "ghcr.io/donislawdev/beannetworktester", f"({name})")
-    for doc in ("README.md",):
+    for doc in ("README.md", os.path.join("site", "pages", "docker", "en.html")):
         missing = _docs_missing(_read(os.path.join(ROOT, doc)), name)
         check(f"{doc} prints every option the try-out uses", not missing, f"(missing {missing})")
     canary = _read(os.path.join(ROOT, "README.md")).replace("--cap-add SYS_PTRACE", "--cap-add X")

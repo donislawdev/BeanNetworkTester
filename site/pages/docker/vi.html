@@ -1,0 +1,75 @@
+<section class="hero">
+  <h1>Mô phỏng độ trễ mạng trong Docker và Docker Compose</h1>
+  <p class="lead">Thêm độ trễ, mất gói hoặc giới hạn tốc độ cho lưu lượng của một container, không cần đổi image của nó và không cần đặt proxy phía trước. Image Bean Network Tester tham gia vào mạng của container đó, chỉ thay đổi những gì đi vào và đi ra khỏi nó, rồi tự dừng. Đây là phiên bản Linux nên vẫn đang thử nghiệm.</p>
+</section>
+
+<section>
+  <h2>Làm chậm một container</h2>
+  <p>Khởi động image bên cạnh container bạn muốn kiểm thử, ở đây là container tên <code>api</code>. Nó cần thêm ba capability ngoài mặc định của Docker và không cần <code>--privileged</code>:</p>
+<pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
+  <p><code>--network container:api</code> đưa chương trình vào mạng của container đó, nên các container khác và máy chủ không bị ảnh hưởng. <code>--dst-ip</code> giới hạn tác động vào một địa chỉ. Không có tùy chọn này, mọi kết nối của <code>api</code> đều chậm đi. Đã đo: với <code>--latency 100</code>, ping từ container tới địa chỉ đó tăng từ 0,07 ms lên 200,8 ms, vì cả yêu cầu lẫn phản hồi đều bị trễ, còn ping tới địa chỉ khác vẫn dưới 1 ms.</p>
+  <p>Mọi thiết lập của dòng lệnh đều dùng được ở đây: <code>--loss</code>, <code>--jitter</code>, <code>--down</code> và <code>--up</code> cho giới hạn tốc độ, một <a href="../dong-lenh/">preset hoặc cả một kịch bản</a>. <code>--duration</code> kết thúc phiên, <code>docker stop</code> cũng vậy.</p>
+</section>
+
+<section>
+  <h2>Docker Compose: mô phỏng độ trễ mạng cho một dịch vụ</h2>
+  <p>Trong Compose, đây là một dịch vụ riêng dùng chung mạng với dịch vụ mà nó làm chậm:</p>
+<pre><code>services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]</code></pre>
+  <p>Mọi dịch vụ nói chuyện với <code>api</code> giờ thấy nó xa thêm 400 ms và mất 2 % gói. Đã đo với tệp này: ping từ một dịch vụ khác tăng từ 0,1 ms lên 401 ms. <code>docker compose stop slow-network</code> kết thúc phiên, và lưu lượng trở lại bình thường ngay.</p>
+</section>
+
+<section>
+  <h2>Một chương trình bên trong container</h2>
+  <p><code>--target</code> chọn chương trình theo tên, giống như trên máy tính để bàn. Để thấy các tiến trình của container khác, image cũng cần danh sách tiến trình của nó: <code>--pid container:api</code>.</p>
+<pre><code>docker run --rm --network container:api --pid container:api \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target nginx --latency 100 --duration 60</code></pre>
+  <p>Không có <code>--pid</code>, chương trình không tìm thấy tiến trình đó và ghi rõ trong nhật ký: <code>Targeting: NO matching process has a connection open - traffic is NOT being impaired.</code> Khi đó không có gì bị làm chậm.</p>
+</section>
+
+<section>
+  <h2>Một chương trình trên máy chủ Linux</h2>
+  <p>Image cũng có thể tác động tới chương trình chạy trực tiếp trên máy chủ, ngoài mọi container. Khi đó nó cần mạng và danh sách tiến trình của máy chủ, cùng hai tùy chọn nữa: thiếu một trong hai, việc đọc kết nối của chương trình ngoài container sẽ bị từ chối.</p>
+<pre><code>docker run --rm --network host --pid host \
+  --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  --cap-add SYS_PTRACE --security-opt apparmor=unconfined \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --target firefox --latency 100 --duration 60</code></pre>
+  <p>Với <code>--network host</code>, phiên thay đổi lưu lượng của chính máy chủ, kể cả phiên ssh của bạn, vì vậy hãy thu hẹp bằng <code>--target</code>, <code>--dst-ip</code> hoặc <code>--dst-port</code> và giữ ngắn bằng <code>--duration</code>. Đã đo trên Ubuntu 26.04: yêu cầu của chương trình được chọn tăng từ 3 ms lên khoảng 250 ms, còn của chương trình khác vẫn ở 11 ms. Trên máy tính để bàn, <a href="../mo-phong-mang-tren-linux/">gói cho Linux</a> làm được điều tương tự mà không cần Docker.</p>
+</section>
+
+<section>
+  <h2>Docker Desktop trên Windows và macOS</h2>
+  <p>Docker Desktop chạy container trong máy ảo Linux riêng của nó, và ở đó "máy chủ" nghĩa là máy ảo này. Image thay đổi lưu lượng của các container, không bao giờ thay đổi lưu lượng của chương trình Windows hay macOS. Để làm chậm một chương trình Windows, hãy dùng phiên bản Windows của Bean Network Tester.</p>
+  <p>Trên máy Mac dùng Apple silicon và các máy arm64 khác, Docker chạy image x86_64 này bằng giả lập, và ở đó không có các lời gọi BPF của nhân. Image vẫn khởi động và <code>--simulate</code> vẫn chạy, nhưng việc bắt gói dừng ngay với lỗi <code>Function not implemented</code>. Đã đo trên một máy Mac M2 với giả lập QEMU của Colima, nơi <code>--doctor</code> vẫn báo OK ở mọi dòng.</p>
+</section>
+
+<section>
+  <h2>Tệp, kịch bản và CI</h2>
+  <ul>
+    <li><strong>Tệp.</strong> Gắn một thư mục vào <code>/work</code> (<code>-v "$PWD:/work"</code>) cho <code>--log-conns</code>, <code>--repro-out</code>, tệp CSV hoặc tệp <code>--scenario</code>. Chương trình chạy với quyền root trong image, nên các tệp nó ghi thuộc về root.</li>
+    <li><strong>Mã thoát.</strong> Image kết thúc với <a href="../bang-tra-cuu/">mã thoát</a> của chính chương trình, nên một bước CI có thể thất bại theo chúng. <code>--fail-on-no-traffic</code> đánh dấu thất bại một lần chạy mà không có gì đi qua, dấu hiệu thường gặp của mạng hoặc mục tiêu sai. <code>docker stop</code> kết thúc với 143, một lần dừng sạch.</li>
+    <li><strong>Còn thiếu gì.</strong> <code>--doctor</code> sẽ chỉ ra, ví dụ một capability mà container được khởi động mà không có.</li>
+    <li><strong>Dừng.</strong> Sau <code>docker stop</code>, lưu lượng trở lại bình thường ngay. Sau <code>docker kill</code>, lưu lượng chảy lại trong khoảng 3 giây.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Có những image nào</h2>
+  <p>Mọi bản phát hành ổn định từ 1.1.0 trở đi đều là một image, gắn thẻ phiên bản của nó và <code>latest</code>. Bản phát hành ứng viên không có image. Mỗi image là gói Linux đã phát hành, giữ nguyên, trên Ubuntu 24.04, cho x86_64. Trước khi đẩy lên, checksum và nguồn gốc bản dựng của gói được kiểm tra, và image được chạy trên nhân Linux đúng như trang này mô tả. Để kiểm tra một image bạn đã kéo về:</p>
+<pre><code>gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1</code></pre>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>
