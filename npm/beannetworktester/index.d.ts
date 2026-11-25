@@ -57,8 +57,11 @@ export declare class BadNetworkError extends Error {}
 
 export declare class BadNetwork {
   constructor(options?: BadNetworkOptions);
-  /** Starts the program and resolves once it is capturing. */
-  start(): Promise<BadNetwork>;
+  /**
+   * Starts the program and resolves once it is capturing. An aborted `signal` calls the
+   * start off while it still waits for another session.
+   */
+  start(options?: { signal?: AbortSignal }): Promise<BadNetwork>;
   /** Ends the session and resolves to its summary. */
   stop(options?: { timeout?: number }): Promise<Summary | null>;
   readonly running: boolean;
