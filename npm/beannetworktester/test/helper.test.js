@@ -291,10 +291,17 @@ test('a stop that is not heard asks first, then forces', async () => {
   const ask = async (endsOn) => {
     const calls = [];
     const session = new BadNetwork({ simulate: true });
+    // A running program holds the event loop, and the waits in _end do not: on Node 22
+    // a fake that held nothing ended the test while _end still waited.
+    const running = setInterval(() => {}, 1000);
     let exit;
     session._exited = new Promise((done) => { exit = done; });
     session._child = { kill: (signal) => { calls.push(signal); if (signal === endsOn) exit(true); } };
-    await session._end({ grace: 0.05 });
+    try {
+      await session._end({ grace: 0.05 });
+    } finally {
+      clearInterval(running);
+    }
     return calls;
   };
   assert.deepEqual(await ask('SIGKILL'), ['SIGTERM', 'SIGKILL'], 'asked, given time, then forced');

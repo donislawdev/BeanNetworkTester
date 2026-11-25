@@ -50,6 +50,8 @@ def _open(path: str):
         fd = os.open(path, os.O_RDONLY | _SAFE)
     except FileNotFoundError:
         mode = "r+b"
+        # Readable by every user on purpose: a session of another user, or one under sudo,
+        # opens this file to wait on it. It holds nothing, and only its maker may write it.
         try:
             fd = os.open(path, os.O_RDWR | os.O_CREAT | _SAFE, 0o644)
         except OSError as exc:
