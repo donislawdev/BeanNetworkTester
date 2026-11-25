@@ -17,15 +17,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   Desktop and Apple silicon.
 - **`beannetworktester` on PyPI, for tests.** From 1.1.0 every stable release is also a Python
   package: `pip install beannetworktester`. In pytest, the `bad_network` fixture slows the real
-  network for one test, aimed at a server (`server="http://localhost:3000"`) or at a process,
-  and stops when the test ends. It works with Playwright for Python and any Python code, on
+  network for one test, aimed at a server (`server="http://localhost:3000"`), an API's port or
+  a process, and stops when the test ends. It works with Playwright for Python and any Python code, on
   Windows x64 and Linux x64, and carries the release's own program. It needs administrator
   rights on Windows, and root or `sudo` without a password on Linux, as on GitHub's runners.
 - **`beannetworktester` on npm, for Playwright Test.** From 1.1.0 every stable release is also
   an npm package: `npm install --save-dev beannetworktester`. Import `test` from
   `beannetworktester/playwright`, and the `badNetwork` fixture slows the real network for one
-  test, aimed at a server or at the test's own browser, in Chromium, Firefox and WebKit alike,
-  WebSockets included. It stops when the test ends and attaches its summary to the report. The
+  test, aimed at a server, an API's port or the test's own browser, in Chromium, Firefox and
+  WebKit alike, WebSockets included. It stops when the test ends and attaches its summary to the report. The
   program comes in a package of its own for Windows x64 and Linux x64. It needs the same rights
   as the Python package.
 - **`--stop-on-stdin-close`, and a `start` record in `--format json`.** For a program that

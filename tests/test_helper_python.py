@@ -120,9 +120,13 @@ def test_a_session_without_an_aim_is_refused():
         _aim.session_flags(settings={"latency": 300})
     check("canary: simulate needs none",
           _aim.session_flags(simulate=True, settings={"latency": 3}) == ["--latency", "3"])
-    for own in ("target", "dst_ip", "dst_port"):
-        check(f"{own} is an aim", _aim.session_flags(settings={own: "x"})[:1]
-              == ["--" + own.replace("_", "-")])
+    # The program's own aims are an aim on their own (an API on its port, say), and they
+    # narrow server= and process= when given with them.
+    for own, value in (("target", "node"), ("dst_ip", "10.0.0.0/24"), ("dst_port", 8080)):
+        check(f"{own} is an aim", _aim.session_flags(settings={own: value})
+              == ["--" + own.replace("_", "-"), str(value)])
+    check("and narrows one", _aim.session_flags(process="self", settings={"dst_port": 443})
+          == ["--target", str(os.getpid()), "--dst-port", "443"])
 
 
 @pytest.mark.parametrize("server, port", [
@@ -151,8 +155,6 @@ def test_settings_become_the_programs_flags():
     check("the flags", flags == ["--target", str(os.getpid()), "--latency", "300",
                                  "--loss-burst", "4", "--flap-hold", "--block-port", "80,443"],
           f"({flags})")
-    check("a PID and a name", _aim.session_flags(process=1234, settings={})[-1] == "1234"
-          and _aim.session_flags(process="node", settings={})[-1] == "node")
     for bad in ({"format": "text"}, {"Latency": 1}, {"latency-ms": 1}):
         with pytest.raises(BadNetworkError):
             _aim.session_flags(simulate=True, settings=bad)
@@ -163,6 +165,78 @@ def test_settings_become_the_programs_flags():
         _aim.session_flags(process="self", settings={"target": "x"})
     with pytest.raises(BadNetworkError, match="process="):
         _aim.session_flags(process=True, settings={})
+
+
+def test_a_process_aim_is_this_test_or_what_it_started():
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    try:
+        check("a running Popen is its PID",
+              _aim.session_flags(process=child, settings={}) == ["--target", str(child.pid)])
+    finally:
+        child.kill()
+        child.wait(timeout=30)
+    with pytest.raises(BadNetworkError, match="already ended"):
+        _aim.session_flags(process=child, settings={})
+    # A number may be any process (PID 1 on Linux is every one), a name every process whose
+    # name contains it: neither is something this test started, and target= takes them.
+    for bad in (1, os.getpid(), "node", "chrome.exe", "*", True, object()):
+        with pytest.raises(BadNetworkError, match="use target="):
+            _aim.session_flags(process=bad, settings={})
+    check("self is this process", _aim.session_flags(process="self", settings={})
+          == ["--target", str(os.getpid())])
+
+
+def test_several_servers_are_every_address_and_port_of_them():
+    def resolve(host, port, proto=0):
+        found = ["10.0.0.5"] if host == "10.0.0.5" else ["127.0.0.1", "::1"]
+        return _resolver(*found)(host, port, proto)
+
+    flags = _aim.session_flags(server=["http://localhost:3000", ("10.0.0.5", 5432),
+                                       "localhost:3000"], settings={}, resolve=resolve)
+    check("the flags", flags == ["--dst-ip", "127.0.0.1,::1,10.0.0.5",
+                                 "--dst-port", "3000,5432"], f"({flags})")
+    with pytest.raises(BadNetworkError, match="names no server"):
+        _aim.session_flags(server=[], settings={})
+
+
+def _scenario(folder, steps, name="s.json", *, bom=False, wrapped=True):
+    path = folder / name
+    text = json.dumps({"steps": steps} if wrapped else steps)
+    path.write_text(("\ufeff" if bom else "") + text, encoding="utf-8")
+    return path
+
+
+def test_a_scenario_may_not_change_what_the_session_aims_at(tmp_path):
+    local = _resolver("127.0.0.1")
+    port_step = [{"at": 0, "settings": {"latency": 50}}, {"at": 5, "settings": {"dst_port": ""}}]
+    with pytest.raises(BadNetworkError, match="step 2 changes dst_port"):
+        _aim.session_flags(server="localhost:3000", resolve=local,
+                           settings={"scenario": str(_scenario(tmp_path, port_step))})
+    path = _scenario(tmp_path, port_step, "list.json", bom=True, wrapped=False)
+    flags = _aim.session_flags(process="self", settings={"scenario": str(path)})
+    check("with process=, a step on the port narrows that process: allowed, by its full path",
+          flags[-2:] == ["--scenario", str(path.resolve())], f"({flags})")
+    target_step = str(_scenario(tmp_path, [{"at": 0, "settings": {"target": "*"}}], "t.json"))
+    with pytest.raises(BadNetworkError, match="step 1 changes target"):
+        _aim.session_flags(process="self", settings={"scenario": target_step})
+    check("the program's own aims are the test's to change: no check",
+          _aim.session_flags(settings={"dst_port": 8080, "scenario": target_step})[-1]
+          == os.path.abspath(target_step))
+    # The program's own: failing-dns aims at port 53 in its first step.
+    shipped = [os.path.join(ROOT, "scenarios")]
+    with pytest.raises(BadNetworkError, match="step 1 changes dst_port"):
+        _aim.session_flags(server="localhost:3000", resolve=local, shipped_scenarios=shipped,
+                           settings={"scenario": "scenarios/failing-dns.json"})
+    flags = _aim.session_flags(process="self", shipped_scenarios=shipped,
+                               settings={"scenario": "scenarios/failing-dns.json"})
+    check("a shipped name is found where the program keeps it", flags[-1]
+          == os.path.join(ROOT, "scenarios", "failing-dns.json"), f"({flags})")
+    for bad, why in (("missing.json", "no such file"), (__file__, "could not be read as JSON")):
+        with pytest.raises(BadNetworkError, match=why):
+            _aim.session_flags(process="self", settings={"scenario": bad})
+    (tmp_path / "flat.json").write_text('{"loop": true}')
+    with pytest.raises(BadNetworkError, match="no list of steps"):
+        _aim.session_flags(process="self", settings={"scenario": str(tmp_path / "flat.json")})
 
 
 def test_what_the_helper_sets_itself_is_the_programs_own():
@@ -191,6 +265,22 @@ def test_a_second_session_waits_for_the_first(tmp_path):
     second.acquire(0)
     check("free again after the release", second.held)
     second.release()
+
+
+def test_a_lock_file_this_user_cannot_write_is_still_a_lock(tmp_path):
+    """A run under sudo leaves a lock file owned by root, which the next run's user can
+    only read: opening it to write failed, and the session never started."""
+    path = tmp_path / "m.lock"
+    path.write_bytes(b"")
+    os.chmod(path, 0o444)
+    try:
+        first, second = _lock.MachineLock(str(path)), _lock.MachineLock(str(path))
+        first.acquire(0)
+        with pytest.raises(BadNetworkError, match="one at a time"):
+            second.acquire(0)
+        first.release()
+    finally:
+        os.chmod(path, 0o644)
 
 
 _HOLDER = """
@@ -230,6 +320,11 @@ def test_a_session_waits_for_the_capture_and_stops_with_its_summary(checkout_pro
         check("started: the program's start record", session.start_record
               and session.start_record["event"] == "start", f"({session.start_record})")
         check("running", session.running)
+        began = time.monotonic()
+        with pytest.raises(BadNetworkError, match="has not been stopped yet"):
+            bad_network(simulate=True, duration=60, wait=30)
+        check("a second one here is refused at once, not after waiting for its own lock",
+              time.monotonic() - began < 5)
         check("the session added its own flags", session.command[-6:]
               == ["--format", "json", "--stop-on-stdin-close", "--duration", "60", "--simulate"])
     finally:
@@ -257,6 +352,38 @@ def test_the_program_refusing_a_setting_fails_the_start_with_its_words(checkout_
         bad_network(simulate=True, loss=500)
     with bad_network(simulate=True, duration=30) as session:
         check("canary: a failed start left the lock free", session.running)
+
+
+def test_a_stop_that_is_not_heard_asks_first_then_forces():
+    """A forced end on Linux leaves the aim's packets nowhere to go for about 3 s, so a
+    program that did not hear its input close is asked to end before it is forced."""
+    from beannetworktester import _session
+
+    calls = []
+
+    class Deaf:
+        def terminate(self):
+            calls.append("terminate")
+
+        def kill(self):
+            calls.append("kill")
+
+        def wait(self, timeout=None):
+            calls.append(f"wait {timeout:g}" if timeout else "wait")
+            if timeout and "kill" not in calls:
+                raise subprocess.TimeoutExpired("program", timeout)
+
+    class Listening(Deaf):
+        def wait(self, timeout=None):
+            calls.append("wait")
+
+    _session._end(Deaf())
+    check("asked, given time, then forced",
+          calls == ["terminate", f"wait {_session.END_GRACE_S:g}", "kill", "wait"], f"({calls})")
+    calls.clear()
+    _session._end(Listening())
+    check("canary: one that ends when asked is not forced", calls == ["terminate", "wait"],
+          f"({calls})")
 
 
 def test_a_bad_duration_is_refused_before_anything_starts():

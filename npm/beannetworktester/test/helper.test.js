@@ -11,10 +11,12 @@ const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
 
-const { flagOf, sessionFlags, serverAddress, serverIps, RESERVED } = require('../lib/aim');
+const { spawn } = require('node:child_process');
+const { checkedScenario, flagOf, sessionFlags, serverAddress, serverIps, RESERVED } = require('../lib/aim');
 const { acquire, alive } = require('../lib/lock');
 const { BadNetworkError, PROGRAM_ENV, programCommand, rightsPrefix } = require('../lib/program');
 const { BadNetwork, badNetwork } = require('../index');
+const { END_GRACE_S } = require('../lib/session');
 const { build, checkedVersion, distTag } = require('../release/assemble');
 
 const lookup = (...addresses) => async () => addresses.map((address) => ({ address }));
@@ -22,9 +24,71 @@ const lookup = (...addresses) => async () => addresses.map((address) => ({ addre
 test('a session without an aim is refused, and simulate needs none', async () => {
   await assert.rejects(sessionFlags({ settings: { latency: 300 } }), /needs an aim/);
   assert.deepEqual(await sessionFlags({ simulate: true, settings: { latency: 3 } }), ['--latency', '3']);
+  // The program's own aims are an aim on their own (an API on its port, say), and they
+  // narrow server and process when given with them.
   for (const own of ['target', 'dstIp', 'dstPort']) {
     assert.equal((await sessionFlags({ settings: { [own]: 'x' } }))[0], flagOf(own));
   }
+  assert.deepEqual(await sessionFlags({ process: 'self', settings: { dstPort: 443 } }),
+    ['--target', String(process.pid), '--dst-port', '443']);
+});
+
+test('process is this test, or a child process it started', async () => {
+  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)']);
+  await new Promise((done) => child.once('spawn', done));
+  try {
+    assert.deepEqual(await sessionFlags({ process: child, settings: {} }), ['--target', String(child.pid)]);
+  } finally {
+    const exited = new Promise((done) => child.once('exit', done));
+    child.kill();
+    await exited;
+  }
+  await assert.rejects(sessionFlags({ process: child, settings: {} }), /already ended/);
+  // A number may be any process (PID 1 on Linux is every one), a name every process whose
+  // name contains it: neither is something this test started, and target takes them.
+  for (const bad of [1, process.pid, 'node', 'chrome.exe', '*', true, {}]) {
+    await assert.rejects(sessionFlags({ process: bad, settings: {} }), /use target/, JSON.stringify(bad));
+  }
+});
+
+test('several servers are every address and port of them', async () => {
+  const resolveBy = async (host) => (host === '10.0.0.5' ? [{ address: '10.0.0.5' }]
+    : [{ address: '127.0.0.1' }, { address: '::1' }]);
+  const flags = await sessionFlags({ server: ['http://localhost:3000', { host: '10.0.0.5', port: 5432 },
+    'localhost:3000'], settings: {}, lookup: resolveBy });
+  assert.deepEqual(flags, ['--dst-ip', '127.0.0.1,::1,10.0.0.5', '--dst-port', '3000,5432']);
+  await assert.rejects(sessionFlags({ server: [], settings: {} }), /names no server/);
+  assert.throws(() => serverAddress({ host: 'h', port: 'x' }), /names no host and port/);
+});
+
+test('a scenario may not change what server or process set', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bnt-scenario-'));
+  const write = (name, data, bom = '') => {
+    const where = path.join(dir, name);
+    fs.writeFileSync(where, bom + JSON.stringify(data));
+    return where;
+  };
+  const portStep = [{ at: 0, settings: { latency: 50 } }, { at: 5, settings: { dst_port: '' } }];
+  await assert.rejects(sessionFlags({ server: 'localhost:3000', lookup: lookup('127.0.0.1'),
+    settings: { scenario: write('s.json', { steps: portStep }) } }), /step 2 changes dst_port/);
+  const list = write('list.json', portStep, String.fromCharCode(0xfeff));
+  assert.deepEqual((await sessionFlags({ process: 'self', settings: { scenario: list } })).slice(-2),
+    ['--scenario', path.resolve(list)], 'with process, a step on the port narrows that process');
+  const targetStep = write('t.json', { steps: [{ at: 0, settings: { target: '*' } }] });
+  await assert.rejects(sessionFlags({ process: 'self', settings: { scenario: targetStep } }),
+    /step 1 changes target/);
+  assert.equal((await sessionFlags({ settings: { dstPort: 8080, scenario: targetStep } })).at(-1),
+    path.resolve(targetStep), 'the program\'s own aims are the test\'s to change: no check');
+  // The program's own: failing-dns aims at port 53 in its first step.
+  const shippedScenarios = [path.resolve(__dirname, '..', '..', '..', 'scenarios')];
+  await assert.rejects(sessionFlags({ server: 'localhost:3000', lookup: lookup('127.0.0.1'),
+    shippedScenarios, settings: { scenario: 'scenarios/failing-dns.json' } }), /step 1 changes dst_port/);
+  assert.equal((await sessionFlags({ process: 'self', shippedScenarios,
+    settings: { scenario: 'scenarios/failing-dns.json' } })).at(-1),
+  path.join(shippedScenarios[0], 'failing-dns.json'));
+  assert.throws(() => checkedScenario(path.join(dir, 'missing.json'), []), /no such file/);
+  assert.throws(() => checkedScenario(__filename, []), /could not be read as JSON/);
+  assert.throws(() => checkedScenario(write('flat.json', { loop: true }), []), /no list of steps/);
 });
 
 test('a server is its addresses and its port', async () => {
@@ -50,7 +114,6 @@ test('settings become the program\'s flags', async () => {
   await assert.rejects(sessionFlags({ server: 'h:1', settings: { dstIp: '1.2.3.4' }, lookup: lookup('1.1.1.1') }),
     /one or the other/);
   await assert.rejects(sessionFlags({ process: 'self', settings: { target: 'x' } }), /one or the other/);
-  await assert.rejects(sessionFlags({ process: true, settings: {} }), /process=/);
   assert.ok(RESERVED.has('stopOnStdinClose') && RESERVED.has('format'));
 });
 
@@ -108,6 +171,9 @@ test('a session waits for the capture and stops with its summary', { skip: !proc
   try {
     assert.equal(session.startRecord.event, 'start');
     assert.ok(session.running);
+    const began = Date.now();
+    await assert.rejects(badNetwork({ simulate: true, duration: 60, wait: 30 }), /has not been stopped yet/);
+    assert.ok(Date.now() - began < 5000, 'a second one here is refused at once, not after its own lock');
     assert.deepEqual(session.command.slice(-6),
       ['--format', 'json', '--stop-on-stdin-close', '--duration', '60', '--simulate']);
   } finally {
@@ -127,6 +193,23 @@ test('a bad duration is refused before anything starts', () => {
   for (const bad of [0, -1, null, 'x', 86401]) {
     assert.throws(() => new BadNetwork({ simulate: true, duration: bad }), /duration/);
   }
+});
+
+test('a stop that is not heard asks first, then forces', async () => {
+  // A forced end on Linux leaves the aim's packets nowhere to go for about 3 s, so a
+  // program that did not hear its input close is asked to end before it is forced.
+  assert.equal(END_GRACE_S, 5);
+  const ask = async (endsOn) => {
+    const calls = [];
+    const session = new BadNetwork({ simulate: true });
+    let exit;
+    session._exited = new Promise((done) => { exit = done; });
+    session._child = { kill: (signal) => { calls.push(signal); if (signal === endsOn) exit(true); } };
+    await session._end({ grace: 0.05 });
+    return calls;
+  };
+  assert.deepEqual(await ask('SIGKILL'), ['SIGTERM', 'SIGKILL'], 'asked, given time, then forced');
+  assert.deepEqual(await ask('SIGTERM'), ['SIGTERM'], 'canary: one that ends when asked is not forced');
 });
 
 test('the release lays out three packages, the systems first', () => {

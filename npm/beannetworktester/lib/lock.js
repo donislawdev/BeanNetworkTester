@@ -1,6 +1,6 @@
 'use strict';
 
-// One session at a time on a machine.
+// One session at a time.
 //
 // Two sessions that see the same traffic add up: two of 100 ms each slowed a server by
 // 200 ms (measured 2026-11-25). Playwright's workers would then slow each other's
@@ -8,9 +8,10 @@
 //
 // Node has no file lock the system drops with the process, so the lock is a file that
 // names the process holding it: a holder that died is noticed by its process ID and
-// the file is taken over. The Python package uses a lock of the system's own, in
-// another file, so a pytest run and a Playwright run on one machine at the same time
-// are not kept apart.
+// the file is taken over. The file is in the temporary folder: on Linux that is the
+// machine's, shared by every user, and on Windows it is the user's own. The Python
+// package uses a lock of the system's own, in another file, so a pytest run and a
+// Playwright run at the same time are not kept apart.
 
 const fs = require('node:fs');
 const os = require('node:os');
@@ -48,7 +49,9 @@ function create(where) {
     fs.closeSync(fd);
     return true;
   } catch (err) {
-    if (err.code !== 'EEXIST') throw err;
+    if (err.code !== 'EEXIST') {
+      throw new BadNetworkError(`The lock file ${where} cannot be made: ${err.message}`);
+    }
     return false;
   }
 }
@@ -59,8 +62,15 @@ function tryTake(where) {
   if (alive(pid) || holder(where) !== pid) return false;
   try {
     fs.unlinkSync(where);           // its holder is gone
-  } catch {
-    // another waiter took it over first
+  } catch (err) {
+    // A file another user's run left (one under sudo, say) cannot be removed from
+    // Linux's shared /tmp, and waiting would only end in the wrong sentence. On Windows
+    // the folder is the user's own, and a refusal there is a reader holding it a moment.
+    if (process.platform !== 'win32' && (err.code === 'EPERM' || err.code === 'EACCES')) {
+      throw new BadNetworkError(`The lock file ${where} was left by process ${pid}, which has ` +
+        `ended, and this user may not remove it. Remove it (on Linux: sudo rm ${where}).`);
+    }
+    // ENOENT: another waiter took it over first
   }
   return create(where);
 }

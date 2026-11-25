@@ -14,10 +14,11 @@ const { spawn } = require('node:child_process');
 const readline = require('node:readline');
 const { sessionFlags } = require('./aim');
 const { acquire } = require('./lock');
-const { BadNetworkError, programCommand, rightsPrefix } = require('./program');
+const { BadNetworkError, programCommand, rightsPrefix, shippedScenarios } = require('./program');
 
 const DEFAULT_DURATION = 300;
 const MAX_DURATION = 86400;
+const END_GRACE_S = 5;
 const EXIT_MEANING = {
   2: 'the program refused the command line',
   3: 'the program refused the settings',
@@ -50,24 +51,38 @@ class BadNetwork {
   }
 
   get running() {
-    return Boolean(this._child) && this._child.exitCode === null && this._child.signalCode === null;
+    // A pid too: a program that could not be started has none, and never exits.
+    return Boolean(this._child) && Number.isInteger(this._child.pid)
+      && this._child.exitCode === null && this._child.signalCode === null;
   }
 
   async start() {
     if (this._child) throw new BadNetworkError('this session has already been started; make a new one');
-    const flags = await sessionFlags({ server: this.server, process: this.proc,
-      simulate: this.simulate, settings: this.settings });
-    const tail = ['--format', 'json', '--stop-on-stdin-close', '--duration', String(this.duration)];
-    if (this.simulate) tail.push('--simulate');
-    this.command = [...rightsPrefix({ simulate: this.simulate }), ...programCommand(), ...flags, ...tail];
-    this._release = await acquire(this.wait);
+    if (LIVE.size) {
+      // It would wait for the lock this process holds itself, until `wait` ran out.
+      throw new BadNetworkError('A session started in this process has not been stopped yet, and ' +
+        'two at once would add up. Stop it first (await session.stop()), or change the ' +
+        'conditions over time with one session and scenario.');
+    }
+    LIVE.add(this);             // at once: two starts awaited together are two at once
+    try {
+      const program = programCommand();
+      const flags = await sessionFlags({ server: this.server, process: this.proc,
+        simulate: this.simulate, settings: this.settings, shippedScenarios: shippedScenarios(program) });
+      const tail = ['--format', 'json', '--stop-on-stdin-close', '--duration', String(this.duration)];
+      if (this.simulate) tail.push('--simulate');
+      this.command = [...rightsPrefix({ simulate: this.simulate }), ...program, ...flags, ...tail];
+      this._release = await acquire(this.wait);
+    } catch (err) {
+      LIVE.delete(this);
+      throw err;
+    }
     try {
       await this._launch();
     } catch (err) {
-      this._abandon();
+      await this._abandon();
       throw err;
     }
-    LIVE.add(this);
     return this;
   }
 
@@ -77,10 +92,7 @@ class BadNetwork {
     this._stopped = true;
     child.stdin.end();
     const ended = await Promise.race([this._exited, delay(timeout * 1000).then(() => false)]);
-    if (ended === false) {
-      child.kill();             // the traffic comes back when the process is gone
-      await this._exited;
-    }
+    if (ended === false) await this._end();
     this._finish();
     if (!this.summary) throw new BadNetworkError(this._endedWithout(child.exitCode, false));
     this._warnAbout(this.summary);
@@ -132,10 +144,25 @@ class BadNetwork {
     LIVE.delete(this);
   }
 
-  _abandon() {
+  async _abandon() {
     this._stopped = true;
-    if (this.running) this._child.kill();
+    if (this.running) await this._end();
     this._finish();
+  }
+
+  // End the program when closing its input did not: asked to first, then forced. Asked
+  // first because a forced end on Linux leaves the aim's packets with nowhere to go for
+  // about 3 s (2.8 s measured 2026-10-20), while an asked one lets them through at once
+  // and writes the summary. Under sudo the request reaches the program through sudo. On
+  // Windows both are TerminateProcess, and the traffic comes back at once.
+  async _end({ grace = END_GRACE_S } = {}) {
+    const child = this._child;
+    child.kill('SIGTERM');
+    const ended = await Promise.race([this._exited, delay(grace * 1000).then(() => false)]);
+    if (ended === false) {
+      child.kill('SIGKILL');
+      await Promise.race([this._exited, delay(grace * 1000)]);
+    }
   }
 
   _tail() {
@@ -183,4 +210,4 @@ process.on('exit', () => {
   }
 });
 
-module.exports = { BadNetwork, BadNetworkError, badNetwork, DEFAULT_DURATION };
+module.exports = { BadNetwork, BadNetworkError, badNetwork, DEFAULT_DURATION, END_GRACE_S };

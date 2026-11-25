@@ -34,9 +34,11 @@ def bad_network(request):
     sessions: list[BadNetwork] = []
 
     def start(**options) -> BadNetwork:
-        session = BadNetwork(**options)
+        # Kept once it started: a session that failed to start has cleaned up after
+        # itself, and has no summary to report.
+        session = BadNetwork(**options).start()
         sessions.append(session)
-        return session.start()
+        return session
 
     yield start
     errors = []

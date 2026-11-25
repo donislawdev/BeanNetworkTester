@@ -21,9 +21,11 @@ const test = base.extend({
   badNetwork: async ({}, use, testInfo) => {
     const sessions = [];
     await use(async (options) => {
-      const session = new BadNetwork(options);
+      // Kept once it started: a session that failed to start has cleaned up after
+      // itself, and has no summary to report.
+      const session = await new BadNetwork(options).start();
       sessions.push(session);
-      return session.start();
+      return session;
     });
     let failure = null;
     for (const session of sessions) {

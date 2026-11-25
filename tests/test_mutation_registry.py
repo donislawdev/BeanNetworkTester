@@ -13495,6 +13495,15 @@ MUTATIONS = [
         "new": "    if False:\n",
         "test": "test_a_session_without_an_aim_is_refused",
     },
+    {
+        # Rule 16 (b): a number or a name reaches far beyond the test - PID 1 on Linux
+        # is every process, "node" every process whose name contains it.
+        "label": "test helper: process= takes a number or a name",
+        "file": "python/beannetworktester/src/beannetworktester/_aim.py",
+        "old": "    if pid is None:\n",
+        "new": "    if False:\n",
+        "test": "test_a_process_aim_is_this_test_or_what_it_started",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

@@ -1,9 +1,12 @@
-"""One session at a time on a machine.
+"""One session at a time.
 
 Two sessions that see the same traffic add up: two of 100 ms each slowed a server
 by 200 ms (measured 2026-11-25). Parallel test workers would then slow each other's
 tests, so a session takes this lock for as long as it runs, and a second one waits.
 The system drops the lock when the process that holds it ends, however it ends.
+
+The file is in the temporary folder: on Linux that is the machine's, so every user
+shares the lock, and on Windows it is the user's own.
 """
 
 from __future__ import annotations
@@ -20,6 +23,25 @@ LOCK_NAME = "beannetworktester.lock"
 
 def lock_path() -> str:
     return os.path.join(tempfile.gettempdir(), LOCK_NAME)
+
+
+def _open(path: str):
+    """The lock file, opened for reading when it is there, and made when it is not.
+
+    For reading, because the file may be another user's: a test run under sudo leaves
+    one owned by root, which this user may lock but not write, and which Linux does not
+    let a create-or-open in /tmp touch at all. Both locks work on a file open for reading.
+    """
+    try:
+        return open(path, "rb")               # noqa: SIM115 - held until release()
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        raise BadNetworkError(f"The lock file {path} cannot be opened: {exc}") from exc
+    try:
+        return open(path, "a+b")              # noqa: SIM115 - held until release()
+    except OSError as exc:
+        raise BadNetworkError(f"The lock file {path} cannot be made: {exc}") from exc
 
 
 def _try_lock(handle) -> bool:
@@ -57,7 +79,7 @@ class MachineLock:
         self._handle = None
 
     def acquire(self, wait: float, *, sleep=time.sleep, clock=time.monotonic) -> None:
-        handle = open(self.path, "a+b")       # noqa: SIM115 - held until release()
+        handle = _open(self.path)
         deadline = clock() + max(0.0, wait)
         while not _try_lock(handle):
             if clock() >= deadline:

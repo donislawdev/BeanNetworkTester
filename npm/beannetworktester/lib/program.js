@@ -82,6 +82,12 @@ function programCommand({ env = process.env, platform = process.platform, arch =
   return [found];
 }
 
+// The folders the program keeps the scenarios it ships in: built, or a checkout.
+function shippedScenarios(command) {
+  const folder = path.dirname(path.resolve(command[command.length - 1]));
+  return [path.join(folder, '_internal', 'scenarios'), path.join(folder, 'scenarios')];
+}
+
 function isAdmin({ run = spawnSync } = {}) {
   // `net session` answers only an elevated caller: the usual test, with no module.
   const done = run('net', ['session'], { stdio: 'ignore', windowsHide: true });
@@ -114,4 +120,5 @@ function rightsPrefix({ simulate, platform = process.platform,
   throw new BadNetworkError('beannetworktester runs the network on Windows x64 and Linux x64 only.');
 }
 
-module.exports = { BadNetworkError, PACKAGES, PROGRAM_ENV, PYTHON_ENV, programCommand, rightsPrefix };
+module.exports = { BadNetworkError, PACKAGES, PROGRAM_ENV, PYTHON_ENV, programCommand, rightsPrefix,
+  shippedScenarios };

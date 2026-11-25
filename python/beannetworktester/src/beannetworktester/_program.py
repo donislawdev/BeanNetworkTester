@@ -76,6 +76,12 @@ def program_command(*, env: Mapping[str, str] | None = None, platform: str | Non
         f"{PROGRAM_ENV} to the path of BeanNetworkTester.")
 
 
+def shipped_scenarios(command: list[str]) -> list[str]:
+    """The folders the program keeps the scenarios it ships in: built, or a checkout."""
+    folder = os.path.dirname(os.path.abspath(command[-1]))
+    return [os.path.join(folder, "_internal", "scenarios"), os.path.join(folder, "scenarios")]
+
+
 def _is_admin() -> bool:
     import ctypes
     try:

@@ -21,10 +21,11 @@ import warnings
 
 from ._aim import session_flags
 from ._lock import MachineLock
-from ._program import BadNetworkError, program_command, rights_prefix
+from ._program import BadNetworkError, program_command, rights_prefix, shipped_scenarios
 
 DEFAULT_DURATION = 300.0
 MAX_DURATION = 86400.0
+END_GRACE_S = 5.0
 _EXIT_MEANING = {
     2: "the program refused the command line",
     3: "the program refused the settings",
@@ -36,6 +37,22 @@ _EXIT_MEANING = {
 # nobody keeps in a variable still runs: its reader threads hold it (measured: a
 # collection with only a weak reference left did not end it).
 _LIVE: "set[BadNetwork]" = set()
+
+
+def _end(proc: subprocess.Popen) -> None:
+    """End the program when closing its input did not: asked to first, then forced.
+
+    Asked first because a forced end on Linux leaves the aim's packets with nowhere to go
+    for about 3 s (2.8 s measured 2026-10-20), while an asked one lets them through at
+    once and writes the summary. Under sudo the request reaches the program through sudo.
+    On Windows both are TerminateProcess, and the traffic comes back at once.
+    """
+    proc.terminate()
+    try:
+        proc.wait(timeout=END_GRACE_S)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
 
 
 class BadNetworkWarning(UserWarning):
@@ -75,13 +92,20 @@ class BadNetwork:
     def start(self) -> "BadNetwork":
         if self._proc is not None:
             raise BadNetworkError("this session has already been started; make a new one")
+        if _LIVE:
+            # It would wait for the lock this process holds itself, until `wait` ran out.
+            raise BadNetworkError(
+                "A session started in this process has not been stopped yet, and two at once "
+                "would add up. Stop it first (session.stop(), or the end of its with block), "
+                "or change the conditions over time with one session and scenario=.")
+        program = program_command()
         flags = session_flags(server=self.server, process=self.process,
-                              simulate=self.simulate, settings=self.settings)
+                              simulate=self.simulate, settings=self.settings,
+                              shipped_scenarios=shipped_scenarios(program))
         tail = ["--format", "json", "--stop-on-stdin-close", "--duration", f"{self.duration:g}"]
         if self.simulate:
             tail.append("--simulate")
-        self.command = (rights_prefix(simulate=self.simulate) + program_command()
-                        + flags + tail)
+        self.command = rights_prefix(simulate=self.simulate) + program + flags + tail
         self._lock.acquire(self.wait)
         try:
             self._launch()
@@ -106,8 +130,7 @@ class BadNetwork:
         try:
             proc.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
-            proc.kill()                # the traffic comes back when the process is gone
-            proc.wait()
+            _end(proc)
         self._finish()
         if self.summary is None:
             raise BadNetworkError(self._ended_without_summary(proc.returncode))
@@ -182,8 +205,7 @@ class BadNetwork:
         self._stopped = True
         proc = self._proc
         if proc is not None and proc.poll() is None:
-            proc.kill()
-            proc.wait()
+            _end(proc)
         self._finish()
 
     def _stderr_tail(self) -> str:
