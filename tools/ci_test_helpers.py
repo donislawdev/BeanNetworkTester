@@ -1,21 +1,27 @@
-"""Tries the installed package on a runner the way its README tells people to use it.
+"""Tries the test helpers on a runner, installed the way their READMEs tell people to.
 
-Run by .github/workflows/pypi.yml in a fresh virtual environment that holds the wheel
+PyPI (.github/workflows/pypi.yml), in a fresh virtual environment that holds the wheel
 pip picked from the release's wheels, and nothing from the checkout:
 
-    python try_package.py install <version> <repo>     the package and its program
-    python try_package.py session <repo> [--playwright]
+    python ci_test_helpers.py install <version> <repo>     the package and its program
+    python ci_test_helpers.py session <repo> [--playwright]
 
-``install`` says the package was installed (not imported from the checkout), that its
+npm (.github/workflows/npm.yml), in a Playwright Test project that installed the
+release's tarballs:
+
+    python ci_test_helpers.py install-npm <version> <repo> <project>
+    python ci_test_helpers.py session-npm <project>
+
+``install`` says the package was installed (not loaded from the checkout), that its
 program is the release's (``--version``) and, on Windows, that it is signed with the
-project's certificate. ``session`` serves two local web servers and runs a real pytest
-file that uses the ``bad_network`` fixture: the server it aims at is slowed, the other
-one is not, and the session stops with a summary. ``--playwright`` adds a page loaded
-in Chromium. With BEANNETWORKTESTER_PROGRAM set (a pull request, whose release may be
-older than the helper), the checkout's program runs instead of the packaged one.
+project's certificate. ``session`` serves two local web servers and runs a real test
+through the fixture: the server it aims at is slowed, the other one is not, and the
+session stops with a summary. ``--playwright`` (always for npm) adds a page loaded in
+Chromium. With BEANNETWORKTESTER_PROGRAM set (a pull request, whose release may be older
+than the helper), the checkout's program runs instead of the packaged one.
 
 Each judge is a function over numbers, so each can be shown to fail
-(tests/test_helper_python.py).
+(tests/test_ci_release_channels.py).
 """
 
 from __future__ import annotations
@@ -41,12 +47,14 @@ UNTOUCHED_MAX_MS = 50
 # --- judges ---------------------------------------------------------------------- #
 
 
-def judge_install(location: str, version_line: str, version: str, from_checkout: bool):
+def judge_install(location: str, version_line: str, version: str, from_checkout: bool,
+                  installed_in: str = "site-packages"):
     """``version`` is the tag's without the v. A candidate's program carries the version
-    it leads to (VERSION.txt holds three numbers), so 1.1.0-rc.1 says 1.1.0."""
+    it leads to (VERSION.txt holds three numbers), so 1.1.0-rc.1 says 1.1.0.
+    ``installed_in`` is site-packages for PyPI and node_modules for npm."""
     failures = []
-    if "site-packages" not in location.replace("\\", "/"):
-        failures.append(f"beannetworktester was imported from {location}, not from the install")
+    if installed_in not in location.replace("\\", "/"):
+        failures.append(f"beannetworktester was loaded from {location}, not from the install")
     core = version.split("-")[0]
     if not from_checkout and version_line.strip() != f"Bean Network Tester {core}":
         failures.append(f"the packaged program says {version_line.strip()!r}, not version "
@@ -114,8 +122,11 @@ def _signature(exe: str) -> tuple[str, str]:
 
 
 def install(version: str, repo: Path) -> list[str]:
-    import beannetworktester
-    from beannetworktester._program import PROGRAM_ENV, program_command
+    # The package under test, installed from its wheel on the runner. It is on no path
+    # mypy reads, and that is the point: the checkout's copy must not be the one tried.
+    import beannetworktester  # type: ignore[import-not-found]
+    from beannetworktester._program import (  # type: ignore[import-not-found]
+        PROGRAM_ENV, program_command)
     from_checkout = bool(os.environ.get(PROGRAM_ENV))
     command = program_command()
     version_line = "" if from_checkout else subprocess.run(  # noqa: S603
@@ -232,13 +243,115 @@ def session(repo: Path, playwright: bool) -> list[str]:
     return failures
 
 
+# --- npm: the same judges, over a Playwright Test project that installed the tarballs --- #
+
+
+def _node_program(project: Path) -> tuple[str, str]:
+    system = "win32-x64" if sys.platform == "win32" else "linux-x64"
+    name = "BeanNetworkTester.exe" if sys.platform == "win32" else "BeanNetworkTester"
+    manifest = subprocess.run(  # noqa: S603, S607
+        ["node", "-p", f"require.resolve('@beannetworktester/{system}/package.json')"],
+        cwd=project, capture_output=True, text=True, check=False).stdout.strip()
+    return manifest, str(Path(manifest).parent / "program" / "BeanNetworkTester" / name)
+
+
+def install_npm(version: str, repo: Path, project: Path) -> list[str]:
+    from_checkout = bool(os.environ.get("BEANNETWORKTESTER_PROGRAM"))
+    manifest, program = _node_program(project)
+    version_line = "" if from_checkout else subprocess.run(  # noqa: S603
+        [program, "--version"], capture_output=True, text=True, check=False).stdout
+    failures = judge_install(manifest, version_line, version, from_checkout, "node_modules")
+    if sys.platform == "win32" and not from_checkout:
+        failures += judge_signature(*_signature(program), _codesign_pin(repo))
+    print(f"package: {manifest}\nprogram: {program}\n{version_line.strip()}")
+    return failures
+
+
+SPEC = '''
+const {{ test }} = require('beannetworktester/playwright');
+const fs = require('node:fs');
+const http = require('node:http');
+
+const AIM = {aim!r}, CONTROL = {control!r}, OUT = {out!r};
+
+function get(url) {{
+  return new Promise((done, failed) => {{
+    const start = process.hrtime.bigint();
+    http.get(url + '/', {{ agent: false }}, (reply) => {{
+      reply.resume();
+      reply.on('end', () => done(Number(process.hrtime.bigint() - start) / 1e6));
+    }}).on('error', failed);
+  }});
+}}
+
+async function ms(url) {{
+  const times = [];
+  for (let i = 0; i < 5; i++) times.push(await get(url));
+  times.sort((a, b) => a - b);
+  return Math.round(times[2] * 10) / 10;
+}}
+
+function save(values) {{
+  let data = {{}};
+  try {{ data = JSON.parse(fs.readFileSync(OUT, 'utf8')); }} catch {{ data = {{}}; }}
+  fs.writeFileSync(OUT, JSON.stringify(Object.assign(data, values)));
+}}
+
+test('the server aimed at is slowed and nothing else', async ({{ badNetwork }}) => {{
+  const base_aim = await ms(AIM), base_control = await ms(CONTROL);
+  const session = await badNetwork({{ server: AIM, latency: {latency}, duration: 120 }});
+  const slow_aim = await ms(AIM), slow_control = await ms(CONTROL);
+  const summary = await session.stop();
+  save({{ base_aim, base_control, slow_aim, slow_control, after_aim: await ms(AIM),
+    stop_reason: summary.stop_reason, in_scope: summary.counters.scoped_seen }});
+}});
+
+test('a page in Chromium is slowed', async ({{ page, badNetwork }}) => {{
+  const load = async () => {{
+    const start = Date.now();
+    await page.goto(AIM + '/', {{ waitUntil: 'load' }});
+    return Date.now() - start;
+  }};
+  const base_page = await load();
+  await badNetwork({{ server: AIM, latency: {latency}, duration: 120 }});
+  save({{ base_page, slow_page: await load() }});
+}});
+'''
+
+
+def session_npm(project: Path) -> list[str]:
+    import shutil
+    aim, control = _serve(), _serve()
+    out = project / "results.json"
+    (project / "tests").mkdir(exist_ok=True)
+    (project / "tests" / "try.spec.js").write_text(
+        SPEC.format(aim=aim, control=control, out=str(out), latency=LATENCY_MS), encoding="utf-8")
+    report = project / "report.json"
+    npx = shutil.which("npx") or "npx"
+    done = subprocess.run(  # noqa: S603
+        [npx, "playwright", "test", "tests/try.spec.js", "--workers=1", "--reporter=line,json"],
+        cwd=project, env=dict(os.environ, PLAYWRIGHT_JSON_OUTPUT_NAME=str(report)), check=False)
+    failures = [] if done.returncode == 0 else [f"playwright test ended with {done.returncode}"]
+    results = json.loads(out.read_text(encoding="utf-8")) if out.exists() else {}
+    print(json.dumps(results, indent=2))
+    failures += judge_session(results) + judge_page(results)
+    if '"bad-network"' not in (report.read_text(encoding="utf-8") if report.exists() else ""):
+        failures.append("the Playwright report holds no bad-network attachment")
+    return failures
+
+
 def main(argv: list[str]) -> int:
     if argv[:1] == ["install"] and len(argv) == 3:
         failures = install(argv[1], Path(argv[2]))
     elif argv[:1] == ["session"] and len(argv) in (2, 3):
         failures = session(Path(argv[1]), argv[2:] == ["--playwright"])
+    elif argv[:1] == ["install-npm"] and len(argv) == 4:
+        failures = install_npm(argv[1], Path(argv[2]), Path(argv[3]))
+    elif argv[:1] == ["session-npm"] and len(argv) == 2:
+        failures = session_npm(Path(argv[1]))
     else:
-        print("usage: try_package.py install <version> <repo> | session <repo> [--playwright]")
+        print("usage: try_package.py install <version> <repo> | session <repo> [--playwright] | "
+              "install-npm <version> <repo> <project> | session-npm <project>")
         return 2
     for failure in failures:
         print(f"::error::{failure}", file=sys.stderr)

@@ -1,6 +1,6 @@
 """The channels fed from a published release: the stable-only rule they share
 (tools/ci_release_channel.py) and the guards of pypi.yml, plus the judges of the
-package try-out (python/beannetworktester/release/try_package.py).
+package try-out (tools/ci_test_helpers.py).
 
 The image channel's own guards live in tests/test_ci_docker_image.py.
 """
@@ -15,9 +15,8 @@ import pytest
 from fakes import ROOT, check
 
 sys.path.insert(0, os.path.join(ROOT, "tools"))
-sys.path.insert(0, os.path.join(ROOT, "python", "beannetworktester", "release"))
 import ci_release_channel as channel  # noqa: E402
-import try_package  # noqa: E402
+import ci_test_helpers as try_package  # noqa: E402
 
 WORKFLOWS = Path(ROOT) / ".github" / "workflows"
 HELPER = Path(ROOT) / "python" / "beannetworktester"
@@ -122,7 +121,79 @@ def test_the_try_out_covers_both_systems_and_the_oldest_python():
     check("the oldest declared Python is tried", f'"{oldest}"' in trying, f"({oldest})")
     check("the README's install", "pip install --pre --no-index --find-links wheels "
           "beannetworktester" in trying)
-    check("the session is tried", "try_package.py session" in trying)
+    check("the session is tried", "ci_test_helpers.py session" in trying)
+
+
+# --- npm.yml --------------------------------------------------------------------------- #
+
+
+def _publishes(body):
+    """A plain `npm publish` command (not "npm publishes" in a comment)."""
+    return re.search(r"npm publish\s", body) is not None
+
+
+def _npm_problems(text):
+    """What would let a package reach npm without the stable-only answer, the try-out or
+    the owner's approval, or with a token anywhere but the first release's staging."""
+    problems = []
+    jobs = re.findall(r"^  ([\w-]+):\n", text.split("\njobs:\n", 1)[-1], re.M)
+    for name in jobs:
+        body = _job(text, name)
+        real = [line for line in body.splitlines()
+                if "npm stage publish" in line and "--dry-run" not in line]
+        if name != "stage" and (real or "id-token: write" in body or _publishes(body)):
+            problems.append(f"{name} can publish")
+        if name != "stage" and "secrets." in body:
+            problems.append(f"{name} uses a secret")
+    stage = _job(text, "stage")
+    if "if: needs.which.outputs.publish == 'true'" not in stage:
+        problems.append("stage does not wait for decide's yes")
+    if not re.search(r"^    needs: \[which, try\]$", stage, re.M):
+        problems.append("stage does not wait for the try-out")
+    if _publishes(stage) or "npm stage publish" not in stage:
+        problems.append("stage publishes instead of staging for approval")
+    if "--provenance" not in stage:
+        problems.append("stage publishes no provenance")
+    if set(re.findall(r"secrets\.(\w+)", text)) - {"NPM_TOKEN"}:
+        problems.append("a secret other than the first release's NPM_TOKEN")
+    if "if: needs.which.outputs.publish != 'true'" not in _job(text, "rehearse"):
+        problems.append("the rehearsal does not run when nothing is published")
+    if "ci_release_channel.py decide --channel npm" not in _job(text, "which"):
+        problems.append("which does not ask the shared rule for the npm channel")
+    return problems
+
+
+def test_only_the_guarded_job_stages_on_npm():
+    text = (WORKFLOWS / "npm.yml").read_text(encoding="utf-8")
+    check("no problem", _npm_problems(text) == [], f"({_npm_problems(text)})")
+    canaries = {
+        "a real stage in the rehearsal": text.replace(
+            '--dry-run --access public --tag "$tag"', '--access public --tag "$tag"'),
+        "publish without approval": text.replace(
+            'npm stage publish "./tarballs/$tarball" --access public --tag "$tag" --provenance',
+            'npm publish "./tarballs/$tarball" --access public --tag "$tag" --provenance'),
+        "staging before the try-out": text.replace("    needs: [which, try]\n    if: needs.which"
+                                                   ".outputs.publish == 'true'",
+                                                   "    needs: [which, packages]\n    if: needs."
+                                                   "which.outputs.publish == 'true'"),
+        "another secret": text + "\n# ${{ secrets.GH_PAT }}\n",
+    }
+    for what, changed in canaries.items():
+        check(f"canary: {what} is caught", changed != text and _npm_problems(changed) != [],
+              f"({what})")
+
+
+def test_the_npm_try_out_covers_every_system_the_package_carries():
+    text = (WORKFLOWS / "npm.yml").read_text(encoding="utf-8")
+    tried = set(re.findall(r"system: ([\w-]+)", _job(text, "try")))
+    program = (Path(ROOT) / "npm" / "beannetworktester" / "lib" / "program.js").read_text(
+        encoding="utf-8")
+    carried = set(re.findall(r"'([\w-]+)': '@beannetworktester/", program))
+    check("every system is tried on its own runner", tried == carried, f"({tried} / {carried})")
+    engines = re.search(r'"node": ">=(\d+)"', (Path(ROOT) / "npm" / "beannetworktester" /
+                                               "package.json").read_text(encoding="utf-8"))
+    check("the oldest declared Node is tried",
+          f'node-version: "{engines.group(1)}"' in _job(text, "try"), f"({engines.group(1)})")
 
 
 # --- the try-out's judges ------------------------------------------------------------ #

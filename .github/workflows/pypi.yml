@@ -7,7 +7,7 @@ name: PyPI package
 # downloaded, held to the release's SHA256SUMS.txt and to their attestations, and
 # only then laid out into wheels (release/assemble.py). The wheels are installed on
 # Windows and Linux runners the way the package README says and tried with a real
-# pytest run (release/try_package.py), and only wheels that passed are published: in
+# pytest run (tools/ci_test_helpers.py), and only wheels that passed are published: in
 # the pypi environment, which waits for the owner's approval, by trusted publishing
 # (no token anywhere), with attestations.
 #
@@ -27,7 +27,9 @@ on:
     paths:
       - "python/beannetworktester/**"
       - ".github/workflows/pypi.yml"
+      - ".github/actions/release-archives/**"
       - "tools/ci_release_channel.py"
+      - "tools/ci_test_helpers.py"
 
 permissions:
   contents: read
@@ -90,33 +92,10 @@ jobs:
           python-version: "3.15"
 
       - name: the release's archives, checked before they are opened
-        env:
-          GH_TOKEN: ${{ github.token }}
-        # The checksum says each download is the file the release lists. The Linux
-        # package's provenance says release.yml built it. The Windows zip is signed
-        # after the build, so its attestation is the SBOM attest-release.yml made of
-        # the signed file. --signer-workflow holds each to its workflow.
-        run: |
-          set -euo pipefail
-          zip="BeanNetworkTester-${TAG}-windows-x64.zip"
-          tgz="BeanNetworkTester-${TAG}-linux-x64.tar.gz"
-          mkdir -p download
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir download \
-            --pattern "$zip" --pattern "$tgz" --pattern SHA256SUMS.txt
-          cd download
-          for file in "$zip" "$tgz"; do
-            grep -qF " *${file}" SHA256SUMS.txt || {
-              echo "::error::SHA256SUMS.txt of $TAG does not name $file"
-              exit 1
-            }
-          done
-          sha256sum -c --ignore-missing SHA256SUMS.txt
-          gh attestation verify "$tgz" --repo "$GITHUB_REPOSITORY" \
-            --predicate-type https://slsa.dev/provenance/v1 \
-            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml"
-          gh attestation verify "$zip" --repo "$GITHUB_REPOSITORY" \
-            --predicate-type https://spdx.dev/Document/v2.3 \
-            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/attest-release.yml"
+        uses: ./.github/actions/release-archives
+        with:
+          tag: ${{ needs.which.outputs.tag }}
+          token: ${{ github.token }}
 
       - name: lay them out into wheels
         run: |
@@ -187,7 +166,7 @@ jobs:
       - name: the package and its program
         if: env.PULL_REQUEST != 'true' || matrix.python == '3.15'
         shell: bash
-        run: '"$VENV_PYTHON" -u python/beannetworktester/release/try_package.py install "$VERSION" .'
+        run: '"$VENV_PYTHON" -u tools/ci_test_helpers.py install "$VERSION" .'
 
       - name: Playwright and its Chromium
         if: matrix.python == '3.15'
@@ -206,7 +185,7 @@ jobs:
           set -euo pipefail
           extra=""
           if [ "$PYTHON_VERSION" = "3.15" ]; then extra="--playwright"; fi
-          "$VENV_PYTHON" -u python/beannetworktester/release/try_package.py session . $extra
+          "$VENV_PYTHON" -u tools/ci_test_helpers.py session . $extra
 
   publish:
     name: publish the wheels that were tried

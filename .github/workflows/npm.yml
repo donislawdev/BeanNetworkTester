@@ -1,0 +1,299 @@
+name: npm package
+
+# beannetworktester on npm: the Playwright Test fixture and the Node API
+# (npm/beannetworktester), with the program of a PUBLISHED release in a package of
+# its own for each system (@beannetworktester/win32-x64, @beannetworktester/linux-x64).
+#
+# The packages carry the release's bytes: the archives are downloaded and checked
+# against SHA256SUMS.txt and their attestations (.github/actions/release-archives),
+# unpacked and laid out (release/assemble.js), and packed on Linux, where npm keeps the
+# Linux program's execute bit. They are installed into a Playwright Test project on
+# Windows and Linux runners and tried with a real run (tools/ci_test_helpers.py), and
+# only packages that passed are STAGED: npm holds each until the owner approves it on
+# npmjs.com with two-factor authentication. Signed in with OIDC, with provenance.
+#
+# Only stable releases go to npm (tools/ci_release_channel.py). A release candidate is
+# built, tried and rehearsed with --dry-run, and nothing leaves the runner. A pull
+# request that touches the package does the same with the newest published release,
+# and tries it with the checkout's own program, because that release may be older than
+# the helper.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Published stable tag to stage the npm packages of, for example v1.1.0"
+        required: true
+  pull_request:
+    paths:
+      - "npm/beannetworktester/**"
+      - ".github/workflows/npm.yml"
+      - ".github/actions/release-archives/**"
+      - "tools/ci_release_channel.py"
+      - "tools/ci_test_helpers.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  which:
+    name: which release, and whether it may go to npm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.which.outputs.tag }}
+      version: ${{ steps.which.outputs.version }}
+      publish: ${{ steps.which.outputs.publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: which release
+        id: which
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          case "$EVENT" in
+            release) tag="$RELEASE_TAG" ;;
+            workflow_dispatch) tag="$INPUT_TAG" ;;
+            *) tag="$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --limit 1 \
+                        --json tagName --jq '.[0].tagName')" ;;
+          esac
+          state="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,isPrerelease --jq '"\(.isDraft) \(.isPrerelease)"')"
+          read -r draft prerelease <<< "$state"
+          python3 tools/ci_release_channel.py decide --channel npm --event "$EVENT" \
+            --tag "$tag" --draft "$draft" --prerelease "$prerelease" | tee -a "$GITHUB_OUTPUT"
+
+  packages:
+    name: the packages, made of the release's checked archives
+    needs: which
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      TAG: ${{ needs.which.outputs.tag }}
+      VERSION: ${{ needs.which.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: "26"
+
+      - name: the release's archives, checked before they are opened
+        uses: ./.github/actions/release-archives
+        with:
+          tag: ${{ needs.which.outputs.tag }}
+          token: ${{ github.token }}
+
+      - name: unpack, lay out and pack them
+        # Each package goes by its absolute path: npm reads packages/win32-x64 as a
+        # repository on GitHub.
+        run: |
+          set -euo pipefail
+          mkdir -p unpacked/windows unpacked/linux tarballs
+          unzip -q "download/BeanNetworkTester-${TAG}-windows-x64.zip" -d unpacked/windows
+          tar -xzf "download/BeanNetworkTester-${TAG}-linux-x64.tar.gz" -C unpacked/linux
+          node npm/beannetworktester/release/assemble.js build "$VERSION" \
+            unpacked/windows unpacked/linux "$PWD/packages" > order.txt
+          mapfile -t dirs < order.txt
+          for dir in "${dirs[@]}"; do
+            name="$(node -p "require('$dir/package.json').name")"
+            tarball="$(npm pack "$dir" --pack-destination tarballs --ignore-scripts | tail -n 1)"
+            echo "$name $tarball" >> tarballs/order.txt
+          done
+          node npm/beannetworktester/release/assemble.js tag "$VERSION" > tarballs/dist-tag.txt
+          cat tarballs/order.txt
+          ls -l tarballs
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: npm-packages
+          path: tarballs/
+          retention-days: 7
+
+  try:
+    name: installed into Playwright Test, tried for real (${{ matrix.os }})
+    needs: [which, packages]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            system: win32-x64
+          - os: ubuntu-24.04
+            system: linux-x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      VERSION: ${{ needs.which.outputs.version }}
+      SYSTEM: ${{ matrix.system }}
+      PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          # The oldest Node the package declares.
+          node-version: "20"
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.15"
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: npm-packages
+          path: tarballs
+
+      - name: npm install beannetworktester into a Playwright Test project
+        shell: bash
+        # The runner is asked what it is, so a label that moved to another system
+        # cannot try one package and report on another. Installed from the files, the
+        # way npm installs them from the registry.
+        run: |
+          set -euo pipefail
+          here="$(node -p "process.platform + '-' + process.arch")"
+          if [ "$here" != "$SYSTEM" ]; then
+            echo "::error::this runner is $here, and it was to try $SYSTEM"
+            exit 1
+          fi
+          main="$(awk '$1 == "beannetworktester" { print $2 }' tarballs/order.txt)"
+          platform="$(awk -v name="@beannetworktester/$SYSTEM" '$1 == name { print $2 }' tarballs/order.txt)"
+          mkdir "$RUNNER_TEMP/project"
+          cd "$RUNNER_TEMP/project"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund "$GITHUB_WORKSPACE/tarballs/$platform" \
+            "$GITHUB_WORKSPACE/tarballs/$main" @playwright/test@1.65.1
+          npx playwright install --with-deps chromium
+          echo "PROJECT=$RUNNER_TEMP/project" >> "$GITHUB_ENV"
+
+      - name: a pull request runs the checkout's program
+        if: env.PULL_REQUEST == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --require-hashes -r requirements.txt
+          {
+            echo "BEANNETWORKTESTER_PROGRAM=$GITHUB_WORKSPACE/bean_network_tester.py"
+            echo "BEANNETWORKTESTER_PYTHON=$(python -c 'import sys; print(sys.executable)')"
+          } >> "$GITHUB_ENV"
+
+      - name: the package and its program
+        shell: bash
+        run: python -u tools/ci_test_helpers.py install-npm "$VERSION" . "$PROJECT"
+
+      - name: a real session, through the Playwright fixture
+        shell: bash
+        run: python -u tools/ci_test_helpers.py session-npm "$PROJECT"
+
+  rehearse:
+    name: what staging would send, without sending it
+    needs: [which, try]
+    if: needs.which.outputs.publish != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: "26"
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: npm-packages
+          path: tarballs
+
+      - name: stage with --dry-run
+        # Every tarball as ./tarballs/...: npm reads tarballs/x.tgz as a repository on
+        # GitHub and asks git for it.
+        run: |
+          set -euo pipefail
+          tag="$(cat tarballs/dist-tag.txt)"
+          mapfile -t lines < tarballs/order.txt
+          for line in "${lines[@]}"; do
+            read -r _ tarball <<< "$line"
+            npm stage publish "./tarballs/$tarball" --dry-run --access public --tag "$tag"
+          done
+
+  stage:
+    name: staged on npm for the owner to approve
+    needs: [which, try]
+    if: needs.which.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # The OIDC token npm trusts once a package has a trusted publisher, and the
+      # provenance statement npm publishes beside each package.
+      id-token: write
+    env:
+      VERSION: ${{ needs.which.outputs.version }}
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: "26"
+          registry-url: "https://registry.npmjs.org"
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: npm-packages
+          path: tarballs
+
+      - name: stage every package, the systems first
+        env:
+          # Only for the first release on npm, when no package exists yet and so none
+          # can trust this workflow. Remove the secret once the packages trust it.
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # With no secret, the placeholder setup-node leaves stays, and npm signs in
+        # with OIDC.
+        run: |
+          set -euo pipefail
+          if [ -n "$NPM_TOKEN" ]; then
+            export NODE_AUTH_TOKEN="$NPM_TOKEN"
+          fi
+          tag="$(cat tarballs/dist-tag.txt)"
+          staged=()
+          mapfile -t lines < tarballs/order.txt
+          for line in "${lines[@]}"; do
+            read -r name tarball <<< "$line"
+            if [ "$(npm view "$name@$VERSION" version 2>/dev/null || true)" = "$VERSION" ]; then
+              echo "$name@$VERSION is already published"
+              continue
+            fi
+            waiting="$(npm stage list "$name" --json 2>/dev/null || true)"
+            if grep -q -F "\"$VERSION\"" <<< "$waiting"; then
+              echo "$name@$VERSION is already staged"
+              staged+=("$name")
+              continue
+            fi
+            if [ -z "$NPM_TOKEN" ] && ! npm view "$name" name > /dev/null 2>&1; then
+              echo "::error::$name is not on npm yet, so it cannot trust this workflow, and there is no NPM_TOKEN secret to stage it with. Create a granular access token on npmjs.com that can stage (Read and write, stage only, all packages), set it as the NPM_TOKEN secret of this repository, and run this workflow again."
+              exit 1
+            fi
+            npm stage publish "./tarballs/$tarball" --access public --tag "$tag" --provenance
+            staged+=("$name")
+          done
+          {
+            echo "## $VERSION staged on npm"
+            echo
+            echo "Approve each one on npmjs.com with two-factor authentication, in this order."
+            echo "The systems come first, so that nobody installs beannetworktester before its program is there."
+            echo
+            for name in "${staged[@]}"; do
+              echo "1. \`$name@$VERSION\`"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
