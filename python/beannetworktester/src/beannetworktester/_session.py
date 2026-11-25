@@ -129,10 +129,11 @@ class BadNetwork:
     def _launch(self) -> None:
         flags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
         try:
+            # Bytes, decoded by the readers: the program writes ASCII JSON, and its log
+            # may hold a path in any encoding, which must not stop the reading.
             self._proc = subprocess.Popen(  # noqa: S603 - the program, from this package
                 self.command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
-                creationflags=flags)
+                stderr=subprocess.PIPE, creationflags=flags)
         except OSError as exc:
             raise BadNetworkError(f"the program could not be started: {exc}") from exc
         self._readers = [
@@ -142,9 +143,9 @@ class BadNetwork:
             reader.start()
 
     def _read_out(self, stream) -> None:
-        for line in stream:
+        for raw in stream:
             try:
-                record = json.loads(line)
+                record = json.loads(raw.decode("utf-8", "replace"))
             except ValueError:
                 continue
             if not isinstance(record, dict):
@@ -158,8 +159,8 @@ class BadNetwork:
         self._started.set()             # wakes a waiter whose program ended first
 
     def _read_err(self, stream) -> None:
-        for line in stream:
-            self.stderr.append(line.rstrip("\n"))
+        for raw in stream:
+            self.stderr.append(raw.decode("utf-8", "replace").rstrip("\r\n"))
 
     def _wait_for_start(self) -> None:
         if not self._started.wait(self.start_timeout):

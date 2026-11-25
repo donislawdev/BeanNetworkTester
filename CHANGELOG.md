@@ -21,6 +21,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   and stops when the test ends. It works with Playwright for Python and any Python code, on
   Windows x64 and Linux x64, and carries the release's own program. It needs administrator
   rights on Windows, and root or `sudo` without a password on Linux, as on GitHub's runners.
+- **`beannetworktester` on npm, for Playwright Test.** From 1.1.0 every stable release is also
+  an npm package: `npm install --save-dev beannetworktester`. Import `test` from
+  `beannetworktester/playwright`, and the `badNetwork` fixture slows the real network for one
+  test, aimed at a server or at the test's own browser, in Chromium, Firefox and WebKit alike,
+  WebSockets included. It stops when the test ends and attaches its summary to the report. The
+  program comes in a package of its own for Windows x64 and Linux x64. It needs the same rights
+  as the Python package.
 - **`--stop-on-stdin-close`, and a `start` record in `--format json`.** For a program that
   starts this one, such as a test runner. With the flag, the session ends when its standard
   input closes, as a normal end with a summary whose `stop_reason` is `stdin`. If the program
