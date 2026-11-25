@@ -106,13 +106,20 @@ test('the app recovers when the API comes back', async ({ page, badNetwork }) =>
 ```js
 const { badNetwork } = require('beannetworktester');
 
-const session = await badNetwork({ server: 'http://localhost:3000', loss: 5, duration: 120 });
-try {
-  await runMyClient();
-} finally {
-  const summary = await session.stop();
-  console.log(summary.counters.scoped_seen, 'packets were in the aim');
+async function main() {
+  const session = await badNetwork({ server: 'http://localhost:3000', loss: 5, duration: 120 });
+  try {
+    await runMyClient();
+  } finally {
+    const summary = await session.stop();
+    console.log(summary.counters.scoped_seen, 'packets were in the aim');
+  }
 }
+
+main().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});
 ```
 
 ## What a session aims at

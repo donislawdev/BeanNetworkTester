@@ -20,13 +20,26 @@ const test = base.extend({
   // eslint-disable-next-line no-empty-pattern -- Playwright reads the fixtures it needs from this pattern
   badNetwork: async ({}, use, testInfo) => {
     const sessions = [];
-    await use(async (options) => {
+    const starting = new Set();
+    const testEnded = new AbortController();
+    await use((options) => {
       // Kept once it started: a session that failed to start has cleaned up after
       // itself, and has no summary to report.
-      const session = await new BadNetwork(options).start();
-      sessions.push(session);
-      return session;
+      const start = new BadNetwork(options).start({ signal: testEnded.signal })
+        .then((session) => {
+          sessions.push(session);
+          return session;
+        });
+      starting.add(start);
+      start.then(() => starting.delete(start), () => starting.delete(start));
+      return start;
     });
+    // A start still waiting for another session when the test ended (a test that timed
+    // out in the wait, or one that did not await it) would otherwise begin after the test,
+    // with nobody to stop it before its duration. It is called off, and one already past
+    // its wait is let finish, so the loop below stops it with the others.
+    testEnded.abort();
+    await Promise.allSettled([...starting]);
     let failure = null;
     for (const session of sessions) {
       try {

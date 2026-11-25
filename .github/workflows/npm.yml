@@ -86,6 +86,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          # A run by hand builds the tag it publishes, not the branch it was started from.
+          ref: ${{ github.event_name == 'workflow_dispatch' && needs.which.outputs.tag || '' }}
           persist-credentials: false
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
@@ -144,6 +146,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          # A run by hand builds the tag it publishes, not the branch it was started from.
+          ref: ${{ github.event_name == 'workflow_dispatch' && needs.which.outputs.tag || '' }}
           persist-credentials: false
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
@@ -274,7 +278,14 @@ jobs:
               echo "$name@$VERSION is already published"
               continue
             fi
-            waiting="$(npm stage list "$name" --json 2>/dev/null || true)"
+            # A list that could not be read is not a list without the version: a sign-in
+            # that may only publish (OIDC) may not be allowed to read it.
+            listed=yes
+            if ! waiting="$(npm stage list "$name" --json 2>/dev/null)"; then
+              listed=no
+              waiting=""
+              echo "::warning::The staged versions of $name could not be read with this sign-in."
+            fi
             if grep -q -F "\"$VERSION\"" <<< "$waiting"; then
               echo "$name@$VERSION is already staged"
               staged+=("$name")
@@ -284,7 +295,12 @@ jobs:
               echo "::error::$name is not on npm yet, so it cannot trust this workflow, and there is no NPM_TOKEN secret to stage it with. Create a granular access token on npmjs.com that can stage (Read and write, stage only, all packages), set it as the NPM_TOKEN secret of this repository, and run this workflow again."
               exit 1
             fi
-            npm stage publish "./tarballs/$tarball" --access public --tag "$tag" --provenance
+            if ! npm stage publish "./tarballs/$tarball" --access public --tag "$tag" --provenance; then
+              if [ "$listed" = no ]; then
+                echo "::error::$name@$VERSION could not be staged, and this sign-in cannot read what is staged, so an earlier run may have staged it already. Look at $name on npmjs.com: approve or discard $VERSION there, then run this workflow again."
+              fi
+              exit 1
+            fi
             staged+=("$name")
           done
           {

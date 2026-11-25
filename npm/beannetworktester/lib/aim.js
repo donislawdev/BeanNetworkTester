@@ -183,6 +183,18 @@ async function sessionFlags({ server, process: proc, simulate = false, settings 
         'as a setting.');
     }
   }
+  for (const key of OWN_AIMS) {
+    const value = settings[key];
+    if (value === undefined || value === null || value === false || value === true) continue;
+    // An empty aim reaches the program as an empty flag, which aims at nothing in
+    // particular: every connection of the machine, or, after server, every address.
+    const text = Array.isArray(value) ? value.join(',') : String(value);
+    if (!text.replace(/,/g, '').trim()) {
+      throw new BadNetworkError(`${key}: ${JSON.stringify(value)} names nothing, and an empty ` +
+        'aim would reach every connection of this machine. Give an address, a port or a name, ' +
+        `or leave ${key} out.`);
+    }
+  }
   const aims = OWN_AIMS.filter((key) => given(settings[key]));
   if (server === undefined && proc === undefined && !aims.length && !simulate) {
     throw new BadNetworkError('badNetwork needs an aim: server (a URL, \'host:port\', or an ' +

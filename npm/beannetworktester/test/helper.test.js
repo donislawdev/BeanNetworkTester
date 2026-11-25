@@ -33,6 +33,17 @@ test('a session without an aim is refused, and simulate needs none', async () =>
     ['--target', String(process.pid), '--dst-port', '443']);
 });
 
+test('an empty aim is refused, not passed on as no aim at all', async () => {
+  // Alone it would count as an aim and reach the program as an empty flag, which aims at
+  // everything. After server it would override the server's own addresses.
+  for (const [key, empty] of [['dstIp', ''], ['dstIp', []], ['dstPort', ' '], ['target', ','],
+    ['target', ['', '']]]) {
+    await assert.rejects(sessionFlags({ settings: { [key]: empty } }), /names nothing/);
+    await assert.rejects(sessionFlags({ server: 'localhost:3000', settings: { [key]: empty },
+      lookup: lookup('127.0.0.1') }), /names nothing/);
+  }
+});
+
 test('process is this test, or a child process it started', async () => {
   const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)']);
   await new Promise((done) => child.once('spawn', done));
@@ -164,6 +175,84 @@ test('one session at a time, and a holder that died is taken over', async () => 
   const taken = await acquire(0, { where });
   assert.equal(fs.readFileSync(where, 'utf8'), String(process.pid));
   taken();
+});
+
+test('a lock file with no process ID in it is taken over once it is old', async () => {
+  const where = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bnt-lock-')), 'test.lock');
+  fs.writeFileSync(where, '');                     // a run that died before writing it
+  await assert.rejects(acquire(0, { where }), /one at a time/, 'a fresh one may be being written');
+  const old = new Date(Date.now() - 60000);
+  fs.utimesSync(where, old, old);
+  const taken = await acquire(0, { where });
+  assert.equal(fs.readFileSync(where, 'utf8'), String(process.pid));
+  taken();
+});
+
+test('an abandoned lock is taken over by one waiter at a time', async () => {
+  const where = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bnt-lock-')), 'test.lock');
+  fs.writeFileSync(where, '999999999');
+  fs.mkdirSync(`${where}.takeover`);               // another waiter is taking it over
+  await assert.rejects(acquire(0, { where }), /one at a time/);
+  assert.equal(fs.readFileSync(where, 'utf8'), '999999999', 'the lock was left to that waiter');
+  const old = new Date(Date.now() - 60000);
+  fs.utimesSync(`${where}.takeover`, old, old);    // ...which died while doing it
+  await assert.rejects(acquire(0, { where }), /one at a time/, 'its old turn is cleared first');
+  const taken = await acquire(0, { where });
+  assert.equal(fs.readFileSync(where, 'utf8'), String(process.pid));
+  assert.ok(!fs.existsSync(`${where}.takeover`), 'the turn is given back');
+  taken();
+});
+
+test('a wait for another session is called off when the test ends', async () => {
+  const where = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bnt-lock-')), 'test.lock');
+  const held = await acquire(0, { where });
+  const testEnded = new AbortController();
+  setTimeout(() => testEnded.abort(), 300);
+  const began = Date.now();
+  await assert.rejects(acquire(30, { where, signal: testEnded.signal }), /test ended/);
+  assert.ok(Date.now() - began < 5000, 'called off at once, not at the end of its wait');
+  assert.equal(fs.readFileSync(where, 'utf8'), String(process.pid), 'the holder kept its lock');
+  held();
+});
+
+test('wait and startTimeout are numbers of seconds, like duration', () => {
+  for (const wait of [-1, 'x', NaN, Infinity, null]) {
+    assert.throws(() => new BadNetwork({ simulate: true, wait }), /wait=/);
+  }
+  for (const startTimeout of [0, -1, 'x', NaN, Infinity]) {
+    assert.throws(() => new BadNetwork({ simulate: true, startTimeout }), /startTimeout=/);
+  }
+  assert.ok(new BadNetwork({ simulate: true, wait: 0, startTimeout: 1 }), 'canary: 0 s of wait is a choice');
+});
+
+test('a start called off in its wait leaves nothing behind', { skip: !process.env[PROGRAM_ENV] }, async () => {
+  const held = await acquire(0);                   // another session holds the machine's lock
+  const testEnded = new AbortController();
+  setTimeout(() => testEnded.abort(), 300);
+  try {
+    await assert.rejects(new BadNetwork({ simulate: true, latency: 5, wait: 30 })
+      .start({ signal: testEnded.signal }), /test ended/);
+  } finally {
+    held();
+  }
+  // Nothing counts as live: the next session of this process starts.
+  const next = await badNetwork({ simulate: true, latency: 5, duration: 60 });
+  await next.stop();
+});
+
+test('a link or a FIFO at the lock path is refused at once', { skip: process.platform === 'win32' }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bnt-lock-'));
+  const victim = path.join(dir, 'victim');
+  fs.writeFileSync(victim, '999999999');
+  const link = path.join(dir, 'link.lock');
+  fs.symlinkSync(victim, link);
+  await assert.rejects(acquire(0, { where: link }), /not a plain file/);
+  assert.equal(fs.readFileSync(victim, 'utf8'), '999999999', 'the file behind the link is untouched');
+  const fifo = path.join(dir, 'fifo.lock');
+  require('node:child_process').execFileSync('mkfifo', [fifo]);
+  const began = Date.now();
+  await assert.rejects(acquire(0, { where: fifo }), /not a plain file/);
+  assert.ok(Date.now() - began < 5000, 'refused at once, not blocked');
 });
 
 test('a session waits for the capture and stops with its summary', { skip: !process.env[PROGRAM_ENV] }, async () => {

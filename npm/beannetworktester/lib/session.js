@@ -13,7 +13,7 @@
 const { spawn } = require('node:child_process');
 const readline = require('node:readline');
 const { sessionFlags } = require('./aim');
-const { acquire } = require('./lock');
+const { acquire, calledOff } = require('./lock');
 const { BadNetworkError, programCommand, rightsPrefix, shippedScenarios } = require('./program');
 
 const DEFAULT_DURATION = 300;
@@ -38,6 +38,15 @@ class BadNetwork {
         `session may run, above 0 and at most ${MAX_DURATION}. It is the safety net if nothing ` +
         'else stops it.');
     }
+    // A number that is not one would make the waits below end at once or never.
+    if (typeof wait !== 'number' || !Number.isFinite(wait) || wait < 0) {
+      throw new BadNetworkError(`wait=${JSON.stringify(wait)}: give the seconds to wait for ` +
+        'another session to end, 0 or more.');
+    }
+    if (typeof startTimeout !== 'number' || !Number.isFinite(startTimeout) || startTimeout <= 0) {
+      throw new BadNetworkError(`startTimeout=${JSON.stringify(startTimeout)}: give the seconds ` +
+        'to wait for the program to start capturing, above 0.');
+    }
     Object.assign(this, { server, proc, simulate: Boolean(simulate), duration: seconds, wait,
       startTimeout, settings });
     this.command = [];
@@ -56,7 +65,9 @@ class BadNetwork {
       && this._child.exitCode === null && this._child.signalCode === null;
   }
 
-  async start() {
+  // `signal` calls the start off while it still waits for another session: the
+  // Playwright fixture aborts it when the test ends.
+  async start({ signal } = {}) {
     if (this._child) throw new BadNetworkError('this session has already been started; make a new one');
     if (LIVE.size) {
       // It would wait for the lock this process holds itself, until `wait` ran out.
@@ -67,14 +78,23 @@ class BadNetwork {
     LIVE.add(this);             // at once: two starts awaited together are two at once
     try {
       const program = programCommand();
-      const flags = await sessionFlags({ server: this.server, process: this.proc,
-        simulate: this.simulate, settings: this.settings, shippedScenarios: shippedScenarios(program) });
       const tail = ['--format', 'json', '--stop-on-stdin-close', '--duration', String(this.duration)];
       if (this.simulate) tail.push('--simulate');
-      this.command = [...rightsPrefix({ simulate: this.simulate }), ...program, ...flags, ...tail];
-      this._release = await acquire(this.wait);
+      const command = async () => {
+        const flags = await sessionFlags({ server: this.server, process: this.proc,
+          simulate: this.simulate, settings: this.settings,
+          shippedScenarios: shippedScenarios(program) });
+        return [...rightsPrefix({ simulate: this.simulate }), ...program, ...flags, ...tail];
+      };
+      this.command = await command();          // a wrong option fails before any wait
+      this._release = await acquire(this.wait, { signal });
+      if (signal && signal.aborted) throw calledOff();
+      // Again once the lock is ours: the wait may have lasted minutes, in which a process
+      // aim may have ended and its number gone to another process, or a server's address
+      // may have changed.
+      this.command = await command();
     } catch (err) {
-      LIVE.delete(this);
+      this._finish();
       throw err;
     }
     try {
@@ -90,10 +110,14 @@ class BadNetwork {
     const child = this._child;
     if (!child || this._stopped) return this.summary;
     this._stopped = true;
-    child.stdin.end();
-    const ended = await Promise.race([this._exited, delay(timeout * 1000).then(() => false)]);
-    if (ended === false) await this._end();
-    this._finish();
+    try {
+      child.stdin.end();
+      const exited = await Promise.race([this._exited, delay(timeout * 1000).then(() => false)]);
+      if (exited === false) await this._end();
+    } finally {
+      this._finish();
+    }
+    if (this.running) throw this._stillRunning();
     if (!this.summary) throw new BadNetworkError(this._endedWithout(child.exitCode, false));
     this._warnAbout(this.summary);
     return this.summary;
@@ -103,6 +127,10 @@ class BadNetwork {
     const [file, ...args] = this.command;
     const child = spawn(file, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     this._child = child;
+    // A signal that cannot be delivered is an 'error' event, and one with no listener
+    // would end this process. Whether the program ended is read from its state instead.
+    child.on('error', () => {});
+    child.stdin.on('error', () => {});      // a program that ended first closed its input
     this._exited = new Promise((done) => child.once('close', () => done(true)));
     readline.createInterface({ input: child.stderr }).on('line', (line) => {
       this.stderr.push(line);
@@ -146,8 +174,17 @@ class BadNetwork {
 
   async _abandon() {
     this._stopped = true;
-    if (this.running) await this._end();
-    this._finish();
+    try {
+      if (this.running) await this._end();
+    } finally {
+      this._finish();
+    }
+  }
+
+  _stillRunning() {
+    return new BadNetworkError(`the program (process ${this._child.pid}) did not end when it ` +
+      'was asked to, nor when it was forced. End it yourself: until then it still changes the ' +
+      `network.${this._tail()}`);
   }
 
   // End the program when closing its input did not: asked to first, then forced. Asked
@@ -158,8 +195,8 @@ class BadNetwork {
   async _end({ grace = END_GRACE_S } = {}) {
     const child = this._child;
     child.kill('SIGTERM');
-    const ended = await Promise.race([this._exited, delay(grace * 1000).then(() => false)]);
-    if (ended === false) {
+    const exited = await Promise.race([this._exited, delay(grace * 1000).then(() => false)]);
+    if (exited === false) {
       child.kill('SIGKILL');
       await Promise.race([this._exited, delay(grace * 1000)]);
     }
@@ -193,7 +230,6 @@ class BadNetwork {
 function delay(ms) {
   return new Promise((done) => setTimeout(done, ms).unref());
 }
-
 async function badNetwork(options) {
   return new BadNetwork(options).start();
 }

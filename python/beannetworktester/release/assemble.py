@@ -24,7 +24,7 @@ import sys
 import tarfile
 import tomllib
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent
@@ -132,14 +132,20 @@ def code() -> list[tuple[str, bytes, bool]]:
     return files
 
 
+def _inside(name: str, archive: Path) -> None:
+    """A name that stays inside TOP once it is a path in the wheel: no "..", no root."""
+    parts = PurePosixPath(name).parts
+    if len(parts) < 2 or parts[0] != TOP or ".." in parts or "\\" in name:
+        fail(f"{archive.name} holds {name}, which is not a file inside {TOP}/")
+
+
 def windows_program(archive: Path) -> list[tuple[str, bytes, bool]]:
     files = []
     with zipfile.ZipFile(archive) as z:
         for info in z.infolist():
             if info.is_dir():
                 continue
-            if not info.filename.startswith(TOP + "/"):
-                fail(f"{archive.name} holds {info.filename} outside {TOP}/")
+            _inside(info.filename, archive)
             files.append((INSIDE + info.filename, z.read(info),
                           info.filename == PROGRAMS["win_amd64"]))
     _has_program(files, PROGRAMS["win_amd64"], archive)
@@ -154,8 +160,9 @@ def linux_program(archive: Path) -> list[tuple[str, bytes, bool]]:
                 fail(f"{archive.name} holds a link, {member.name}, and a wheel cannot hold one")
             if member.isdir():
                 continue
-            if not member.isfile() or not member.name.startswith(TOP + "/"):
+            if not member.isfile():
                 fail(f"{archive.name} holds {member.name}, which is not a file inside {TOP}/")
+            _inside(member.name, archive)
             handle = tar.extractfile(member)
             if handle is None:
                 fail(f"{archive.name}: {member.name} cannot be read")

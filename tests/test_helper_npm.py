@@ -29,11 +29,22 @@ def test_the_node_tests_pass_on_the_checkouts_program():
         pytest.skip("no node on this machine")
     env = dict(os.environ, BEANNETWORKTESTER_PROGRAM=LAUNCHER,
                BEANNETWORKTESTER_PYTHON=sys.executable, BEAN_NO_ELEVATE="1")
-    done = subprocess.run([node, "--test", "test/"], cwd=str(HELPER), env=env,
-                          capture_output=True, text=True, timeout=600)
+    # The files by name: Node 24 takes a folder after --test for a module to load, and fails.
+    files = sorted(p.relative_to(HELPER).as_posix() for p in (HELPER / "test").glob("*.test.js"))
+    check("there are node tests to run", files, "(none in test/)")
+    done = subprocess.run([node, "--test", "--test-reporter=tap", *files], cwd=str(HELPER),
+                          env=env, capture_output=True, text=True, timeout=600)
     check("node --test passed", done.returncode == 0, f"({done.stdout[-1500:]}{done.stderr[-500:]})")
-    check("and ran the session test, not skipped it",
-          re.search(r"(?:# skip|skipped) 0$", done.stdout, re.M), f"({done.stdout[-400:]})")
+    # The tests that need the program run here, where it is; only a test of another
+    # system's own files may skip.
+    skipped = set(re.findall(r"^\s*ok \d+ - (.+?) # SKIP", done.stdout, re.M))
+    other_system = {"a link or a FIFO at the lock path is refused at once"} \
+        if sys.platform == "win32" else set()
+    check("the tests that need the program ran, not skipped", skipped <= other_system,
+          f"({sorted(skipped - other_system)})")
+    check("canary: the reader finds a test that passed",
+          re.search(r"^\s*ok \d+ - a session waits for the capture", done.stdout, re.M),
+          f"({done.stdout[-400:]})")
 
 
 def test_the_names_the_helper_reserves_are_the_programs_own():

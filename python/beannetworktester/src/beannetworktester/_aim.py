@@ -164,7 +164,7 @@ def checked_scenario(path: object, aim_keys: frozenset[str], shipped: Sequence[s
     try:
         with open(found, encoding="utf-8-sig") as handle:
             data = json.load(handle)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, RecursionError) as exc:   # RecursionError: nesting too deep
         raise BadNetworkError(f"scenario={given!r} could not be read as JSON: {exc}") from exc
     steps = data.get("steps") if isinstance(data, dict) else data
     if not isinstance(steps, list):
@@ -194,6 +194,16 @@ def session_flags(*, server: object = None, process: object = None, simulate: bo
         if key in RESERVED:
             raise BadNetworkError(f"{key} is set by beannetworktester itself and cannot be "
                                   "passed as a setting.")
+    for key in AIM_KEYS:
+        value = settings.get(key)
+        # An empty aim reaches the program as an empty flag, which aims at nothing in
+        # particular: every connection of the machine, or, after server=, every address.
+        if value is None or isinstance(value, bool):
+            continue
+        if not _value(value).replace(",", "").strip():
+            raise BadNetworkError(
+                f"{key}={value!r} names nothing, and an empty aim would reach every connection "
+                f"of this machine. Give an address, a port or a name, or leave {key} out.")
     aims = [key for key in AIM_KEYS if _given(settings.get(key))]
     if server is None and process is None and not aims and not simulate:
         raise BadNetworkError(

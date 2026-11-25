@@ -118,6 +118,7 @@ def test_closing_stdin_ends_the_run_at_once_as_a_normal_end():
         first = json.loads(proc.stdout.readline())
         check("the child says it started", first.get("event") == "start", f"({first})")
         proc.stdin.close()
+        proc.stdin = None           # closed: communicate() and _stop() must not touch it
         start = time.monotonic()
         out, err = proc.communicate(timeout=20)
         took = time.monotonic() - start
@@ -135,6 +136,7 @@ def test_canary_without_the_flag_a_closed_stdin_changes_nothing():
     try:
         json.loads(proc.stdout.readline())
         proc.stdin.close()
+        proc.stdin = None           # closed: communicate() and _stop() must not touch it
         time.sleep(1.5)
         check("canary: the run goes on without the flag", proc.poll() is None,
               f"(exit {proc.returncode})")

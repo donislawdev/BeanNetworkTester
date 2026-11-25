@@ -55,6 +55,15 @@ def _end(proc: subprocess.Popen) -> None:
         proc.wait()
 
 
+def _close(stream) -> None:
+    if stream is None:
+        return
+    try:
+        stream.close()
+    except OSError:
+        pass                        # the program ended first and took its end along
+
+
 class BadNetworkWarning(UserWarning):
     """A session ran, but not the way a test would want: it slowed nothing, say."""
 
@@ -80,7 +89,6 @@ class BadNetwork:
         self.start_record: dict | None = None
         self.summary: dict | None = None
         self.stderr: collections.deque[str] = collections.deque(maxlen=60)
-        self._records: list[dict] = []
         self._proc: subprocess.Popen | None = None
         self._lock = MachineLock()
         self._started = threading.Event()
@@ -99,15 +107,23 @@ class BadNetwork:
                 "would add up. Stop it first (session.stop(), or the end of its with block), "
                 "or change the conditions over time with one session and scenario=.")
         program = program_command()
-        flags = session_flags(server=self.server, process=self.process,
-                              simulate=self.simulate, settings=self.settings,
-                              shipped_scenarios=shipped_scenarios(program))
         tail = ["--format", "json", "--stop-on-stdin-close", "--duration", f"{self.duration:g}"]
         if self.simulate:
             tail.append("--simulate")
-        self.command = rights_prefix(simulate=self.simulate) + program + flags + tail
+
+        def command() -> list[str]:
+            flags = session_flags(server=self.server, process=self.process,
+                                  simulate=self.simulate, settings=self.settings,
+                                  shipped_scenarios=shipped_scenarios(program))
+            return rights_prefix(simulate=self.simulate) + program + flags + tail
+
+        self.command = command()               # a wrong option fails before any wait
         self._lock.acquire(self.wait)
         try:
+            # Again once the lock is ours: the wait may have lasted minutes, in which a
+            # process aim may have ended and its number gone to another process, or a
+            # server's address may have changed.
+            self.command = command()
             self._launch()
             self._wait_for_start()
         except BaseException:
@@ -128,10 +144,18 @@ class BadNetwork:
         except OSError:
             pass                       # the program already ended: its pipe went with it
         try:
-            proc.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            _end(proc)
-        self._finish()
+            try:
+                proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                _end(proc)
+            except BaseException:
+                # Interrupted in the wait (Ctrl+C, a test timeout): the program must not
+                # outlive the stop, and the interruption goes on to the caller.
+                if proc.poll() is None:
+                    _end(proc)
+                raise
+        finally:
+            self._finish()
         if self.summary is None:
             raise BadNetworkError(self._ended_without_summary(proc.returncode))
         self._warn_about(self.summary)
@@ -173,7 +197,6 @@ class BadNetwork:
                 continue
             if not isinstance(record, dict):
                 continue
-            self._records.append(record)
             if record.get("event") == "start":
                 self.start_record = record
                 self._started.set()
@@ -198,6 +221,15 @@ class BadNetwork:
     def _finish(self) -> None:
         for reader in self._readers:
             reader.join(timeout=5)
+        proc = self._proc
+        if proc is not None:
+            _close(proc.stdin)
+            # An output pipe is closed only once its reader is done with it: closing one
+            # under a reader still in it would fail in that thread.
+            # Not strict: a start that failed before its readers began has none.
+            for stream, reader in zip((proc.stdout, proc.stderr), self._readers, strict=False):
+                if not reader.is_alive():
+                    _close(stream)
         self._lock.release()
         _LIVE.discard(self)
 

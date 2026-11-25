@@ -59,6 +59,10 @@ def test_the_cli_writes_only_outputs_to_stdout(capsys):
                          "v1.1.0-rc.1", "--draft", "false", "--prerelease", "true"])
     out, err = capsys.readouterr()
     check("exit 0", code == 0)
+    # The three the workflow reads, so an empty stdout cannot pass as "only outputs".
+    check("the workflow's three outputs, and a release candidate is not published",
+          out.splitlines() == ["tag=v1.1.0-rc.1", "version=1.1.0-rc.1", "publish=false"],
+          f"({out!r})")
     check("stdout is key=value lines for $GITHUB_OUTPUT",
           all(re.fullmatch(r"\w+=\S*", line) for line in out.splitlines()), f"({out!r})")
     check("the notice goes to stderr", "::notice::" in err and "::notice::" not in out)
@@ -72,10 +76,23 @@ def _job(text, name):
     return found.group(1) if found else ""
 
 
+DISPATCH_REF = "ref: ${{ github.event_name == 'workflow_dispatch' && needs.which.outputs.tag || '' }}"
+
+
+def _built_from_the_branch(text):
+    """Jobs that check the repository out after ``which`` without the tag a run by hand
+    publishes: they would pack the branch it was started from under the tag's version.
+    A release event checks the tag out anyway, and a pull request its own tree."""
+    jobs = re.findall(r"^  ([\w-]+):\n", text.split("\njobs:\n", 1)[-1], re.M)
+    return [f"{name} builds the branch a run by hand started from, not its tag"
+            for name in jobs if name != "which" and "actions/checkout@" in _job(text, name)
+            and DISPATCH_REF not in _job(text, name)]
+
+
 def _pypi_problems(text):
     """What would let something reach PyPI without the stable-only answer, the try-out,
     the owner's approval, or with a stored token."""
-    problems = []
+    problems = _built_from_the_branch(text)
     jobs = re.findall(r"^  ([\w-]+):\n", text.split("\njobs:\n", 1)[-1], re.M)
     for name in jobs:
         if name != "publish" and re.search(r"id-token: write|pypi-publish", _job(text, name)):
@@ -107,6 +124,8 @@ def test_only_the_guarded_job_publishes_to_pypi():
         "no approval": text.replace("      name: pypi\n", "      name: release\n"),
         "a secret": text + "\n# ${{ secrets.PYPI_TOKEN }}\n",
         "publish before the try-out": text.replace("needs: [which, try]", "needs: [which, wheels]"),
+        "a run by hand that builds the branch": text.replace("          " + DISPATCH_REF + "\n",
+                                                             "", 1),
     }
     for what, changed in canaries.items():
         check(f"canary: {what} is caught", _pypi_problems(changed) != [], f"({what})")
@@ -135,7 +154,7 @@ def _publishes(body):
 def _npm_problems(text):
     """What would let a package reach npm without the stable-only answer, the try-out or
     the owner's approval, or with a token anywhere but the first release's staging."""
-    problems = []
+    problems = _built_from_the_branch(text)
     jobs = re.findall(r"^  ([\w-]+):\n", text.split("\njobs:\n", 1)[-1], re.M)
     for name in jobs:
         body = _job(text, name)
@@ -177,6 +196,8 @@ def test_only_the_guarded_job_stages_on_npm():
                                                    "    needs: [which, packages]\n    if: needs."
                                                    "which.outputs.publish == 'true'"),
         "another secret": text + "\n# ${{ secrets.GH_PAT }}\n",
+        "a run by hand that builds the branch": text.replace("          " + DISPATCH_REF + "\n",
+                                                             "", 1),
     }
     for what, changed in canaries.items():
         check(f"canary: {what} is caught", changed != text and _npm_problems(changed) != [],
@@ -189,6 +210,8 @@ def test_the_npm_try_out_covers_every_system_the_package_carries():
     program = (Path(ROOT) / "npm" / "beannetworktester" / "lib" / "program.js").read_text(
         encoding="utf-8")
     carried = set(re.findall(r"'([\w-]+)': '@beannetworktester/", program))
+    # Two empty readings would agree with each other and prove nothing.
+    check("the readers find systems on both sides", tried and carried, f"({tried} / {carried})")
     check("every system is tried on its own runner", tried == carried, f"({tried} / {carried})")
     engines = re.search(r'"node": ">=(\d+)"', (Path(ROOT) / "npm" / "beannetworktester" /
                                                "package.json").read_text(encoding="utf-8"))

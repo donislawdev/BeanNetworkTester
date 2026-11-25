@@ -129,6 +129,18 @@ def test_a_session_without_an_aim_is_refused():
           == ["--target", str(os.getpid()), "--dst-port", "443"])
 
 
+@pytest.mark.parametrize("key, empty", [("dst_ip", ""), ("dst_ip", []), ("dst_port", " "),
+                                        ("target", ","), ("target", ("", ""))])
+def test_an_empty_aim_is_refused_not_passed_as_no_aim(key, empty):
+    # Alone it would count as an aim and reach the program as an empty flag, which aims
+    # at everything. After server= it would override the server's own addresses.
+    with pytest.raises(BadNetworkError, match="names nothing"):
+        _aim.session_flags(settings={key: empty})
+    with pytest.raises(BadNetworkError, match="names nothing"):
+        _aim.session_flags(server="localhost:3000", settings={key: empty},
+                           resolve=_resolver("127.0.0.1"))
+
+
 @pytest.mark.parametrize("server, port", [
     ("http://localhost:3000", "3000"), ("https://localhost", "443"), ("ws://localhost/x", "80"),
     ("localhost:5432", "5432"), (("localhost", 8443), "8443")])
@@ -272,15 +284,43 @@ def test_a_lock_file_this_user_cannot_write_is_still_a_lock(tmp_path):
     only read: opening it to write failed, and the session never started."""
     path = tmp_path / "m.lock"
     path.write_bytes(b"")
-    os.chmod(path, 0o444)
+    os.chmod(path, 0o400)
     try:
         first, second = _lock.MachineLock(str(path)), _lock.MachineLock(str(path))
         first.acquire(0)
+        # Read-only even where the permission bits do not bind (a suite run as root).
+        check("the file is held open for reading only", first._handle.mode == "rb",
+              f"({first._handle.mode})")
         with pytest.raises(BadNetworkError, match="one at a time"):
             second.acquire(0)
         first.release()
     finally:
-        os.chmod(path, 0o644)
+        os.chmod(path, 0o600)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the shared /tmp is Linux's")
+def test_a_link_or_a_fifo_at_the_lock_path_is_refused_at_once(tmp_path):
+    """The path is the same for every user: a link planted there would point the lock at
+    another file, and a FIFO would block the open until someone writes to it."""
+    target = tmp_path / "victim"
+    link = tmp_path / "link.lock"
+    link.symlink_to(target)                       # dangling: a create would make the victim
+    with pytest.raises(BadNetworkError, match="not a plain file"):
+        _lock.MachineLock(str(link)).acquire(0)
+    check("nothing was made through the link", not target.exists())
+    fifo = tmp_path / "fifo.lock"
+    os.mkfifo(fifo)
+    began = time.monotonic()
+    with pytest.raises(BadNetworkError, match="not a plain file"):
+        _lock.MachineLock(str(fifo)).acquire(0)
+    check("refused at once, not blocked", time.monotonic() - began < 5)
+
+
+def test_the_lock_is_in_the_machines_tmp_on_linux_whatever_tmpdir_says(monkeypatch):
+    monkeypatch.setenv("TMPDIR", "/somewhere/else")
+    monkeypatch.setattr(_lock.tempfile, "tempdir", None)
+    monkeypatch.setattr(_lock.sys, "platform", "linux")
+    check("/tmp", _lock.lock_path() == os.path.join("/tmp", _lock.LOCK_NAME), f"({_lock.lock_path()})")
 
 
 _HOLDER = """
@@ -384,6 +424,40 @@ def test_a_stop_that_is_not_heard_asks_first_then_forces():
     _session._end(Listening())
     check("canary: one that ends when asked is not forced", calls == ["terminate", "wait"],
           f"({calls})")
+
+
+def test_a_stop_interrupted_in_its_wait_still_ends_the_program_and_frees_the_lock(tmp_path):
+    """Ctrl+C or a test timeout inside stop() used to leave the program running, the lock
+    held and the session counted as live, so the next session in the process was refused."""
+    from beannetworktester import _session
+
+    ended = []
+
+    class Running:
+        stdin = stdout = stderr = None
+
+        def poll(self):
+            return None if not ended else 0
+
+        def wait(self, timeout=None):
+            raise KeyboardInterrupt
+
+    session = BadNetwork(simulate=True)
+    session._lock = _lock.MachineLock(str(tmp_path / "m.lock"))
+    session._lock.acquire(0)
+    session._proc = Running()
+    _session._LIVE.add(session)
+    real_end = _session._end
+    _session._end = lambda proc: ended.append(proc)
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            session.stop()
+    finally:
+        _session._end = real_end
+        _session._LIVE.discard(session)
+    check("the program was ended", len(ended) == 1)
+    check("the lock is free", not session._lock.held)
+    check("the session no longer counts as live", session not in _session._LIVE)
 
 
 def test_a_bad_duration_is_refused_before_anything_starts():
@@ -516,6 +590,14 @@ def test_the_release_refuses_what_it_cannot_ship(tmp_path):
     win, tgz = _fake_archives(tmp_path / "b", program=False)
     with pytest.raises(SystemExit, match="no executable"):
         assemble.build("1.1.0", win, tgz, tmp_path / "out2")
+    # A name that climbs out of the program's folder would be a path outside the
+    # package once the wheel is installed.
+    for n, escape in enumerate(("BeanNetworkTester/../../evil.py", "BeanNetworkTester/..\\evil")):
+        win, tgz = _fake_archives(tmp_path / f"c{n}")
+        with zipfile.ZipFile(win, "a") as z:
+            z.writestr(escape, b"x")
+        with pytest.raises(SystemExit, match="not a file inside"):
+            assemble.build("1.1.0", win, tgz, tmp_path / f"out3{n}")
 
 
 def test_the_linux_wheel_names_the_c_library_of_the_machine_that_builds_it():
