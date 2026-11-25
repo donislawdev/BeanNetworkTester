@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>Simulace latence sítě v Dockeru a Docker Compose</h1>
-  <p class="lead">Přidejte zpoždění, ztrátu paketů nebo limit rychlosti provozu jednoho kontejneru, bez změny jeho obrazu a bez proxy před ním. Obraz Bean Network Tester se připojí do sítě toho kontejneru, mění jen to, co do něj vchází a z něj odchází, a sám skončí. Je to verze pro Linux, takže je experimentální.</p>
+  <p class="lead">Přidejte zpoždění, ztrátu paketů nebo limit rychlosti provozu jednoho kontejneru, bez změny jeho obrazu a bez proxy před ním. Obraz Bean Network Tester se připojí do sítě toho kontejneru, mění jen to, co do něj vchází a z něj odchází, a sám skončí. Je to balíček pro Linux, takže je experimentální.</p>
 </section>
 
 <section>
@@ -8,7 +8,7 @@
   <p>Spusťte obraz vedle kontejneru, který chcete testovat, zde jednoho s názvem <code>api</code>. Potřebuje tři schopnosti navíc k výchozím schopnostem Dockeru a nepotřebuje <code>--privileged</code>:</p>
 <pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
   ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
-  <p><code>--network container:api</code> vloží program do sítě toho kontejneru, takže ostatní kontejnery ani hostitel nejsou dotčeny. <code>--dst-ip</code> ho omezí na jednu adresu. Bez této volby se zpomalí každé spojení <code>api</code>. Změřeno: při <code>--latency 100</code> vzrostl ping kontejneru na tu adresu z 0,07 ms na 200,8 ms, protože se zpožďuje požadavek i odpověď, a jeho ping na jinou adresu zůstal pod 1 ms.</p>
+  <p><code>--network container:api</code> vloží program do sítě toho kontejneru. Zasáhne každý program v této síti, včetně dalšího kontejneru spuštěného v ní stejným způsobem, ale nikdy hostitele ani kontejnery s vlastní sítí. <code>--dst-ip</code> ho omezí na jednu adresu. Bez této volby se zpomalí každé spojení <code>api</code>. Změřeno: při <code>--latency 100</code> vzrostl ping kontejneru na tu adresu z 0,07 ms na 200,8 ms, protože se zpožďuje požadavek i odpověď, a jeho ping na jinou adresu zůstal pod 1 ms.</p>
   <p>Funguje tu každé nastavení příkazového řádku: <code>--loss</code>, <code>--jitter</code>, <code>--down</code> a <code>--up</code> pro limit rychlosti, <a href="../prikazovy-radek/">předvolba nebo celý scénář</a>. Relaci ukončí <code>--duration</code> a také <code>docker stop</code>.</p>
 </section>
 
@@ -48,7 +48,7 @@
 <section>
   <h2>Docker Desktop ve Windows a macOS</h2>
   <p>Docker Desktop spouští kontejnery ve vlastním virtuálním stroji s Linuxem a tam „hostitel“ znamená tento stroj. Obraz mění provoz kontejnerů, nikdy ne provoz programů Windows nebo macOS. Chcete-li zpomalit program ve Windows, použijte verzi Bean Network Tester pro Windows.</p>
-  <p>Na Macu s Apple silicon a na dalších strojích arm64 spouští Docker tento obraz x86_64 v emulaci, a tam volání BPF jádra nejsou k dispozici. Obraz se spustí a <code>--simulate</code> funguje, ale zachytávání hned skončí chybou <code>Function not implemented</code>. Změřeno na Macu M2 s emulací QEMU v Colima, kde <code>--doctor</code> přesto hlásil OK v každém řádku.</p>
+  <p>Na Macu s Apple silicon a na dalších strojích arm64 spouští Docker tento obraz x86_64 v emulaci a zachytávání tam nemusí fungovat. Změřeno na Macu M2 s emulací QEMU v Colima: obraz se spustí a <code>--simulate</code> funguje, ale zachytávání hned skončí chybou <code>Function not implemented</code>, zatímco <code>--doctor</code> přesto hlásí OK v každém řádku.</p>
 </section>
 
 <section>

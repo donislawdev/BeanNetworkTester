@@ -175,7 +175,8 @@ docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-ad
   ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60
 ```
 
-Docker Compose에서는 느리게 할 서비스 옆에 이렇게 씁니다:
+Docker Compose에서는 느리게 할 서비스 옆에 이렇게 씁니다. 여기처럼 `--dst-ip`도 `--dst-port`도
+없으면 그 서비스의 모든 트래픽이 느려집니다:
 
 ```yaml
 services:
@@ -189,8 +190,10 @@ services:
 ```
 
 - **어떤 트래픽에 닿는가.** `--network container:<이름>`(Compose에서는 `network_mode:
-  "service:<이름>"`)은 프로그램을 그 컨테이너의 네트워크에 넣으므로, 그 컨테이너의 트래픽만
-  바뀝니다.
+  "service:<이름>"`)은 프로그램을 그 컨테이너의 네트워크에 넣습니다. 그 네트워크 안의 모든
+  프로그램에 닿으며, 같은 방법으로 그 안에서 시작한 다른 컨테이너도 포함되지만, 호스트나 자기
+  네트워크를 가진 컨테이너에는 닿지 않습니다. `--dst-ip`, `--dst-port`, `--target`으로 좁힐 수
+  있습니다.
 - **그 컨테이너 안의 프로그램 하나.** `--target <이름>`에는 `--pid container:<이름>`도 필요합니다.
   없으면 다른 컨테이너의 프로세스를 보지 못하고, 아무것도 느리게 하지 않는다고 알립니다.
 - **Linux 호스트 자체의 프로그램.** `--network host --pid host`에 `--cap-add SYS_PTRACE
@@ -200,9 +203,10 @@ services:
 - **Windows와 macOS의 Docker Desktop.** 컨테이너는 Docker 자체 가상 머신에서 실행됩니다.
   이미지는 컨테이너의 트래픽만 바꾸고 Windows나 macOS 프로그램의 트래픽은 바꾸지 않습니다.
   Windows 프로그램에는 Windows 버전을 쓰세요.
-- **Apple silicon과 다른 arm64 머신.** 이미지는 x86_64이고, 에뮬레이션에서는 커널의 BPF 호출이
-  없습니다. 이미지는 시작되고 `--simulate`도 동작하지만, 캡처는 곧바로 `Function not
-  implemented`로 멈춥니다.
+- **Apple silicon과 다른 arm64 머신.** 이미지는 x86_64이므로 그곳에서는 Docker가 에뮬레이션으로
+  실행하며, 캡처가 동작하지 않을 수 있습니다. Colima의 QEMU 에뮬레이션을 쓰는 M2 Mac에서 측정한
+  결과, 이미지는 시작되고 `--simulate`도 동작하지만 캡처는 곧바로
+  `Function not implemented`로 멈췄습니다.
 - **파일.** `--log-conns`, `--repro-out`, CSV 파일, `--scenario` 파일을 위해 폴더를 `/work`에
   마운트하세요(`-v "$PWD:/work"`). 파일은 root 소유가 됩니다.
 - **중지.** `docker stop`은 세션을 깨끗하게 끝내고(종료 코드 143) 트래픽은 바로 정상으로

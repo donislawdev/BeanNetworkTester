@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>محاكاة تأخير الشبكة في Docker وDocker Compose</h1>
-  <p class="lead">أضف تأخيرًا أو فقدانًا للحزم أو حدًا للسرعة إلى حركة مرور حاوية واحدة، دون تغيير صورتها ودون وكيل أمامها. تنضم صورة Bean Network Tester إلى شبكة تلك الحاوية، وتغيّر فقط ما يدخل إليها ويخرج منها، ثم تتوقف من تلقاء نفسها. إنها نسخة Linux، لذا فهي تجريبية.</p>
+  <p class="lead">أضف تأخيرًا أو فقدانًا للحزم أو حدًا للسرعة إلى حركة مرور حاوية واحدة، دون تغيير صورتها ودون وكيل أمامها. تنضم صورة Bean Network Tester إلى شبكة تلك الحاوية، وتغيّر فقط ما يدخل إليها ويخرج منها، ثم تتوقف من تلقاء نفسها. إنها حزمة Linux، لذا فهي تجريبية.</p>
 </section>
 
 <section>
@@ -8,7 +8,7 @@
   <p>شغّل الصورة بجوار الحاوية التي تريد اختبارها، وهي هنا حاوية اسمها <code>api</code>. تحتاج الصورة إلى ثلاث قدرات إضافة إلى قدرات Docker الافتراضية، ولا تحتاج إلى <code>--privileged</code>:</p>
 <pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
   ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
-  <p>يضع <code>--network container:api</code> البرنامج داخل شبكة تلك الحاوية، فلا تُمَسّ الحاويات الأخرى ولا المضيف. ويحصر <code>--dst-ip</code> التأثير في عنوان واحد. ومن دونه يتباطأ كل اتصال لـ <code>api</code>. القياس: عند <code>--latency 100</code> ارتفع ping الحاوية إلى ذلك العنوان من 0.07 ms إلى 200.8 ms، لأن الطلب والرد يتأخران كلاهما، بينما بقي ping إلى عنوان آخر أقل من 1 ms.</p>
+  <p>يضع <code>--network container:api</code> البرنامج داخل شبكة تلك الحاوية. وهو يصل إلى كل برنامج في تلك الشبكة، بما في ذلك أي حاوية أخرى شُغّلت فيها بالطريقة نفسها، ولا يصل أبدًا إلى المضيف ولا إلى الحاويات التي لها شبكتها الخاصة. ويحصر <code>--dst-ip</code> التأثير في عنوان واحد. ومن دونه يتباطأ كل اتصال لـ <code>api</code>. القياس: عند <code>--latency 100</code> ارتفع ping الحاوية إلى ذلك العنوان من 0.07 ms إلى 200.8 ms، لأن الطلب والرد يتأخران كلاهما، بينما بقي ping إلى عنوان آخر أقل من 1 ms.</p>
   <p>كل إعداد في سطر الأوامر يعمل هنا: <code>--loss</code> و<code>--jitter</code> و<code>--down</code> و<code>--up</code> لحد السرعة، و<a href="../satr-al-awamir/">إعداد مسبق أو سيناريو كامل</a>. تنتهي الجلسة بـ <code>--duration</code>، وكذلك بـ <code>docker stop</code>.</p>
 </section>
 
@@ -48,7 +48,7 @@
 <section>
   <h2>Docker Desktop على Windows وmacOS</h2>
   <p>يشغّل Docker Desktop الحاويات في آلة Linux افتراضية خاصة به، وهناك يعني "المضيف" تلك الآلة. تغيّر الصورة حركة الحاويات، ولا تغيّر أبدًا حركة برامج Windows أو macOS. لإبطاء برنامج على Windows، استخدم نسخة Windows من Bean Network Tester.</p>
-  <p>على جهاز Mac بمعالج Apple silicon وعلى أجهزة arm64 الأخرى، يشغّل Docker صورة x86_64 هذه عبر المحاكاة، وهناك لا تتوفر استدعاءات BPF الخاصة بالنواة. تبدأ الصورة ويعمل <code>--simulate</code>، لكن الالتقاط يتوقف فورًا مع <code>Function not implemented</code>. القياس على جهاز Mac M2 مع محاكاة QEMU في Colima، حيث أظهر <code>--doctor</code> مع ذلك OK في كل سطر.</p>
+  <p>على جهاز Mac بمعالج Apple silicon وعلى أجهزة arm64 الأخرى، يشغّل Docker صورة x86_64 هذه عبر المحاكاة، وقد لا يعمل الالتقاط هناك. القياس على جهاز Mac M2 مع محاكاة QEMU في Colima: تبدأ الصورة ويعمل <code>--simulate</code>، لكن الالتقاط يتوقف فورًا مع <code>Function not implemented</code>، بينما يُظهر <code>--doctor</code> مع ذلك OK في كل سطر.</p>
 </section>
 
 <section>

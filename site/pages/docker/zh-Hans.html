@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>在 Docker 和 Docker Compose 中模拟网络延迟</h1>
-  <p class="lead">给一个容器的流量加上延迟、丢包或限速，不用改它的镜像，也不用在它前面放代理。Bean Network Tester 镜像加入那个容器的网络，只改变进出它的流量，到时间后自己停止。它就是 Linux 版，所以仍是实验性的。</p>
+  <p class="lead">给一个容器的流量加上延迟、丢包或限速，不用改它的镜像，也不用在它前面放代理。Bean Network Tester 镜像加入那个容器的网络，只改变进出它的流量，到时间后自己停止。它就是 Linux 软件包，所以仍是实验性的。</p>
 </section>
 
 <section>
@@ -8,7 +8,7 @@
   <p>在要测试的容器旁边启动镜像，这里的容器名为 <code>api</code>。它在 Docker 默认权限之外还需要三项能力，不需要 <code>--privileged</code>：</p>
 <pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
   ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
-  <p><code>--network container:api</code> 让程序进入那个容器的网络，其他容器和主机都不受影响。<code>--dst-ip</code> 把范围缩小到一个地址，不加它则 <code>api</code> 的每个连接都会变慢。实测：在 <code>--latency 100</code> 下，容器 ping 该地址从 0.07 ms 升到 200.8 ms，因为请求和回复都被延迟；它 ping 另一个地址仍低于 1 ms。</p>
+  <p><code>--network container:api</code> 让程序进入那个容器的网络。它会影响这个网络里的每个程序，包括以同样方式在其中启动的其他容器，但不会影响主机，也不会影响拥有自己网络的容器。<code>--dst-ip</code> 把范围缩小到一个地址，不加它则 <code>api</code> 的每个连接都会变慢。实测：在 <code>--latency 100</code> 下，容器 ping 该地址从 0.07 ms 升到 200.8 ms，因为请求和回复都被延迟；它 ping 另一个地址仍低于 1 ms。</p>
   <p>命令行的每个设置在这里都能用：<code>--loss</code>、<code>--jitter</code>、用于限速的 <code>--down</code> 和 <code>--up</code>，以及<a href="../minglinghang/">预设或整个场景</a>。<code>--duration</code> 会结束会话，<code>docker stop</code> 也会。</p>
 </section>
 
@@ -48,7 +48,7 @@
 <section>
   <h2>Windows 和 macOS 上的 Docker Desktop</h2>
   <p>Docker Desktop 在自己的 Linux 虚拟机中运行容器，在那里"主机"指的就是这台虚拟机。镜像改变的是容器的流量，永远不会改变 Windows 或 macOS 程序的流量。要让 Windows 程序变慢，请使用 Bean Network Tester 的 Windows 版。</p>
-  <p>在 Apple 芯片的 Mac 以及其他 arm64 机器上，Docker 以模拟方式运行这个 x86_64 镜像，而模拟环境中没有内核的 BPF 调用。镜像能启动，<code>--simulate</code> 也能用，但捕获会立即以 <code>Function not implemented</code> 停止。这是在使用 Colima QEMU 模拟的 M2 Mac 上测得的，当时 <code>--doctor</code> 仍然每一行都报告 OK。</p>
+  <p>在 Apple 芯片的 Mac 以及其他 arm64 机器上，Docker 以模拟方式运行这个 x86_64 镜像，捕获在那里可能无法工作。在使用 Colima QEMU 模拟的 M2 Mac 上实测：镜像能启动，<code>--simulate</code> 也能用，但捕获会立即以 <code>Function not implemented</code> 停止，而 <code>--doctor</code> 仍然每一行都报告 OK。</p>
 </section>
 
 <section>

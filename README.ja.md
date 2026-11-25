@@ -146,7 +146,8 @@ docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-ad
   ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60
 ```
 
-Docker Compose では、遅くしたいサービスの隣にこう書きます:
+Docker Compose では、遅くしたいサービスの隣にこう書きます。ここのように `--dst-ip` も
+`--dst-port` も指定しないと、そのサービスのすべての通信が遅くなります:
 
 ```yaml
 services:
@@ -160,8 +161,10 @@ services:
 ```
 
 - **どの通信に届くか。** `--network container:<名前>`（Compose では `network_mode:
-  "service:<名前>"`）でプログラムがそのコンテナーのネットワークに入るので、変わるのはその
-  コンテナーの通信だけです。
+  "service:<名前>"`）でプログラムがそのコンテナーのネットワークに入ります。そのネットワーク内の
+  すべてのプログラムに届き、同じ方法でそこに起動したほかのコンテナーも含まれますが、ホストや
+  自分のネットワークを持つコンテナーには届きません。`--dst-ip`、`--dst-port`、`--target` で
+  絞り込めます。
 - **そのコンテナー内の1つのプログラム。** `--target <名前>` には `--pid container:<名前>` も
   必要です。ないと、ほかのコンテナーのプロセスが見えず、何も遅くしないとログに書きます。
 - **Linux ホスト自身のプログラム。** `--network host --pid host` に加えて `--cap-add SYS_PTRACE
@@ -172,8 +175,9 @@ services:
 - **Windows と macOS の Docker Desktop。** コンテナーは Docker 独自の仮想マシンで動きます。
   イメージが変えるのはコンテナーの通信だけで、Windows や macOS のプログラムの通信は変えません。
   Windows のプログラムには Windows 版を使ってください。
-- **Apple シリコンとほかの arm64 マシン。** イメージは x86_64 で、エミュレーションではカーネルの
-  BPF 呼び出しがありません。イメージは起動し `--simulate` も動きますが、キャプチャはすぐに
+- **Apple シリコンとほかの arm64 マシン。** イメージは x86_64 なので、そこでは Docker が
+  エミュレーションで動かし、キャプチャが動かないことがあります。Colima の QEMU エミュレーションを
+  使った M2 Mac での実測では、イメージは起動し `--simulate` も動きますが、キャプチャはすぐに
   `Function not implemented` で止まります。
 - **ファイル。** `--log-conns`、`--repro-out`、CSV ファイル、`--scenario` のファイルには、
   フォルダーを `/work` にマウントします（`-v "$PWD:/work"`）。ファイルは root のものになります。

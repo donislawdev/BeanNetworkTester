@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>Simuler la latence réseau dans Docker et Docker Compose</h1>
-  <p class="lead">Ajoutez de la latence, de la perte de paquets ou une limite de débit au trafic d'un seul conteneur, sans modifier son image et sans proxy devant lui. L'image de Bean Network Tester rejoint le réseau de ce conteneur, ne change que ce qui y entre et en sort, puis s'arrête d'elle-même. C'est la version Linux, donc expérimentale.</p>
+  <p class="lead">Ajoutez de la latence, de la perte de paquets ou une limite de débit au trafic d'un seul conteneur, sans modifier son image et sans proxy devant lui. L'image de Bean Network Tester rejoint le réseau de ce conteneur, ne change que ce qui y entre et en sort, puis s'arrête d'elle-même. C'est le paquet Linux, elle est donc expérimentale.</p>
 </section>
 
 <section>
@@ -8,7 +8,7 @@
   <p>Lancez l'image à côté du conteneur à tester, ici nommé <code>api</code>. Elle a besoin de trois capacités en plus de celles de Docker par défaut, et pas de <code>--privileged</code> :</p>
 <pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
   ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
-  <p><code>--network container:api</code> place le programme dans le réseau de ce conteneur, si bien que les autres conteneurs et l'hôte ne sont pas touchés. <code>--dst-ip</code> le limite à une adresse. Sans cette option, chaque connexion de <code>api</code> est ralentie. Mesuré : avec <code>--latency 100</code>, le ping du conteneur vers cette adresse est passé de 0,07 ms à 200,8 ms, car la requête et la réponse sont toutes deux retardées, et son ping vers une autre adresse est resté sous 1 ms.</p>
+  <p><code>--network container:api</code> place le programme dans le réseau de ce conteneur. Il atteint chaque programme de ce réseau, y compris un autre conteneur démarré dedans de la même façon, et jamais l'hôte ni les conteneurs qui ont leur propre réseau. <code>--dst-ip</code> le limite à une adresse. Sans cette option, chaque connexion de <code>api</code> est ralentie. Mesuré : avec <code>--latency 100</code>, le ping du conteneur vers cette adresse est passé de 0,07 ms à 200,8 ms, car la requête et la réponse sont toutes deux retardées, et son ping vers une autre adresse est resté sous 1 ms.</p>
   <p>Chaque réglage de la ligne de commande fonctionne ici : <code>--loss</code>, <code>--jitter</code>, <code>--down</code> et <code>--up</code> pour une limite de débit, un <a href="../ligne-de-commande/">préréglage ou tout un scénario</a>. <code>--duration</code> met fin à la session, tout comme <code>docker stop</code>.</p>
 </section>
 
@@ -48,7 +48,7 @@
 <section>
   <h2>Docker Desktop sous Windows et macOS</h2>
   <p>Docker Desktop exécute les conteneurs dans sa propre machine virtuelle Linux, et là « l'hôte » désigne cette machine. L'image change le trafic des conteneurs, jamais celui des programmes Windows ou macOS. Pour ralentir un programme Windows, utilisez la version Windows de Bean Network Tester.</p>
-  <p>Sur un Mac à puce Apple et sur les autres machines arm64, Docker exécute cette image x86_64 en émulation, et les appels BPF du noyau n'y existent pas. L'image démarre et <code>--simulate</code> fonctionne, mais une capture s'arrête aussitôt avec <code>Function not implemented</code>. Mesuré sur un Mac M2 avec l'émulation QEMU de Colima, où <code>--doctor</code> indiquait pourtant OK à chaque ligne.</p>
+  <p>Sur un Mac à puce Apple et sur les autres machines arm64, Docker exécute cette image x86_64 en émulation, et une capture peut ne pas y fonctionner. Mesuré sur un Mac M2 avec l'émulation QEMU de Colima : l'image démarre et <code>--simulate</code> fonctionne, mais une capture s'arrête aussitôt avec <code>Function not implemented</code>, alors que <code>--doctor</code> indique pourtant OK à chaque ligne.</p>
 </section>
 
 <section>

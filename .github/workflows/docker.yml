@@ -8,8 +8,9 @@ name: Container image
 # build provenance release.yml made when it built it, and only then unpacked
 # into the image. The image is then run on the runner's own kernel the way the
 # README and the site tell people to run it (tools/ci_docker_image.py), and only
-# an image that passed is pushed, tagged and attested, in that order, so a
-# failure anywhere leaves no tag pointing at something nobody tried.
+# an image that passed is pushed under its version and attested, in that order,
+# so a failure anywhere leaves no tag pointing at something nobody tried. Then
+# `latest` is moved to the newest release's image, one run at a time.
 #
 # Only stable releases become images. A release candidate is built and tried
 # like a pull request, and nothing is pushed. A pull request that touches the
@@ -49,7 +50,6 @@ jobs:
     outputs:
       tag: ${{ steps.which.outputs.tag }}
       version: ${{ steps.which.outputs.version }}
-      latest: ${{ steps.which.outputs.latest }}
       publish: ${{ steps.which.outputs.publish }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -68,7 +68,6 @@ jobs:
         # tools/ci_docker_image.py decide, where a test can try every case.
         run: |
           set -euo pipefail
-          latest="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
           case "$EVENT" in
             release) tag="$RELEASE_TAG" ;;
             workflow_dispatch) tag="$INPUT_TAG" ;;
@@ -81,7 +80,7 @@ jobs:
             --json isDraft,isPrerelease --jq '"\(.isDraft) \(.isPrerelease)"')"
           read -r draft prerelease <<< "$state"
           python3 tools/ci_docker_image.py decide --event "$EVENT" --tag "$tag" \
-            --latest "$latest" --draft "$draft" --prerelease "$prerelease" | tee -a "$GITHUB_OUTPUT"
+            --draft "$draft" --prerelease "$prerelease" | tee -a "$GITHUB_OUTPUT"
 
   image:
     name: the image, tried on the runner's kernel before anything is pushed
@@ -165,28 +164,21 @@ jobs:
       attestations: write
     env:
       VERSION: ${{ needs.which.outputs.version }}
-      LATEST: ${{ needs.which.outputs.latest }}
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: image
 
-      - name: push, then tag latest
+      - name: push under its version
         id: push
         env:
           TOKEN: ${{ github.token }}
-        # latest only for the newest release: a stable release run again by hand
-        # later never takes it away from a newer one.
         run: |
           set -euo pipefail
           echo "$TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           docker load --input image.tar
           docker tag beannetworktester:try "$IMAGE:$VERSION"
           docker push "$IMAGE:$VERSION"
-          if [ "$LATEST" = "true" ]; then
-            docker tag beannetworktester:try "$IMAGE:latest"
-            docker push "$IMAGE:latest"
-          fi
           # Asked of the registry, not of the local image store: the digest the
           # attestation names has to be the one people pull.
           digest="$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest}}' \
@@ -208,6 +200,57 @@ jobs:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
+
+      - name: log out of the registry
+        if: always()
+        run: docker logout ghcr.io
+
+  latest:
+    name: move latest to the newest release's image
+    # After publish, so it runs only on decide's yes, and only once the version
+    # tag and its attestation exist.
+    needs: [which, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # One at a time across all runs, with the newest release read inside, so two
+    # releases published close together cannot leave latest on the older one. A
+    # run waiting here can be replaced by a later one, which loses nothing: every
+    # run moves latest to the newest release's image, not to its own.
+    concurrency:
+      group: image-latest
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    env:
+      TAG: ${{ needs.which.outputs.tag }}
+    steps:
+      - name: latest = the image of the newest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TOKEN: ${{ github.token }}
+        # --prefer-index=false copies the image as it is, so latest has the digest
+        # of the version tag, and with it the attestation. Without it buildx wraps
+        # the image in a new index with a digest of its own (measured 2026-11-25).
+        run: |
+          set -euo pipefail
+          newest="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          echo "$TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          if ! digest="$(docker buildx imagetools inspect "$IMAGE:${newest#v}" \
+                --format '{{json .Manifest}}' | jq -r .digest)"; then
+            if [ "$newest" = "$TAG" ]; then
+              echo "::error::$IMAGE:${newest#v} was pushed by this run, and the registry does not show it"
+              exit 1
+            fi
+            echo "::notice::$newest is the newest release and has no image yet, so latest stays where it is until it has one."
+            exit 0
+          fi
+          test -n "$digest" && test "$digest" != null
+          docker buildx imagetools create --prefer-index=false --tag "$IMAGE:latest" "$IMAGE@$digest"
+          moved="$(docker buildx imagetools inspect "$IMAGE:latest" --format '{{json .Manifest}}' \
+            | jq -r .digest)"
+          test "$moved" = "$digest"
+          echo "$IMAGE:latest is ${newest#v} ($digest)"
 
       - name: log out of the registry
         if: always()

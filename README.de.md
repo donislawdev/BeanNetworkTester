@@ -196,7 +196,8 @@ docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-ad
   ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60
 ```
 
-Dasselbe in Docker Compose, neben dem Dienst, den es ausbremst:
+Dasselbe in Docker Compose, neben dem Dienst, den es ausbremst. Ohne `--dst-ip` oder
+`--dst-port`, wie hier, wird der gesamte Verkehr dieses Dienstes langsamer:
 
 ```yaml
 services:
@@ -210,8 +211,9 @@ services:
 ```
 
 - **Welcher Verkehr.** `--network container:<name>` (in Compose `network_mode: "service:<name>"`)
-  setzt das Programm in das Netzwerk dieses Containers, es ändert also dessen Verkehr und sonst
-  nichts.
+  setzt das Programm in das Netzwerk dieses Containers. Es erreicht jedes Programm in diesem
+  Netzwerk, auch einen anderen Container, der genauso darin gestartet wurde, aber nie den Host
+  oder Container mit eigenem Netzwerk. `--dst-ip`, `--dst-port` und `--target` grenzen es ein.
 - **Ein Programm in diesem Container.** `--target <name>` braucht zusätzlich `--pid
   container:<name>`. Ohne das sieht das Programm keinen Prozess des anderen Containers und sagt,
   dass es nichts verlangsamt.
@@ -223,9 +225,10 @@ services:
 - **Docker Desktop unter Windows und macOS.** Die Container laufen in Dockers eigener virtueller
   Maschine. Das Image ändert den Verkehr von Containern, nie den von Windows- oder
   macOS-Programmen. Für ein Windows-Programm nutzen Sie die Windows-Version.
-- **Apple Silicon und andere arm64-Rechner.** Das Image ist x86_64, und in der Emulation fehlen die
-  BPF-Aufrufe des Kernels: Das Image startet und `--simulate` funktioniert, aber eine Erfassung
-  bricht sofort mit `Function not implemented` ab.
+- **Apple Silicon und andere arm64-Rechner.** Das Image ist x86_64, Docker führt es dort also in
+  einer Emulation aus, und eine Erfassung funktioniert dann womöglich nicht. Gemessen auf einem
+  M2-Mac mit der QEMU-Emulation von Colima: Das Image startet und `--simulate` funktioniert, aber
+  eine Erfassung bricht sofort mit `Function not implemented` ab.
 - **Dateien.** Binden Sie einen Ordner unter `/work` ein (`-v "$PWD:/work"`) für `--log-conns`,
   `--repro-out`, CSV-Dateien oder eine `--scenario`-Datei. Sie gehören root.
 - **Beenden.** `docker stop` beendet die Sitzung sauber (Exit-Code 143), der Verkehr ist sofort

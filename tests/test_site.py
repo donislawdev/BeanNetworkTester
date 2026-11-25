@@ -566,7 +566,8 @@ def test_every_flag_a_page_names_is_one_the_command_line_has():
     # The download page shows how to verify the file with the GitHub CLI and, on Linux,
     # with sha256sum, and these flags are those tools'. The Docker page starts the image
     # with `docker run` and checks it with the GitHub CLI. Named per page, so a Bean
-    # command on any other page cannot hide behind them.
+    # command on any other page cannot hide behind them. On the Docker page itself,
+    # tests/test_ci_docker_image.py holds every flag after the image to this same list.
     other_tools = {"download": {"--repo", "--predicate-type", "--ignore-missing"},
                    "docker": {"--rm", "--network", "--cap-add", "--pid", "--security-opt",
                               "--privileged", "--owner", "--predicate-type"}}

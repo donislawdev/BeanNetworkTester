@@ -199,7 +199,8 @@ docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-ad
   ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60
 ```
 
-La même chose dans Docker Compose, à côté du service qu'elle ralentit :
+La même chose dans Docker Compose, à côté du service qu'elle ralentit. Sans `--dst-ip` ni
+`--dst-port`, comme ici, tout le trafic de ce service est ralenti :
 
 ```yaml
 services:
@@ -213,8 +214,10 @@ services:
 ```
 
 - **Quel trafic elle atteint.** `--network container:<nom>` (dans Compose `network_mode:
-  "service:<nom>"`) place le programme dans le réseau de ce conteneur, si bien qu'il change son
-  trafic et rien d'autre.
+  "service:<nom>"`) place le programme dans le réseau de ce conteneur. Il atteint chaque programme
+  de ce réseau, y compris un autre conteneur démarré dedans de la même façon, et jamais l'hôte ni
+  les conteneurs qui ont leur propre réseau. `--dst-ip`, `--dst-port` et `--target` le
+  restreignent.
 - **Un programme de ce conteneur.** `--target <nom>` demande aussi `--pid container:<nom>`. Sans
   cela, le programme ne voit aucun processus de l'autre conteneur et dit qu'il ne ralentit rien.
 - **Un programme de l'hôte Linux lui-même.** Avec `--network host --pid host`, et en plus
@@ -225,9 +228,10 @@ services:
 - **Docker Desktop sous Windows et macOS.** Les conteneurs tournent dans la machine virtuelle
   propre à Docker. L'image change le trafic des conteneurs, jamais celui des programmes Windows ou
   macOS. Pour un programme Windows, utilisez la version Windows.
-- **Puce Apple et autres machines arm64.** L'image est x86_64, et en émulation les appels BPF du
-  noyau manquent : l'image démarre et `--simulate` fonctionne, mais une capture s'arrête aussitôt
-  avec `Function not implemented`.
+- **Puce Apple et autres machines arm64.** L'image est x86_64, Docker l'exécute donc là en
+  émulation, et une capture peut ne pas fonctionner. Mesuré sur un Mac M2 avec l'émulation QEMU de
+  Colima : l'image démarre et `--simulate` fonctionne, mais une capture s'arrête aussitôt avec
+  `Function not implemented`.
 - **Fichiers.** Montez un dossier sur `/work` (`-v "$PWD:/work"`) pour `--log-conns`,
   `--repro-out`, des fichiers CSV ou un fichier `--scenario`. Ils appartiennent à root.
 - **Arrêt.** `docker stop` termine la session proprement (code de sortie 143) et le trafic

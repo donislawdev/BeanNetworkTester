@@ -195,7 +195,8 @@ docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-ad
   ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60
 ```
 
-Lo mismo en Docker Compose, junto al servicio que ralentiza:
+Lo mismo en Docker Compose, junto al servicio que ralentiza. Sin `--dst-ip` ni `--dst-port`,
+como aquí, se ralentiza todo el tráfico de ese servicio:
 
 ```yaml
 services:
@@ -209,22 +210,24 @@ services:
 ```
 
 - **Qué tráfico alcanza.** `--network container:<nombre>` (en Compose `network_mode:
-  "service:<nombre>"`) mete el programa en la red de ese contenedor, así que cambia su tráfico y
-  nada más.
+  "service:<nombre>"`) mete el programa en la red de ese contenedor. Alcanza a todos los programas
+  de esa red, también a otro contenedor iniciado en ella de la misma forma, y nunca al host ni a
+  los contenedores con red propia. `--dst-ip`, `--dst-port` y `--target` lo acotan.
 - **Un programa de ese contenedor.** `--target <nombre>` necesita además `--pid
   container:<nombre>`. Sin eso, el programa no ve ningún proceso del otro contenedor y dice que no
   ralentiza nada.
-- **Un programa del propio host Linux.** Con `--network host --pid host` y además `--cap-add
-  SYS_PTRACE --security-opt apparmor=unconfined`: sin ambas se rechaza la lectura de las
+- **Un programa del propio host Linux.** Con `--network host --pid host` y además
+  `--cap-add SYS_PTRACE --security-opt apparmor=unconfined`: sin ambas se rechaza la lectura de las
   conexiones de un programa de fuera del contenedor (medido en Ubuntu 26.04). Con `--network host`
   la sesión cambia el tráfico del propio host, así que mantenla acotada (`--target`, `--dst-ip`,
   `--dst-port`) y corta (`--duration`).
 - **Docker Desktop en Windows y macOS.** Los contenedores corren en la máquina virtual propia de
   Docker. La imagen cambia el tráfico de los contenedores, nunca el de los programas de Windows o
   macOS. Para un programa de Windows, usa la versión de Windows.
-- **Apple silicon y otras máquinas arm64.** La imagen es x86_64, y con emulación faltan las
-  llamadas BPF del kernel: la imagen arranca y `--simulate` funciona, pero una captura se detiene
-  al instante con `Function not implemented`.
+- **Apple silicon y otras máquinas arm64.** La imagen es x86_64, así que Docker la ejecuta allí con
+  emulación, y puede que una captura no funcione. Medido en un Mac M2 con la emulación QEMU de
+  Colima: la imagen arranca y `--simulate` funciona, pero una captura se detiene al instante con
+  `Function not implemented`.
 - **Archivos.** Monta una carpeta en `/work` (`-v "$PWD:/work"`) para `--log-conns`,
   `--repro-out`, archivos CSV o un archivo de `--scenario`. Pertenecen a root.
 - **Parada.** `docker stop` termina la sesión limpiamente (código de salida 143) y el tráfico

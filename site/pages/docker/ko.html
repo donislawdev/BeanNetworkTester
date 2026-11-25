@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>Docker와 Docker Compose에서 네트워크 지연 시뮬레이션</h1>
-  <p class="lead">컨테이너 하나의 트래픽에 지연, 패킷 손실, 속도 제한을 더합니다. 이미지를 바꿀 필요도, 앞에 프록시를 둘 필요도 없습니다. Bean Network Tester 이미지는 그 컨테이너의 네트워크에 합류해 드나드는 트래픽만 바꾸고, 시간이 되면 스스로 멈춥니다. Linux 버전이므로 실험 단계입니다.</p>
+  <p class="lead">컨테이너 하나의 트래픽에 지연, 패킷 손실, 속도 제한을 더합니다. 이미지를 바꿀 필요도, 앞에 프록시를 둘 필요도 없습니다. Bean Network Tester 이미지는 그 컨테이너의 네트워크에 합류해 드나드는 트래픽만 바꾸고, 시간이 되면 스스로 멈춥니다. Linux 패키지이므로 실험 단계입니다.</p>
 </section>
 
 <section>
@@ -8,7 +8,7 @@
   <p>테스트할 컨테이너 옆에서 이미지를 실행합니다. 여기서는 이름이 <code>api</code>인 컨테이너입니다. Docker 기본값 외에 세 가지 capability가 필요하고, <code>--privileged</code>는 필요 없습니다.</p>
 <pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
   ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
-  <p><code>--network container:api</code>는 프로그램을 그 컨테이너의 네트워크에 넣으므로 다른 컨테이너와 호스트는 영향을 받지 않습니다. <code>--dst-ip</code>는 범위를 주소 하나로 좁힙니다. 이 옵션이 없으면 <code>api</code>의 모든 연결이 느려집니다. 측정 결과: <code>--latency 100</code>에서 컨테이너가 그 주소로 보낸 ping은 0.07 ms에서 200.8 ms로 늘었습니다. 요청과 응답이 모두 지연되기 때문입니다. 다른 주소로 보낸 ping은 1 ms 미만에 머물렀습니다.</p>
+  <p><code>--network container:api</code>는 프로그램을 그 컨테이너의 네트워크에 넣습니다. 그 네트워크 안의 모든 프로그램에 닿으며, 같은 방법으로 그 안에서 시작한 다른 컨테이너도 포함되지만, 호스트나 자기 네트워크를 가진 컨테이너에는 닿지 않습니다. <code>--dst-ip</code>는 범위를 주소 하나로 좁힙니다. 이 옵션이 없으면 <code>api</code>의 모든 연결이 느려집니다. 측정 결과: <code>--latency 100</code>에서 컨테이너가 그 주소로 보낸 ping은 0.07 ms에서 200.8 ms로 늘었습니다. 요청과 응답이 모두 지연되기 때문입니다. 다른 주소로 보낸 ping은 1 ms 미만에 머물렀습니다.</p>
   <p>명령줄의 모든 설정을 여기서 쓸 수 있습니다. <code>--loss</code>, <code>--jitter</code>, 속도 제한용 <code>--down</code>과 <code>--up</code>, <a href="../myeongnyeongjul/">프리셋이나 시나리오 전체</a>도 됩니다. 세션은 <code>--duration</code>으로 끝나고, <code>docker stop</code>으로도 끝납니다.</p>
 </section>
 
@@ -48,7 +48,7 @@
 <section>
   <h2>Windows와 macOS의 Docker Desktop</h2>
   <p>Docker Desktop은 자체 Linux 가상 머신에서 컨테이너를 실행하며, 거기서 "호스트"는 그 가상 머신을 뜻합니다. 이미지는 컨테이너의 트래픽만 바꾸고, Windows나 macOS 프로그램의 트래픽은 결코 바꾸지 않습니다. Windows 프로그램을 느리게 하려면 Bean Network Tester의 Windows 버전을 쓰세요.</p>
-  <p>Apple silicon Mac과 다른 arm64 머신에서 Docker는 이 x86_64 이미지를 에뮬레이션으로 실행하며, 그 환경에는 커널의 BPF 호출이 없습니다. 이미지는 시작되고 <code>--simulate</code>도 동작하지만, 캡처는 곧바로 <code>Function not implemented</code>로 멈춥니다. Colima의 QEMU 에뮬레이션을 쓰는 M2 Mac에서 측정했으며, 그때도 <code>--doctor</code>는 모든 줄에 OK를 표시했습니다.</p>
+  <p>Apple silicon Mac과 다른 arm64 머신에서 Docker는 이 x86_64 이미지를 에뮬레이션으로 실행하므로, 캡처가 동작하지 않을 수 있습니다. Colima의 QEMU 에뮬레이션을 쓰는 M2 Mac에서 측정한 결과, 이미지는 시작되고 <code>--simulate</code>도 동작하지만 캡처는 곧바로 <code>Function not implemented</code>로 멈추며, 그래도 <code>--doctor</code>는 모든 줄에 OK를 표시합니다.</p>
 </section>
 
 <section>

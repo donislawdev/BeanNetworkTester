@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>Simularea latenței rețelei în Docker și Docker Compose</h1>
-  <p class="lead">Adăugați întârziere, pierderi de pachete sau o limită de viteză traficului unui singur container, fără să-i schimbați imaginea și fără un proxy în fața lui. Imaginea Bean Network Tester intră în rețeaua acelui container, schimbă doar ce intră și iese din el și se oprește singură. Este versiunea pentru Linux, deci experimentală.</p>
+  <p class="lead">Adăugați întârziere, pierderi de pachete sau o limită de viteză traficului unui singur container, fără să-i schimbați imaginea și fără un proxy în fața lui. Imaginea Bean Network Tester intră în rețeaua acelui container, schimbă doar ce intră și iese din el și se oprește singură. Conține pachetul pentru Linux, deci este experimentală.</p>
 </section>
 
 <section>
@@ -8,7 +8,7 @@
   <p>Porniți imaginea lângă containerul pe care vreți să-l testați, aici unul numit <code>api</code>. Are nevoie de trei capabilități în plus față de cele implicite ale Docker și nu are nevoie de <code>--privileged</code>:</p>
 <pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
   ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
-  <p><code>--network container:api</code> pune programul în rețeaua acelui container, așa că celelalte containere și gazda rămân neatinse. <code>--dst-ip</code> îl restrânge la o adresă. Fără această opțiune, fiecare conexiune a lui <code>api</code> încetinește. Măsurat: la <code>--latency 100</code>, ping-ul containerului spre acea adresă a crescut de la 0,07 ms la 200,8 ms, pentru că sunt întârziate și cererea, și răspunsul, iar ping-ul lui spre altă adresă a rămas sub 1 ms.</p>
+  <p><code>--network container:api</code> pune programul în rețeaua acelui container. Ajunge la fiecare program din acea rețea, inclusiv la un alt container pornit în ea în același fel, dar niciodată la gazdă sau la containerele cu rețea proprie. <code>--dst-ip</code> îl restrânge la o adresă. Fără această opțiune, fiecare conexiune a lui <code>api</code> încetinește. Măsurat: la <code>--latency 100</code>, ping-ul containerului spre acea adresă a crescut de la 0,07 ms la 200,8 ms, pentru că sunt întârziate și cererea, și răspunsul, iar ping-ul lui spre altă adresă a rămas sub 1 ms.</p>
   <p>Aici funcționează orice setare a liniei de comandă: <code>--loss</code>, <code>--jitter</code>, <code>--down</code> și <code>--up</code> pentru o limită de viteză, un <a href="../linia-de-comanda/">preset sau un scenariu întreg</a>. Sesiunea se încheie cu <code>--duration</code>, dar și cu <code>docker stop</code>.</p>
 </section>
 
@@ -48,7 +48,7 @@
 <section>
   <h2>Docker Desktop pe Windows și macOS</h2>
   <p>Docker Desktop rulează containerele într-o mașină virtuală Linux proprie, iar acolo „gazda” înseamnă acea mașină. Imaginea schimbă traficul containerelor, niciodată pe cel al programelor Windows sau macOS. Pentru a încetini un program Windows, folosiți versiunea pentru Windows a Bean Network Tester.</p>
-  <p>Pe un Mac cu Apple silicon și pe alte mașini arm64, Docker rulează această imagine x86_64 prin emulare, iar acolo apelurile BPF ale nucleului nu există. Imaginea pornește și <code>--simulate</code> funcționează, dar o captură se oprește imediat cu <code>Function not implemented</code>. Măsurat pe un Mac M2 cu emularea QEMU din Colima, unde <code>--doctor</code> arăta totuși OK pe fiecare rând.</p>
+  <p>Pe un Mac cu Apple silicon și pe alte mașini arm64, Docker rulează această imagine x86_64 prin emulare, iar acolo o captură poate să nu funcționeze. Măsurat pe un Mac M2 cu emularea QEMU din Colima: imaginea pornește și <code>--simulate</code> funcționează, dar o captură se oprește imediat cu <code>Function not implemented</code>, în timp ce <code>--doctor</code> arată totuși OK pe fiecare rând.</p>
 </section>
 
 <section>

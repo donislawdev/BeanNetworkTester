@@ -29,6 +29,11 @@ from fakes import ROOT, check
 # stop a real typo in OUR flags hiding behind somebody else's.
 IGNORE = {"--help", "--noconfirm", "--noconsole", "--onefile", "--uac-admin",
           "--bundle", "--repo", "--predicate-type"}
+# Docker's own options, which the README's Docker section names to say how the image is
+# started. Allowed in that section only, so one of them anywhere else is still read
+# as a flag of ours (which side of the image each is on: tests/test_ci_docker_image.py).
+DOCKER_SECTION = "### Docker image (experimental)"
+DOCKER_OPTIONS = {"--cap-add", "--network", "--pid", "--privileged"}
 READMES = ("README.md",)
 
 
@@ -45,9 +50,27 @@ def _parser_flags():
     return flags
 
 
-def _documented_flags(readme):
-    text = open(os.path.join(ROOT, readme), encoding="utf-8").read()
+def _read_readme(readme):
+    with open(os.path.join(ROOT, readme), encoding="utf-8") as handle:
+        return handle.read()
+
+
+def _flags(text):
     return set(re.findall(r"`(--[a-z][a-z0-9-]+)", text))
+
+
+def _documented_flags(readme):
+    return _flags(_read_readme(readme))
+
+
+def _stale(text, real):
+    """Flags the text names that are neither ours nor allowed where they stand."""
+    section = re.search(rf"^{re.escape(DOCKER_SECTION)}\n.*?(?=^#{{1,3}} |\Z)", text,
+                        re.M | re.S)
+    docker = section.group(0) if section else ""
+    rest = text.replace(docker, "") if docker else text
+    return sorted((_flags(rest) - real - IGNORE)
+                  | (_flags(docker) - real - IGNORE - DOCKER_OPTIONS))
 
 
 def test_every_parser_flag_is_documented_in_both_readmes():
@@ -61,9 +84,17 @@ def test_every_parser_flag_is_documented_in_both_readmes():
 def test_no_stale_app_flags_in_readmes():
     real = _parser_flags()
     for readme in READMES:
-        stale = sorted(_documented_flags(readme) - real - IGNORE)
+        stale = _stale(_read_readme(readme), real)
         check(f"{readme} lists no flag the parser lacks", not stale,
               f"(stale: {stale})")
+    text = _read_readme("README.md")
+    check("the README has the Docker section the exemption is for", DOCKER_SECTION in text)
+    outside = text.replace("\n## Language\n", "\n## Language\n\nStart it with `--privileged`.\n", 1)
+    check("canary: a Docker option outside its section is stale",
+          "--privileged" in _stale(outside, real), f"({_stale(outside, real)})")
+    typo = text.replace(DOCKER_SECTION + "\n", DOCKER_SECTION + "\n\nUse `--latncy 100`.\n", 1)
+    check("canary: a typo of ours inside the Docker section is still stale",
+          _stale(typo, real) == ["--latncy"], f"({_stale(typo, real)})")
 
 
 def test_no_semicolons_in_the_help_a_user_reads():

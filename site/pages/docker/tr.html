@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>Docker ve Docker Compose içinde ağ gecikmesi simülasyonu</h1>
-  <p class="lead">Tek bir konteynerin trafiğine gecikme, paket kaybı veya hız sınırı ekleyin; imajını değiştirmeden ve önüne bir proxy koymadan. Bean Network Tester imajı o konteynerin ağına katılır, yalnızca ona girip çıkanı değiştirir ve kendiliğinden durur. Linux sürümüdür, bu yüzden deneyseldir.</p>
+  <p class="lead">Tek bir konteynerin trafiğine gecikme, paket kaybı veya hız sınırı ekleyin; imajını değiştirmeden ve önüne bir proxy koymadan. Bean Network Tester imajı o konteynerin ağına katılır, yalnızca ona girip çıkanı değiştirir ve kendiliğinden durur. Linux paketidir, bu yüzden deneyseldir.</p>
 </section>
 
 <section>
@@ -8,7 +8,7 @@
   <p>İmajı test etmek istediğiniz konteynerin yanında başlatın, burada adı <code>api</code> olan bir konteyner. Docker varsayılanlarına ek olarak üç yetenek gerekir, <code>--privileged</code> gerekmez:</p>
 <pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
   ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
-  <p><code>--network container:api</code> programı o konteynerin ağına koyar, böylece diğer konteynerlere ve ana makineye dokunulmaz. <code>--dst-ip</code> etkiyi tek bir adresle sınırlar. Bu seçenek olmadan <code>api</code> konteynerinin her bağlantısı yavaşlar. Ölçüldü: <code>--latency 100</code> ile konteynerin o adrese ping süresi 0,07 ms'den 200,8 ms'ye çıktı, çünkü hem istek hem yanıt geciktirilir; başka bir adrese ping ise 1 ms'nin altında kaldı.</p>
+  <p><code>--network container:api</code> programı o konteynerin ağına koyar. Program o ağdaki her programa ulaşır, aynı şekilde o ağda başlatılmış başka bir konteyner de buna dahildir, ama ana makineye ve kendi ağı olan konteynerlere asla ulaşmaz. <code>--dst-ip</code> etkiyi tek bir adresle sınırlar. Bu seçenek olmadan <code>api</code> konteynerinin her bağlantısı yavaşlar. Ölçüldü: <code>--latency 100</code> ile konteynerin o adrese ping süresi 0,07 ms'den 200,8 ms'ye çıktı, çünkü hem istek hem yanıt geciktirilir; başka bir adrese ping ise 1 ms'nin altında kaldı.</p>
   <p>Komut satırının her ayarı burada çalışır: <code>--loss</code>, <code>--jitter</code>, hız sınırı için <code>--down</code> ve <code>--up</code>, bir <a href="../komut-satiri/">ön ayar ya da bütün bir senaryo</a>. Oturumu <code>--duration</code> bitirir, <code>docker stop</code> da bitirir.</p>
 </section>
 
@@ -48,7 +48,7 @@
 <section>
   <h2>Windows ve macOS üzerinde Docker Desktop</h2>
   <p>Docker Desktop konteynerleri kendi Linux sanal makinesinde çalıştırır ve orada "ana makine" o sanal makine demektir. İmaj konteynerlerin trafiğini değiştirir, Windows veya macOS programlarınınkini asla değiştirmez. Bir Windows programını yavaşlatmak için Bean Network Tester'ın Windows sürümünü kullanın.</p>
-  <p>Apple silicon işlemcili bir Mac'te ve diğer arm64 makinelerde Docker bu x86_64 imajını öykünmeyle çalıştırır ve orada çekirdeğin BPF çağrıları yoktur. İmaj başlar ve <code>--simulate</code> çalışır, ama bir yakalama hemen <code>Function not implemented</code> hatasıyla durur. Colima'nın QEMU öykünmesiyle bir M2 Mac'te ölçüldü; orada <code>--doctor</code> yine de her satırda OK gösteriyordu.</p>
+  <p>Apple silicon işlemcili bir Mac'te ve diğer arm64 makinelerde Docker bu x86_64 imajını öykünmeyle çalıştırır ve orada yakalama çalışmayabilir. Colima'nın QEMU öykünmesiyle bir M2 Mac'te ölçüldü: imaj başlar ve <code>--simulate</code> çalışır, ama bir yakalama hemen <code>Function not implemented</code> hatasıyla durur, <code>--doctor</code> ise yine de her satırda OK gösterir.</p>
 </section>
 
 <section>

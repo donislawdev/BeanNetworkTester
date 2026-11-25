@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>Simulasi latensi jaringan di Docker dan Docker Compose</h1>
-  <p class="lead">Tambahkan jeda, packet loss, atau batas kecepatan pada lalu lintas satu container, tanpa mengubah image-nya dan tanpa proxy di depannya. Image Bean Network Tester bergabung ke jaringan container itu, hanya mengubah yang masuk dan keluar darinya, lalu berhenti sendiri. Ini versi Linux, jadi masih eksperimental.</p>
+  <p class="lead">Tambahkan jeda, packet loss, atau batas kecepatan pada lalu lintas satu container, tanpa mengubah image-nya dan tanpa proxy di depannya. Image Bean Network Tester bergabung ke jaringan container itu, hanya mengubah yang masuk dan keluar darinya, lalu berhenti sendiri. Ini paket Linux, jadi masih eksperimental.</p>
 </section>
 
 <section>
@@ -8,7 +8,7 @@
   <p>Jalankan image di samping container yang ingin diuji, di sini bernama <code>api</code>. Image ini butuh tiga capability di luar bawaan Docker, dan tidak butuh <code>--privileged</code>:</p>
 <pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
   ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
-  <p><code>--network container:api</code> memasukkan program ke jaringan container itu, jadi container lain dan host tidak tersentuh. <code>--dst-ip</code> membatasinya ke satu alamat. Tanpa opsi itu, setiap koneksi <code>api</code> melambat. Hasil ukur: pada <code>--latency 100</code>, ping container ke alamat itu naik dari 0,07 ms ke 200,8 ms, karena permintaan dan balasan sama-sama ditunda, sedangkan ping-nya ke alamat lain tetap di bawah 1 ms.</p>
+  <p><code>--network container:api</code> memasukkan program ke jaringan container itu. Program ini menjangkau setiap program di jaringan itu, termasuk container lain yang dijalankan di dalamnya dengan cara yang sama, tetapi tidak pernah host atau container yang punya jaringan sendiri. <code>--dst-ip</code> membatasinya ke satu alamat. Tanpa opsi itu, setiap koneksi <code>api</code> melambat. Hasil ukur: pada <code>--latency 100</code>, ping container ke alamat itu naik dari 0,07 ms ke 200,8 ms, karena permintaan dan balasan sama-sama ditunda, sedangkan ping-nya ke alamat lain tetap di bawah 1 ms.</p>
   <p>Semua pengaturan baris perintah berlaku di sini: <code>--loss</code>, <code>--jitter</code>, <code>--down</code> dan <code>--up</code> untuk batas kecepatan, <a href="../baris-perintah/">preset atau satu skenario utuh</a>. <code>--duration</code> mengakhiri sesi, begitu juga <code>docker stop</code>.</p>
 </section>
 
@@ -48,7 +48,7 @@
 <section>
   <h2>Docker Desktop di Windows dan macOS</h2>
   <p>Docker Desktop menjalankan container di mesin virtual Linux miliknya sendiri, dan di sana "host" berarti mesin itu. Image ini mengubah lalu lintas container, tidak pernah lalu lintas program Windows atau macOS. Untuk memperlambat program Windows, gunakan versi Windows dari Bean Network Tester.</p>
-  <p>Di Mac dengan Apple silicon dan mesin arm64 lain, Docker menjalankan image x86_64 ini lewat emulasi, dan di sana panggilan BPF kernel tidak tersedia. Image tetap berjalan dan <code>--simulate</code> berfungsi, tetapi penangkapan langsung berhenti dengan <code>Function not implemented</code>. Diukur di Mac M2 dengan emulasi QEMU dari Colima, di mana <code>--doctor</code> tetap menampilkan OK di setiap baris.</p>
+  <p>Di Mac dengan Apple silicon dan mesin arm64 lain, Docker menjalankan image x86_64 ini lewat emulasi, dan penangkapan mungkin tidak berjalan di sana. Diukur di Mac M2 dengan emulasi QEMU dari Colima: image tetap berjalan dan <code>--simulate</code> berfungsi, tetapi penangkapan langsung berhenti dengan <code>Function not implemented</code>, sementara <code>--doctor</code> tetap menampilkan OK di setiap baris.</p>
 </section>
 
 <section>

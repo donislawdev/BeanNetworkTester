@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>Netwerklatentie simuleren in Docker en Docker Compose</h1>
-  <p class="lead">Voeg vertraging, pakketverlies of een snelheidslimiet toe aan het verkeer van één container, zonder zijn image te veranderen en zonder proxy ervoor. De image van Bean Network Tester voegt zich bij het netwerk van die container, verandert alleen wat erin en eruit gaat en stopt vanzelf. Het is de Linux-versie, dus experimenteel.</p>
+  <p class="lead">Voeg vertraging, pakketverlies of een snelheidslimiet toe aan het verkeer van één container, zonder zijn image te veranderen en zonder proxy ervoor. De image van Bean Network Tester voegt zich bij het netwerk van die container, verandert alleen wat erin en eruit gaat en stopt vanzelf. Het is het Linux-pakket, dus experimenteel.</p>
 </section>
 
 <section>
@@ -8,7 +8,7 @@
   <p>Start de image naast de container die u wilt testen, hier een container met de naam <code>api</code>. Hij heeft drie capabilities nodig bovenop de standaard van Docker, en geen <code>--privileged</code>:</p>
 <pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
   ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
-  <p><code>--network container:api</code> zet het programma in het netwerk van die container, dus andere containers en de host blijven onaangeroerd. <code>--dst-ip</code> beperkt het tot één adres. Zonder die optie wordt elke verbinding van <code>api</code> trager. Gemeten: bij <code>--latency 100</code> steeg de ping van de container naar dat adres van 0,07 ms naar 200,8 ms, omdat zowel het verzoek als het antwoord vertraagd wordt, en de ping naar een ander adres bleef onder 1 ms.</p>
+  <p><code>--network container:api</code> zet het programma in het netwerk van die container. Het bereikt elk programma in dat netwerk, ook een andere container die er op dezelfde manier in is gestart, maar nooit de host of containers met een eigen netwerk. <code>--dst-ip</code> beperkt het tot één adres. Zonder die optie wordt elke verbinding van <code>api</code> trager. Gemeten: bij <code>--latency 100</code> steeg de ping van de container naar dat adres van 0,07 ms naar 200,8 ms, omdat zowel het verzoek als het antwoord vertraagd wordt, en de ping naar een ander adres bleef onder 1 ms.</p>
   <p>Elke instelling van de opdrachtregel werkt hier: <code>--loss</code>, <code>--jitter</code>, <code>--down</code> en <code>--up</code> voor een snelheidslimiet, een <a href="../opdrachtregel/">preset of een heel scenario</a>. <code>--duration</code> beëindigt de sessie, en <code>docker stop</code> ook.</p>
 </section>
 
@@ -48,7 +48,7 @@
 <section>
   <h2>Docker Desktop op Windows en macOS</h2>
   <p>Docker Desktop draait containers in een eigen virtuele Linux-machine, en daar betekent "host" die machine. De image verandert het verkeer van containers, nooit dat van Windows- of macOS-programma's. Om een Windows-programma te vertragen, gebruikt u de Windows-versie van Bean Network Tester.</p>
-  <p>Op een Mac met Apple silicon en op andere arm64-machines draait Docker deze x86_64-image via emulatie, en daar zijn de BPF-aanroepen van de kernel er niet. De image start en <code>--simulate</code> werkt, maar een vastlegging stopt meteen met <code>Function not implemented</code>. Gemeten op een M2-Mac met de QEMU-emulatie van Colima, waar <code>--doctor</code> toch op elke regel OK meldde.</p>
+  <p>Op een Mac met Apple silicon en op andere arm64-machines draait Docker deze x86_64-image via emulatie, en daar werkt een vastlegging misschien niet. Gemeten op een M2-Mac met de QEMU-emulatie van Colima: de image start en <code>--simulate</code> werkt, maar een vastlegging stopt meteen met <code>Function not implemented</code>, terwijl <code>--doctor</code> toch op elke regel OK meldt.</p>
 </section>
 
 <section>

@@ -164,7 +164,8 @@ docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-ad
   ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60
 ```
 
-在 Docker Compose 中，写在要减速的服务旁边：
+在 Docker Compose 中，写在要减速的服务旁边。像这里这样不加 `--dst-ip` 或 `--dst-port` 时，
+那个服务的全部流量都会变慢：
 
 ```yaml
 services:
@@ -178,7 +179,9 @@ services:
 ```
 
 - **影响哪些流量。** `--network container:<名称>`（Compose 中为 `network_mode: "service:<名称>"`）
-  让程序进入那个容器的网络，所以只改变那个容器的流量。
+  让程序进入那个容器的网络。它会影响这个网络里的每个程序，包括以同样方式在其中启动的其他容器，
+  但不会影响主机，也不会影响拥有自己网络的容器。`--dst-ip`、`--dst-port` 和 `--target`
+  可以缩小范围。
 - **那个容器里的一个程序。** `--target <名称>` 还需要 `--pid container:<名称>`。没有它，程序看不到
   另一个容器的进程，并会说明它没有让任何东西变慢。
 - **Linux 主机本身的程序。** 使用 `--network host --pid host`，再加上 `--cap-add SYS_PTRACE
@@ -187,8 +190,9 @@ services:
   `--dst-ip`、`--dst-port` 缩小范围，并用 `--duration` 限制时长。
 - **Windows 和 macOS 上的 Docker Desktop。** 容器运行在 Docker 自己的虚拟机里。镜像只改变容器的
   流量，永远不会改变 Windows 或 macOS 程序的流量。Windows 程序请使用 Windows 版。
-- **Apple 芯片和其他 arm64 机器。** 镜像是 x86_64 的，模拟环境中没有内核的 BPF 调用：镜像能启动，
-  `--simulate` 也能用，但捕获会立即以 `Function not implemented` 停止。
+- **Apple 芯片和其他 arm64 机器。** 镜像是 x86_64 的，所以 Docker 在那里以模拟方式运行它，捕获
+  可能无法工作。在使用 Colima QEMU 模拟的 M2 Mac 上实测：镜像能启动，`--simulate` 也能用，但
+  捕获会立即以 `Function not implemented` 停止。
 - **文件。** 把一个文件夹挂载到 `/work`（`-v "$PWD:/work"`），用于 `--log-conns`、`--repro-out`、
   CSV 文件或 `--scenario` 文件。这些文件属于 root。
 - **停止。** `docker stop` 会正常结束会话（退出码 143），流量立即恢复正常。`docker kill` 之后约

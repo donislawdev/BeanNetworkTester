@@ -25,7 +25,7 @@ Each judge is a function over numbers and text, so each can be shown to fail
 (``tests/test_ci_docker_image.py``). Standard library only: it runs on the runner's
 system Python.
 
-    python3 tools/ci_docker_image.py decide --event release --tag v1.1.0 --latest v1.1.0 \\
+    python3 tools/ci_docker_image.py decide --event release --tag v1.1.0 \\
         --draft false --prerelease false >> "$GITHUB_OUTPUT"
     python3 -u tools/ci_docker_image.py try beannetworktester:try v1.1.0
 """
@@ -74,10 +74,12 @@ TAG = re.compile(r"v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?")
 STABLE = re.compile(r"v\d+\.\d+\.\d+")
 
 
-def decide(event, tag, latest, draft, prerelease):
-    """``{"tag", "version", "latest", "publish", "notice"}`` - or ``ValueError`` saying why not.
+def decide(event, tag, draft, prerelease):
+    """``{"tag", "version", "publish", "notice"}`` - or ``ValueError`` saying why not.
 
     ``draft`` and ``prerelease`` are the API's answers for ``tag`` ("true"/"false").
+    Which image is ``latest`` is not decided here: the workflow's ``latest`` job reads
+    the newest release when it moves the tag, one run at a time.
     """
     if event not in ("release", "workflow_dispatch", "pull_request"):
         raise ValueError(f"{event!r} is not an event this workflow runs on")
@@ -97,8 +99,8 @@ def decide(event, tag, latest, draft, prerelease):
             notice = (f"{tag} is not a stable release, so its image is built and tried and "
                       "nothing is pushed. Only stable releases become images.")
         publish = False
-    return {"tag": tag, "version": tag[1:], "latest": "true" if tag == latest else "false",
-            "publish": "true" if publish else "false", "notice": notice}
+    return {"tag": tag, "version": tag[1:], "publish": "true" if publish else "false",
+            "notice": notice}
 
 
 def parse_ping(output):
@@ -162,9 +164,15 @@ def judge_stop(code, seconds):
 
 
 def judge_target(baseline_s, during_s, ping_during):
-    """``--target`` in another container: its HTTP is slowed, the kernel's ping is not."""
+    """``--target`` in another container: its HTTP is slowed, the kernel's ping is not.
+
+    A time is ``None`` when a request failed (``timed_gets``).
+    """
     failures = []
-    if during_s - baseline_s < TARGET_ADDED_S:
+    if baseline_s is None or during_s is None:
+        failures.append(f"an HTTP request to the target failed (before {baseline_s}, during "
+                        f"{during_s}), so no time of it says whether it was slowed")
+    elif during_s - baseline_s < TARGET_ADDED_S:
         failures.append(f"--target with --pid container: added {during_s - baseline_s:.2f} s "
                         f"to {GETS} requests, expected at least {TARGET_ADDED_S:.1f}")
     if ping_during is None or ping_during[1] >= NORMAL_MS:
@@ -173,7 +181,11 @@ def judge_target(baseline_s, during_s, ping_during):
 
 
 def judge_host(target_gets, control_gets):
-    """Seconds per request to the targeted host program and to one that is not targeted."""
+    """Seconds per request to the targeted host program and to one that is not targeted,
+    or ``None`` when a request failed (``local_gets``)."""
+    if target_gets is None or control_gets is None:
+        return [f"an HTTP request to a program on the host failed (target {target_gets}, "
+                f"control {control_gets}), so no time of it says whether it was slowed"]
     failures = []
     if not target_gets or min(target_gets) < HOST_GET_MIN_S:
         failures.append(f"a program on the host was not slowed: {target_gets}, expected each "
@@ -205,10 +217,18 @@ def ping(address):
 
 
 def timed_gets(address):
-    script = f"for i in $(seq {GETS}); do wget -q -O /dev/null http://{address}/; done"
+    """Seconds for ``GETS`` requests from the app container, or ``None`` when one failed:
+    a refused or timed-out request takes time too, and is not a slowed one."""
+    script = (f"for i in $(seq {GETS}); do wget -q -O /dev/null http://{address}/ || exit 1; "
+              "done")
     start = time.monotonic()
-    docker("exec", APP, "sh", "-c", script)
-    return time.monotonic() - start
+    code = docker("exec", APP, "sh", "-c", script)[0]
+    seconds = time.monotonic() - start
+    return seconds if code == 0 else None
+
+
+def seconds_text(seconds):
+    return "failed" if seconds is None else f"{seconds:.2f} s"
 
 
 def targeting_line():
@@ -226,13 +246,18 @@ def stop(name):
 
 
 def local_gets(port):
+    """Seconds per request to a server on the runner, or ``None`` when one failed."""
     # No proxy: a runner's proxy settings must not carry a request meant for 127.0.0.1.
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     out = []
     for _ in range(GETS):
         start = time.monotonic()
-        with opener.open(f"http://127.0.0.1:{port}/", timeout=10) as reply:
-            reply.read()
+        try:
+            with opener.open(f"http://127.0.0.1:{port}/", timeout=10) as reply:
+                reply.read()
+        except OSError as exc:            # URLError and HTTPError are OSErrors
+            print(f"request to 127.0.0.1:{port} failed: {exc}")
+            return None
         out.append(round(time.monotonic() - start, 3))
     return out
 
@@ -266,8 +291,8 @@ def try_containers(image):
            "--duration", "120")
     time.sleep(5)
     during_s, ping_during = timed_gets(peer), ping(peer)
-    print(f"--target {HELPER_PROGRAM}: {GETS} requests {baseline:.2f} s -> {during_s:.2f} s, "
-          f"ping {ping_during}")
+    print(f"--target {HELPER_PROGRAM}: {GETS} requests {seconds_text(baseline)} -> "
+          f"{seconds_text(during_s)}, ping {ping_during}")
     print(targeting_line())
     failures += judge_target(baseline, during_s, ping_during)
     stop(SIDE)
@@ -328,7 +353,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     sub = parser.add_subparsers(dest="command", required=True)
     which = sub.add_parser("decide")
-    for name in ("event", "tag", "latest", "draft", "prerelease"):
+    for name in ("event", "tag", "draft", "prerelease"):
         which.add_argument(f"--{name}", required=True)
     tried = sub.add_parser("try")
     tried.add_argument("image")
@@ -336,13 +361,13 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.command == "decide":
         try:
-            outputs = decide(args.event, args.tag, args.latest, args.draft, args.prerelease)
+            outputs = decide(args.event, args.tag, args.draft, args.prerelease)
         except ValueError as exc:
             print(f"::error::{exc}", file=sys.stderr)
             return 1
         if outputs["notice"]:
             print(f"::notice::{outputs['notice']}", file=sys.stderr)
-        for key in ("tag", "version", "latest", "publish"):
+        for key in ("tag", "version", "publish"):
             print(f"{key}={outputs[key]}")
         return 0
     failures = try_image(args.image, args.tag)

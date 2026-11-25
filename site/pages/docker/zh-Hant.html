@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>在 Docker 和 Docker Compose 中模擬網路延遲</h1>
-  <p class="lead">為單一容器的流量加上延遲、封包遺失或限速，不必修改它的映像檔，也不必在它前面放代理。Bean Network Tester 映像檔會加入那個容器的網路，只改變進出它的流量，時間到了就自行停止。這就是 Linux 版，因此仍屬實驗性質。</p>
+  <p class="lead">為單一容器的流量加上延遲、封包遺失或限速，不必修改它的映像檔，也不必在它前面放代理。Bean Network Tester 映像檔會加入那個容器的網路，只改變進出它的流量，時間到了就自行停止。這就是 Linux 套件，因此仍屬實驗性質。</p>
 </section>
 
 <section>
@@ -8,7 +8,7 @@
   <p>在要測試的容器旁邊啟動映像檔，這裡的容器名為 <code>api</code>。它在 Docker 預設權限之外還需要三項能力，不需要 <code>--privileged</code>：</p>
 <pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
   ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
-  <p><code>--network container:api</code> 讓程式進入那個容器的網路，其他容器和主機都不受影響。<code>--dst-ip</code> 把範圍縮小到一個位址，不加它則 <code>api</code> 的每個連線都會變慢。實測：在 <code>--latency 100</code> 下，容器 ping 該位址從 0.07 ms 升到 200.8 ms，因為請求和回覆都會延遲；它 ping 另一個位址仍低於 1 ms。</p>
+  <p><code>--network container:api</code> 讓程式進入那個容器的網路。它會影響這個網路裡的每個程式，包括以同樣方式在其中啟動的其他容器，但不會影響主機，也不會影響擁有自己網路的容器。<code>--dst-ip</code> 把範圍縮小到一個位址，不加它則 <code>api</code> 的每個連線都會變慢。實測：在 <code>--latency 100</code> 下，容器 ping 該位址從 0.07 ms 升到 200.8 ms，因為請求和回覆都會延遲；它 ping 另一個位址仍低於 1 ms。</p>
   <p>命令列的每個設定在這裡都能用：<code>--loss</code>、<code>--jitter</code>、用於限速的 <code>--down</code> 和 <code>--up</code>，以及<a href="../minglinglie/">預設組或整個情境</a>。<code>--duration</code> 會結束工作階段，<code>docker stop</code> 也會。</p>
 </section>
 
@@ -48,7 +48,7 @@
 <section>
   <h2>Windows 和 macOS 上的 Docker Desktop</h2>
   <p>Docker Desktop 在自己的 Linux 虛擬機器中執行容器，在那裡「主機」指的就是這台虛擬機器。映像檔改變的是容器的流量，永遠不會改變 Windows 或 macOS 程式的流量。要讓 Windows 程式變慢，請使用 Bean Network Tester 的 Windows 版。</p>
-  <p>在 Apple 晶片的 Mac 以及其他 arm64 機器上，Docker 以模擬方式執行這個 x86_64 映像檔，而模擬環境中沒有核心的 BPF 呼叫。映像檔能啟動，<code>--simulate</code> 也能用，但擷取會立即以 <code>Function not implemented</code> 停止。這是在使用 Colima QEMU 模擬的 M2 Mac 上測得的，當時 <code>--doctor</code> 仍然每一行都回報 OK。</p>
+  <p>在 Apple 晶片的 Mac 以及其他 arm64 機器上，Docker 以模擬方式執行這個 x86_64 映像檔，擷取在那裡可能無法運作。在使用 Colima QEMU 模擬的 M2 Mac 上實測：映像檔能啟動，<code>--simulate</code> 也能用，但擷取會立即以 <code>Function not implemented</code> 停止，而 <code>--doctor</code> 仍然每一行都回報 OK。</p>
 </section>
 
 <section>

@@ -1,6 +1,6 @@
 <section class="hero">
   <h1>Docker と Docker Compose でネットワーク遅延を再現</h1>
-  <p class="lead">1つのコンテナの通信に遅延、パケットロス、速度制限を加えます。イメージを変える必要も、前にプロキシを置く必要もありません。Bean Network Tester のイメージはそのコンテナのネットワークに加わり、出入りする通信だけを変え、時間が来ると自分で止まります。Linux 版なので、実験的な扱いです。</p>
+  <p class="lead">1つのコンテナの通信に遅延、パケットロス、速度制限を加えます。イメージを変える必要も、前にプロキシを置く必要もありません。Bean Network Tester のイメージはそのコンテナのネットワークに加わり、出入りする通信だけを変え、時間が来ると自分で止まります。Linux 版パッケージなので、実験的な扱いです。</p>
 </section>
 
 <section>
@@ -8,7 +8,7 @@
   <p>テストしたいコンテナ（ここでは <code>api</code>）の隣でイメージを起動します。Docker の既定に加えて3つのケーパビリティが必要で、<code>--privileged</code> は不要です。</p>
 <pre><code>docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
   ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60</code></pre>
-  <p><code>--network container:api</code> でプログラムがそのコンテナのネットワークに入るので、ほかのコンテナとホストには影響しません。<code>--dst-ip</code> は対象を1つのアドレスに絞ります。指定しなければ <code>api</code> のすべての接続が遅くなります。実測では、<code>--latency 100</code> でコンテナからそのアドレスへの ping が 0.07 ms から 200.8 ms に増えました。要求と応答の両方が遅れるためです。別のアドレスへの ping は 1 ms 未満のままでした。</p>
+  <p><code>--network container:api</code> でプログラムがそのコンテナのネットワークに入ります。そのネットワーク内のすべてのプログラムに届き、同じ方法でそこに起動したほかのコンテナも含まれますが、ホストや自分のネットワークを持つコンテナには届きません。<code>--dst-ip</code> は対象を1つのアドレスに絞ります。指定しなければ <code>api</code> のすべての接続が遅くなります。実測では、<code>--latency 100</code> でコンテナからそのアドレスへの ping が 0.07 ms から 200.8 ms に増えました。要求と応答の両方が遅れるためです。別のアドレスへの ping は 1 ms 未満のままでした。</p>
   <p>コマンドラインの設定はすべて使えます。<code>--loss</code>、<code>--jitter</code>、速度制限の <code>--down</code> と <code>--up</code>、<a href="../komando-rain/">プリセットやシナリオ全体</a>もです。<code>--duration</code> でセッションが終わり、<code>docker stop</code> でも終わります。</p>
 </section>
 
@@ -48,7 +48,7 @@
 <section>
   <h2>Windows と macOS の Docker Desktop</h2>
   <p>Docker Desktop はコンテナを独自の Linux 仮想マシンで動かし、そこでは「ホスト」はその仮想マシンを指します。イメージが変えるのはコンテナの通信だけで、Windows や macOS のプログラムの通信は変えません。Windows のプログラムを遅くするには、Bean Network Tester の Windows 版を使ってください。</p>
-  <p>Apple シリコンの Mac やほかの arm64 マシンでは、Docker はこの x86_64 イメージをエミュレーションで動かし、そこにはカーネルの BPF 呼び出しがありません。イメージは起動し <code>--simulate</code> も動きますが、キャプチャはすぐに <code>Function not implemented</code> で止まります。Colima の QEMU エミュレーションを使った M2 Mac での実測で、そのとき <code>--doctor</code> はすべての行で OK と表示していました。</p>
+  <p>Apple シリコンの Mac やほかの arm64 マシンでは、Docker はこの x86_64 イメージをエミュレーションで動かすため、キャプチャが動かないことがあります。Colima の QEMU エミュレーションを使った M2 Mac での実測では、イメージは起動し <code>--simulate</code> も動きますが、キャプチャはすぐに <code>Function not implemented</code> で止まり、それでも <code>--doctor</code> はすべての行で OK と表示します。</p>
 </section>
 
 <section>
