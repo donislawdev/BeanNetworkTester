@@ -52,6 +52,7 @@
 - **实时观察**：图表、计数器、可搜索的连接表和事件日志。
 - **导出为 CSV**：会话统计数据，以及连接表的快照。
 - **命令行模式**：可用脚本调用，适合 CI，带有退出码和 JSON 输出。
+- **在测试中**：pytest fixture 和 Playwright Test fixture 在一个测试期间让真实网络变慢，目标是一个服务器。
 - **同一窗口里的网络工具**：带图表、抖动和丢包统计的持续 ping，TCP 和 UDP 端口扫描，面向通话的 NAT 和 TURN 检测，本机的每个套接字及占用它的程序，检查哪些本地端口空闲，每条 TCP 连接的健康状况，以及网卡信息。
 - **无遥测，不会自行发送任何内容**
 
@@ -205,6 +206,38 @@ services:
 ```bash
 gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1
 ```
+
+### 在测试中使用：pytest 与 Playwright
+
+从 1.1.0 起，每个稳定版也会发布为 Python 包和 npm 包，名字都是 `beannetworktester`，供需要慢速、
+丢包或断开网络的测试使用。两者都带有该版本自己的 Windows x64 和 Linux x64 程序，并只在一个测试期间运行
+它：目标是某个服务器或测试自己的进程，绝不是整台机器，测试结束时就停止。
+
+```python
+# pip install beannetworktester
+def test_checkout_survives_a_slow_api(bad_network):
+    bad_network(server="http://localhost:8000", latency=300, loss=2)
+    ...
+```
+
+```js
+// npm install --save-dev beannetworktester
+import { test, expect } from 'beannetworktester/playwright';
+
+test('the spinner shows on a slow network', async ({ page, badNetwork }) => {
+  await badNetwork({ server: 'http://localhost:3000', latency: 800 });
+  await page.goto('http://localhost:3000');
+});
+```
+
+- 设置就是本程序的参数名，例如 `latency`、`jitter`、`loss` 和 `preset`。
+- 改变网络在 Windows 上需要管理员权限，在 Linux 上需要 root 或无需密码的 `sudo`。GitHub 的 Windows 和
+  Ubuntu runner 都具备。
+- Playwright 本身只能让页面离线或让 Chromium 变慢。这里作用于网络本身，所以 Chromium、Firefox 和 WebKit
+  会以同样方式变慢，WebSocket 也包括在内。
+- 一台机器上同一时间只运行一个会话，所以并行的测试 worker 会互相等待。
+
+其余内容见各个包的页面：[PyPI](https://pypi.org/project/beannetworktester/) 和 [npm](https://www.npmjs.com/package/beannetworktester)。
 
 ## 窗口界面
 
@@ -1473,6 +1506,8 @@ beantester/              实现包
     applied.py           “应用更改”拿表单去比较的对象（一个纯辅助函数）
     theme.py  chart.py  tooltip.py  profiles.py  icon.py  labels.py
 lang/                    翻译（en, pl, zh）
+python/                  发布到 PyPI 的 pytest 辅助包 (beannetworktester)
+npm/                     发布到 npm 的 Playwright Test 辅助包 (beannetworktester)
 tests/                   pytest 测试
 smoke_gui.py             在伪造的 tkinter 上做图形界面冒烟测试
 BeanNetworkTester.spec   构建配方（onedir、控制台、asInvoker）

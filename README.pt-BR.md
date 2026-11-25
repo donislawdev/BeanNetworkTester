@@ -61,6 +61,8 @@ dele fica sabendo que existe.
   eventos.
 - **Exporta para CSV** - estatísticas da sessão e um instantâneo da tabela de conexões.
 - **Modo de linha de comando** - automatizável em CI, com códigos de saída e saída em JSON.
+- **Nos testes** - uma fixture do pytest e uma fixture do Playwright Test deixam a rede real
+  lenta durante um teste, mirando um servidor.
 - **Ferramentas de rede na mesma janela** - um ping contínuo com gráfico, jitter e perda de
   pacotes, um scanner de portas TCP e UDP, uma verificação de NAT e TURN para chamadas, cada
   socket deste computador com o programa que o usa, uma verificação de quais portas locais estão
@@ -234,6 +236,44 @@ Para conferir uma imagem baixada:
 ```bash
 gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1
 ```
+
+### Nos testes: pytest e Playwright
+
+A partir da 1.1.0, cada versão estável também é um pacote Python e um pacote npm, ambos
+chamados `beannetworktester`, para testes que precisam de uma rede lenta, com perdas ou quebrada.
+Cada um traz o próprio programa da versão para Windows x64 e Linux x64 e o executa durante um
+teste: mirando um servidor ou o próprio processo do teste, nunca a máquina inteira, e parando
+quando o teste termina.
+
+```python
+# pip install beannetworktester
+def test_checkout_survives_a_slow_api(bad_network):
+    bad_network(server="http://localhost:8000", latency=300, loss=2)
+    ...
+```
+
+```js
+// npm install --save-dev beannetworktester
+import { test, expect } from 'beannetworktester/playwright';
+
+test('the spinner shows on a slow network', async ({ page, badNetwork }) => {
+  await badNetwork({ server: 'http://localhost:3000', latency: 800 });
+  await page.goto('http://localhost:3000');
+});
+```
+
+- As configurações são as flags deste programa pelo nome, como `latency`, `jitter`, `loss`
+  e `preset`.
+- Mudar a rede exige direitos de administrador no Windows, e root ou `sudo` sem senha no
+  Linux. Os runners Windows e Ubuntu do GitHub têm isso.
+- O Playwright sozinho consegue deixar uma página offline ou deixar o Chromium lento. Isto
+  age na própria rede, então Chromium, Firefox e WebKit ficam lentos do mesmo jeito, WebSockets
+  incluídos.
+- Roda uma sessão por vez em uma máquina, então os workers de teste em paralelo esperam uns
+  pelos outros.
+
+A página de cada pacote explica o resto: [PyPI](https://pypi.org/project/beannetworktester/) e
+[npm](https://www.npmjs.com/package/beannetworktester).
 
 ## A janela
 
@@ -1681,6 +1721,8 @@ beantester/              o pacote de implementação
     applied.py           com o que "Apply changes" compara o formulário (um auxiliar puro)
     theme.py  chart.py  tooltip.py  profiles.py  icon.py  labels.py
 lang/                    traduções (en, pl, zh)
+python/                  o auxiliar para pytest publicado no PyPI (beannetworktester)
+npm/                     o auxiliar para Playwright Test publicado no npm (beannetworktester)
 tests/                   testes pytest
 smoke_gui.py             smoke da GUI em um tkinter falso
 BeanNetworkTester.spec   a receita de build (onedir, console, asInvoker)

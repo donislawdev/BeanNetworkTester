@@ -55,6 +55,8 @@
 - **실시간 관찰** - 차트, 카운터, 검색 가능한 연결 표, 이벤트 로그.
 - **CSV로 내보내기** - 세션 통계와 연결 표의 스냅샷.
 - **명령줄 모드** - 종료 코드와 JSON 출력을 갖춰 CI에서 스크립트로 쓸 수 있습니다.
+- **테스트 안에서** - pytest 픽스처와 Playwright Test 픽스처가 테스트 하나 동안 실제 네트워크를
+  느리게 합니다. 대상은 서버 하나입니다.
 - **같은 창 안의 네트워크 도구** - 그래프, 지터, 패킷 손실을 보여 주는 연속 ping, TCP와 UDP
   포트 스캐너, 통화를 위한 NAT와 TURN 점검, 이 컴퓨터의 모든 소켓과 그것을 쥔 프로그램, 어떤 로컬
   포트가 비어 있는지 확인, TCP 연결마다의 상태, 네트워크 어댑터.
@@ -219,6 +221,41 @@ services:
 ```bash
 gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1
 ```
+
+### 테스트에서: pytest와 Playwright
+
+1.1.0부터 모든 안정 릴리스는 Python 패키지와 npm 패키지로도 나옵니다. 둘 다 이름은
+`beannetworktester`이며, 느리거나 손실이 있거나 끊기는 네트워크가 필요한 테스트를 위한 것입니다.
+각각 그 릴리스의 Windows x64용과 Linux x64용 프로그램을 담고 있고, 테스트 하나 동안 실행합니다.
+대상은 서버나 테스트 자신의 프로세스이며 컴퓨터 전체가 아니고, 테스트가 끝나면 멈춥니다.
+
+```python
+# pip install beannetworktester
+def test_checkout_survives_a_slow_api(bad_network):
+    bad_network(server="http://localhost:8000", latency=300, loss=2)
+    ...
+```
+
+```js
+// npm install --save-dev beannetworktester
+import { test, expect } from 'beannetworktester/playwright';
+
+test('the spinner shows on a slow network', async ({ page, badNetwork }) => {
+  await badNetwork({ server: 'http://localhost:3000', latency: 800 });
+  await page.goto('http://localhost:3000');
+});
+```
+
+- 설정은 이 프로그램의 플래그 이름 그대로입니다. 예를 들어 `latency`, `jitter`, `loss`,
+  `preset`입니다.
+- 네트워크를 바꾸려면 Windows에서는 관리자 권한이, Linux에서는 root나 비밀번호 없는 `sudo`가
+  필요합니다. GitHub의 Windows와 Ubuntu 러너에는 둘 다 있습니다.
+- Playwright만으로는 페이지를 오프라인으로 만들거나 Chromium을 느리게 할 수 있을 뿐입니다. 이것은
+  네트워크 자체에 작용하므로 Chromium, Firefox, WebKit이 똑같이 느려지고 WebSocket도 포함됩니다.
+- 한 컴퓨터에서는 한 번에 세션 하나만 실행되므로, 병렬 테스트 워커는 서로를 기다립니다.
+
+나머지는 각 패키지의 페이지에 있습니다: [PyPI](https://pypi.org/project/beannetworktester/)와
+[npm](https://www.npmjs.com/package/beannetworktester).
 
 ## 창 화면
 
@@ -1550,6 +1587,8 @@ beantester/              구현 패키지
     applied.py           "Apply changes"가 양식과 비교하는 대상(순수 도우미)
     theme.py  chart.py  tooltip.py  profiles.py  icon.py  labels.py
 lang/                    번역(en, pl, zh)
+python/                  PyPI에 게시하는 pytest 도우미 (beannetworktester)
+npm/                     npm에 게시하는 Playwright Test 도우미 (beannetworktester)
 tests/                   pytest 테스트
 smoke_gui.py             가짜 tkinter 위의 GUI 스모크
 BeanNetworkTester.spec   빌드 레시피(onedir, console, asInvoker)

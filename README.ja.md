@@ -53,6 +53,7 @@ ping を増やす、パケットを破棄する、速度に上限をかける、
 - **リアルタイム表示** - グラフ、カウンター、検索できる接続テーブル、イベントログを備えています。
 - **CSV へのエクスポート** - セッションの統計と、接続テーブルのスナップショットを書き出せます。
 - **コマンドラインモード** - 終了コードと JSON 出力に対応し、CI からスクリプトで操作できます。
+- **テストの中で** - pytest のフィクスチャーと Playwright Test のフィクスチャーが、1 つのテストのあいだ本物のネットワークを遅くします。狙うのは 1 つのサーバーです。
 - **同じウィンドウにあるネットワークツール** - グラフ、ジッター、パケットロスを表示する連続 ping、TCP と UDP のポートスキャナー、通話のための NAT と TURN のチェック、このコンピューターのすべてのソケットとそれを使うプログラム、どのローカルポートが空いているかの確認、TCP 接続ごとの状態、ネットワークアダプター。
 - **テレメトリなし、自分からは何も送信しない**
 
@@ -191,6 +192,34 @@ services:
 ```bash
 gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1
 ```
+
+### テストで使う: pytest と Playwright
+
+1.1.0 から、安定版のリリースは Python パッケージと npm パッケージにもなります。どちらも名前は `beannetworktester` で、遅い、パケットが失われる、切れるネットワークが必要なテストのためのものです。どちらもそのリリースの Windows x64 版と Linux x64 版のプログラムを含み、1 つのテストのあいだだけ動かします。狙うのはサーバーかテスト自身のプロセスで、マシン全体ではありません。テストが終わると止まります。
+
+```python
+# pip install beannetworktester
+def test_checkout_survives_a_slow_api(bad_network):
+    bad_network(server="http://localhost:8000", latency=300, loss=2)
+    ...
+```
+
+```js
+// npm install --save-dev beannetworktester
+import { test, expect } from 'beannetworktester/playwright';
+
+test('the spinner shows on a slow network', async ({ page, badNetwork }) => {
+  await badNetwork({ server: 'http://localhost:3000', latency: 800 });
+  await page.goto('http://localhost:3000');
+});
+```
+
+- 設定はこのプログラムのフラグの名前そのままです。たとえば `latency`、`jitter`、`loss`、`preset` です。
+- ネットワークを変えるには、Windows では管理者権限、Linux では root かパスワードなしの `sudo` が必要です。GitHub の Windows と Ubuntu のランナーにはどちらもあります。
+- Playwright だけでは、ページをオフラインにするか Chromium を遅くすることしかできません。これはネットワークそのものに働くので、Chromium、Firefox、WebKit が同じように遅くなり、WebSocket も含まれます。
+- 1 台のマシンで同時に動くセッションは 1 つなので、並列のテストワーカーは互いを待ちます。
+
+残りはそれぞれのパッケージのページにあります: [PyPI](https://pypi.org/project/beannetworktester/) と [npm](https://www.npmjs.com/package/beannetworktester)。
 
 ## ウィンドウ
 
@@ -1080,6 +1109,8 @@ beantester/              実装パッケージ
     applied.py           "Apply changes" がフォームと比較する対象 (純粋なヘルパー)
     theme.py  chart.py  tooltip.py  profiles.py  icon.py  labels.py
 lang/                    翻訳 (en, pl, zh)
+python/                  PyPI で公開する pytest 用ヘルパー (beannetworktester)
+npm/                     npm で公開する Playwright Test 用ヘルパー (beannetworktester)
 tests/                   pytest のテスト
 smoke_gui.py             偽の tkinter 上の GUI スモークテスト
 BeanNetworkTester.spec   ビルドのレシピ (onedir、console、asInvoker)

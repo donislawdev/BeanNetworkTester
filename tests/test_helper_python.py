@@ -435,6 +435,26 @@ def test_the_package_readme_links_only_to_pages_the_site_has():
     check("canary: a made-up page is not one", "cli" not in pages)
 
 
+def test_every_readme_shows_the_helpers_by_their_real_names():
+    """Every language of the README shows both helpers, with the names the code has."""
+    npm = (Path(ROOT) / "npm" / "beannetworktester")
+    exports = json.loads((npm / "package.json").read_text(encoding="utf-8"))["exports"]
+    fixture = re.search(r"\bbadNetwork: async", (npm / "playwright.js").read_text(encoding="utf-8"))
+    python = (HELPER / "src" / "beannetworktester" / "pytest_plugin.py").read_text(encoding="utf-8")
+    check("the code has the names the READMEs show", "./playwright" in exports and fixture
+          and "def bad_network(request)" in python)
+    readmes = sorted(Path(ROOT).glob("README*.md"))
+    check("eight READMEs", len(readmes) == 8, f"({len(readmes)})")
+    for readme in readmes:
+        text = readme.read_text(encoding="utf-8")
+        for needed in ("from 'beannetworktester/playwright'", "async ({ page, badNetwork })",
+                       "def test_checkout_survives_a_slow_api(bad_network):",
+                       "pip install beannetworktester", "npm install --save-dev beannetworktester",
+                       "https://pypi.org/project/beannetworktester/",
+                       "https://www.npmjs.com/package/beannetworktester"):
+            check(f"{readme.name}: {needed}", needed in text)
+
+
 def test_a_session_stopped_in_time_warns_about_nothing(checkout_program):
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
