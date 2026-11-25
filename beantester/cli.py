@@ -16,6 +16,7 @@ import _thread
 import argparse
 import json
 import math
+import os
 import re
 import sys
 import threading
@@ -167,6 +168,44 @@ def _add_scope_arguments(p):
                    help="impair IPv6 traffic only. IPv4 keeps flowing untouched. "
                         "Both flags together exclude each other and nothing is "
                         "impaired, which the log says out loud")
+    _add_content_scope_arguments(p)
+    p.add_argument("--lan-mode", action="store_true",
+                   help="LAN mode: cut the internet (public addresses), keep the local network")
+    # NOT --lan-cut or --lan-block: a second option starting with "lan-" makes
+    # the --lan abbreviation ambiguous and argparse then refuses it outright.
+    p.add_argument("--internet-only", action="store_true",
+                   help="cut the local network (10.x, 192.168.x, 172.16-31.x, "
+                        "link-local, CGNAT), keep the internet. Loopback keeps "
+                        "working. Careful: DNS asked of your router is local "
+                        "traffic, so the internet can stop working with it")
+    p.add_argument("--narrow-filter", action="store_true",
+                   help="push --dst-ip/--dst-port into the WinDivert filter, so the "
+                        "driver never hands over traffic that could not be impaired "
+                        "(much faster at high packet rates). Applied at START only, "
+                        "and then statistics and connections cover the narrowed "
+                        "traffic only - the summary says when it took effect")
+    p.add_argument("--block-ip",
+                   help="block (drop) all traffic to these remote IPs, IPv4 and IPv6: "
+                        "address, list, range a-b, CIDR, wildcard, re: pattern, "
+                        "! to exclude")
+    p.add_argument("--block-port",
+                   help="block (drop) all traffic to these remote ports: number, list, "
+                        "range a-b, comparison (>1024), wildcard, re: pattern, ! to exclude "
+                        "(blocks on IP OR port, for example '--block-port 443')")
+    p.add_argument("--block-reject", action="store_true",
+                   help="refuse blocked TCP connections instead of dropping them in "
+                        "silence, so the client reports 'connection refused' rather "
+                        "than waiting out its own timeout (TCP only, and only for "
+                        "connections this machine makes)")
+
+
+def _add_content_scope_arguments(p):
+    """Targeting by what a packet carries: the parts of a call, the size of the data.
+
+    Split out of ``_add_scope_arguments`` by the size ratchet, along the seam the
+    comments below already drew: these look INSIDE a packet, the rest of the scope
+    flags look at its addresses and its owner.
+    """
     # Targeting too, by what a packet IS: the parts of a call that uses ICE (WebRTC
     # and the like). Any of the three narrows to those parts and nothing else.
     p.add_argument("--call-checks", action="store_true",
@@ -203,34 +242,33 @@ def _add_scope_arguments(p):
                         "in the same syntax (e.g. '!0' leaves bare acknowledgements "
                         "alone, '0' impairs nothing else). UDP is then left alone, "
                         "unless --payload-udp is given too")
-    p.add_argument("--lan-mode", action="store_true",
-                   help="LAN mode: cut the internet (public addresses), keep the local network")
-    # NOT --lan-cut or --lan-block: a second option starting with "lan-" makes
-    # the --lan abbreviation ambiguous and argparse then refuses it outright.
-    p.add_argument("--internet-only", action="store_true",
-                   help="cut the local network (10.x, 192.168.x, 172.16-31.x, "
-                        "link-local, CGNAT), keep the internet. Loopback keeps "
-                        "working. Careful: DNS asked of your router is local "
-                        "traffic, so the internet can stop working with it")
-    p.add_argument("--narrow-filter", action="store_true",
-                   help="push --dst-ip/--dst-port into the WinDivert filter, so the "
-                        "driver never hands over traffic that could not be impaired "
-                        "(much faster at high packet rates). Applied at START only, "
-                        "and then statistics and connections cover the narrowed "
-                        "traffic only - the summary says when it took effect")
-    p.add_argument("--block-ip",
-                   help="block (drop) all traffic to these remote IPs, IPv4 and IPv6: "
-                        "address, list, range a-b, CIDR, wildcard, re: pattern, "
-                        "! to exclude")
-    p.add_argument("--block-port",
-                   help="block (drop) all traffic to these remote ports: number, list, "
-                        "range a-b, comparison (>1024), wildcard, re: pattern, ! to exclude "
-                        "(blocks on IP OR port, for example '--block-port 443')")
-    p.add_argument("--block-reject", action="store_true",
-                   help="refuse blocked TCP connections instead of dropping them in "
-                        "silence, so the client reports 'connection refused' rather "
-                        "than waiting out its own timeout (TCP only, and only for "
-                        "connections this machine makes)")
+
+
+def _add_upload_arguments(p):
+    """Asymmetry: the switch and the values the upload direction gets of its own.
+
+    Split out of ``build_arg_parser`` by the size ratchet. The flags read
+    `<what>-up`, which is how every other modifier in this parser reads
+    (--loss-burst, --spike-prob, --rst-cooldown, --flap-down).
+    """
+    # 🔴 The abbreviation cost was MEASURED before the names were chosen, exactly
+    # as it was for --loss-burst: `allow_abbrev` is on (ADR 2026-08-02), so a
+    # second option starting with `latency` makes `--lat` ambiguous. 18 prefixes
+    # that work today stop working (--lat, --jit, --j, --cor, --spike-p and the
+    # longer forms of each). Every FULL flag survives, because an exact match
+    # beats a prefix one, so no repro command and no documented example moves.
+    # Guarded by test_cli_runtime.py::test_the_flags_that_gained_an_up_neighbour_still_work.
+    p.add_argument("--asym", action="store_true",
+                   help="apply the --*-up values to the upload direction. Without "
+                        "it the link is symmetric and those values are unused")
+    p.add_argument("--loss-up", type=float, help="packet loss, upload [%%]")
+    p.add_argument("--corrupt-up", type=float, help="corruption, upload [%%]")
+    p.add_argument("--dup-up", type=float, help="duplication, upload [%%]")
+    p.add_argument("--latency-up", type=float, help="latency, upload [ms]")
+    p.add_argument("--jitter-up", type=float, help="jitter, upload [ms]")
+    p.add_argument("--spike-prob-up", type=float,
+                   help="latency spike probability, upload [%%]")
+    p.add_argument("--spike-ms-up", type=float, help="latency spike size, upload [ms]")
 
 
 def build_arg_parser():
@@ -279,26 +317,7 @@ def build_arg_parser():
                         "bounds the queueing delay a rate-limited link builds up "
                         "before it drops (bufferbloat)")
     _add_scope_arguments(p)
-    # Asymmetry. The flags read `<what>-up`, which is how every other modifier in
-    # this parser reads (--loss-burst, --spike-prob, --rst-cooldown, --flap-down).
-    # 🔴 The abbreviation cost was MEASURED before the names were chosen, exactly
-    # as it was for --loss-burst: `allow_abbrev` is on (ADR 2026-08-02), so a
-    # second option starting with `latency` makes `--lat` ambiguous. 18 prefixes
-    # that work today stop working (--lat, --jit, --j, --cor, --spike-p and the
-    # longer forms of each). Every FULL flag survives, because an exact match
-    # beats a prefix one, so no repro command and no documented example moves.
-    # Guarded by test_cli_runtime.py::test_the_flags_that_gained_an_up_neighbour_still_work.
-    p.add_argument("--asym", action="store_true",
-                   help="apply the --*-up values to the upload direction. Without "
-                        "it the link is symmetric and those values are unused")
-    p.add_argument("--loss-up", type=float, help="packet loss, upload [%%]")
-    p.add_argument("--corrupt-up", type=float, help="corruption, upload [%%]")
-    p.add_argument("--dup-up", type=float, help="duplication, upload [%%]")
-    p.add_argument("--latency-up", type=float, help="latency, upload [ms]")
-    p.add_argument("--jitter-up", type=float, help="jitter, upload [ms]")
-    p.add_argument("--spike-prob-up", type=float,
-                   help="latency spike probability, upload [%%]")
-    p.add_argument("--spike-ms-up", type=float, help="latency spike size, upload [ms]")
+    _add_upload_arguments(p)
     p.add_argument("--syn-drop", type=float, help="dropped TCP SYN rate [%%]")
     p.add_argument("--max-size", type=int, help="MTU black hole: drop packets > N B")
     p.add_argument("--spike-prob", type=float, help="latency spike probability [%%]")
@@ -334,7 +353,13 @@ def build_arg_parser():
     p.add_argument("--simulate", action="store_true",
                    help="synthetic traffic instead of a real capture (no capture driver, "
                         "no administrator or root rights)")
+    _add_output_and_ci_arguments(p)
+    return p
 
+
+def _add_output_and_ci_arguments(p):
+    """The flags about what a run prints and how a pipeline or another program checks
+    and ends it - the "output" and "CI/CD" groups of --help."""
     out = p.add_argument_group("output")
     out.add_argument("-v", "--verbose", action="count", default=0,
                      help="log what the tool is doing (effective settings, matchers, "
@@ -346,7 +371,8 @@ def build_arg_parser():
     out.add_argument("--log-file", help="also append the log to this file")
     out.add_argument("--format", choices=[clilog.TEXT, clilog.JSON], default=clilog.TEXT,
                      help="stdout format: human text, or NDJSON for CI (one JSON "
-                          "object per report + a final summary)")
+                          "object per line: a start record, one per report and a "
+                          "final summary)")
 
     ci = p.add_argument_group("CI/CD")
     ci.add_argument("--dry-run", action="store_true",
@@ -360,13 +386,16 @@ def build_arg_parser():
                          % exitcodes.ASSERTION)
     ci.add_argument("--fail-on-no-traffic", action="store_true",
                     help="shorthand for --min-packets 1")
+    ci.add_argument("--stop-on-stdin-close", action="store_true",
+                    help="end the session when standard input closes, as a normal end: "
+                         "a program that started this run stops it by closing the pipe, "
+                         "and the run ends at once if that program dies")
     ci.add_argument("--doctor", action="store_true",
                     help="check the environment (capture rights, pydivert, the capture "
                          "driver, temp leftovers, clock step) and exit")
     ci.add_argument("--cleanup-driver", action="store_true",
                     help="unload a leftover WinDivert driver service (frees its locked "
                          ".sys file without a reboot) and exit")
-    return p
 
 
 def config_from_args(args):
@@ -486,7 +515,8 @@ def config_from_args(args):
                 duration=float(s["duration"]), interval=interval,
                 log_conns=args.log_conns, save_config=args.save_config,
                 scenario=args.scenario, loop=args.loop, repro_out=args.repro_out,
-                min_packets=min_packets)
+                min_packets=min_packets,
+                stop_on_stdin_close=bool(getattr(args, "stop_on_stdin_close", False)))
 
 
 def apply_config(engine, cfg, log=print):
@@ -570,6 +600,56 @@ def _emit_summary(log, record, lines):
     else:
         for line in lines:
             log.info(line)
+
+
+def _emit_start(log, engine, cfg):
+    """NDJSON only: the first record of a session, written once the capture is open.
+
+    A program that drives this one (the test helpers) waits for it before it sends
+    the traffic it wants impaired. The human "Running" line on stderr says the same
+    in text mode, so text mode gets nothing here: stdout is for data. Additive to
+    the NDJSON schema - a consumer that switches on ``event`` is not moved by it.
+    """
+    if log.fmt == clilog.JSON:
+        log.data(dict(event="start", version=appinfo.__version__,
+                      seed=engine.effective_seed(), simulate=bool(cfg["simulate"]),
+                      duration_s=cfg["duration"]), "")
+
+
+class _StdinWatch:
+    """``--stop-on-stdin-close``: the session ends when its standard input closes.
+
+    The one stop every language can send. Node on Windows can only kill
+    (TerminateProcess: the traffic comes back, but no summary is written), and
+    Ctrl+Break reaches only a process that shares a console with the sender. It is
+    also the dead man's switch a test helper needs: when the program that started
+    the run dies, its end of the pipe closes with it, and the run ends at the next
+    pass of the report loop instead of at ``--duration``.
+
+    Only the END of the input matters. Whatever is written is read and dropped, so
+    a parent that writes by mistake cannot fill the pipe and block on it.
+    """
+
+    def __init__(self, stream):
+        try:
+            self._fd = stream.fileno()
+        except (AttributeError, OSError, ValueError) as exc:
+            # None (a windowed run), or a stream with no descriptor behind it
+            # (io.UnsupportedOperation is both an OSError and a ValueError).
+            raise ValueError("--stop-on-stdin-close needs a standard input, "
+                             "and this run has none") from exc
+        self.closed = threading.Event()
+
+    def start(self):
+        threading.Thread(target=self._read, name="stdin-watch", daemon=True).start()
+
+    def _read(self):
+        try:
+            while os.read(self._fd, 4096):
+                pass
+        except OSError as exc:      # a pipe that broke rather than closed: gone too
+            crashlog.note(exc, "cli.stdin")
+        self.closed.set()
 
 
 # What the log calls each signal. Ctrl+Break arrives as SIGBREAK, and calling it
@@ -924,16 +1004,31 @@ def _report_loop(engine, cfg, log, sleep, clock, t0):
             verdict = _say_target_change(engine, log, verdict)
         if deadline is not None and now >= deadline - 1e-9:
             return "duration"
-        # A scenario's timeline is an ending too, and without --duration it is the
-        # ONLY one the run has. It used to be nobody's: the runner thread ended,
-        # logged "Scenario finished." and left the session going forever - a CI
-        # job that hangs to its timeout, with no summary and (on a real run) the
-        # driver still loaded. Asked of the runner rather than derived from
-        # `scen.duration` here, so the tail past the last step stays in one place.
-        if cfg.get("stop_on_scenario") and engine.scenario_finished():
-            return "scenario_done"
-        if not engine.is_running():         # the engine's own watchdog stopped it
-            return engine.stop_reason or "fault"
+        ended = _ended_without_the_clock(engine, cfg, log)
+        if ended:
+            return ended
+
+
+def _ended_without_the_clock(engine, cfg, log):
+    """The endings of a session that are not its deadline, or None while it runs on."""
+    # The program that started this run closed our standard input, or died
+    # (--stop-on-stdin-close). A normal end: the summary is written and the exit
+    # code is whatever the run earned.
+    watch = cfg.get("stdin_watch")
+    if watch is not None and watch.closed.is_set():
+        log.info("Standard input closed - stopping.")
+        return "stdin"
+    # A scenario's timeline is an ending too, and without --duration it is the
+    # ONLY one the run has. It used to be nobody's: the runner thread ended,
+    # logged "Scenario finished." and left the session going forever - a CI
+    # job that hangs to its timeout, with no summary and (on a real run) the
+    # driver still loaded. Asked of the runner rather than derived from
+    # `scen.duration` here, so the tail past the last step stays in one place.
+    if cfg.get("stop_on_scenario") and engine.scenario_finished():
+        return "scenario_done"
+    if not engine.is_running():         # the engine's own watchdog stopped it
+        return engine.stop_reason or "fault"
+    return None
 
 
 def _plan_the_end_of_the_scenario(log, cfg, scen, engine):
@@ -1014,6 +1109,13 @@ def _open_session(cfg, log, engine):
     if cfg["simulate"] and cfg["settings"].get("target"):
         log.warn("--target is ignored in --simulate mode.")
         cfg["settings"]["target"] = ""
+
+    if cfg.get("stop_on_stdin_close"):
+        try:
+            cfg["stdin_watch"] = _StdinWatch(cfg.get("stdin"))
+        except ValueError as e:
+            _fail(exitcodes.USAGE, str(e))
+        cfg["stdin_watch"].start()
 
     if not cfg["simulate"] and not winenv.is_admin():
         _fail(exitcodes.PERMISSION,
@@ -1130,6 +1232,7 @@ def _drive_session(engine, cfg, log, sleep, clock, scen):
         armed = scen is None or _arm_scenario(engine, cfg, log, scen)
         t0 = clock()
         if armed:
+            _emit_start(log, engine, cfg)
             limit = f", stopping after {cfg['duration']:g}s" if cfg["duration"] else ""
             log.info(f"Running{limit}. Ctrl+C to stop.")
             stop_reason = _report_loop(engine, cfg, log, sleep, clock, t0)
@@ -1287,12 +1390,12 @@ def _report_session(engine, cfg, log, clock, code, stop_reason, t0):
     return code
 
 
-def _run_command(args, log, sleep, clock, engine):
+def _run_command(args, log, sleep, clock, engine, stdin=None):
     """Do what the command line asked for; returns the exit code.
 
     Split out of ``run_cli`` so that one ``try`` there can close the signal gate
     before ``run_cli`` reports anything. Fails through ``_fail``, like the rest
-    of the CLI.
+    of the CLI. ``stdin`` is what ``--stop-on-stdin-close`` watches.
     """
     # --gui reaching the CLI runner means it was combined with something else:
     # main() sends a bare --gui straight to the GUI. It used to be accepted and
@@ -1314,6 +1417,7 @@ def _run_command(args, log, sleep, clock, engine):
         return _run_cleanup(log)
 
     cfg = config_from_args(args)
+    cfg["stdin"] = stdin
 
     if args.print_config:
         log.data(dict(event="config", settings=cfg["settings"]),
@@ -1364,8 +1468,10 @@ def _run_command(args, log, sleep, clock, engine):
 
 
 def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
-            out=None, err=None):
+            out=None, err=None, stdin=None):
     """Run the CLI. Returns the process exit code (see ``exitcodes``)."""
+    # ``stdin``: the stream --stop-on-stdin-close watches - the process's own
+    # standard input unless a caller hands in another one.
     # CLI is always English (regardless of the system language).
     from .i18n import set_language
     set_language("en")
@@ -1380,7 +1486,8 @@ def run_cli(argv=None, sleep=time.sleep, clock=time.monotonic, engine=None,
             # Inside the try, and the gate opens last: a signal while the handlers
             # were installed escaped as a traceback, or was dropped (see above).
             _install_signal_handlers(previous_signals)
-            return _run_command(args, log, sleep, clock, engine)
+            return _run_command(args, log, sleep, clock, engine,
+                                sys.stdin if stdin is None else stdin)
         finally:
             # Closed HERE, before any handler below reports and before anything
             # is released. A signal that lands on the way out - CPython runs a

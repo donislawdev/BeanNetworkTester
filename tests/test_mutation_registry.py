@@ -13476,6 +13476,34 @@ MUTATIONS = [
         "new": "    return answer\n",
         "test": "test_a_service_hosts_sockets_are_named_by_their_service_once_each",
     },
+    {
+        # Rule 16 (b), the user's network: the test helpers stop a session ONLY by
+        # closing its input, and a test runner that dies relies on the same close. A
+        # watch that never fires leaves the network slowed until --duration.
+        "label": "stdin stop: a closed standard input does not end the session",
+        "file": "beantester/cli.py",
+        "old": "            crashlog.note(exc, \"cli.stdin\")\n        self.closed.set()\n",
+        "new": "            crashlog.note(exc, \"cli.stdin\")\n",
+        "test": "test_closing_stdin_ends_the_run_at_once_as_a_normal_end",
+    },
+    {
+        # Rule 16 (b): a session with no aim slows every connection of the machine,
+        # the CI runner's own included.
+        "label": "test helper: a session without an aim is let through",
+        "file": "python/beannetworktester/src/beannetworktester/_aim.py",
+        "old": "    if server is None and process is None and not aims and not simulate:\n",
+        "new": "    if False:\n",
+        "test": "test_a_session_without_an_aim_is_refused",
+    },
+    {
+        # Rule 16 (b): a number or a name reaches far beyond the test - PID 1 on Linux
+        # is every process, "node" every process whose name contains it.
+        "label": "test helper: process= takes a number or a name",
+        "file": "python/beannetworktester/src/beannetworktester/_aim.py",
+        "old": "    if pid is None:\n",
+        "new": "    if False:\n",
+        "test": "test_a_process_aim_is_this_test_or_what_it_started",
+    },
 ]
 
 # The runner's own check: a patch that cannot compile must be reported as BROKEN, not

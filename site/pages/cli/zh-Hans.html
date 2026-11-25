@@ -30,7 +30,7 @@ BeanNetworkTester.exe --config my-settings.json --dry-run</code></pre>
 
 <section>
   <h2>它会输出什么</h2>
-  <p>给人看的日志写到标准错误输出，每行以 <code>[bean]</code> 开头。数据写到标准输出：每隔几秒一行报告，结束时一份汇总。使用 <code>--format json</code> 时，标准输出每行一个 JSON 对象：每次报告一个 <code>sample</code> 对象，最后一个 <code>summary</code>，其中包含退出码、种子和可重复这次运行的命令。</p>
+  <p>给人看的日志写到标准错误输出，每行以 <code>[bean]</code> 开头。数据写到标准输出：每隔几秒一行报告，结束时一份汇总。使用 <code>--format json</code> 时，标准输出每行一个 JSON 对象：每次报告一个 <code>sample</code> 对象，最后一个 <code>summary</code>，其中包含退出码、种子和可重复这次运行的命令。在第一次报告之前，捕获一开始运行就会写出一个 <code>start</code> 对象，启动本程序的程序据此知道何时发送自己的流量。</p>
 <pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
   <p>每种结束方式都有自己的退出码，因此流水线可以区分是应用程序出错还是工具没能启动。退出码列在<a href="../cankao-biao/">参考表页面</a>上。</p>
 </section>

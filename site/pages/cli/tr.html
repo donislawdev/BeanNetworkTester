@@ -50,7 +50,8 @@ BeanNetworkTester.exe --config ayarlarim.json --dry-run</code></pre>
   başlar. Veriler standart çıktıya gider: birkaç saniyede bir rapor satırı ve sonunda bir özet.
   <code>--format json</code> ile standart çıktı satır başına bir JSON nesnesi taşır: her rapor için
   bir <code>sample</code> nesnesi ve sonda çıkış kodunu, tohumu ve çalışmayı tekrarlayan komutu
-  içeren bir <code>summary</code>.</p>
+  içeren bir <code>summary</code>.
+  İlk rapordan önce, yakalama başlar başlamaz yazılan bir <code>start</code> nesnesi gelir. Böylece bunu başlatan program, trafiğini ne zaman göndereceğini bilir.</p>
 <pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
   <p>Bir çalışmanın bitebileceği her yolun kendi çıkış kodu vardır; böylece bir işlem hattı, çöken
   bir uygulamayı başlayamayan bir araçtan ayırabilir. Kodlar

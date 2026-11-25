@@ -1,0 +1,96 @@
+<section class="hero">
+  <h1>จำลองความหน่วงเครือข่ายและแพ็กเก็ตสูญหายใน pytest</h1>
+  <p class="lead">ไม่มีการจำลองในโค้ด: แพ็กเกจ <code>beannetworktester</code> บน PyPI มอบ fixture ชื่อ <code>bad_network</code> ให้ pytest ซึ่งทำให้เครือข่ายจริงช้าลงตลอดการทดสอบ ความหน่วง แพ็กเก็ตสูญหาย การจำกัดความเร็ว หรือการขาดการเชื่อมต่อทั้งหมด สำหรับเซิร์ฟเวอร์เดียวหรือโปรเซสเดียว ขณะที่แอป เบราว์เซอร์ และเซิร์ฟเวอร์ของคุณคุยกันจริง แพ็กเกจนี้มีโปรแกรมของ Bean Network Tester อยู่ในตัว และรันบน Windows และ Linux แพ็กเกจนี้เผยแพร่พร้อมทุกรุ่นเสถียรตั้งแต่ 1.1.0 เป็นต้นไป</p>
+</section>
+
+<section>
+  <h2>ติดตั้ง</h2>
+<pre><code>pip install beannetworktester</code></pre>
+  <p>ต้องใช้ Windows x64 หรือ Linux x64 (glibc 2.39 ขึ้นไป เช่น Ubuntu 24.04) และ Python 3.10 ขึ้นไป</p>
+  <p>การเปลี่ยนเครือข่ายบน Windows ต้องใช้สิทธิ์ผู้ดูแลระบบ: เปิดเทอร์มินัลด้วย "เรียกใช้ในฐานะผู้ดูแลระบบ" บน Linux ต้องใช้ root หรือผู้ใช้ที่รัน <code>sudo</code> ได้โดยไม่ต้องใส่รหัสผ่าน และเมื่อนั้นจะมีเพียงโปรแกรมที่รันภายใต้ <code>sudo</code> รันเนอร์ Windows ที่ GitHub โฮสต์ทำงานด้วยสิทธิ์ยกระดับ และรันเนอร์ Ubuntu อนุญาตให้ใช้ <code>sudo</code> ดังนั้น workflow จึงไม่ต้องมีขั้นตอนเพิ่ม</p>
+</section>
+
+<section>
+  <h2>การทดสอบบนเครือข่ายช้า</h2>
+  <p>บันทึกโค้ดนี้เป็น <code>test_slow.py</code> แล้วรัน <code>pytest</code>:</p>
+<pre><code>import subprocess
+import sys
+import time
+import urllib.request
+
+import pytest
+
+
+@pytest.fixture
+def web_server():
+    server = subprocess.Popen([sys.executable, "-m", "http.server", "8000"])
+    time.sleep(1)
+    yield "http://localhost:8000"
+    server.terminate()
+
+
+def test_a_page_takes_longer_on_a_slow_network(bad_network, web_server):
+    bad_network(server=web_server, latency=500)
+    started = time.monotonic()
+    urllib.request.urlopen(web_server).read()
+    assert time.monotonic() - started &gt;= 0.5</code></pre>
+  <p>การทดสอบผ่านเพราะคำตอบมาถึงช้าลงจริง: ทุกแพ็กเก็ตที่ไปและกลับจากเซิร์ฟเวอร์นั้นต้องรอ 500 ms เมื่อการทดสอบจบ เครือข่ายจะกลับเป็นปกติ วัดบน Windows ด้วย <code>latency=200</code>: คำขอไปยังเซิร์ฟเวอร์ในเป้าหมายเพิ่มจาก 4 ms เป็น 404 ms เพราะทั้งคำขอและคำตอบต้องรอ และหน้าเว็บใน Chromium เพิ่มจาก 61 ms เป็น 412 ms ระหว่างนั้นเซิร์ฟเวอร์ภายในเครื่องอีกตัวที่อยู่นอกเป้าหมายตอบใน 11 ms</p>
+  <p>ยังไม่มีสิทธิ์ในมือ? <code>bad_network(simulate=True, latency=500)</code> รันโปรแกรมกับทราฟฟิกที่สร้างขึ้นและไม่เปลี่ยนอะไรในเครือข่าย ใช้ตรวจว่าแพ็กเกจติดตั้งถูกต้อง โดยไม่ทำให้อะไรช้าลง</p>
+</section>
+
+<section>
+  <h2>fixture ชื่อ bad_network</h2>
+  <p>pytest จะหา fixture เจอเองเมื่อติดตั้งแพ็กเกจแล้ว เมื่อเรียก <code>bad_network</code> จะเริ่มเซสชัน และคืนค่าทันทีที่เครือข่ายช้าลงแล้ว เซสชันหยุดเมื่อการทดสอบจบ ไม่ว่าจะผ่าน ล้มเหลว หรือแครช และสรุปของโปรแกรมจะไปอยู่ใน <code>user_properties</code> ของการทดสอบ แล้วจากนั้นเข้าไปในรายงาน JUnit XML หากต้องการเปลี่ยนสภาพเครือข่ายกลางการทดสอบ ให้หยุดเซสชันแรกก่อนเริ่มเซสชันถัดไป:</p>
+<pre><code>def test_the_app_recovers_when_the_api_comes_back(bad_network):
+    outage = bad_network(server="http://localhost:8000", loss=100)
+    assert app_shows_offline_banner()
+    outage.stop()
+    assert app_hides_offline_banner()</code></pre>
+  <p>นอก pytest ให้ใช้ <code>from beannetworktester import bad_network</code> เพื่อเริ่มเซสชันเดียวกัน และ <code>with bad_network(...) as session:</code> จะหยุดเซสชันเมื่อจบบล็อก</p>
+</section>
+
+<section>
+  <h2>Playwright สำหรับ Python</h2>
+  <p>Playwright สำหรับ Python ทำงานบน pytest ดังนั้น fixture จึงเป็นตัวเดียวกัน Chromium, Firefox และ WebKit ช้าลงแบบเดียวกัน รวมถึง WebSocket เพราะสิ่งที่ช้าคือเครือข่ายเอง ไม่ใช่สิ่งที่เบราว์เซอร์คิดว่าเป็น:</p>
+<pre><code>from playwright.sync_api import expect
+
+
+def test_the_spinner_shows_on_a_slow_network(bad_network, page):
+    bad_network(server="http://localhost:3000", latency=800)
+    page.goto("http://localhost:3000")
+    expect(page.get_by_role("progressbar")).to_be_visible()</code></pre>
+</section>
+
+<section>
+  <h2>เซสชันเล็งไปที่อะไร</h2>
+  <p>ทุกเซสชันเล็งไปที่บางสิ่ง และมีเพียงทราฟฟิกนั้นที่เปลี่ยน เซสชันที่ไม่มีเป้าหมายจะทำให้ทุกการเชื่อมต่อของเครื่องช้าลง รวมถึงของตัวรันการทดสอบเอง จึงไม่เริ่มทำงานเลย</p>
+  <ul>
+    <li><strong><code>server="http://localhost:3000"</code></strong> ทำให้ทุกการเชื่อมต่อไปยังที่อยู่และพอร์ตนั้นช้าลง ไม่ว่าจะมาจากแอป เบราว์เซอร์ หรือโปรแกรมอื่นใด ใช้ <code>"db.local:5432"</code>, <code>("10.0.0.5", 443)</code> และรายการเซิร์ฟเวอร์ได้เช่นกัน นี่คือตัวเลือกแรก และแม่นยำทั้งบน Windows และ Linux</li>
+    <li><strong><code>process="self"</code></strong> ทำให้โปรเซสการทดสอบและทุกโปรแกรมที่มันเริ่ม เช่น เบราว์เซอร์ของ Playwright ช้าลง โปรเซสที่การทดสอบของคุณเริ่มเองให้ส่งเป็น <code>subprocess.Popen</code> ของมัน</li>
+    <li><strong><code>dst_port</code>, <code>dst_ip</code> และ <code>target</code></strong> คือเป้าหมายของโปรแกรมเอง เขียนด้วย<a href="../banthat-kham-sang/">ไวยากรณ์ของโปรแกรม</a> สำหรับ API บนพอร์ตหรือที่อยู่ที่รู้จัก มันเข้าถึงทุกอย่างที่ตรงกัน: <code>dst_port=443</code> คือทุกการเชื่อมต่อ HTTPS ของเครื่อง รวมถึงของโปรแกรมแก้ไขโค้ดของคุณ และ <code>target="python"</code> คือทุกโปรแกรมที่มี "python" อยู่ในชื่อ</li>
+  </ul>
+  <p>เป้าหมายที่ให้มาพร้อมกันจะจำกัดกันและกัน: <code>server=</code> คู่กับ <code>process="self"</code> จะทำให้ช้าลงเฉพาะการเชื่อมต่อของการทดสอบนี้ไปยังเซิร์ฟเวอร์นั้น บน Linux <code>process=</code> และ <code>target</code> จะเริ่มมีผลกับการเชื่อมต่อใหม่ช้าได้ถึงราว 0.2 วินาทีหลังเปิด ดังนั้นเมื่อคำขอแรกสำคัญ ให้เล็งไปที่เซิร์ฟเวอร์</p>
+</section>
+
+<section>
+  <h2>เซสชันทำอะไรได้บ้าง</h2>
+  <p>ทุกการตั้งค่าคือหนึ่งใน<a href="../banthat-kham-sang/">ตัวเลือกบรรทัดคำสั่ง</a>ของโปรแกรม เขียนด้วย <code>_</code> แทน <code>-</code> <code>latency=300</code> เพิ่ม 300 ms ให้ทุกแพ็กเก็ต <code>jitter=100</code> ทำให้ความหน่วงนั้นแกว่ง <code>loss=5</code> ทิ้งแพ็กเก็ต 5 % <code>down</code> และ <code>up</code> จำกัดความเร็วเป็น KB/s และ <code>loss=100</code> ตัดเซิร์ฟเวอร์ออก <code>preset="presets.3g"</code> คือโปรไฟล์ลิงก์ทั้งชุด และ <code>seed=42</code> ทำให้สุ่มเหมือนเดิมทุกครั้งที่รัน <a href="../senario-tam-wela/">สถานการณ์</a>จะเปลี่ยนสภาพเครือข่ายตามวินาทีที่ผ่านไป: <code>scenario="scenarios/cafe-wifi.json"</code> ขั้นตอนในสถานการณ์เปลี่ยนพฤติกรรมของเครือข่ายได้ แต่เปลี่ยนสิ่งที่เซสชันเล็งไม่ได้</p>
+</section>
+
+<section>
+  <h2>pytest-xdist และข้อจำกัด</h2>
+  <ul>
+    <li><strong>ทีละหนึ่ง</strong> สองเซสชันบนทราฟฟิกเดียวกันจะซ้อนกัน worker ของ pytest-xdist จึงผลัดกันทำ แต่ละตัวรอได้สูงสุด <code>wait</code> วินาที (600 ถ้าไม่ได้กำหนดค่าอื่น) เซสชันที่สองในการทดสอบเดียวกันจะถูกปฏิเสธทันที</li>
+    <li><strong>จบพร้อมการทดสอบ</strong> ถ้าโปรเซสการทดสอบตาย โปรแกรมจะรู้และหยุดทันที <code>duration</code> (300 วินาที ถ้าไม่ได้กำหนดค่าอื่น) คือเวลานานที่สุดที่เซสชันรันได้ไม่ว่ากรณีใด</li>
+    <li><strong>บอกเมื่อไม่ได้ทำอะไร</strong> เซสชันที่ไม่ได้ทำให้อะไรช้าลง เพราะไม่มีอะไรไปถึงเป้าหมาย จะจบด้วย <code>BadNetworkWarning</code> สาเหตุที่พบบ่อยคือแอปคุยกับที่อยู่อื่นที่ไม่ใช่เป้าหมาย เช่น คอนเทนเนอร์</li>
+    <li><strong>macOS</strong> โปรแกรมทำงานบน Windows และ Linux บน Mac ให้รันการทดสอบในคอนเทนเนอร์หรือเครื่องเสมือน Linux x86_64 หรือบนรันเนอร์ CI</li>
+  </ul>
+  <p>README ของแพ็กเกจบน <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/python/beannetworktester">GitHub</a> แสดงทุกตัวเลือกและอธิบายทุกข้อความ</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

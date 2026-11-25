@@ -1,0 +1,138 @@
+{
+  "id": "pytest",
+  "order": 62,
+  "languages": {
+    "en": {
+      "slug": "pytest-network-latency",
+      "link_text": "Network latency in pytest",
+      "title": "Simulate network latency and packet loss in pytest",
+      "description": "A pytest fixture that adds real latency, packet loss or an outage to one server or process, for Playwright for Python too, on Windows and Linux."
+    },
+    "pl": {
+      "slug": "opoznienie-sieci-w-pytest",
+      "link_text": "Opóźnienie sieci w pytest",
+      "title": "Symulacja opóźnienia sieci i utraty pakietów w pytest",
+      "description": "Fixture do pytest, który dodaje serwerowi albo procesowi prawdziwe opóźnienie, utratę pakietów albo awarię, także w Playwright dla Pythona."
+    },
+    "zh-Hans": {
+      "slug": "pytest-wangluo-yanchi",
+      "link_text": "pytest 中的网络延迟",
+      "title": "在 pytest 中模拟网络延迟和丢包",
+      "description": "一个 pytest fixture，为单个服务器或进程加入真实的延迟、丢包或断网，也适用于 Playwright for Python，支持 Windows 和 Linux。"
+    },
+    "ja": {
+      "slug": "pytest-nettowaku-chien",
+      "link_text": "pytest でネットワーク遅延",
+      "title": "pytest でネットワーク遅延とパケットロスを再現",
+      "description": "1つのサーバーやプロセスに本物の遅延、パケットロス、切断を加える pytest のフィクスチャ。Playwright for Python でも使えます。"
+    },
+    "de": {
+      "slug": "netzwerklatenz-in-pytest",
+      "link_text": "Netzwerklatenz in pytest",
+      "title": "Netzwerklatenz und Paketverlust in pytest simulieren",
+      "description": "Eine pytest-Fixture, die einem Server oder Prozess echte Latenz, Paketverlust oder einen Ausfall gibt, auch für Playwright für Python, unter Windows und Linux."
+    },
+    "fr": {
+      "slug": "latence-reseau-dans-pytest",
+      "link_text": "Latence réseau dans pytest",
+      "title": "Simuler la latence réseau et les pertes de paquets dans pytest",
+      "description": "Une fixture pytest qui ajoute une vraie latence, des pertes de paquets ou une coupure à un serveur ou un processus, aussi avec Playwright pour Python."
+    },
+    "es": {
+      "slug": "latencia-de-red-en-pytest",
+      "link_text": "Latencia de red en pytest",
+      "title": "Simula latencia de red y pérdida de paquetes en pytest",
+      "description": "Un fixture de pytest que añade latencia real, pérdida de paquetes o un corte a un servidor o un proceso, también con Playwright para Python, en Windows y Linux."
+    },
+    "pt-BR": {
+      "slug": "latencia-de-rede-no-pytest",
+      "link_text": "Latência de rede no pytest",
+      "title": "Simule latência de rede e perda de pacotes no pytest",
+      "description": "Uma fixture do pytest que adiciona latência real, perda de pacotes ou uma queda a um servidor ou processo, também com Playwright para Python."
+    },
+    "it": {
+      "slug": "latenza-di-rete-in-pytest",
+      "link_text": "Latenza di rete in pytest",
+      "title": "Simulare latenza di rete e perdita di pacchetti in pytest",
+      "description": "Una fixture pytest che aggiunge latenza reale, perdita di pacchetti o un'interruzione a un server o a un processo, anche con Playwright per Python."
+    },
+    "id": {
+      "slug": "latensi-jaringan-di-pytest",
+      "link_text": "Latensi jaringan di pytest",
+      "title": "Simulasikan latensi jaringan dan packet loss di pytest",
+      "description": "Fixture pytest yang menambah latensi nyata, packet loss, atau pemutusan ke satu server atau proses, juga untuk Playwright for Python, di Windows dan Linux."
+    },
+    "ru": {
+      "slug": "zaderzhka-seti-v-pytest",
+      "link_text": "Задержка сети в pytest",
+      "title": "Задержка сети и потеря пакетов в pytest",
+      "description": "Фикстура pytest, которая добавляет серверу или процессу настоящую задержку, потерю пакетов или обрыв, в том числе для Playwright для Python."
+    },
+    "tr": {
+      "slug": "pytest-ag-gecikmesi",
+      "link_text": "pytest içinde ağ gecikmesi",
+      "title": "pytest içinde ağ gecikmesi ve paket kaybı simülasyonu",
+      "description": "Bir sunucuya veya sürece gerçek gecikme, paket kaybı ya da kesinti ekleyen bir pytest fixture'ı, Python için Playwright ile de, Windows ve Linux'ta."
+    },
+    "cs": {
+      "slug": "latence-site-v-pytest",
+      "link_text": "Latence sítě v pytest",
+      "title": "Simulace latence sítě a ztráty paketů v pytest",
+      "description": "Fixture pro pytest, která serveru nebo procesu přidá skutečnou latenci, ztrátu paketů nebo výpadek, i pro Playwright pro Python, na Windows i Linuxu."
+    },
+    "vi": {
+      "slug": "do-tre-mang-trong-pytest",
+      "link_text": "Độ trễ mạng trong pytest",
+      "title": "Mô phỏng độ trễ mạng và mất gói trong pytest",
+      "description": "Một fixture pytest thêm độ trễ thật, mất gói hoặc mất kết nối cho một máy chủ hay một tiến trình, dùng được với Playwright cho Python, trên Windows và Linux."
+    },
+    "hi": {
+      "slug": "pytest-mein-network-latency",
+      "link_text": "pytest में नेटवर्क लेटेंसी",
+      "title": "pytest में नेटवर्क लेटेंसी और पैकेट लॉस का सिमुलेशन",
+      "description": "एक pytest fixture जो किसी सर्वर या प्रोसेस पर असली लेटेंसी, पैकेट लॉस या आउटेज जोड़ता है, Python के लिए Playwright के साथ भी, Windows और Linux पर।"
+    },
+    "ko": {
+      "slug": "pytest-neteuwokeu-jiyeon",
+      "link_text": "pytest의 네트워크 지연",
+      "title": "pytest에서 네트워크 지연과 패킷 손실 시뮬레이션",
+      "description": "한 서버나 프로세스에 실제 지연, 패킷 손실, 끊김을 더하는 pytest fixture. Python용 Playwright에서도 쓸 수 있습니다."
+    },
+    "ar": {
+      "slug": "takhir-alshabaka-fi-pytest",
+      "link_text": "تأخير الشبكة في pytest",
+      "title": "محاكاة تأخير الشبكة وفقدان الحزم في pytest",
+      "description": "أداة fixture لـ pytest تضيف تأخيرًا حقيقيًا أو فقدان حزم أو انقطاعًا لخادم أو عملية واحدة، ومع Playwright لـ Python أيضًا، على Windows وLinux."
+    },
+    "ro": {
+      "slug": "latenta-retelei-in-pytest",
+      "link_text": "Latența rețelei în pytest",
+      "title": "Simulează latența rețelei și pierderi de pachete în pytest",
+      "description": "Un fixture pytest care adaugă latență reală, pierderi de pachete sau o întrerupere unui server sau unui proces, și cu Playwright pentru Python."
+    },
+    "nl": {
+      "slug": "netwerklatentie-in-pytest",
+      "link_text": "Netwerklatentie in pytest",
+      "title": "Netwerklatentie en pakketverlies simuleren in pytest",
+      "description": "Een pytest-fixture die één server of proces echte latentie, pakketverlies of een storing geeft, ook met Playwright voor Python, op Windows en Linux."
+    },
+    "zh-Hant": {
+      "slug": "pytest-wanglu-yanchi",
+      "link_text": "pytest 中的網路延遲",
+      "title": "在 pytest 中模擬網路延遲和封包遺失",
+      "description": "一個 pytest fixture，為單一伺服器或處理程序加入真實的延遲、封包遺失或斷線，也適用於 Playwright for Python，支援 Windows 和 Linux。"
+    },
+    "uk": {
+      "slug": "zatrymka-merezhi-v-pytest",
+      "link_text": "Затримка мережі в pytest",
+      "title": "Затримка мережі і втрата пакетів у pytest",
+      "description": "Фікстура pytest, що додає серверу або процесу справжню затримку, втрату пакетів або обрив, також для Playwright для Python, на Windows і Linux."
+    },
+    "th": {
+      "slug": "khwam-nuang-khruea-khai-pytest",
+      "link_text": "ความหน่วงเครือข่ายใน pytest",
+      "title": "จำลองความหน่วงเครือข่ายและแพ็กเก็ตสูญหายใน pytest",
+      "description": "fixture ของ pytest ที่เพิ่มความหน่วงจริง แพ็กเก็ตสูญหาย หรือการตัดการเชื่อมต่อให้เซิร์ฟเวอร์หรือโปรเซสเดียว ใช้กับ Playwright for Python ได้ด้วย"
+    }
+  }
+}

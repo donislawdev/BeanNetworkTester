@@ -50,7 +50,8 @@ BeanNetworkTester.exe --config moje-nastaveni.json --dry-run</code></pre>
   <code>[bean]</code>. Data jdou na standardní výstup: řádek hlášení každých pár sekund a souhrn na
   konci. S <code>--format json</code> nese standardní výstup jeden objekt JSON na řádek: objekt
   <code>sample</code> pro každé hlášení a na konci <code>summary</code> s návratovým kódem,
-  semínkem a příkazem, který běh zopakuje.</p>
+  semínkem a příkazem, který běh zopakuje.
+  Před prvním hlášením přijde objekt <code>start</code>, zapsaný hned, jak zachytávání běží, takže program, který tento spouští, ví, kdy poslat svůj provoz.</p>
 <pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
   <p>Každý způsob, jak může běh skončit, má vlastní návratový kód, takže pipeline odliší padající
   aplikaci od nástroje, který se nemohl spustit. Kódy jsou vypsané na

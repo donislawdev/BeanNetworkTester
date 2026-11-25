@@ -1062,7 +1062,7 @@ CLI_GROUPS = (
                  "--remove-desktop")),
     ("sources", ("--config", "--preset", "--print-config", "--save-config")),
     ("run", ("--simulate", "--scenario", "--loop", "--interval", "--log-conns",
-             "--repro-out")),
+             "--repro-out", "--stop-on-stdin-close")),
     ("output", ("--verbose", "--quiet", "--log-level", "--log-file", "--format")),
     ("checks", ("--dry-run", "--doctor", "--min-packets", "--fail-on-no-traffic",
                 "--cleanup-driver")),

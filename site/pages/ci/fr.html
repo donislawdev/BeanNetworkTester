@@ -7,14 +7,14 @@
   <h2>La forme d’une étape</h2>
   <p>Dégradez pendant la durée du test, puis laissez l’outil s’arrêter tout seul. Aucune étape de nettoyage à oublier :</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>Dans un job GitHub Actions, sur un runner Windows auto-hébergé :</p>
+  <p>Dans un job GitHub Actions sur un runner Windows :</p>
 <pre><code>- name: Test the app on a poor connection
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>Deux choses à propos du runner : la capture du trafic exige des droits d’administrateur, et un runner hébergé ne vous les donnera pas, donc cela a sa place sur une machine Windows auto-hébergée.</p>
+  <p>Capturer le trafic demande les droits d'administrateur. Les runners Windows hébergés par GitHub tournent avec des droits élevés, donc l'étape y fonctionne telle quelle, et un runner auto-hébergé doit tourner en administrateur. Un test Playwright ou pytest peut aussi lancer et arrêter le programme lui-même : voir <a href="../reseau-lent-dans-playwright/">Playwright</a> et <a href="../latence-reseau-dans-pytest/">pytest</a>.</p>
 </section>
 
 <section>

@@ -7,14 +7,14 @@
   <h2>หน้าตาของหนึ่งขั้นตอน</h2>
   <p>ทำให้เครือข่ายแย่ตลอดช่วงทดสอบ แล้วปล่อยให้มันหยุดเอง ไม่มีขั้นตอนล้างข้อมูลที่ลืมได้:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>ในงาน GitHub Actions บนรันเนอร์ Windows ที่โฮสต์เอง (self-hosted):</p>
+  <p>ในงาน GitHub Actions บนรันเนอร์ Windows:</p>
 <pre><code>- name: Test the app on a poor connection
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>สองข้อเกี่ยวกับรันเนอร์ การดักจับทราฟฟิกต้องใช้สิทธิ์ผู้ดูแลระบบ และรันเนอร์ที่โฮสต์ให้จะไม่ให้สิทธิ์นั้น จึงต้องใช้เครื่อง Windows ที่โฮสต์เอง</p>
+  <p>การดักจับทราฟฟิกต้องใช้สิทธิ์ผู้ดูแลระบบ รันเนอร์ Windows ที่ GitHub โฮสต์ทำงานด้วยสิทธิ์ยกระดับ ขั้นตอนนี้จึงใช้ที่นั่นได้ทันที ส่วนรันเนอร์ที่โฮสต์เองต้องรันในฐานะผู้ดูแลระบบ การทดสอบที่เขียนด้วย Playwright หรือ pytest ก็เริ่มและหยุดโปรแกรมเองได้เช่นกัน: ดู <a href="../khruea-khai-cha-nai-playwright/">Playwright</a> และ <a href="../khwam-nuang-khruea-khai-pytest/">pytest</a></p>
 </section>
 
 <section>

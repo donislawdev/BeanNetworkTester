@@ -53,6 +53,7 @@ ping を増やす、パケットを破棄する、速度に上限をかける、
 - **リアルタイム表示** - グラフ、カウンター、検索できる接続テーブル、イベントログを備えています。
 - **CSV へのエクスポート** - セッションの統計と、接続テーブルのスナップショットを書き出せます。
 - **コマンドラインモード** - 終了コードと JSON 出力に対応し、CI からスクリプトで操作できます。
+- **テストの中で** - pytest のフィクスチャーと Playwright Test のフィクスチャーが、1 つのテストのあいだ本物のネットワークを遅くします。狙うのは 1 つのサーバーです。
 - **同じウィンドウにあるネットワークツール** - グラフ、ジッター、パケットロスを表示する連続 ping、TCP と UDP のポートスキャナー、通話のための NAT と TURN のチェック、このコンピューターのすべてのソケットとそれを使うプログラム、どのローカルポートが空いているかの確認、TCP 接続ごとの状態、ネットワークアダプター。
 - **テレメトリなし、自分からは何も送信しない**
 
@@ -191,6 +192,34 @@ services:
 ```bash
 gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1
 ```
+
+### テストで使う: pytest と Playwright
+
+1.1.0 から、安定版のリリースは Python パッケージと npm パッケージにもなります。どちらも名前は `beannetworktester` で、遅い、パケットが失われる、切れるネットワークが必要なテストのためのものです。どちらもそのリリースの Windows x64 版と Linux x64 版のプログラムを含み、1 つのテストのあいだだけ動かします。狙うのはサーバーかテスト自身のプロセスで、マシン全体ではありません。テストが終わると止まります。
+
+```python
+# pip install beannetworktester
+def test_checkout_survives_a_slow_api(bad_network):
+    bad_network(server="http://localhost:8000", latency=300, loss=2)
+    ...
+```
+
+```js
+// npm install --save-dev beannetworktester
+import { test, expect } from 'beannetworktester/playwright';
+
+test('the spinner shows on a slow network', async ({ page, badNetwork }) => {
+  await badNetwork({ server: 'http://localhost:3000', latency: 800 });
+  await page.goto('http://localhost:3000');
+});
+```
+
+- 設定はこのプログラムのフラグの名前そのままです。たとえば `latency`、`jitter`、`loss`、`preset` です。
+- ネットワークを変えるには、Windows では管理者権限、Linux では root かパスワードなしの `sudo` が必要です。GitHub の Windows と Ubuntu のランナーにはどちらもあります。
+- Playwright だけでは、ページをオフラインにするか Chromium を遅くすることしかできません。これはネットワークそのものに働くので、Chromium、Firefox、WebKit が同じように遅くなり、WebSocket も含まれます。
+- 1 台のマシンで同時に動くセッションは 1 つなので、並列のテストワーカーは互いを待ちます。
+
+残りはそれぞれのパッケージのページにあります: [PyPI](https://pypi.org/project/beannetworktester/) と [npm](https://www.npmjs.com/package/beannetworktester)。
 
 ## ウィンドウ
 
@@ -548,7 +577,7 @@ BeanNetworkTester.exe --preset "3G network" --duration 60
 ### 出力: ログは stderr、データは stdout
 
 - **stderr** - 人間向けのログで、先頭に `[bean]` が付きます (開始、シード、エラー、停止の理由)。
-- **stdout** - データです。レポートの行と、`--format json` のときは **NDJSON** (1行に1つの JSON オブジェクト。連続する `sample` オブジェクトと、終了コード、シード、再現コマンドを含む最後の `summary`) です。
+- **stdout** - データです。レポートの行と、`--format json` のときは **NDJSON** (1行に1つの JSON オブジェクト。キャプチャーが動き出した時点の `start` オブジェクト、連続する `sample` オブジェクト、終了コード、シード、再現コマンドを含む最後の `summary`) です。このプログラムを起動するプログラムは、遅くしたい通信を送る前に `start` を待てます。
 
 ```bat
 BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
@@ -642,6 +671,7 @@ BeanNetworkTester.exe --simulate --duration 30 --format json > run.ndjson
 | `--print-config` | 有効な設定 (`defaults < file < preset < flags` の適用後) を JSON で出力して終了する |
 | `--min-packets N` | N 個より少ないパケットしか捕捉されなかった場合、終了コード `6` で終了する |
 | `--fail-on-no-traffic` | `--min-packets 1` の短縮形 - **何も捕捉しなかったフィルターを検出する** |
+| `--stop-on-stdin-close` | 標準入力が閉じられたら、通常の終了としてセッションを終えます。サマリーが書かれ、その `stop_reason` は `stdin` です。このプログラムを起動したプログラムはパイプを閉じれば止められ、そのプログラムが終了した場合も `--duration` まで続けずにすぐ終わります |
 | `--doctor` | 環境 (管理者権限、`pydivert`、WinDivert ドライバーの状態、`%TEMP%` の残骸、管理者権限なしでプログラムのフォルダーに書き込めるか、時計がどれだけ細かく時間を測るか) をチェックして終了する |
 | `--cleanup-driver` | 動かなくなった WinDivert ドライバーをアンロードして (ロックされた `.sys` ファイルを**システムの再起動なしで**解放して) 終了する。各行が、1つのサービスに何が起きたかを伝える。サービスを停止できなかった場合でも、終了コードは `0` |
 
@@ -1079,6 +1109,8 @@ beantester/              実装パッケージ
     applied.py           "Apply changes" がフォームと比較する対象 (純粋なヘルパー)
     theme.py  chart.py  tooltip.py  profiles.py  icon.py  labels.py
 lang/                    翻訳 (en, pl, zh)
+python/                  PyPI で公開する pytest 用ヘルパー (beannetworktester)
+npm/                     npm で公開する Playwright Test 用ヘルパー (beannetworktester)
 tests/                   pytest のテスト
 smoke_gui.py             偽の tkinter 上の GUI スモークテスト
 BeanNetworkTester.spec   ビルドのレシピ (onedir、console、asInvoker)

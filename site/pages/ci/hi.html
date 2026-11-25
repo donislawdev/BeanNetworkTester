@@ -7,14 +7,14 @@
   <h2>एक चरण का रूप</h2>
   <p>टेस्ट की अवधि भर बिगाड़ें, फिर उसे अपने आप रुकने दें। सफ़ाई का कोई चरण नहीं जिसे भूला जा सके:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>GitHub Actions जॉब में, सेल्फ़-होस्टेड Windows रनर पर:</p>
+  <p>Windows रनर पर GitHub Actions जॉब में:</p>
 <pre><code>- name: Test the app on a poor connection
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>रनर के बारे में दो बातें: ट्रैफ़िक कैप्चर करने के लिए एडमिनिस्ट्रेटर अधिकार चाहिए, और होस्टेड रनर वे नहीं देगा, इसलिए यह सेल्फ़-होस्टेड Windows मशीन का काम है।</p>
+  <p>ट्रैफ़िक कैप्चर करने के लिए एडमिनिस्ट्रेटर अधिकार चाहिए। GitHub के होस्ट किए गए Windows रनर ऊँचे अधिकारों के साथ चलते हैं, इसलिए यह कदम वहाँ जैसा है वैसा ही चलता है, और सेल्फ़-होस्टेड रनर को एडमिनिस्ट्रेटर के रूप में चलना होगा। Playwright या pytest में लिखा टेस्ट भी प्रोग्राम को ख़ुद शुरू और बंद कर सकता है: <a href="../playwright-mein-dhima-network/">Playwright</a> और <a href="../pytest-mein-network-latency/">pytest</a> देखें।</p>
 </section>
 
 <section>

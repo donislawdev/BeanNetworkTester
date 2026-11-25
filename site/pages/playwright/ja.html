@@ -1,0 +1,83 @@
+<section class="hero">
+  <h1>Playwright のテストで遅いネットワークとパケットロスを再現</h1>
+  <p class="lead">Playwright はページをオフラインにしたり、DevTools 経由で Chromium を遅くしたりできます。npm の <code>beannetworktester</code> パッケージは、代わりにブラウザーの下で本物のネットワークを遅くします。テストが通信するサーバーに対して、遅延、パケットロス、速度制限、完全な切断を加えます。Chromium、Firefox、WebKit は WebSocket も含めて同じように遅くなります。パッケージには Bean Network Tester のプログラムが入っており、テストの間だけ Windows と Linux で実行します。1.1.0 以降の安定版リリースごとに公開されます。</p>
+</section>
+
+<section>
+  <h2>インストール</h2>
+<pre><code>npm install -D @playwright/test beannetworktester
+npx playwright install chromium</code></pre>
+  <p>Windows x64 または Linux x64（glibc 2.39 以降、たとえば Ubuntu 24.04）と Node 20 以降が必要です。npm はお使いのシステム向けのプログラムをオプションの依存関係としてインストールするので、オプションの依存関係を除外しないでください。</p>
+  <p>ネットワークを変えるには、Windows では管理者権限が必要です。ターミナルを「管理者として実行」で開いてください。Linux では root か、パスワードなしで <code>sudo</code> を実行できるユーザーが必要で、その場合 <code>sudo</code> で動くのはプログラムだけです。GitHub がホストする Windows ランナーは昇格した権限で動き、Ubuntu ランナーは <code>sudo</code> を許可しているので、ワークフローに追加の手順は要りません。</p>
+</section>
+
+<section>
+  <h2>遅いネットワークでのテスト</h2>
+  <p>これを <code>tests/slow.spec.js</code> として保存し、<code>npx playwright test</code> を実行します。</p>
+<pre><code>import http from 'node:http';
+import { test, expect } from 'beannetworktester/playwright';
+
+let server;
+test.beforeAll(async () =&gt; {
+  server = http.createServer((request, response) =&gt; response.end('&lt;h1&gt;Hello&lt;/h1&gt;'));
+  await new Promise((done) =&gt; server.listen(8000, done));
+});
+test.afterAll(() =&gt; server.close());
+
+test('a page takes longer on a slow network', async ({ page, badNetwork }) =&gt; {
+  await badNetwork({ server: 'http://localhost:8000', latency: 500 });
+  const started = Date.now();
+  await page.goto('http://localhost:8000');
+  await expect(page.locator('h1')).toHaveText('Hello');
+  expect(Date.now() - started).toBeGreaterThanOrEqual(500);
+});</code></pre>
+  <p>テストが通るのは、ページが本当に遅れて届くからです。そのサーバーとの間のすべてのパケットが 500 ms 待ちます。テストが終わるとネットワークは元に戻ります。Windows で <code>latency: 200</code> にして測定すると、対象のサーバーへのリクエストは 0.8 ms から 404 ms になり（リクエストと応答の両方が待つため）、Chromium のページは 13 ms から 416 ms になりました。対象外の別のローカルサーバーは、その間 1.6 ms で応答していました。</p>
+  <p>権限がすぐに使えない場合は、<code>badNetwork({ simulate: true, latency: 500 })</code> を使います。作り物の通信でプログラムを動かし、ネットワークには何も変更を加えません。パッケージが正しく入っているかの確認用で、何も遅くしません。</p>
+</section>
+
+<section>
+  <h2>badNetwork フィクスチャ</h2>
+  <p><code>test</code> と <code>expect</code> を <code>@playwright/test</code> ではなく <code>beannetworktester/playwright</code> からインポートします。<code>badNetwork</code> を呼ぶとセッションが始まり、ネットワークが遅くなった時点で完了します。セッションはテストが成功しても失敗してもクラッシュしても、テストの終わりに止まり、プログラムのサマリーが <code>bad-network</code> としてテストのレポートに添付されます。途中で条件を変えるには、次のセッションを始める前に最初のセッションを止めます。</p>
+<pre><code>test('the app recovers when the API comes back', async ({ page, badNetwork }) =&gt; {
+  const outage = await badNetwork({ server: 'http://localhost:8000', loss: 100 });
+  await page.goto('http://localhost:3000');
+  await expect(page.getByText('Offline')).toBeVisible();
+  await outage.stop();
+  await expect(page.getByText('Offline')).toBeHidden();
+});</code></pre>
+  <p>Playwright Test の外では、<code>require('beannetworktester')</code> の <code>badNetwork</code> で同じセッションを始められます。<code>const session = await badNetwork({ ... })</code> と書き、<code>await session.stop()</code> で終了してサマリーを受け取ります。</p>
+</section>
+
+<section>
+  <h2>セッションの対象</h2>
+  <p>どのセッションも何かを対象にし、変わるのはその通信だけです。対象のないセッションはマシンのすべての接続を、テストランナー自身の接続まで遅くしてしまうため、開始しません。</p>
+  <ul>
+    <li><strong><code>server: 'http://localhost:3000'</code></strong> は、そのアドレスとポートへのすべての接続を遅くします。ブラウザーからでも、API サーバーからでも、ほかのどのプログラムからでもです。<code>'db.local:5432'</code> やサーバーのリストも使えます。これが第一の選択肢で、Windows でも Linux でも正確です。</li>
+    <li><strong><code>process: 'self'</code></strong> は、テストワーカーと、それが起動したすべてのプログラム（ブラウザーなど）を遅くします。テスト自身が起動したプロセスは、その <code>ChildProcess</code> を渡します。</li>
+    <li><strong><code>dstPort</code>、<code>dstIp</code>、<code>target</code></strong> はプログラム自身の対象で、<a href="../komando-rain/">その構文</a>で書きます。既知のポートやアドレスにある API 向けです。一致するものすべてに届きます。<code>dstPort: 443</code> はエディターの通信も含むマシンのすべての HTTPS 接続、<code>target: 'node'</code> は名前に「node」を含むすべてのプログラムです。</li>
+  </ul>
+  <p>一緒に指定した対象は互いを絞り込みます。<code>server</code> と <code>process: 'self'</code> を合わせると、このワーカーからそのサーバーへの接続だけが遅くなります。Linux では、<code>process</code> と <code>target</code> が新しい接続に効くのは、開いてから最大で約 0.2 秒後です。最初のリクエストが大事なときはサーバーを対象にしてください。</p>
+</section>
+
+<section>
+  <h2>セッションでできること</h2>
+  <p>各設定はプログラムの<a href="../komando-rain/">コマンドラインオプション</a>のひとつです。<code>latency: 300</code> はすべてのパケットに 300 ms を加え、<code>jitter: 100</code> はその遅延を揺らし、<code>loss: 5</code> はパケットの 5 % を落とし、<code>down</code> と <code>up</code> は速度を KB/s で制限し、<code>loss: 100</code> はサーバーを切り離します。<code>preset: 'presets.3g'</code> は回線プロファイル一式で、<code>seed: 42</code> は毎回同じランダムな選択をします。<a href="../jikan-henka-shinario/">シナリオ</a>は秒ごとに条件を変えます：<code>scenario: 'scenarios/cafe-wifi.json'</code>。シナリオのステップはネットワークの振る舞いを変えられますが、セッションの対象は変えられません。</p>
+</section>
+
+<section>
+  <h2>並列ワーカーと上限</h2>
+  <ul>
+    <li><strong>一度にひとつ。</strong>同じ通信に 2 つのセッションをかけると効果が重なるため、並列ワーカーは順番待ちをし、それぞれ最大 <code>wait</code> 秒（指定しなければ 600）待ちます。同じテスト内の 2 つ目のセッションはすぐに拒否されます。</li>
+    <li><strong>テストとともに終わります。</strong>テストワーカーが落ちると、プログラムはそれに気づいてすぐ止まります。<code>duration</code>（指定しなければ 300 秒）は、どんな場合でもセッションが動ける最長時間です。</li>
+    <li><strong>何もしなかったときは知らせます。</strong>対象に何も届かず、何も遅くしなかったセッションは <code>BadNetworkWarning</code> で終わります。よくある原因は、アプリが対象とは別のアドレス、たとえばコンテナと通信していることです。</li>
+    <li><strong>macOS。</strong>プログラムは Windows と Linux で動きます。Mac では、Linux x86_64 のコンテナや仮想マシン、または CI ランナーでテストを実行してください。</li>
+  </ul>
+  <p>パッケージの README（<a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/npm/beannetworktester">GitHub</a>）に、すべてのオプションと各メッセージの意味が載っています。</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

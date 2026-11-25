@@ -7,14 +7,14 @@
   <h2>一個步驟的樣子</h2>
   <p>在測試期間施加影響，然後讓它自行停止。沒有需要記得執行的清理步驟：</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>在 GitHub Actions 作業中，使用自行代管的 Windows 執行器：</p>
+  <p>在 Windows 執行器上的 GitHub Actions 工作中：</p>
 <pre><code>- name: Test the app on a poor connection
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>關於執行器有兩點：擷取流量需要管理員權限，而代管執行器不會給你這些權限，所以這應該放在自行代管的 Windows 機器上。</p>
+  <p>擷取流量需要系統管理員權限。GitHub 代管的 Windows 執行器以提升的權限執行，所以這個步驟在那裡可以直接使用；自行代管的執行器則必須以系統管理員身分執行。用 Playwright 或 pytest 撰寫的測試也可以自己啟動和停止程式：請參閱 <a href="../playwright-man-wanglu/">Playwright</a> 和 <a href="../pytest-wanglu-yanchi/">pytest</a>。</p>
 </section>
 
 <section>

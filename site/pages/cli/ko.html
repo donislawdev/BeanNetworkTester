@@ -30,7 +30,7 @@ BeanNetworkTester.exe --config my-settings.json --dry-run</code></pre>
 
 <section>
   <h2>무엇을 출력하는가</h2>
-  <p>사람이 읽는 로그는 표준 오류로 나가며, 각 줄은 <code>[bean]</code>으로 시작합니다. 데이터는 표준 출력으로 나갑니다. 몇 초마다 보고 줄 하나, 그리고 마지막에 요약입니다. <code>--format json</code>을 쓰면 표준 출력은 한 줄에 JSON 객체 하나씩을 담습니다. 보고마다 <code>sample</code> 객체 하나, 그리고 마지막에 종료 코드, 시드, 실행을 반복하는 명령이 든 <code>summary</code>입니다.</p>
+  <p>사람이 읽는 로그는 표준 오류로 나가며, 각 줄은 <code>[bean]</code>으로 시작합니다. 데이터는 표준 출력으로 나갑니다. 몇 초마다 보고 줄 하나, 그리고 마지막에 요약입니다. <code>--format json</code>을 쓰면 표준 출력은 한 줄에 JSON 객체 하나씩을 담습니다. 보고마다 <code>sample</code> 객체 하나, 그리고 마지막에 종료 코드, 시드, 실행을 반복하는 명령이 든 <code>summary</code>입니다. 첫 보고 전에는 캡처가 시작되는 즉시 <code>start</code> 객체가 나오므로, 이 프로그램을 실행하는 프로그램은 언제 트래픽을 보내면 되는지 알 수 있습니다.</p>
 <pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
   <p>실행이 끝나는 방식마다 고유한 종료 코드가 있으므로, 파이프라인은 실패한 애플리케이션과 시작하지 못한 도구를 구별할 수 있습니다. 코드 목록은 <a href="../chamjo-pyo/">참조 표 페이지</a>에 있습니다.</p>
 </section>

@@ -1,0 +1,83 @@
+<section class="hero">
+  <h1>Simulace pomalé sítě a ztráty paketů v testech Playwright</h1>
+  <p class="lead">Playwright umí stránku odpojit od sítě a zpomalit Chromium přes DevTools. Balíček <code>beannetworktester</code> z npm místo toho zpomalí skutečnou síť, pod prohlížečem: latenci, ztrátu paketů, omezení rychlosti nebo úplný výpadek, pro server, se kterým váš test mluví. Chromium, Firefox i WebKit se zpomalí stejně, včetně WebSocketů. Balíček obsahuje program Bean Network Tester a spouští ho po dobu testu, ve Windows i v Linuxu. Vychází s každou stabilní verzí od 1.1.0.</p>
+</section>
+
+<section>
+  <h2>Instalace</h2>
+<pre><code>npm install -D @playwright/test beannetworktester
+npx playwright install chromium</code></pre>
+  <p>Potřebuje Windows x64 nebo Linux x64 (glibc 2.39 nebo novější, například Ubuntu 24.04) a Node 20 nebo novější. npm instaluje program pro váš systém jako volitelnou závislost, takže volitelné závislosti nevynechávejte.</p>
+  <p>Změna sítě potřebuje ve Windows práva správce: otevřete terminál přes „Spustit jako správce“. V Linuxu potřebuje root nebo uživatele, který smí spouštět <code>sudo</code> bez hesla, a pak pod <code>sudo</code> běží jen program. Hostované runnery GitHubu s Windows běží se zvýšenými právy a ty s Ubuntu povolují <code>sudo</code>, takže workflow nepotřebuje žádný krok navíc.</p>
+</section>
+
+<section>
+  <h2>Test na pomalé síti</h2>
+  <p>Uložte to jako <code>tests/slow.spec.js</code> a spusťte <code>npx playwright test</code>:</p>
+<pre><code>import http from 'node:http';
+import { test, expect } from 'beannetworktester/playwright';
+
+let server;
+test.beforeAll(async () =&gt; {
+  server = http.createServer((request, response) =&gt; response.end('&lt;h1&gt;Hello&lt;/h1&gt;'));
+  await new Promise((done) =&gt; server.listen(8000, done));
+});
+test.afterAll(() =&gt; server.close());
+
+test('a page takes longer on a slow network', async ({ page, badNetwork }) =&gt; {
+  await badNetwork({ server: 'http://localhost:8000', latency: 500 });
+  const started = Date.now();
+  await page.goto('http://localhost:8000');
+  await expect(page.locator('h1')).toHaveText('Hello');
+  expect(Date.now() - started).toBeGreaterThanOrEqual(500);
+});</code></pre>
+  <p>Test projde, protože stránka opravdu přijde později: každý paket k tomu serveru a od něj čeká 500 ms. Po skončení testu je síť zase normální. Změřeno ve Windows s <code>latency: 200</code>: požadavek na server v cíli trval místo 0,8 ms 404 ms, protože čeká požadavek i odpověď, a stránka v Chromiu místo 13 ms 416 ms. Jiný místní server, mimo cíl, mezitím odpovídal za 1,6 ms.</p>
+  <p>Nemáte práva po ruce? <code>badNetwork({ simulate: true, latency: 500 })</code> spustí program na vymyšleném provozu a na síti nic nezmění. Ověří, že je balíček správně nainstalovaný, a nic nezpomalí.</p>
+</section>
+
+<section>
+  <h2>Fixture badNetwork</h2>
+  <p>Importujte <code>test</code> a <code>expect</code> z <code>beannetworktester/playwright</code> místo z <code>@playwright/test</code>. <code>badNetwork</code> spustí sezení, když ho zavoláte, a skončí čekání, jakmile je síť pomalá. Sezení skončí s koncem testu, ať prošel, selhal, nebo spadl, a souhrn programu se připojí ke zprávě testu jako <code>bad-network</code>. Chcete-li uprostřed testu změnit podmínky, zastavte první sezení dřív, než spustíte další:</p>
+<pre><code>test('the app recovers when the API comes back', async ({ page, badNetwork }) =&gt; {
+  const outage = await badNetwork({ server: 'http://localhost:8000', loss: 100 });
+  await page.goto('http://localhost:3000');
+  await expect(page.getByText('Offline')).toBeVisible();
+  await outage.stop();
+  await expect(page.getByText('Offline')).toBeHidden();
+});</code></pre>
+  <p>Mimo Playwright Test spustí stejné sezení <code>badNetwork</code> z <code>require('beannetworktester')</code>: <code>const session = await badNetwork({ ... })</code>, a <code>await session.stop()</code> ho ukončí a vrátí souhrn.</p>
+</section>
+
+<section>
+  <h2>Na co sezení míří</h2>
+  <p>Každé sezení na něco míří a mění se jen tento provoz. Sezení bez cíle by zpomalilo každé spojení počítače, i spojení samotného spouštěče testů, a proto se vůbec nespustí.</p>
+  <ul>
+    <li><strong><code>server: 'http://localhost:3000'</code></strong> zpomalí každé spojení s touto adresou a portem, z prohlížeče, z vašeho API serveru nebo z jakéhokoli jiného programu. Funguje i <code>'db.local:5432'</code> a seznam serverů. To je první volba a ve Windows i v Linuxu je přesná.</li>
+    <li><strong><code>process: 'self'</code></strong> zpomalí testovací worker a každý program, který spustil, například jeho prohlížeč. Proces, který spustil sám test, předáte jako jeho <code>ChildProcess</code>.</li>
+    <li><strong><code>dstPort</code>, <code>dstIp</code> a <code>target</code></strong> jsou vlastní cíle programu, zapsané v <a href="../prikazovy-radek/">jeho syntaxi</a>, pro API na známém portu nebo adrese. Zasáhnou všechno, co odpovídá: <code>dstPort: 443</code> je každé spojení HTTPS počítače, i spojení vašeho editoru, a <code>target: 'node'</code> každý program s „node“ v názvu.</li>
+  </ul>
+  <p>Cíle zadané spolu se navzájem zužují: <code>server</code> s <code>process: 'self'</code> zpomalí jen spojení tohoto workeru s tím serverem. V Linuxu <code>process</code> a <code>target</code> zasáhnou nové spojení až asi 0,2 sekundy po jeho otevření, takže miřte na server, když záleží na prvním požadavku.</p>
+</section>
+
+<section>
+  <h2>Co sezení umí</h2>
+  <p>Každé nastavení je jedna z <a href="../prikazovy-radek/">voleb příkazového řádku</a> programu. <code>latency: 300</code> přidá každému paketu 300 ms, <code>jitter: 100</code> tuto prodlevu mění, <code>loss: 5</code> zahodí 5 % paketů, <code>down</code> a <code>up</code> omezí rychlost v KB/s a <code>loss: 100</code> server odřízne. <code>preset: 'presets.3g'</code> je celý profil linky a <code>seed: 42</code> udělá při každém běhu stejné náhodné volby. <a href="../scenare-v-case/">Scénář</a> mění podmínky, jak běží sekundy: <code>scenario: 'scenarios/cafe-wifi.json'</code>. Krok scénáře smí změnit, jak se síť chová, ale ne to, na co sezení míří.</p>
+</section>
+
+<section>
+  <h2>Paralelní workery a meze</h2>
+  <ul>
+    <li><strong>Jedno po druhém.</strong> Dvě sezení na stejném provozu by se sčítala, takže paralelní workery se střídají a každý čeká až <code>wait</code> sekund (600, pokud nezadáte jinak). Druhé sezení ve stejném testu je hned odmítnuto.</li>
+    <li><strong>Končí s testem.</strong> Když testovací worker zanikne, program to pozná a hned se zastaví. <code>duration</code> (300 sekund, pokud nezadáte jinak) je v každém případě nejdelší doba sezení.</li>
+    <li><strong>Řekne, když nic neudělalo.</strong> Sezení, které nic nezpomalilo, protože do jeho cíle nic nedorazilo, skončí varováním <code>BadNetworkWarning</code>. Obvykle aplikace mluví s jinou adresou, než je cíl, například s kontejnerem.</li>
+    <li><strong>macOS.</strong> Program běží ve Windows a v Linuxu. Na Macu spusťte testy v kontejneru nebo virtuálním počítači s Linuxem x86_64, nebo na runneru CI.</li>
+  </ul>
+  <p>README balíčku na <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/npm/beannetworktester">GitHubu</a> uvádí každou volbu a vysvětluje každou zprávu.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

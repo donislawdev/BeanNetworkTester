@@ -50,7 +50,8 @@ BeanNetworkTester.exe --config mie-impostazioni.json --dry-run</code></pre>
   <code>[bean]</code>. I dati vanno sullo standard output: una riga di resoconto ogni pochi secondi e
   un riepilogo alla fine. Con <code>--format json</code>, lo standard output porta un oggetto JSON per
   riga: un oggetto <code>sample</code> per ogni resoconto e un <code>summary</code> finale con il
-  codice di uscita, il seme e il comando che ripete l'esecuzione.</p>
+  codice di uscita, il seme e il comando che ripete l'esecuzione.
+  Prima del primo resoconto arriva un oggetto <code>start</code>, scritto appena la cattura è attiva, così un programma che avvia questo sa quando inviare il suo traffico.</p>
 <pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
   <p>Ogni modo in cui un'esecuzione può finire ha il proprio codice di uscita, così una pipeline
   distingue un'applicazione che fallisce da uno strumento che non è riuscito ad avviarsi. I codici

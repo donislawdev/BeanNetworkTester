@@ -1,0 +1,96 @@
+<section class="hero">
+  <h1>pytest içinde ağ gecikmesi ve paket kaybı simülasyonu</h1>
+  <p class="lead">Hiçbir şey taklit edilmez: PyPI'daki <code>beannetworktester</code> paketi pytest'e, bir test süresince gerçek ağı yavaşlatan bir <code>bad_network</code> fixture'ı verir. Gecikme, paket kaybı, hız sınırı ya da tam kesinti, tek bir sunucu ya da tek bir süreç için, uygulamanız, tarayıcınız ve sunucunuz gerçekten birbiriyle konuşurken. Paket Bean Network Tester'ın kendi programını içerir ve Windows ile Linux'ta çalıştırır. 1.1.0'dan itibaren her kararlı sürümle yayımlanır.</p>
+</section>
+
+<section>
+  <h2>Kurulum</h2>
+<pre><code>pip install beannetworktester</code></pre>
+  <p>Windows x64 ya da Linux x64 (glibc 2.39 veya daha yenisi, örneğin Ubuntu 24.04) ve Python 3.10 veya daha yenisi gerekir.</p>
+  <p>Ağı değiştirmek Windows'ta yönetici hakları ister: terminali "Yönetici olarak çalıştır" ile açın. Linux'ta root ya da parolasız <code>sudo</code> çalıştırabilen bir kullanıcı gerekir, o zaman <code>sudo</code> altında yalnızca program çalışır. GitHub'ın barındırılan Windows runner'ları yükseltilmiş haklarla çalışır, Ubuntu runner'ları da <code>sudo</code> izni verir, yani bir workflow'un fazladan bir adıma ihtiyacı yoktur.</p>
+</section>
+
+<section>
+  <h2>Yavaş bir ağda test</h2>
+  <p>Bunu <code>test_slow.py</code> olarak kaydedin ve <code>pytest</code> çalıştırın:</p>
+<pre><code>import subprocess
+import sys
+import time
+import urllib.request
+
+import pytest
+
+
+@pytest.fixture
+def web_server():
+    server = subprocess.Popen([sys.executable, "-m", "http.server", "8000"])
+    time.sleep(1)
+    yield "http://localhost:8000"
+    server.terminate()
+
+
+def test_a_page_takes_longer_on_a_slow_network(bad_network, web_server):
+    bad_network(server=web_server, latency=500)
+    started = time.monotonic()
+    urllib.request.urlopen(web_server).read()
+    assert time.monotonic() - started &gt;= 0.5</code></pre>
+  <p>Test geçer, çünkü yanıt gerçekten daha geç gelir: o sunucuya giden ve ondan gelen her paket 500 ms bekler. Test bitince ağ normale döner. Windows'ta <code>latency=200</code> ile ölçüldü: hedefteki sunucuya bir istek 4 ms'den 404 ms'ye çıktı, çünkü hem istek hem yanıt bekler, Chromium'da bir sayfa da 61 ms'den 412 ms'ye. Hedefin dışındaki başka bir yerel sunucu bu sırada 11 ms'de yanıt verdi.</p>
+  <p>Haklarınız el altında değil mi? <code>bad_network(simulate=True, latency=500)</code> programı uydurma trafikle çalıştırır ve ağda hiçbir şeyi değiştirmez. Paketin doğru kurulduğunu denetler, hiçbir şeyi yavaşlatmaz.</p>
+</section>
+
+<section>
+  <h2>bad_network fixture'ı</h2>
+  <p>Paket kurulunca pytest fixture'ı kendisi bulur. <code>bad_network</code> onu çağırdığınızda bir oturum başlatır ve ağ yavaşladığı anda döner. Oturum test bitince durur, test geçmiş, kalmış ya da çökmüş olsun, ve programın özeti testin <code>user_properties</code> alanına, oradan da bir JUnit XML raporuna gider. Koşulları testin ortasında değiştirmek için, sonrakini başlatmadan önce ilk oturumu durdurun:</p>
+<pre><code>def test_the_app_recovers_when_the_api_comes_back(bad_network):
+    outage = bad_network(server="http://localhost:8000", loss=100)
+    assert app_shows_offline_banner()
+    outage.stop()
+    assert app_hides_offline_banner()</code></pre>
+  <p>pytest dışında <code>from beannetworktester import bad_network</code> aynı oturumu başlatır, <code>with bad_network(...) as session:</code> ise onu bloğun sonunda durdurur.</p>
+</section>
+
+<section>
+  <h2>Python için Playwright</h2>
+  <p>Python için Playwright pytest üzerinde çalışır, bu yüzden fixture aynıdır. Chromium, Firefox ve WebKit aynı şekilde yavaşlar, WebSocket'ler de dahil, çünkü yavaş olan ağın kendisidir, tarayıcının ona dair fikri değil:</p>
+<pre><code>from playwright.sync_api import expect
+
+
+def test_the_spinner_shows_on_a_slow_network(bad_network, page):
+    bad_network(server="http://localhost:3000", latency=800)
+    page.goto("http://localhost:3000")
+    expect(page.get_by_role("progressbar")).to_be_visible()</code></pre>
+</section>
+
+<section>
+  <h2>Bir oturum neyi hedefler</h2>
+  <p>Her oturum bir şeyi hedefler ve yalnızca o trafik değişir. Hedefi olmayan bir oturum makinenin her bağlantısını, test çalıştırıcısının kendi bağlantıları dahil, yavaşlatırdı, bu yüzden hiç başlamaz.</p>
+  <ul>
+    <li><strong><code>server="http://localhost:3000"</code></strong> o adres ve porta giden her bağlantıyı yavaşlatır; uygulamanızdan, tarayıcınızdan ya da başka herhangi bir programdan. <code>"db.local:5432"</code>, <code>("10.0.0.5", 443)</code> ve bir sunucu listesi de çalışır. İlk tercih budur ve Windows ile Linux'ta tam isabetlidir.</li>
+    <li><strong><code>process="self"</code></strong> test sürecini ve onun başlattığı her programı, örneğin Playwright'ın tarayıcısını yavaşlatır. Testinizin kendi başlattığı bir süreç, <code>subprocess.Popen</code> nesnesiyle verilir.</li>
+    <li><strong><code>dst_port</code>, <code>dst_ip</code> ve <code>target</code></strong> programın kendi hedefleridir, <a href="../komut-satiri/">onun sözdizimiyle</a> yazılır ve bilinen bir port ya da adresteki bir API içindir. Eşleşen her şeye ulaşırlar: <code>dst_port=443</code> makinenin her HTTPS bağlantısıdır, editörünüzünkiler dahil, <code>target="python"</code> ise adında "python" geçen her programdır.</li>
+  </ul>
+  <p>Birlikte verilen hedefler birbirini daraltır: <code>server=</code> ile <code>process="self"</code> yalnızca bu testin o sunucuya bağlantılarını yavaşlatır. Linux'ta <code>process=</code> ve <code>target</code> yeni bir bağlantıya açıldıktan sonra yaklaşık 0,2 saniyeye kadar ulaşır, bu yüzden ilk istek önemliyse sunucuyu hedefleyin.</p>
+</section>
+
+<section>
+  <h2>Bir oturum neler yapabilir</h2>
+  <p>Her ayar programın <a href="../komut-satiri/">komut satırı seçeneklerinden</a> biridir ve <code>-</code> yerine <code>_</code> ile yazılır. <code>latency=300</code> her pakete 300 ms ekler, <code>jitter=100</code> bu gecikmeyi değiştirir, <code>loss=5</code> paketlerin %5'ini düşürür, <code>down</code> ve <code>up</code> hızı KB/s cinsinden sınırlar, <code>loss=100</code> ise sunucuyu keser. <code>preset="presets.3g"</code> eksiksiz bir bağlantı profilidir, <code>seed=42</code> ise her çalıştırmada aynı rastgele seçimleri yapar. Bir <a href="../zamana-bagli-senaryolar/">senaryo</a> koşulları saniyeler geçtikçe değiştirir: <code>scenario="scenarios/cafe-wifi.json"</code>. Senaryonun bir adımı ağın nasıl davrandığını değiştirebilir ama oturumun neyi hedeflediğini değiştiremez.</p>
+</section>
+
+<section>
+  <h2>pytest-xdist ve sınırlar</h2>
+  <ul>
+    <li><strong>Bir seferde bir tane.</strong> Aynı trafikteki iki oturum birbirine eklenirdi, bu yüzden pytest-xdist worker'ları sırayla çalışır ve her biri <code>wait</code> saniyeye kadar bekler (başka bir değer vermezseniz 600). Aynı testteki ikinci bir oturum hemen reddedilir.</li>
+    <li><strong>Testle birlikte biter.</strong> Test süreci ölürse program bunu görür ve hemen durur. <code>duration</code> (başka bir değer vermezseniz 300 saniye) her durumda bir oturumun en uzun süresidir.</li>
+    <li><strong>Hiçbir şey yapmadığında söyler.</strong> Hedefine hiçbir şey ulaşmadığı için hiçbir şeyi yavaşlatmayan bir oturum <code>BadNetworkWarning</code> ile biter. Genellikle uygulama hedeften başka bir adresle, örneğin bir konteynerle konuşuyordur.</li>
+    <li><strong>macOS.</strong> Program Windows ve Linux'ta çalışır. Mac'te testleri bir Linux x86_64 konteynerinde, sanal makinede ya da bir CI runner'ında çalıştırın.</li>
+  </ul>
+  <p>Paketin <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/python/beannetworktester">GitHub</a> üzerindeki README dosyası her seçeneği listeler ve her mesajı açıklar.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

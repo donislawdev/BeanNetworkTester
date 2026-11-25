@@ -40,6 +40,8 @@ import tempfile
 import time
 import urllib.request
 
+import ci_release_channel
+
 # What a capture needs on top of Docker's defaults (CAP_NET_RAW is one of them), and
 # what reaching a program on the host needs on top of that: reading another process's
 # sockets is ptrace-checked, and AppArmor's docker-default profile refuses it even
@@ -70,37 +72,14 @@ GETS = 5
 TARGET_ADDED_S = GETS * 4 * LATENCY_MS / 1000 / 2
 HOST_GET_MIN_S = 2 * LATENCY_MS / 1000 * 0.9
 
-TAG = re.compile(r"v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?")
-STABLE = re.compile(r"v\d+\.\d+\.\d+")
-
-
 def decide(event, tag, draft, prerelease):
     """``{"tag", "version", "publish", "notice"}`` - or ``ValueError`` saying why not.
 
-    ``draft`` and ``prerelease`` are the API's answers for ``tag`` ("true"/"false").
+    The rule is every channel's (``tools/ci_release_channel.py``), worded for an image.
     Which image is ``latest`` is not decided here: the workflow's ``latest`` job reads
     the newest release when it moves the tag, one run at a time.
     """
-    if event not in ("release", "workflow_dispatch", "pull_request"):
-        raise ValueError(f"{event!r} is not an event this workflow runs on")
-    if not TAG.fullmatch(tag or ""):
-        raise ValueError(f'"{tag}" is not a release tag, for example v1.1.0')
-    if draft != "false":
-        raise ValueError(f"{tag} is not published yet, and an image is only ever made of "
-                         "what people can download")
-    stable = bool(STABLE.fullmatch(tag)) and prerelease == "false"
-    publish = event != "pull_request"
-    notice = ""
-    if not stable:
-        if event == "workflow_dispatch":
-            raise ValueError(f"{tag} is not a stable release, and only stable releases become "
-                             "images. Run this workflow with the tag of one, such as v1.1.0.")
-        if publish:
-            notice = (f"{tag} is not a stable release, so its image is built and tried and "
-                      "nothing is pushed. Only stable releases become images.")
-        publish = False
-    return {"tag": tag, "version": tag[1:], "publish": "true" if publish else "false",
-            "notice": notice}
+    return ci_release_channel.decide(event, tag, draft, prerelease, "image")
 
 
 def parse_ping(output):

@@ -8,15 +8,14 @@
   <h2>The shape of a step</h2>
   <p>Impair for the length of the test, then let it stop on its own. No cleanup step to forget:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>In a GitHub Actions job, on a self-hosted Windows runner:</p>
+  <p>In a GitHub Actions job on a Windows runner:</p>
 <pre><code>- name: Test the app on a poor connection
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>Two things about the runner: capturing traffic needs administrator rights, and a hosted runner
-  will not give you those, so this belongs on a self-hosted Windows machine.</p>
+  <p>Capturing traffic needs administrator rights. GitHub's hosted Windows runners run elevated, so the step works there as it is, and a self-hosted runner has to run as an administrator. A test in Playwright or pytest can also start and stop the program itself: see <a href="../playwright-slow-network/">Playwright</a> and <a href="../pytest-network-latency/">pytest</a>.</p>
 </section>
 
 <section>

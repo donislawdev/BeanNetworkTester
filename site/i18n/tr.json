@@ -99,6 +99,7 @@
   "flag.save_config": "Bu komut satırının ortaya çıkardığı ayarları bir JSON dosyasına yazar ve hiçbir şey başlatmadan çıkar. Pencere ve --config bu dosyayı yükleyebilir.",
   "flag.scenario": "Bir senaryo dosyasını çalar; belirttiği saniyelerde ayarları değiştiren bir zaman çizelgesi. Hazır bir senaryo herhangi bir klasörden scenarios/cafe-wifi.json olarak belirtilebilir.",
   "flag.simulate": "Gerçek bir yakalama yerine uydurma trafikle çalışır: sürücü yok, yönetici ya da root hakkı yok ve ağda hiçbir şey değişmez. Ayarları denemek ve testler için.",
+  "flag.stop_on_stdin_close": "Standart girdi kapandığında çalışmayı özetiyle birlikte normal bir bitiş olarak sonlandırır. Bunu başlatan program boruyu kapatarak durdurur ve o program çökerse ya da kapatılırsa çalışma --duration dolmasını beklemeden hemen biter.",
   "flag.verbose": "Aracın ne yaptığını günlüğe yazar: kullandığı ayarlar, bir program için bulduğu portlar, senaryo adımları, sürücünün açılıp kapanması.",
   "flag.version": "Programın sürümünü yazdırır, sonra çıkar.",
   "footer.author": "DonislawDev tarafından yapıldı.",

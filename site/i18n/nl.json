@@ -99,6 +99,7 @@
   "flag.save_config": "Schrijft de instellingen waarop deze opdrachtregel uitkomt naar een JSON-bestand en stopt zonder iets te starten. Het venster en --config kunnen het bestand laden.",
   "flag.scenario": "Speelt een scenariobestand af, een tijdlijn die de instellingen verandert op de seconden die hij noemt. Een kant-en-klaar scenario kun je vanuit elke map aanduiden als scenarios/cafe-wifi.json.",
   "flag.simulate": "Draait op verzonnen verkeer in plaats van een echte opvang: geen stuurprogramma, geen beheerders- of rootrechten, en op het netwerk verandert niets. Om instellingen uit te proberen en voor tests.",
+  "flag.stop_on_stdin_close": "Beëindigt de run wanneer de standaardinvoer sluit, als een normaal einde met samenvatting. Een programma dat dit programma startte, stopt het door de pipe te sluiten, en als dat programma wegvalt, eindigt de run meteen in plaats van pas na --duration.",
   "flag.verbose": "Logt wat het hulpmiddel doet: de instellingen die het gebruikt, de poorten die het voor een programma vond, scenariostappen, het openen en sluiten van het stuurprogramma.",
   "flag.version": "Drukt de versie van het programma af en stopt dan.",
   "footer.author": "Gemaakt door DonislawDev.",

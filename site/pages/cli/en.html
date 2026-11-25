@@ -50,7 +50,8 @@ BeanNetworkTester.exe --config my-settings.json --dry-run</code></pre>
   <code>[bean]</code>. Data goes to standard output: a report line every few seconds and a summary at
   the end. With <code>--format json</code>, standard output carries one JSON object per line: a
   <code>sample</code> object for each report, and a final <code>summary</code> with the exit code,
-  the seed and the command that repeats the run.</p>
+  the seed and the command that repeats the run.
+  Before the first report comes a <code>start</code> object, written once the capture is running, so a program that starts this one knows when to send its traffic.</p>
 <pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
   <p>Each way a run can end has its own exit code, so a pipeline can tell a failing application
   from a tool that could not start. The codes are listed on

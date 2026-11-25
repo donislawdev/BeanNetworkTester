@@ -50,7 +50,8 @@ BeanNetworkTester.exe --config thiet-lap-cua-toi.json --dry-run</code></pre>
   <code>[bean]</code>. Dữ liệu được ghi ra đầu ra chuẩn: vài giây một dòng báo cáo và một bản tóm tắt
   ở cuối. Với <code>--format json</code>, đầu ra chuẩn chứa mỗi dòng một đối tượng JSON: một đối tượng
   <code>sample</code> cho mỗi báo cáo và một <code>summary</code> cuối cùng với mã thoát, seed và lệnh
-  để lặp lại lượt chạy.</p>
+  để lặp lại lượt chạy.
+  Trước báo cáo đầu tiên có một đối tượng <code>start</code>, được ghi ngay khi việc bắt gói bắt đầu chạy, để chương trình khởi chạy chương trình này biết khi nào gửi lưu lượng của nó.</p>
 <pre><code>BeanNetworkTester.exe --simulate --duration 30 --format json &gt; run.ndjson</code></pre>
   <p>Mỗi cách một lượt chạy có thể kết thúc đều có mã thoát riêng, nên pipeline phân biệt được ứng
   dụng bị lỗi với công cụ không khởi động được. Các mã được liệt kê trên

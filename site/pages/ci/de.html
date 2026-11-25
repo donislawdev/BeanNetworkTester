@@ -7,14 +7,14 @@
   <h2>Die Form eines Schritts</h2>
   <p>Störe für die Dauer des Tests und lass es dann von selbst enden. Es gibt keinen Aufräumschritt, den man vergessen könnte:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>In einem GitHub-Actions-Job auf einem selbst gehosteten Windows-Runner:</p>
+  <p>In einem GitHub-Actions-Job auf einem Windows-Runner:</p>
 <pre><code>- name: Test the app on a poor connection
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>Zwei Dinge zum Runner: Das Abfangen von Datenverkehr braucht Administratorrechte, und ein gehosteter Runner gibt dir diese nicht, deshalb gehört das auf einen selbst gehosteten Windows-Rechner.</p>
+  <p>Das Abfangen von Datenverkehr braucht Administratorrechte. Die gehosteten Windows-Runner von GitHub laufen mit erhöhten Rechten, dort funktioniert der Schritt also unverändert, und ein selbst gehosteter Runner muss als Administrator laufen. Ein Test in Playwright oder pytest kann das Programm auch selbst starten und beenden: siehe <a href="../langsames-netz-in-playwright/">Playwright</a> und <a href="../netzwerklatenz-in-pytest/">pytest</a>.</p>
 </section>
 
 <section>

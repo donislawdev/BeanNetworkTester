@@ -1,0 +1,49 @@
+name: release archives
+description: >-
+  Downloads a published release's Windows zip and Linux package into a folder, and
+  checks both before anything opens them. The checksum says each download is the file
+  the release lists. The Linux package's provenance says release.yml built it. The
+  Windows zip is signed after the build, so its attestation is the SBOM
+  attest-release.yml made of the signed file. --signer-workflow holds each to its
+  workflow. Used by pypi.yml and npm.yml.
+inputs:
+  tag:
+    description: The published release tag, for example v1.1.0
+    required: true
+  token:
+    description: A token that can read the release and its attestations
+    required: true
+  dir:
+    description: The folder the archives go into
+    required: false
+    default: download
+runs:
+  using: composite
+  steps:
+    - name: download and check the release's archives
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        TAG: ${{ inputs.tag }}
+        DIR: ${{ inputs.dir }}
+      run: |
+        set -euo pipefail
+        zip="BeanNetworkTester-${TAG}-windows-x64.zip"
+        tgz="BeanNetworkTester-${TAG}-linux-x64.tar.gz"
+        mkdir -p "$DIR"
+        gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$DIR" \
+          --pattern "$zip" --pattern "$tgz" --pattern SHA256SUMS.txt
+        cd "$DIR"
+        for file in "$zip" "$tgz"; do
+          grep -qF " *${file}" SHA256SUMS.txt || {
+            echo "::error::SHA256SUMS.txt of $TAG does not name $file"
+            exit 1
+          }
+        done
+        sha256sum -c --ignore-missing SHA256SUMS.txt
+        gh attestation verify "$tgz" --repo "$GITHUB_REPOSITORY" \
+          --predicate-type https://slsa.dev/provenance/v1 \
+          --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml"
+        gh attestation verify "$zip" --repo "$GITHUB_REPOSITORY" \
+          --predicate-type https://spdx.dev/Document/v2.3 \
+          --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/attest-release.yml"

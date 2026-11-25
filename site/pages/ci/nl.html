@@ -7,14 +7,14 @@
   <h2>De vorm van een stap</h2>
   <p>Verslechter voor de duur van de test en laat het dan vanzelf stoppen. Geen opruimstap om te vergeten:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>In een GitHub Actions-job, op een zelf gehoste Windows-runner:</p>
+  <p>In een GitHub Actions-job op een Windows-runner:</p>
 <pre><code>- name: Test the app on a poor connection
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>Twee dingen over de runner: het onderscheppen van verkeer vereist beheerdersrechten, en een gehoste runner geeft je die niet, dus dit hoort op een zelf gehoste Windows-machine.</p>
+  <p>Verkeer onderscheppen vraagt beheerdersrechten. De gehoste Windows-runners van GitHub draaien met verhoogde rechten, dus daar werkt de stap zoals hij is, en een eigen runner moet als administrator draaien. Een test in Playwright of pytest kan het programma ook zelf starten en stoppen: zie <a href="../traag-netwerk-in-playwright/">Playwright</a> en <a href="../netwerklatentie-in-pytest/">pytest</a>.</p>
 </section>
 
 <section>

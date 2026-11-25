@@ -7,14 +7,14 @@
   <h2>Hình dạng của một bước</h2>
   <p>Làm suy giảm trong suốt bài kiểm tra, rồi để nó tự dừng. Không có bước dọn dẹp nào để quên:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>Trong một job GitHub Actions, trên runner Windows tự lưu trữ (self-hosted):</p>
+  <p>Trong một job GitHub Actions trên runner Windows:</p>
 <pre><code>- name: Test the app on a poor connection
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>Hai điều về runner: bắt lưu lượng cần quyền quản trị, và runner được lưu trữ sẵn sẽ không cấp cho bạn quyền đó, nên việc này thuộc về một máy Windows tự lưu trữ.</p>
+  <p>Bắt lưu lượng cần quyền quản trị. Các runner Windows do GitHub lưu trữ chạy với quyền nâng cao, nên bước này chạy được ở đó như nguyên bản, còn runner tự lưu trữ phải chạy với quyền quản trị. Một bài kiểm thử viết bằng Playwright hoặc pytest cũng có thể tự khởi chạy và dừng chương trình: xem <a href="../mang-cham-trong-playwright/">Playwright</a> và <a href="../do-tre-mang-trong-pytest/">pytest</a>.</p>
 </section>
 
 <section>

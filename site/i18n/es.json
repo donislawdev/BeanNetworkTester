@@ -99,6 +99,7 @@
   "flag.save_config": "Escribe en un archivo JSON los ajustes que resultan de esta línea de comandos y termina sin poner nada en marcha. La ventana y --config pueden cargar el archivo.",
   "flag.scenario": "Reproduce un archivo de escenario, una línea de tiempo que cambia los ajustes en los segundos que indica. Uno listo se puede indicar como scenarios/cafe-wifi.json desde cualquier carpeta.",
   "flag.simulate": "Funciona con tráfico inventado en lugar de una captura real: sin controlador, sin permisos de administrador ni root, y nada cambia en la red. Para probar ajustes y para tests.",
+  "flag.stop_on_stdin_close": "Termina la ejecución cuando se cierra la entrada estándar, como un final normal con su resumen. Un programa que inició este lo detiene cerrando la tubería, y si ese programa muere, la ejecución termina al instante en lugar de al cumplirse --duration.",
   "flag.verbose": "Registra lo que hace la herramienta: los ajustes que usa, los puertos que encontró para un programa, los pasos del escenario, la apertura y el cierre del controlador.",
   "flag.version": "Muestra la versión del programa y termina.",
   "footer.author": "Creado por DonislawDev.",

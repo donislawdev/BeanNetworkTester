@@ -1,0 +1,83 @@
+<section class="hero">
+  <h1>Повільна мережа і втрата пакетів у тестах Playwright</h1>
+  <p class="lead">Playwright уміє відключити сторінку від мережі та сповільнити Chromium через DevTools. Пакет <code>beannetworktester</code> з npm натомість сповільнює справжню мережу, під браузером: затримка, втрата пакетів, обмеження швидкості або повний обрив, для сервера, з яким говорить ваш тест. Chromium, Firefox і WebKit сповільнюються однаково, разом із WebSocket. Пакет містить програму Bean Network Tester і запускає її на час тесту, у Windows і Linux. Він виходить з кожним стабільним випуском, починаючи з 1.1.0.</p>
+</section>
+
+<section>
+  <h2>Встановлення</h2>
+<pre><code>npm install -D @playwright/test beannetworktester
+npx playwright install chromium</code></pre>
+  <p>Потрібні Windows x64 або Linux x64 (glibc 2.39 або новіша, наприклад Ubuntu 24.04) і Node 20 або новіший. npm встановлює програму для вашої системи як необов'язкову залежність, тож не вимикайте необов'язкові залежності.</p>
+  <p>Щоб змінювати мережу, у Windows потрібні права адміністратора: відкрийте термінал через «Запуск від імені адміністратора». У Linux потрібен root або користувач, якому дозволено <code>sudo</code> без пароля, і тоді під <code>sudo</code> працює лише програма. Розміщені ранери GitHub з Windows працюють із підвищеними правами, а ранери з Ubuntu дозволяють <code>sudo</code>, тож workflow не потребує додаткового кроку.</p>
+</section>
+
+<section>
+  <h2>Тест на повільній мережі</h2>
+  <p>Збережіть це як <code>tests/slow.spec.js</code> і запустіть <code>npx playwright test</code>:</p>
+<pre><code>import http from 'node:http';
+import { test, expect } from 'beannetworktester/playwright';
+
+let server;
+test.beforeAll(async () =&gt; {
+  server = http.createServer((request, response) =&gt; response.end('&lt;h1&gt;Hello&lt;/h1&gt;'));
+  await new Promise((done) =&gt; server.listen(8000, done));
+});
+test.afterAll(() =&gt; server.close());
+
+test('a page takes longer on a slow network', async ({ page, badNetwork }) =&gt; {
+  await badNetwork({ server: 'http://localhost:8000', latency: 500 });
+  const started = Date.now();
+  await page.goto('http://localhost:8000');
+  await expect(page.locator('h1')).toHaveText('Hello');
+  expect(Date.now() - started).toBeGreaterThanOrEqual(500);
+});</code></pre>
+  <p>Тест проходить, бо сторінка справді приходить пізніше: кожен пакет до цього сервера й від нього чекає 500 мс. Коли тест закінчується, мережа знову працює як звичайно. Виміряно у Windows з <code>latency: 200</code>: запит до сервера в цілі зріс з 0,8 мс до 404 мс, бо чекають і запит, і відповідь, а сторінка в Chromium з 13 мс до 416 мс. Інший локальний сервер, поза ціллю, відповідав тим часом за 1,6 мс.</p>
+  <p>Прав під рукою немає? <code>badNetwork({ simulate: true, latency: 500 })</code> запускає програму на вигаданому трафіку й нічого не змінює в мережі. Це перевіряє, що пакет установлено правильно, і нічого не сповільнює.</p>
+</section>
+
+<section>
+  <h2>Фікстура badNetwork</h2>
+  <p>Імпортуйте <code>test</code> і <code>expect</code> з <code>beannetworktester/playwright</code> замість <code>@playwright/test</code>. <code>badNetwork</code> починає сесію, коли ви її викликаєте, і завершує очікування, щойно мережа стала повільною. Сесія зупиняється разом із кінцем тесту, чи він пройшов, чи впав, чи аварійно завершився, а підсумок програми прикріплюється до звіту тесту як <code>bad-network</code>. Щоб змінити умови посеред тесту, зупиніть першу сесію, перш ніж починати наступну:</p>
+<pre><code>test('the app recovers when the API comes back', async ({ page, badNetwork }) =&gt; {
+  const outage = await badNetwork({ server: 'http://localhost:8000', loss: 100 });
+  await page.goto('http://localhost:3000');
+  await expect(page.getByText('Offline')).toBeVisible();
+  await outage.stop();
+  await expect(page.getByText('Offline')).toBeHidden();
+});</code></pre>
+  <p>Поза Playwright Test ту саму сесію починає <code>badNetwork</code> з <code>require('beannetworktester')</code>: <code>const session = await badNetwork({ ... })</code>, а <code>await session.stop()</code> завершує її і повертає підсумок.</p>
+</section>
+
+<section>
+  <h2>На що націлена сесія</h2>
+  <p>Кожна сесія на щось націлена, і змінюється лише цей трафік. Сесія без цілі сповільнила б кожне з'єднання машини, зокрема з'єднання самого запускача тестів, тому вона не запускається.</p>
+  <ul>
+    <li><strong><code>server: 'http://localhost:3000'</code></strong> сповільнює кожне з'єднання з цією адресою та портом, з браузера, з вашого API-сервера чи з будь-якої іншої програми. Підходять і <code>'db.local:5432'</code>, і список серверів. Це перший вибір, і він точний у Windows і Linux.</li>
+    <li><strong><code>process: 'self'</code></strong> сповільнює тестовий воркер і кожну програму, яку він запустив, наприклад його браузер. Процес, який запустив сам тест, передається як його <code>ChildProcess</code>.</li>
+    <li><strong><code>dstPort</code>, <code>dstIp</code> і <code>target</code></strong> це власні цілі програми, записані в <a href="../komandnyi-riadok/">її синтаксисі</a>, для API на відомому порту чи адресі. Вони дістають усе, що підходить: <code>dstPort: 443</code> це кожне HTTPS-з'єднання машини, зокрема з'єднання вашого редактора, а <code>target: 'node'</code> кожна програма з «node» в назві.</li>
+  </ul>
+  <p>Цілі, задані разом, звужують одна одну: <code>server</code> з <code>process: 'self'</code> сповільнює лише з'єднання цього воркера з цим сервером. У Linux <code>process</code> і <code>target</code> починають діяти на нове з'єднання із запізненням приблизно до 0,2 секунди після його відкриття, тож цільтеся в сервер, коли важливий перший запит.</p>
+</section>
+
+<section>
+  <h2>Що вміє сесія</h2>
+  <p>Кожне налаштування це один із <a href="../komandnyi-riadok/">параметрів командного рядка</a> програми. <code>latency: 300</code> додає 300 мс кожному пакету, <code>jitter: 100</code> робить цю затримку змінною, <code>loss: 5</code> губить 5 % пакетів, <code>down</code> і <code>up</code> обмежують швидкість у КБ/с, а <code>loss: 100</code> відрізає сервер. <code>preset: 'presets.3g'</code> це цілий профіль каналу, а <code>seed: 42</code> дає ті самі випадкові рішення під час кожного запуску. <a href="../stsenarii-v-chasi/">Сценарій</a> змінює умови з плином секунд: <code>scenario: 'scenarios/cafe-wifi.json'</code>. Крок сценарію може змінити поведінку мережі, але не те, на що націлена сесія.</p>
+</section>
+
+<section>
+  <h2>Паралельні воркери й обмеження</h2>
+  <ul>
+    <li><strong>По одній.</strong> Дві сесії на одному трафіку додалися б, тому паралельні воркери чекають своєї черги, кожен до <code>wait</code> секунд (600, якщо не задати інше значення). Друга сесія в тому самому тесті одразу відхиляється.</li>
+    <li><strong>Вона закінчується разом із тестом.</strong> Якщо тестовий воркер помирає, програма це бачить і одразу зупиняється. <code>duration</code> (300 секунд, якщо не задати інше значення) у будь-якому разі найдовший час роботи сесії.</li>
+    <li><strong>Вона каже, коли нічого не зробила.</strong> Сесія, яка нічого не сповільнила, бо до її цілі нічого не дійшло, завершується попередженням <code>BadNetworkWarning</code>. Зазвичай це означає, що застосунок говорить з іншою адресою, ніж ціль, наприклад з контейнером.</li>
+    <li><strong>macOS.</strong> Програма працює у Windows і Linux. На Mac запускайте тести в контейнері чи віртуальній машині з Linux x86_64 або на ранері CI.</li>
+  </ul>
+  <p>README пакета на <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/npm/beannetworktester">GitHub</a> перелічує кожен параметр і пояснює кожне повідомлення.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

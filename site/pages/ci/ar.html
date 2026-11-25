@@ -7,14 +7,14 @@
   <h2>شكل الخطوة</h2>
   <p>أضعف الشبكة طوال مدة الاختبار ثم دعها تتوقف وحدها. لا توجد خطوة تنظيف يمكن نسيانها:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>في مهمة GitHub Actions على مشغّل Windows مستضاف ذاتيًا:</p>
+  <p>في مهمة GitHub Actions على مشغّل Windows:</p>
 <pre><code>- name: Test the app on a poor connection
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>أمران عن المشغّل: التقاط الحركة يتطلب صلاحيات المسؤول، والمشغّل المستضاف لن يمنحك إياها، فهذا يخص جهاز Windows مستضافًا ذاتيًا.</p>
+  <p>التقاط الحركة يحتاج إلى صلاحيات المسؤول. مشغّلات Windows التي يستضيفها GitHub تعمل بصلاحيات مرتفعة، لذا تعمل هذه الخطوة هناك كما هي، أما المشغّل المستضاف ذاتيًا فيجب أن يعمل كمسؤول. ويمكن لاختبار مكتوب بـ Playwright أو pytest أن يبدأ البرنامج ويوقفه بنفسه أيضًا: انظر <a href="../shabaka-batia-fi-playwright/">Playwright</a> و<a href="../takhir-alshabaka-fi-pytest/">pytest</a>.</p>
 </section>
 
 <section>

@@ -7,14 +7,14 @@
   <h2>1ステップの形</h2>
   <p>テストの間だけ劣化させ、あとは自動で止まらせます。忘れてはいけない後片付けのステップはありません：</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>GitHub Actionsのジョブで、セルフホストのWindowsランナーを使う場合：</p>
+  <p>Windows ランナー上の GitHub Actions ジョブでは次のようにします。</p>
 <pre><code>- name: Test the app on a poor connection
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>ランナーについて2点。通信の取得には管理者権限が必要で、ホスト型ランナーはそれを与えてくれないため、セルフホストのWindowsマシンで使うことになります。</p>
+  <p>通信の捕捉には管理者権限が必要です。GitHub がホストする Windows ランナーは昇格した権限で動くので、この手順はそのまま使えます。セルフホストランナーは管理者として実行する必要があります。Playwright や pytest のテストからプログラムを起動・停止することもできます。<a href="../playwright-osoi-nettowaku/">Playwright</a> と <a href="../pytest-nettowaku-chien/">pytest</a> を参照してください。</p>
 </section>
 
 <section>

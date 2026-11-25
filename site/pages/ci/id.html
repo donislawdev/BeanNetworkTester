@@ -7,14 +7,14 @@
   <h2>Bentuk sebuah langkah</h2>
   <p>Ganggu selama pengujian, lalu biarkan berhenti sendiri. Tidak ada langkah pembersihan yang bisa terlupa:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>Dalam job GitHub Actions, di runner Windows yang di-host sendiri:</p>
+  <p>Dalam job GitHub Actions di runner Windows:</p>
 <pre><code>- name: Test the app on a poor connection
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>Dua hal tentang runner: menangkap lalu lintas butuh hak administrator, dan runner hosted tidak akan memberikannya, jadi ini cocok di mesin Windows yang di-host sendiri.</p>
+  <p>Menangkap lalu lintas butuh hak administrator. Runner Windows yang di-host GitHub berjalan dengan hak tinggi, jadi langkah ini berjalan di sana apa adanya, sedangkan runner self-hosted harus berjalan sebagai administrator. Tes di Playwright atau pytest juga bisa memulai dan menghentikan program sendiri: lihat <a href="../jaringan-lambat-di-playwright/">Playwright</a> dan <a href="../latensi-jaringan-di-pytest/">pytest</a>.</p>
 </section>
 
 <section>

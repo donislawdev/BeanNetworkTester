@@ -1,0 +1,96 @@
+<section class="hero">
+  <h1>محاكاة تأخير الشبكة وفقدان الحزم في pytest</h1>
+  <p class="lead">لا شيء مزيف: حزمة <code>beannetworktester</code> على PyPI تمنح pytest أداة fixture باسم <code>bad_network</code> تبطئ الشبكة الحقيقية طوال مدة الاختبار. تأخير، أو فقدان حزم، أو حد للسرعة، أو انقطاع كامل، لخادم واحد أو عملية واحدة، بينما يتحدث تطبيقك ومتصفحك وخادمك بعضهم إلى بعض فعلًا. تحمل الحزمة برنامج Bean Network Tester نفسه وتشغّله على Windows وLinux. تُنشر الحزمة مع كل إصدار مستقر بدءًا من 1.1.0.</p>
+</section>
+
+<section>
+  <h2>التثبيت</h2>
+<pre><code>pip install beannetworktester</code></pre>
+  <p>تحتاج إلى Windows x64 أو Linux x64 (glibc 2.39 أو أحدث، مثل Ubuntu 24.04) وإلى Python 3.10 أو أحدث.</p>
+  <p>تغيير الشبكة يحتاج إلى صلاحيات المسؤول على Windows: افتح الطرفية عبر "تشغيل كمسؤول". وعلى Linux يحتاج إلى root، أو إلى مستخدم يستطيع تشغيل <code>sudo</code> دون كلمة مرور، وعندها لا يعمل تحت <code>sudo</code> إلا البرنامج. مشغّلات Windows التي يستضيفها GitHub تعمل بصلاحيات مرتفعة، ومشغّلات Ubuntu لديه تسمح بـ <code>sudo</code>، لذا لا يحتاج سير العمل إلى أي خطوة إضافية.</p>
+</section>
+
+<section>
+  <h2>اختبار على شبكة بطيئة</h2>
+  <p>احفظ هذا باسم <code>test_slow.py</code> وشغّل <code>pytest</code>:</p>
+<pre><code>import subprocess
+import sys
+import time
+import urllib.request
+
+import pytest
+
+
+@pytest.fixture
+def web_server():
+    server = subprocess.Popen([sys.executable, "-m", "http.server", "8000"])
+    time.sleep(1)
+    yield "http://localhost:8000"
+    server.terminate()
+
+
+def test_a_page_takes_longer_on_a_slow_network(bad_network, web_server):
+    bad_network(server=web_server, latency=500)
+    started = time.monotonic()
+    urllib.request.urlopen(web_server).read()
+    assert time.monotonic() - started &gt;= 0.5</code></pre>
+  <p>ينجح الاختبار لأن الرد يصل فعلًا متأخرًا: كل حزمة ذاهبة إلى ذلك الخادم أو آتية منه تنتظر 500 ms. عند انتهاء الاختبار تعود الشبكة إلى طبيعتها. القياس على Windows مع <code>latency=200</code>: ارتفع طلب إلى الخادم المستهدف من 4 ms إلى 404 ms، لأن الطلب والرد ينتظران كلاهما، وارتفعت صفحة في Chromium من 61 ms إلى 412 ms. وفي الأثناء كان خادم محلي آخر خارج الهدف يرد في 11 ms.</p>
+  <p>لا تملك الصلاحيات الآن؟ <code>bad_network(simulate=True, latency=500)</code> يشغّل البرنامج على حركة مختلقة ولا يغيّر شيئًا في الشبكة. إنه يتحقق من أن الحزمة مثبتة كما يجب، ولا يبطئ شيئًا.</p>
+</section>
+
+<section>
+  <h2>الـ fixture المسمى bad_network</h2>
+  <p>يجد pytest الـ fixture بنفسه بمجرد تثبيت الحزمة. يبدأ <code>bad_network</code> جلسة عند استدعائه، ويعود حالما تصبح الشبكة بطيئة. تتوقف الجلسة عند انتهاء الاختبار، سواء نجح أو فشل أو تعطّل، ويذهب ملخص البرنامج إلى <code>user_properties</code> الخاصة بالاختبار، ومنها إلى تقرير JUnit XML. لتغيير الظروف في منتصف الاختبار، أوقف الجلسة الأولى قبل أن تبدأ التالية:</p>
+<pre><code>def test_the_app_recovers_when_the_api_comes_back(bad_network):
+    outage = bad_network(server="http://localhost:8000", loss=100)
+    assert app_shows_offline_banner()
+    outage.stop()
+    assert app_hides_offline_banner()</code></pre>
+  <p>خارج pytest، يبدأ <code>from beannetworktester import bad_network</code> الجلسة نفسها، ويوقفها <code>with bad_network(...) as session:</code> عند نهاية الكتلة.</p>
+</section>
+
+<section>
+  <h2>Playwright لـ Python</h2>
+  <p>يعمل Playwright لـ Python فوق pytest، لذا فالـ fixture هو نفسه. يتباطأ Chromium وFirefox وWebKit بالطريقة نفسها، بما في ذلك WebSocket، لأن الشبكة نفسها هي البطيئة، لا تصوّر المتصفح عنها:</p>
+<pre><code>from playwright.sync_api import expect
+
+
+def test_the_spinner_shows_on_a_slow_network(bad_network, page):
+    bad_network(server="http://localhost:3000", latency=800)
+    page.goto("http://localhost:3000")
+    expect(page.get_by_role("progressbar")).to_be_visible()</code></pre>
+</section>
+
+<section>
+  <h2>ما الذي تستهدفه الجلسة</h2>
+  <p>كل جلسة تستهدف شيئًا ما، ولا يتغير إلا تلك الحركة. الجلسة التي بلا هدف كانت ستبطئ كل اتصال في الجهاز، بما فيها اتصالات مشغّل الاختبارات نفسه، لذلك لا تبدأ أصلًا.</p>
+  <ul>
+    <li><strong><code>server="http://localhost:3000"</code></strong> يبطئ كل اتصال بهذا العنوان وهذا المنفذ، من تطبيقك أو متصفحك أو أي برنامج آخر. ويصلح أيضًا <code>"db.local:5432"</code> و<code>("10.0.0.5", 443)</code> وقائمة من الخوادم. هذا هو الخيار الأول، وهو دقيق على Windows وLinux.</li>
+    <li><strong><code>process="self"</code></strong> يبطئ عملية الاختبار وكل برنامج بدأته، مثل متصفح Playwright. أما العملية التي بدأها اختبارك بنفسه فتُمرَّر على هيئة <code>subprocess.Popen</code> الخاص بها.</li>
+    <li><strong><code>dst_port</code> و<code>dst_ip</code> و<code>target</code></strong> هي أهداف البرنامج نفسه، تُكتب <a href="../satr-al-awamir/">بصيغته</a>، وهي لواجهة API على منفذ أو عنوان معروف. تصل إلى كل ما يطابقها: <code>dst_port=443</code> هو كل اتصال HTTPS في الجهاز، بما فيها اتصالات المحرر لديك، و<code>target="python"</code> هو كل برنامج في اسمه "python".</li>
+  </ul>
+  <p>الأهداف المعطاة معًا يضيّق بعضها بعضًا: <code>server=</code> مع <code>process="self"</code> يبطئ فقط اتصالات هذا الاختبار بذلك الخادم. على Linux لا يبدأ <code>process=</code> و<code>target</code> بالتأثير في اتصال جديد إلا بعد فتحه بنحو 0.2 ثانية في أقصى حد، لذا استهدف الخادم حين يهم الطلب الأول.</p>
+</section>
+
+<section>
+  <h2>ما الذي تستطيعه الجلسة</h2>
+  <p>كل إعداد هو أحد <a href="../satr-al-awamir/">خيارات سطر الأوامر</a> في البرنامج، ويُكتب بـ <code>_</code> بدلًا من <code>-</code>. <code>latency=300</code> يضيف 300 ms إلى كل حزمة، و<code>jitter=100</code> يجعل هذا التأخير متفاوتًا، و<code>loss=5</code> يُسقط 5 % من الحزم، و<code>down</code> و<code>up</code> يحدّان السرعة بالكيلوبايت في الثانية، و<code>loss=100</code> يقطع الخادم. <code>preset="presets.3g"</code> ملف تعريف كامل للاتصال، و<code>seed=42</code> يعيد الاختيارات العشوائية نفسها في كل تشغيل. أما <a href="../sinaryuhat-zamaniya/">السيناريو</a> فيغيّر الظروف مع مرور الثواني: <code>scenario="scenarios/cafe-wifi.json"</code>. يمكن لخطوة في السيناريو أن تغيّر سلوك الشبكة، لكن لا يمكنها تغيير ما تستهدفه الجلسة.</p>
+</section>
+
+<section>
+  <h2>pytest-xdist والحدود</h2>
+  <ul>
+    <li><strong>واحدة في كل مرة.</strong> جلستان على الحركة نفسها ستتراكمان، لذلك ينتظر عمّال pytest-xdist دورهم، وينتظر كل منهم حتى <code>wait</code> ثانية (600 ما لم تحدد قيمة أخرى). وتُرفض الجلسة الثانية في الاختبار نفسه فورًا.</li>
+    <li><strong>تنتهي مع الاختبار.</strong> إذا ماتت عملية الاختبار، يلاحظ البرنامج ذلك ويتوقف فورًا. و<code>duration</code> (300 ثانية ما لم تحدد قيمة أخرى) هو أطول ما يمكن أن تستمر فيه الجلسة في كل الأحوال.</li>
+    <li><strong>تخبرك حين لا تفعل شيئًا.</strong> الجلسة التي لم تبطئ شيئًا، لأن شيئًا لم يصل إلى هدفها، تنتهي بتحذير <code>BadNetworkWarning</code>. السبب المعتاد أن التطبيق يتحدث إلى عنوان غير الهدف، مثل حاوية.</li>
+    <li><strong>macOS.</strong> يعمل البرنامج على Windows وLinux. على جهاز Mac، شغّل الاختبارات في حاوية أو آلة افتراضية بنظام Linux x86_64، أو على مشغّل CI.</li>
+  </ul>
+  <p>ملف README الخاص بالحزمة على <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/python/beannetworktester">GitHub</a> يسرد كل خيار ويشرح كل رسالة.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

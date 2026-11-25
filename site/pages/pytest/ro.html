@@ -1,0 +1,96 @@
+<section class="hero">
+  <h1>Simulează latența rețelei și pierderi de pachete în pytest</h1>
+  <p class="lead">Nimic simulat în cod: pachetul <code>beannetworktester</code> de pe PyPI îi dă lui pytest un fixture <code>bad_network</code> care încetinește rețeaua reală cât durează un test. Latență, pierderi de pachete, o limită de viteză sau o întrerupere totală, pentru un server sau un proces, în timp ce aplicația, browserul și serverul tău chiar vorbesc între ele. Pachetul conține programul Bean Network Tester și îl rulează pe Windows și Linux. Apare cu fiecare versiune stabilă începând cu 1.1.0.</p>
+</section>
+
+<section>
+  <h2>Instalare</h2>
+<pre><code>pip install beannetworktester</code></pre>
+  <p>Are nevoie de Windows x64 sau Linux x64 (glibc 2.39 sau mai nou, de exemplu Ubuntu 24.04) și Python 3.10 sau mai nou.</p>
+  <p>Schimbarea rețelei cere drepturi de administrator pe Windows: deschide terminalul cu „Executare ca administrator”. Pe Linux cere root sau un utilizator care poate rula <code>sudo</code> fără parolă, și atunci doar programul rulează cu <code>sudo</code>. Runnerele Windows găzduite de GitHub rulează cu drepturi ridicate, iar runnerele Ubuntu permit <code>sudo</code>, deci un workflow nu are nevoie de niciun pas în plus.</p>
+</section>
+
+<section>
+  <h2>Un test pe o rețea lentă</h2>
+  <p>Salvează asta ca <code>test_slow.py</code> și rulează <code>pytest</code>:</p>
+<pre><code>import subprocess
+import sys
+import time
+import urllib.request
+
+import pytest
+
+
+@pytest.fixture
+def web_server():
+    server = subprocess.Popen([sys.executable, "-m", "http.server", "8000"])
+    time.sleep(1)
+    yield "http://localhost:8000"
+    server.terminate()
+
+
+def test_a_page_takes_longer_on_a_slow_network(bad_network, web_server):
+    bad_network(server=web_server, latency=500)
+    started = time.monotonic()
+    urllib.request.urlopen(web_server).read()
+    assert time.monotonic() - started &gt;= 0.5</code></pre>
+  <p>Testul trece pentru că răspunsul chiar ajunge mai târziu: fiecare pachet spre acel server și dinspre el așteaptă 500 ms. Când testul se termină, rețeaua revine la normal. Măsurat pe Windows cu <code>latency=200</code>: o cerere către serverul din țintă a crescut de la 4 ms la 404 ms, pentru că așteaptă și cererea, și răspunsul, iar o pagină în Chromium de la 61 ms la 412 ms. Un alt server local, în afara țintei, răspundea între timp în 11 ms.</p>
+  <p>Nu ai drepturile la îndemână? <code>bad_network(simulate=True, latency=500)</code> rulează programul pe trafic inventat și nu schimbă nimic în rețea. Verifică faptul că pachetul e instalat corect și nu încetinește nimic.</p>
+</section>
+
+<section>
+  <h2>Fixture-ul bad_network</h2>
+  <p>pytest găsește singur fixture-ul după ce pachetul e instalat. <code>bad_network</code> pornește o sesiune când îl apelezi și revine imediat ce rețeaua e lentă. Sesiunea se oprește când testul se termină, fie că a trecut, a picat sau s-a prăbușit, iar rezumatul programului ajunge în <code>user_properties</code> ale testului și de acolo într-un raport JUnit XML. Ca să schimbi condițiile la jumătatea testului, oprește prima sesiune înainte s-o pornești pe următoarea:</p>
+<pre><code>def test_the_app_recovers_when_the_api_comes_back(bad_network):
+    outage = bad_network(server="http://localhost:8000", loss=100)
+    assert app_shows_offline_banner()
+    outage.stop()
+    assert app_hides_offline_banner()</code></pre>
+  <p>În afara pytest, <code>from beannetworktester import bad_network</code> pornește aceeași sesiune, iar <code>with bad_network(...) as session:</code> o oprește la finalul blocului.</p>
+</section>
+
+<section>
+  <h2>Playwright pentru Python</h2>
+  <p>Playwright pentru Python rulează pe pytest, deci fixture-ul e același. Chromium, Firefox și WebKit sunt încetinite la fel, inclusiv WebSocket-urile, pentru că rețeaua însăși e lentă, nu ideea pe care și-o face browserul despre ea:</p>
+<pre><code>from playwright.sync_api import expect
+
+
+def test_the_spinner_shows_on_a_slow_network(bad_network, page):
+    bad_network(server="http://localhost:3000", latency=800)
+    page.goto("http://localhost:3000")
+    expect(page.get_by_role("progressbar")).to_be_visible()</code></pre>
+</section>
+
+<section>
+  <h2>Spre ce țintește o sesiune</h2>
+  <p>Fiecare sesiune țintește ceva și doar acel trafic se schimbă. O sesiune fără țintă ar încetini fiecare conexiune a mașinii, inclusiv pe cele ale rulatorului de teste, așa că nu pornește.</p>
+  <ul>
+    <li><strong><code>server="http://localhost:3000"</code></strong> încetinește fiecare conexiune către acea adresă și acel port, din aplicația ta, din browser sau din orice alt program. Merg și <code>"db.local:5432"</code>, <code>("10.0.0.5", 443)</code> și o listă de servere. Aceasta e prima alegere și e exactă pe Windows și Linux.</li>
+    <li><strong><code>process="self"</code></strong> încetinește procesul de teste și fiecare program pornit de el, de exemplu browserul Playwright. Un proces pornit chiar de test se dă ca <code>subprocess.Popen</code>-ul lui.</li>
+    <li><strong><code>dst_port</code>, <code>dst_ip</code> și <code>target</code></strong> sunt țintele proprii ale programului, scrise în <a href="../linia-de-comanda/">sintaxa lui</a>, pentru un API pe un port sau o adresă cunoscute. Ele ajung la tot ce se potrivește: <code>dst_port=443</code> înseamnă fiecare conexiune HTTPS a mașinii, inclusiv cele ale editorului tău, iar <code>target="python"</code> fiecare program cu „python” în nume.</li>
+  </ul>
+  <p>Țintele date împreună se restrâng una pe alta: <code>server=</code> cu <code>process="self"</code> încetinește doar conexiunile acestui test către acel server. Pe Linux, <code>process=</code> și <code>target</code> ajung la o conexiune nouă până la circa 0,2 secunde după deschiderea ei, așa că țintește serverul când contează prima cerere.</p>
+</section>
+
+<section>
+  <h2>Ce poate face o sesiune</h2>
+  <p>Fiecare setare este una dintre <a href="../linia-de-comanda/">opțiunile din linia de comandă</a> ale programului, scrisă cu <code>_</code> în loc de <code>-</code>. <code>latency=300</code> adaugă 300 ms fiecărui pachet, <code>jitter=100</code> face să varieze acea întârziere, <code>loss=5</code> aruncă 5 % din pachete, <code>down</code> și <code>up</code> limitează viteza în KB/s, iar <code>loss=100</code> taie serverul. <code>preset="presets.3g"</code> e un profil de legătură întreg, iar <code>seed=42</code> face aceleași alegeri aleatorii la fiecare rulare. Un <a href="../scenarii-in-timp/">scenariu</a> schimbă condițiile pe măsură ce trec secundele: <code>scenario="scenarios/cafe-wifi.json"</code>. Un pas din scenariu poate schimba cum se comportă rețeaua, dar nu și spre ce țintește sesiunea.</p>
+</section>
+
+<section>
+  <h2>pytest-xdist și limite</h2>
+  <ul>
+    <li><strong>Câte una.</strong> Două sesiuni pe același trafic s-ar aduna, așa că workerii pytest-xdist își așteaptă rândul, fiecare până la <code>wait</code> secunde (600 dacă nu dai altă valoare). O a doua sesiune în același test e refuzată imediat.</li>
+    <li><strong>Se termină odată cu testul.</strong> Dacă procesul de teste moare, programul observă și se oprește imediat. <code>duration</code> (300 de secunde dacă nu dai altă valoare) e, în orice caz, cel mai mult cât poate rula o sesiune.</li>
+    <li><strong>Spune când n-a făcut nimic.</strong> O sesiune care n-a încetinit nimic, pentru că nimic n-a ajuns la ținta ei, se încheie cu un <code>BadNetworkWarning</code>. De obicei aplicația vorbește cu altă adresă decât ținta, de exemplu un container.</li>
+    <li><strong>macOS.</strong> Programul rulează pe Windows și Linux. Pe un Mac, rulează testele într-un container sau o mașină virtuală Linux x86_64 ori pe un runner de CI.</li>
+  </ul>
+  <p>README-ul pachetului de pe <a href="https://github.com/donislawdev/BeanNetworkTester/tree/master/python/beannetworktester">GitHub</a> enumeră fiecare opțiune și explică fiecare mesaj.</p>
+</section>
+
+<section class="closing">
+  <h2>{{cta.closing}}</h2>
+  <p class="actions">
+    <a class="btn btn-primary" href="{{site.download_url}}">{{cta.download}}</a>
+  </p>
+</section>

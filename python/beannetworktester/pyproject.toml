@@ -1,0 +1,35 @@
+# The package's metadata. The wheels are not built from this file by a build backend:
+# release/assemble.py reads it and writes one wheel for Windows x64 and one for Linux
+# x64, each with the release's own program inside, and one with no program for every
+# other system. The version here is never raised by hand: the release writes the
+# version of its tag into the wheels.
+
+[project]
+name = "beannetworktester"
+version = "0.0.0.dev0"
+description = "Slow down, break or cut the real network in your tests: latency, packet loss, jitter, outages, for one server or one process. For pytest, Playwright for Python and any Python code."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "GPL-3.0-only"
+authors = [{ name = "DonislawDev" }]
+keywords = ["pytest", "playwright", "network", "latency", "packet loss", "jitter",
+            "network emulation", "chaos testing", "testing", "qa"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Pytest",
+    "Intended Audience :: Developers",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Testing",
+    "Topic :: System :: Networking",
+]
+
+[project.urls]
+Homepage = "https://beannetworktester.donislawdev.com/"
+Source = "https://github.com/donislawdev/BeanNetworkTester"
+Issues = "https://github.com/donislawdev/BeanNetworkTester/issues"
+Changelog = "https://github.com/donislawdev/BeanNetworkTester/blob/master/CHANGELOG.md"
+
+[project.entry-points.pytest11]
+beannetworktester = "beannetworktester.pytest_plugin"

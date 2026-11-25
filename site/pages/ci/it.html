@@ -7,14 +7,14 @@
   <h2>La forma di un passaggio</h2>
   <p>Degrada per la durata del test, poi lascia che si fermi da solo. Nessun passaggio di pulizia da dimenticare:</p>
 <pre><code>BeanNetworkTester.exe --loss 10 --latency 200 --target myapp.exe --duration 60</code></pre>
-  <p>In un job di GitHub Actions, su un runner Windows self-hosted:</p>
+  <p>In un job di GitHub Actions su un runner Windows:</p>
 <pre><code>- name: Test the app on a poor connection
   shell: pwsh
   run: |
     Start-Process -FilePath BeanNetworkTester.exe `
       -ArgumentList '--loss 10 --latency 200 --target myapp.exe --duration 90'
     npm test</code></pre>
-  <p>Due cose sul runner: catturare il traffico richiede privilegi di amministratore, e un runner ospitato non te li darà, quindi questo va su una macchina Windows self-hosted.</p>
+  <p>Catturare il traffico richiede i diritti di amministratore. I runner Windows ospitati da GitHub girano con privilegi elevati, quindi lì il passaggio funziona così com'è, e un runner self-hosted deve girare come amministratore. Un test in Playwright o pytest può anche avviare e fermare il programma da solo: vedi <a href="../rete-lenta-in-playwright/">Playwright</a> e <a href="../latenza-di-rete-in-pytest/">pytest</a>.</p>
 </section>
 
 <section>

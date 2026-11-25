@@ -1,0 +1,63 @@
+{
+  "name": "beannetworktester",
+  "version": "0.0.0-development",
+  "description": "Slow down, break or cut the real network in your tests: latency, packet loss, jitter, outages, for one server or one process. A Playwright Test fixture, and an API for any Node code.",
+  "license": "GPL-3.0-only",
+  "author": "DonislawDev",
+  "homepage": "https://beannetworktester.donislawdev.com/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/donislawdev/BeanNetworkTester.git",
+    "directory": "npm/beannetworktester"
+  },
+  "bugs": "https://github.com/donislawdev/BeanNetworkTester/issues",
+  "keywords": [
+    "playwright",
+    "network",
+    "latency",
+    "packet loss",
+    "jitter",
+    "network throttling",
+    "slow network",
+    "chaos testing",
+    "testing",
+    "qa"
+  ],
+  "type": "commonjs",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./playwright": {
+      "types": "./playwright.d.ts",
+      "default": "./playwright.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "playwright.js",
+    "playwright.d.ts",
+    "lib/",
+    "LICENSE",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@playwright/test": ">=1.40.0"
+  },
+  "peerDependenciesMeta": {
+    "@playwright/test": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test test/"
+  }
+}
