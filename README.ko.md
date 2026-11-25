@@ -160,6 +160,62 @@ Windows에서는 소켓 표와 프로세스 이름을 OS에서 직접 가져오�
 계속 동작합니다(측정 결과: 포트 310개가 매핑되었고, 이름 37개 중 37개가 확인되었습니다). `psutil`은
 그 밖의 모든 환경을 위한 대체 수단이며, 엔진 테스트가 드라이버 없이 Linux에서 실행되는 것도 그 덕분입니다.
 
+### Docker 이미지 (실험 단계)
+
+1.1.0부터 모든 안정 버전은 컨테이너 이미지 `ghcr.io/donislawdev/beannetworktester`로도 나오며,
+버전과 `latest` 태그가 붙습니다. 릴리스 후보에는 없습니다. Linux 패키지를 그대로 Ubuntu 24.04에
+올린 x86_64용이며, 패키지와 마찬가지로 실험 단계입니다. 명령줄만 들어 있고 창은 없으며, 인수 없이
+실행하면 `--help`를 출력합니다.
+
+캡처에는 Docker 기본값 외에 세 가지 capability가 필요하고 `--privileged`는 필요 없습니다. 이름이
+`api`인 컨테이너에서 주소 하나로 가는 트래픽을 느리게 하려면:
+
+```bash
+docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60
+```
+
+Docker Compose에서는 느리게 할 서비스 옆에 이렇게 씁니다:
+
+```yaml
+services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]
+```
+
+- **어떤 트래픽에 닿는가.** `--network container:<이름>`(Compose에서는 `network_mode:
+  "service:<이름>"`)은 프로그램을 그 컨테이너의 네트워크에 넣으므로, 그 컨테이너의 트래픽만
+  바뀝니다.
+- **그 컨테이너 안의 프로그램 하나.** `--target <이름>`에는 `--pid container:<이름>`도 필요합니다.
+  없으면 다른 컨테이너의 프로세스를 보지 못하고, 아무것도 느리게 하지 않는다고 알립니다.
+- **Linux 호스트 자체의 프로그램.** `--network host --pid host`에 `--cap-add SYS_PTRACE
+  --security-opt apparmor=unconfined`를 더합니다. 둘 중 하나라도 없으면 컨테이너 밖 프로그램의
+  연결을 읽는 것이 거부됩니다(Ubuntu 26.04에서 측정). `--network host`에서는 세션이 호스트 자체의
+  트래픽을 바꾸므로 `--target`, `--dst-ip`, `--dst-port`로 좁히고 `--duration`으로 짧게 하세요.
+- **Windows와 macOS의 Docker Desktop.** 컨테이너는 Docker 자체 가상 머신에서 실행됩니다.
+  이미지는 컨테이너의 트래픽만 바꾸고 Windows나 macOS 프로그램의 트래픽은 바꾸지 않습니다.
+  Windows 프로그램에는 Windows 버전을 쓰세요.
+- **Apple silicon과 다른 arm64 머신.** 이미지는 x86_64이고, 에뮬레이션에서는 커널의 BPF 호출이
+  없습니다. 이미지는 시작되고 `--simulate`도 동작하지만, 캡처는 곧바로 `Function not
+  implemented`로 멈춥니다.
+- **파일.** `--log-conns`, `--repro-out`, CSV 파일, `--scenario` 파일을 위해 폴더를 `/work`에
+  마운트하세요(`-v "$PWD:/work"`). 파일은 root 소유가 됩니다.
+- **중지.** `docker stop`은 세션을 깨끗하게 끝내고(종료 코드 143) 트래픽은 바로 정상으로
+  돌아옵니다. `docker kill` 뒤에는 약 3초 안에 다시 흐릅니다.
+
+모든 측정값이 담긴 안내:
+[Docker에서 네트워크 지연 시뮬레이션](https://beannetworktester.donislawdev.com/ko/docker-neteuwokeu-jiyeon/).
+받은 이미지를 확인하려면:
+
+```bash
+gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1
+```
+
 ## 창 화면
 
 창은 **화면과 시스템 배율(DPI)에 맞춰 조정됩니다**. 초기 크기는 해상도에서 계산하며(1366x768에 맞고

@@ -181,6 +181,64 @@ Betriebssystem, und die Prozessauswahl funktioniert weiter, auch wenn `psutil` v
 wird (gemessen: 310 Ports zugeordnet, 37 von 37 Namen aufgelöst). Es ist der Fallback für alles
 andere, und so laufen die Tests der Engine unter Linux ganz ohne Treiber.
 
+### Docker-Image (experimentell)
+
+Ab 1.1.0 ist jede stabile Version auch ein Container-Image, `ghcr.io/donislawdev/beannetworktester`,
+markiert mit ihrer Version und `latest`. Release Candidates bekommen keins. Es ist das Linux-Paket,
+unverändert, auf Ubuntu 24.04, für x86_64, und experimentell wie dieses. Es enthält nur die
+Befehlszeile: Das Fenster ist nicht darin, und ohne Argumente gibt das Image `--help` aus.
+
+Eine Erfassung braucht drei Capabilities zusätzlich zu Dockers Standard und kein `--privileged`. So
+wird der Verkehr eines Containers namens `api` zu einer Adresse verlangsamt:
+
+```bash
+docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60
+```
+
+Dasselbe in Docker Compose, neben dem Dienst, den es ausbremst:
+
+```yaml
+services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]
+```
+
+- **Welcher Verkehr.** `--network container:<name>` (in Compose `network_mode: "service:<name>"`)
+  setzt das Programm in das Netzwerk dieses Containers, es ändert also dessen Verkehr und sonst
+  nichts.
+- **Ein Programm in diesem Container.** `--target <name>` braucht zusätzlich `--pid
+  container:<name>`. Ohne das sieht das Programm keinen Prozess des anderen Containers und sagt,
+  dass es nichts verlangsamt.
+- **Ein Programm auf dem Linux-Host selbst.** Mit `--network host --pid host` und zusätzlich
+  `--cap-add SYS_PTRACE --security-opt apparmor=unconfined`: Ohne beide wird das Lesen der
+  Verbindungen eines Programms außerhalb des Containers verweigert (gemessen unter Ubuntu 26.04).
+  Mit `--network host` ändert die Sitzung den Verkehr des Hosts selbst, also eng (`--target`,
+  `--dst-ip`, `--dst-port`) und kurz (`--duration`) halten.
+- **Docker Desktop unter Windows und macOS.** Die Container laufen in Dockers eigener virtueller
+  Maschine. Das Image ändert den Verkehr von Containern, nie den von Windows- oder
+  macOS-Programmen. Für ein Windows-Programm nutzen Sie die Windows-Version.
+- **Apple Silicon und andere arm64-Rechner.** Das Image ist x86_64, und in der Emulation fehlen die
+  BPF-Aufrufe des Kernels: Das Image startet und `--simulate` funktioniert, aber eine Erfassung
+  bricht sofort mit `Function not implemented` ab.
+- **Dateien.** Binden Sie einen Ordner unter `/work` ein (`-v "$PWD:/work"`) für `--log-conns`,
+  `--repro-out`, CSV-Dateien oder eine `--scenario`-Datei. Sie gehören root.
+- **Beenden.** `docker stop` beendet die Sitzung sauber (Exit-Code 143), der Verkehr ist sofort
+  normal. Nach `docker kill` fließt er innerhalb von etwa 3 Sekunden wieder.
+
+Die Anleitung mit allen Messwerten:
+[Netzwerklatenz in Docker simulieren](https://beannetworktester.donislawdev.com/de/netzwerklatenz-in-docker/).
+So prüfen Sie ein geladenes Image:
+
+```bash
+gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1
+```
+
 ## Das Fenster
 
 Das Fenster **passt sich dem Bildschirm und der Systemskalierung (DPI) an**. Die Anfangsgröße wird

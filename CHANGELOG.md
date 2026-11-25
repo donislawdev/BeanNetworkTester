@@ -13,7 +13,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   container's network (`--network container:<name>`, or `network_mode: "service:<name>"` in
   Docker Compose), it slows down that container's traffic and nothing else. It needs
   `--cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN`, not `--privileged`. The README's
-  "Docker image" section covers one program, the Linux host, Docker Desktop and Apple silicon.
+  "Docker image" section, in every language, covers one program, the Linux host, Docker Desktop
+  and Apple silicon.
 
 ### Fixed
 

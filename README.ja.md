@@ -131,6 +131,63 @@ Windows の Python 3.10 から 3.12 は、15.6 ms 刻みで時間を測ります
 
 `psutil` はツールと一緒にインストールされますが、Windows でプロセスの指定を動かしているのはこれではありません。Windows ではソケットテーブルとプロセス名を OS から直接取得するので、`psutil` を完全に取り除いても、プロセスの指定は動き続けます (実測: 310 個のポートを対応付け、37 件中 37 件の名前を解決しました)。`psutil` はそれ以外の環境向けのフォールバックで、ドライバーなしの Linux でエンジンのテストが動くのもそのためです。
 
+### Docker イメージ（実験的）
+
+1.1.0 以降、安定版はすべてコンテナーイメージ `ghcr.io/donislawdev/beannetworktester` にもなり、
+バージョンと `latest` のタグが付きます。リリース候補にはありません。中身は Linux 版パッケージ
+そのままで、Ubuntu 24.04 上、x86_64 向け、同じく実験的です。入っているのはコマンドラインだけで、
+ウィンドウはありません。引数なしで起動すると `--help` を表示します。
+
+キャプチャには Docker の既定に加えて3つのケーパビリティが必要で、`--privileged` は不要です。
+`api` という名前のコンテナーから1つのアドレスへの通信を遅くするには:
+
+```bash
+docker run --rm --network container:api --cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN \
+  ghcr.io/donislawdev/beannetworktester:1.1.0 --dst-ip 203.0.113.10 --latency 100 --duration 60
+```
+
+Docker Compose では、遅くしたいサービスの隣にこう書きます:
+
+```yaml
+services:
+  api:
+    image: your-api-image
+  slow-network:
+    image: ghcr.io/donislawdev/beannetworktester:1.1.0
+    network_mode: "service:api"
+    cap_add: [BPF, PERFMON, NET_ADMIN]
+    command: ["--latency", "200", "--loss", "2", "--duration", "300"]
+```
+
+- **どの通信に届くか。** `--network container:<名前>`（Compose では `network_mode:
+  "service:<名前>"`）でプログラムがそのコンテナーのネットワークに入るので、変わるのはその
+  コンテナーの通信だけです。
+- **そのコンテナー内の1つのプログラム。** `--target <名前>` には `--pid container:<名前>` も
+  必要です。ないと、ほかのコンテナーのプロセスが見えず、何も遅くしないとログに書きます。
+- **Linux ホスト自身のプログラム。** `--network host --pid host` に加えて `--cap-add SYS_PTRACE
+  --security-opt apparmor=unconfined` が必要です。どちらかが欠けると、コンテナー外のプログラムの
+  接続を読むことが拒否されます（Ubuntu 26.04 で実測）。`--network host` ではセッションが
+  ホスト自身の通信を変えるので、`--target`、`--dst-ip`、`--dst-port` で絞り、`--duration` で
+  短くしてください。
+- **Windows と macOS の Docker Desktop。** コンテナーは Docker 独自の仮想マシンで動きます。
+  イメージが変えるのはコンテナーの通信だけで、Windows や macOS のプログラムの通信は変えません。
+  Windows のプログラムには Windows 版を使ってください。
+- **Apple シリコンとほかの arm64 マシン。** イメージは x86_64 で、エミュレーションではカーネルの
+  BPF 呼び出しがありません。イメージは起動し `--simulate` も動きますが、キャプチャはすぐに
+  `Function not implemented` で止まります。
+- **ファイル。** `--log-conns`、`--repro-out`、CSV ファイル、`--scenario` のファイルには、
+  フォルダーを `/work` にマウントします（`-v "$PWD:/work"`）。ファイルは root のものになります。
+- **停止。** `docker stop` でセッションは正常に終わり（終了コード 143）、通信はすぐ元に戻ります。
+  `docker kill` の後は約 3 秒以内に流れ始めます。
+
+すべての実測値を載せたガイド:
+[Docker でネットワーク遅延を再現](https://beannetworktester.donislawdev.com/ja/docker-nettowaku-chien/)。
+取得したイメージを確認するには:
+
+```bash
+gh attestation verify oci://ghcr.io/donislawdev/beannetworktester:1.1.0 --owner donislawdev --predicate-type https://slsa.dev/provenance/v1
+```
+
 ## ウィンドウ
 
 ウィンドウは**画面とシステムのスケーリング (DPI) に合わせて調整されます**。初期サイズは解像度から計算され (1366x768 に収まり、Full HD / 2K / 4K では大きくなります)、すべての寸法 - 列幅、テーブルの行の高さ、グラフの余白、テキストの折り返し - がフォントに合わせて拡大縮小されます。プログラムは自身を **Per-Monitor-V2 DPI 対応**と宣言しているため、スケーリングの異なる2台目のモニターへウィンドウを移動しても、インターフェースがぼやけることはありません。
