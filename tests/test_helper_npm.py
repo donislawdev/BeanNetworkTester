@@ -1,5 +1,8 @@
 """The npm test helper (npm/beannetworktester): its own node tests, run here so CI runs them
-on Windows and Linux, and its README and setting names held to the program's parser."""
+on Windows and Linux, and its README and setting names held to the program's parser. Also the
+licence of both test packages, this one and the Python one."""
+import hashlib
+import json
 import os
 import re
 import shutil
@@ -88,3 +91,51 @@ def test_the_package_and_the_python_one_carry_the_same_systems():
     python = (Path(ROOT) / "python" / "beannetworktester" / "src" / "beannetworktester" /
               "_program.py").read_text(encoding="utf-8")
     check("the Python package says the same", 'SYSTEMS = ("Windows x64", "Linux x64")' in python)
+
+
+# The official text, as mozilla.org serves it (https://www.mozilla.org/media/MPL/2.0/index.txt,
+# read 2026-11-26): a reworded or cut copy is not the licence the packages declare.
+MPL_2_0_SHA256 = "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04"
+# Exhibit A of the MPL. The repository's own LICENSE is the GPL, so each file of the two
+# packages says which licence it is under.
+MPL_NOTICE = ("This Source Code Form is subject to the terms of the Mozilla Public",
+              "License, v. 2.0. If a copy of the MPL was not distributed with this",
+              "file, You can obtain one at https://mozilla.org/MPL/2.0/.")
+PACKAGES = (Path(ROOT) / "python" / "beannetworktester", HELPER)
+
+
+def _without_the_notice(folder):
+    """The source files of a package folder, and the ones that do not open with the notice."""
+    seen, missing = [], []
+    for path in sorted(folder.rglob("*")):
+        if {"node_modules", "__pycache__"} & set(path.parts) or not path.is_file():
+            continue
+        mark = {".py": "#", ".js": "//", ".ts": "//"}.get(path.suffix)
+        if mark is None:
+            continue
+        seen.append(path)
+        head = path.read_text(encoding="utf-8").splitlines()[:len(MPL_NOTICE)]
+        if head != [f"{mark} {line}" for line in MPL_NOTICE]:
+            missing.append(path.relative_to(folder).as_posix())
+    return seen, missing
+
+
+def test_both_packages_are_mpl_and_every_file_says_so(tmp_path):
+    python = (PACKAGES[0] / "pyproject.toml").read_text(encoding="utf-8")
+    check("the Python package declares MPL-2.0",
+          re.search(r'(?m)^license = "MPL-2\.0"$', python) is not None)
+    npm = json.loads((HELPER / "package.json").read_text(encoding="utf-8"))
+    check("the npm package declares MPL-2.0", npm["license"] == "MPL-2.0", f"({npm['license']})")
+    for folder in PACKAGES:
+        digest = hashlib.sha256((folder / "LICENSE").read_bytes()).hexdigest()
+        check(f"{folder.parent.name}: LICENSE is the MPL-2.0 text", digest == MPL_2_0_SHA256,
+              f"({digest})")
+        seen, missing = _without_the_notice(folder)
+        check(f"{folder.parent.name}: source files were read", len(seen) >= 6, f"({len(seen)})")
+        check(f"{folder.parent.name}: every source file opens with the notice", not missing,
+              f"({missing})")
+    (tmp_path / "kept.py").write_text("".join(f"# {line}\n" for line in MPL_NOTICE),
+                                      encoding="utf-8")
+    (tmp_path / "lost.js").write_text("'use strict';\n", encoding="utf-8")
+    check("canary: a file without the notice is named",
+          _without_the_notice(tmp_path)[1] == ["lost.js"])

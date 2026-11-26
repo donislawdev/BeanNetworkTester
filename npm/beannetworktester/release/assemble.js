@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 'use strict';
 
 // Lays out the packages a release puts on npm: beannetworktester itself, and one
@@ -20,6 +24,7 @@ const REPO = path.resolve(PACKAGE, '..', '..');
 const TOP = 'BeanNetworkTester';
 const PROGRAMS = { 'win32-x64': `${TOP}/BeanNetworkTester.exe`, 'linux-x64': `${TOP}/BeanNetworkTester` };
 const VERSION = /^v?(\d+\.\d+\.\d+(?:-rc\.\d+)?)$/;
+const PROGRAM_LICENCE = 'GPL-3.0-only';
 
 function fail(message) {
   throw new Error(`assemble: ${message}`);
@@ -53,16 +58,20 @@ function platformPackage(system, version, from, out) {
     const where = path.join(dir, 'program', TOP, entry);
     if (fs.lstatSync(where).isSymbolicLink()) fail(`${where} is a link, and a package cannot hold one`);
   }
+  // This package is the program alone, so it is the program's licence: GPL-3.0-only,
+  // where beannetworktester itself, the code a test imports, is MPL-2.0.
   fs.copyFileSync(path.join(REPO, 'LICENSE'), path.join(dir, 'LICENSE'));
   fs.writeFileSync(path.join(dir, 'README.md'),
     `# ${PACKAGES[system]}\n\nThe Bean Network Tester program for ${os === 'win32' ? 'Windows' : 'Linux'} ` +
     `x64, unchanged from release ${version}, for the [beannetworktester](https://www.npmjs.com/package/` +
     'beannetworktester) package. npm installs it with that package on this system. It is not ' +
-    'meant to be installed on its own.\n');
+    'meant to be installed on its own.\n\nThe program is licensed under GPL-3.0-only, in LICENSE. ' +
+    'Its THIRD-PARTY-NOTICES.md, inside program/, names the code built into it and the license of ' +
+    'each part.\n');
   writeJson(path.join(dir, 'package.json'), {
     name: PACKAGES[system], version, description: `The Bean Network Tester program for ` +
       `${os === 'win32' ? 'Windows' : 'Linux'} x64, for the beannetworktester package.`,
-    license: 'GPL-3.0-only', author: 'DonislawDev', homepage: 'https://beannetworktester.donislawdev.com/',
+    license: PROGRAM_LICENCE, author: 'DonislawDev', homepage: 'https://beannetworktester.donislawdev.com/',
     repository: { type: 'git', url: 'git+https://github.com/donislawdev/BeanNetworkTester.git' },
     os: [os], cpu: [cpu], files: ['program/', 'LICENSE', 'README.md'], preferUnplugged: true,
   });
@@ -74,8 +83,7 @@ function mainPackage(version, out) {
   const dir = path.join(out, 'beannetworktester');
   fs.mkdirSync(dir, { recursive: true });
   for (const entry of source.files) {
-    const from = entry === 'LICENSE' ? path.join(REPO, 'LICENSE') : path.join(PACKAGE, entry);
-    fs.cpSync(from, path.join(dir, entry), { recursive: true });
+    fs.cpSync(path.join(PACKAGE, entry), path.join(dir, entry), { recursive: true });
   }
   delete source.scripts;
   source.version = version;

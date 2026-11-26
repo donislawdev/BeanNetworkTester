@@ -136,6 +136,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   WebKit alike, WebSockets included. It stops when the test ends and attaches its summary to the report. The
   program comes in a package of its own for Windows x64 and Linux x64. It needs the same rights
   as the Python package.
+- **The packages for tests are under MPL-2.0.** The code of both `beannetworktester` packages, the
+  part your tests import, is under the Mozilla Public License 2.0, so it can be used in the tests of
+  any project, closed-source ones included. The program they carry stays under GPLv3.
 - **`--stop-on-stdin-close`, and a `start` record in `--format json`.** For a program that
   starts this one, such as a test runner. With the flag, the session ends when its standard
   input closes, as a normal end with a summary whose `stop_reason` is `stdin`. If the program

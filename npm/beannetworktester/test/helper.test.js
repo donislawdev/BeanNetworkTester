@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 'use strict';
 
 // The npm helper. Run with `node --test test/`, and by tests/test_helper_npm.py in the
@@ -322,6 +326,13 @@ test('the release lays out three packages, the systems first', () => {
     { '@beannetworktester/win32-x64': '1.1.0', '@beannetworktester/linux-x64': '1.1.0' });
   assert.equal(main.scripts, undefined);
   for (const file of main.files) assert.ok(fs.existsSync(path.join(dirs[2], file)), file);
+  // The code a test imports is MPL-2.0, the packages that are the program alone GPL-3.0-only.
+  assert.equal(main.license, 'MPL-2.0');
+  assert.match(fs.readFileSync(path.join(dirs[2], 'LICENSE'), 'utf8'), /^Mozilla Public License Version 2\.0/);
+  for (const dir of dirs.slice(0, 2)) {
+    assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).license, 'GPL-3.0-only', dir);
+    assert.match(fs.readFileSync(path.join(dir, 'LICENSE'), 'utf8'), /GNU GENERAL PUBLIC LICENSE/, dir);
+  }
   const win = JSON.parse(fs.readFileSync(path.join(dirs[0], 'package.json'), 'utf8'));
   assert.deepEqual([win.os, win.cpu], [['win32'], ['x64']]);
   assert.ok(fs.existsSync(path.join(dirs[1], 'program', 'BeanNetworkTester', 'BeanNetworkTester')));

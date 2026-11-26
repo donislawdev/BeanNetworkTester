@@ -567,7 +567,25 @@ def test_the_release_makes_three_wheels_with_the_program_inside(tmp_path):
                 if digest:
                     check(f"{wheel.name}: {name} hash", digest == assemble._record_hash(z.read(name)))
             meta = z.read("beannetworktester-1.1.0.dist-info/METADATA").decode()
-            check("GPL-3.0-only", "License-Expression: GPL-3.0-only" in meta)
+            head = meta.split("\n\n", 1)[0].splitlines()
+            with_program = not wheel.name.endswith("-any.whl")
+            licence, files = (("MPL-2.0 AND GPL-3.0-only",
+                               ["LICENSE", "program/LICENSE", "program/THIRD-PARTY-NOTICES.md"])
+                              if with_program else ("MPL-2.0", ["LICENSE"]))
+            declared = [line for line in head if line.startswith("License-Expression: ")]
+            check(f"{wheel.name}: {licence}", declared == [f"License-Expression: {licence}"],
+                  f"({declared})")
+            listed = [line.removeprefix("License-File: ") for line in head
+                      if line.startswith("License-File: ")]
+            check(f"{wheel.name}: its licence files", listed == files, f"({listed})")
+            licences = "beannetworktester-1.1.0.dist-info/licenses/"
+            for name in listed:
+                check(f"{wheel.name}: {name} is in the wheel", licences + name in listing)
+            check(f"{wheel.name}: the package's own code is under the MPL",
+                  z.read(licences + "LICENSE").startswith(b"Mozilla Public License Version 2.0"))
+            if with_program:
+                check(f"{wheel.name}: the program is under the GPL",
+                      b"GNU GENERAL PUBLIC LICENSE" in z.read(licences + "program/LICENSE")[:200])
             check("the pytest plugin is registered", "beannetworktester.pytest_plugin" in
                   z.read("beannetworktester-1.1.0.dist-info/entry_points.txt").decode())
             check("the helper's code is in", "beannetworktester/_session.py" in listing)

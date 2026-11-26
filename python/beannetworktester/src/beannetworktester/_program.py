@@ -1,3 +1,7 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 """Which program a session runs, and with what rights.
 
 The wheel for Windows x64 and the one for Linux x64 carry the release's own program,
