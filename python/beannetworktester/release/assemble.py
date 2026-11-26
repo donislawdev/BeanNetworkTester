@@ -1,3 +1,7 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 """Lays out the wheels a release puts on PyPI.
 
 beannetworktester gets one wheel for Windows x64 and one for Linux x64, each with the
@@ -39,6 +43,14 @@ PROGRAMS = {"win_amd64": f"{TOP}/BeanNetworkTester.exe", "linux": f"{TOP}/BeanNe
 LINUX_TAG = "manylinux_2_39_x86_64"
 INSIDE = "beannetworktester/program/"
 
+# The program inside a platform wheel is a separate work under its own licence: the
+# wheel says both, and carries the program's licence and notices beside this
+# package's own, under licenses/program/. They come from the checkout, which is the
+# tag the release's program was built from (a pull request tries an older release's
+# program, and publishes nothing).
+PROGRAM_LICENCE = "GPL-3.0-only"
+PROGRAM_LICENCE_FILES = ("LICENSE", "THIRD-PARTY-NOTICES.md")
+
 VERSION_SHAPE = re.compile(r"^(\d+\.\d+\.\d+)(?:-rc\.(\d+))?$")
 # Every entry of every wheel carries this date, so the same release gives the same
 # bytes. The zip format starts in 1980.
@@ -63,15 +75,28 @@ def _project() -> dict:
         return tomllib.load(handle)["project"]
 
 
-def metadata(project: dict, version: str, readme: str) -> bytes:
+def licences(project: dict, with_program: bool) -> tuple[str, list[tuple[str, bytes]]]:
+    """A wheel's licence expression, and its licence files by their path under licenses/."""
+    own = project.get("license-files") or []
+    if not own:
+        fail(f"{PACKAGE / 'pyproject.toml'} names no license-files")
+    files = [(name, (PACKAGE / name).read_bytes()) for name in own]
+    if not with_program:
+        return project["license"], files
+    files += [(f"program/{name}", (REPO / name).read_bytes()) for name in PROGRAM_LICENCE_FILES]
+    return f"{project['license']} AND {PROGRAM_LICENCE}", files
+
+
+def metadata(project: dict, version: str, readme: str, licence: str,
+             licence_files: list[str]) -> bytes:
     lines = [
         "Metadata-Version: 2.4",
         f"Name: {project['name']}",
         f"Version: {version}",
         f"Summary: {project['description']}",
         f"Author: {', '.join(a['name'] for a in project.get('authors', []))}",
-        f"License-Expression: {project['license']}",
-        "License-File: LICENSE",
+        f"License-Expression: {licence}",
+        *(f"License-File: {name}" for name in licence_files),
         f"Keywords: {','.join(project.get('keywords', []))}",
         *(f"Classifier: {c}" for c in project.get("classifiers", [])),
         *(f"Project-URL: {label}, {url}" for label, url in project.get("urls", {}).items()),
@@ -181,14 +206,22 @@ def build(version: str, windows_zip: Path, linux_tgz: Path, out: Path) -> list[P
     wheel_version = pep440(version)
     out.mkdir(parents=True, exist_ok=False)
     project = _project()
-    info = [("METADATA", metadata(project, wheel_version,
-                                  (PACKAGE / "README.md").read_text(encoding="utf-8"))),
-            ("entry_points.txt", entry_points(project)),
-            ("licenses/LICENSE", (REPO / "LICENSE").read_bytes())]
+    readme = (PACKAGE / "README.md").read_text(encoding="utf-8")
+
+    def dist_info(with_program: bool) -> list[tuple[str, bytes]]:
+        expression, files = licences(project, with_program)
+        return [("METADATA", metadata(project, wheel_version, readme, expression,
+                                      [name for name, _ in files])),
+                ("entry_points.txt", entry_points(project)),
+                *((f"licenses/{name}", data) for name, data in files)]
+
     ours = code()
-    return [write_wheel(out, wheel_version, "win_amd64", ours + windows_program(windows_zip), info),
-            write_wheel(out, wheel_version, LINUX_TAG, ours + linux_program(linux_tgz), info),
-            write_wheel(out, wheel_version, "any", ours, info)]
+    with_program = dist_info(True)
+    return [write_wheel(out, wheel_version, "win_amd64", ours + windows_program(windows_zip),
+                        with_program),
+            write_wheel(out, wheel_version, LINUX_TAG, ours + linux_program(linux_tgz),
+                        with_program),
+            write_wheel(out, wheel_version, "any", ours, dist_info(False))]
 
 
 def main(argv: list[str]) -> None:

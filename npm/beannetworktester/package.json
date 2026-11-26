@@ -2,7 +2,7 @@
   "name": "beannetworktester",
   "version": "0.0.0-development",
   "description": "Slow down, break or cut the real network in your tests: latency, packet loss, jitter, outages, for one server or one process. A Playwright Test fixture, and an API for any Node code.",
-  "license": "GPL-3.0-only",
+  "license": "MPL-2.0",
   "author": "DonislawDev",
   "homepage": "https://beannetworktester.donislawdev.com/",
   "repository": {

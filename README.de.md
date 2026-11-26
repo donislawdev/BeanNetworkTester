@@ -2016,6 +2016,15 @@ Verzeichnis `scenarios/`, sind Teil des Projekts und wie der Rest unter GPLv3. E
 selbst schreiben, ist es nicht, auch wenn Sie von einem davon ausgegangen sind und die Zahlen
 geändert haben.
 
+### Die Pakete für Tests: MPL-2.0
+
+Der Code der Pakete `beannetworktester` für Tests (pip und npm, der Teil, den Ihre Tests
+importieren, hier in `python/beannetworktester` und `npm/beannetworktester`) steht unter der Mozilla
+Public License 2.0 (MPL-2.0), nicht unter der GPL. Sie können ihn in den Tests jedes Projekts
+verwenden, auch in Closed-Source-Projekten, und Ihre Tests bleiben Ihre. Wenn Sie eine dieser
+Dateien ändern und weitergeben, bleibt diese Datei unter der MPL-2.0. Das Programm, das die Pakete
+mitbringen, ist dasselbe GPLv3-Programm wie überall sonst und läuft als eigenes Programm.
+
 ## Komponenten von Drittanbietern
 
 Das Programm verwendet Bibliotheken anderer Autoren unter deren eigenen Lizenzen - darunter

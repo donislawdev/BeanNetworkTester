@@ -243,6 +243,11 @@ The parts worth reading:
 
 ## Licence
 
-GPL-3.0-only, like the program it carries. The program's third-party notices are inside the
-package, next to it. Source, issues and the changelog:
+The package's own code, the part your tests import, is under the Mozilla Public License 2.0
+(MPL-2.0), in LICENSE. You can use it in the tests of any project, closed-source ones included, and
+your tests stay yours. If you change one of the package's own files and pass it on, that file stays
+under MPL-2.0.
+
+The program the package carries and starts is a separate program, under GPL-3.0-only. Its licence
+and third-party notices are in the package, next to it. Source, issues and the changelog:
 [github.com/donislawdev/BeanNetworkTester](https://github.com/donislawdev/BeanNetworkTester).

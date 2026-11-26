@@ -1677,6 +1677,14 @@ Ookla、Speedtest、Starlink、HughesNet 和 Viasat 是其各自所有者的商�
 唯一需要分开看待的是：随程序**一起**提供的示例场景，位于 `scenarios/` 目录中，是项目的一部分，
 和其余部分一样采用 GPLv3。你自己编写的场景则不是，即使你是从其中一个出发，改了改数字。
 
+### 测试用的软件包：MPL-2.0
+
+测试用的 `beannetworktester` 软件包（pip 和 npm，也就是你的测试所导入的部分，在本仓库的
+`python/beannetworktester` 和 `npm/beannetworktester` 中）的代码采用 Mozilla Public License 2.0
+（MPL-2.0），而不是 GPL。你可以在任何项目的测试中使用它，包括闭源项目，你的测试仍然归你所有。
+如果你修改了其中某个文件并分发，该文件仍采用 MPL-2.0。软件包携带的程序与其他地方是同一个 GPLv3 程序，
+作为独立的程序运行。
+
 ## 第三方组件
 
 程序使用其他作者的库，它们遵循各自的许可证，其中包括

@@ -1938,6 +1938,15 @@ Uma coisa que convém manter separada: os cenários de exemplo que vêm **com** 
 `scenarios/`, fazem parte do projeto e são GPLv3 como o resto dele. Um cenário que você mesmo
 escreve não é, mesmo que você tenha partido de um deles e mudado os números.
 
+### Os pacotes para testes: MPL-2.0
+
+O código dos pacotes `beannetworktester` para testes (pip e npm, a parte que os seus testes
+importam, aqui em `python/beannetworktester` e `npm/beannetworktester`) está sob a Mozilla Public
+License 2.0 (MPL-2.0), não sob a GPL. Você pode usá-lo nos testes de qualquer projeto, inclusive de
+código fechado, e os seus testes continuam sendo seus. Se você alterar um desses arquivos e
+distribuí-lo, esse arquivo continua sob a MPL-2.0. O programa que os pacotes trazem é o mesmo
+programa GPLv3 do resto do projeto e roda como um programa à parte.
+
 ## Componentes de terceiros
 
 O programa usa bibliotecas de outros autores, sob as respectivas licenças - entre elas
