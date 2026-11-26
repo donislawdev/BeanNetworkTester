@@ -79,7 +79,8 @@ def licences(project: dict, with_program: bool) -> tuple[str, list[tuple[str, by
     """A wheel's licence expression, and its licence files by their path under licenses/."""
     own = project.get("license-files") or []
     if not own:
-        fail(f"{PACKAGE / 'pyproject.toml'} names no license-files")
+        fail(f"{PACKAGE / 'pyproject.toml'} has no license-files list under [project]: "
+             'add license-files = ["LICENSE"] there')
     files = [(name, (PACKAGE / name).read_bytes()) for name in own]
     if not with_program:
         return project["license"], files

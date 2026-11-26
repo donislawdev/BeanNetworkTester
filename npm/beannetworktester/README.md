@@ -247,7 +247,7 @@ reading:
   one installed with WinGet, or `bean_network_tester.py` from a checkout, which runs with
   `BEANNETWORKTESTER_PYTHON` (or `python`).
 
-## Licence
+## License
 
 The package's own code, the part your tests import, is under the Mozilla Public License 2.0
 (MPL-2.0), in LICENSE. You can use it in the tests of any project, closed-source ones included, and
@@ -255,6 +255,6 @@ your tests stay yours. If you change one of the package's own files and pass it 
 under MPL-2.0.
 
 The program it starts is a separate program, under GPL-3.0-only, and comes in a package of its own
-for each system (`@beannetworktester/win32-x64`, `@beannetworktester/linux-x64`), with its licence
+for each system (`@beannetworktester/win32-x64`, `@beannetworktester/linux-x64`), with its license
 and third-party notices. Source, issues and the changelog:
 [github.com/donislawdev/BeanNetworkTester](https://github.com/donislawdev/BeanNetworkTester).

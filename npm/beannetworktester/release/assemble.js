@@ -66,7 +66,7 @@ function platformPackage(system, version, from, out) {
     `x64, unchanged from release ${version}, for the [beannetworktester](https://www.npmjs.com/package/` +
     'beannetworktester) package. npm installs it with that package on this system. It is not ' +
     'meant to be installed on its own.\n\nThe program is licensed under GPL-3.0-only, in LICENSE. ' +
-    'Its THIRD-PARTY-NOTICES.md, inside program/, names the code built into it and the licence of ' +
+    'Its THIRD-PARTY-NOTICES.md, inside program/, names the code built into it and the license of ' +
     'each part.\n');
   writeJson(path.join(dir, 'package.json'), {
     name: PACKAGES[system], version, description: `The Bean Network Tester program for ` +
