@@ -5,60 +5,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ## [Unreleased]
 
-### Added
-
-- **A Docker image (experimental).** From 1.1.0 every stable release is also
-  `ghcr.io/donislawdev/beannetworktester`, tagged with its version and `latest`. Release
-  candidates get none. It is the Linux command line, unchanged, for x86_64. Started in another
-  container's network (`--network container:<name>`, or `network_mode: "service:<name>"` in
-  Docker Compose), it slows down every program in that network, unless `--dst-ip`, `--dst-port`
-  or `--target` narrow it. It needs `--cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN`, not
-  `--privileged`. The README's "Docker image" section covers one program, the Linux host, Docker
-  Desktop and Apple silicon.
-- **`beannetworktester` on PyPI, for tests.** From 1.1.0 every stable release is also a Python
-  package: `pip install beannetworktester`. In pytest, the `bad_network` fixture slows the real
-  network for one test, aimed at a server (`server="http://localhost:3000"`), an API's port or
-  a process, and stops when the test ends. It works with Playwright for Python and any Python code, on
-  Windows x64 and Linux x64, and carries the release's own program. It needs administrator
-  rights on Windows, and root or `sudo` without a password on Linux, as on GitHub's runners.
-- **`beannetworktester` on npm, for Playwright Test.** From 1.1.0 every stable release is also
-  an npm package: `npm install --save-dev beannetworktester`. Import `test` from
-  `beannetworktester/playwright`, and the `badNetwork` fixture slows the real network for one
-  test, aimed at a server, an API's port or the test's own browser, in Chromium, Firefox and
-  WebKit alike, WebSockets included. It stops when the test ends and attaches its summary to the report. The
-  program comes in a package of its own for Windows x64 and Linux x64. It needs the same rights
-  as the Python package.
-- **`--stop-on-stdin-close`, and a `start` record in `--format json`.** For a program that
-  starts this one, such as a test runner. With the flag, the session ends when its standard
-  input closes, as a normal end with a summary whose `stop_reason` is `stdin`. If the program
-  that started it dies, the session ends at once instead of running on until `--duration`. In
-  `--format json` the first line is now a `start` object, written once the capture is running,
-  so that program knows when to send the traffic it wants slowed.
-
-### Fixed
-
-- **The `--preset` example in `--help` works.** It showed `--preset 3g`, which the program
-  refuses as an unknown preset. It now shows `--preset presets.3g`. A preset is given by its id,
-  such as `presets.3g`, or by its name in any language of the window, such as "3G network".
-
-### Docs
-
-- **The README's "Filter syntax" chapter says what the parser does.** An empty place between two
-  commas is skipped, so `80,,443` is read as `80,443`. Only a `!` with nothing after it, as in
-  `80,!`, is refused. A comma left without a backslash in a `re:` pattern splits it into two
-  patterns that both load, with no warning. In every language of the README.
-
-- **The README's feature list names the network tools.** A new line lists what the Tools tab
-  offers: a continuous ping with a chart, jitter and packet loss, a TCP and UDP port scanner, a
-  NAT and TURN check for calls, the sockets of this computer with their programs, a check of
-  which local ports are free, the health of each TCP connection and the network adapters. The
-  "No telemetry" line is now short; what each network tool sends, and when, is still said in
-  the Tools tab's description and in "Privacy: no telemetry". In every language of the README.
-
-- **The README's Linux section names every tool that works there.** NAT and STUN and Port scan
-  work on Linux too, and the list of the Tools tab's tools in that section now says so.
-
-## [1.1.0] - 2026-11-13
+## [1.1.0] - 2026-11-28
 
 ### Added
 
@@ -167,6 +114,34 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 - **The Call targeting card says when nothing ticked has matched.** A red line in the card
   shows while no packet of a ticked part has matched the targeting (the target process and
   the destination count too), because such a session impairs nothing.
+
+- **A Docker image (experimental).** From 1.1.0 every stable release is also
+  `ghcr.io/donislawdev/beannetworktester`, tagged with its version and `latest`. Release
+  candidates get none. It is the Linux command line, unchanged, for x86_64. Started in another
+  container's network (`--network container:<name>`, or `network_mode: "service:<name>"` in
+  Docker Compose), it slows down every program in that network, unless `--dst-ip`, `--dst-port`
+  or `--target` narrow it. It needs `--cap-add BPF --cap-add PERFMON --cap-add NET_ADMIN`, not
+  `--privileged`. The README's "Docker image" section covers one program, the Linux host, Docker
+  Desktop and Apple silicon.
+- **`beannetworktester` on PyPI, for tests.** From 1.1.0 every stable release is also a Python
+  package: `pip install beannetworktester`. In pytest, the `bad_network` fixture slows the real
+  network for one test, aimed at a server (`server="http://localhost:3000"`), an API's port or
+  a process, and stops when the test ends. It works with Playwright for Python and any Python code, on
+  Windows x64 and Linux x64, and carries the release's own program. It needs administrator
+  rights on Windows, and root or `sudo` without a password on Linux, as on GitHub's runners.
+- **`beannetworktester` on npm, for Playwright Test.** From 1.1.0 every stable release is also
+  an npm package: `npm install --save-dev beannetworktester`. Import `test` from
+  `beannetworktester/playwright`, and the `badNetwork` fixture slows the real network for one
+  test, aimed at a server, an API's port or the test's own browser, in Chromium, Firefox and
+  WebKit alike, WebSockets included. It stops when the test ends and attaches its summary to the report. The
+  program comes in a package of its own for Windows x64 and Linux x64. It needs the same rights
+  as the Python package.
+- **`--stop-on-stdin-close`, and a `start` record in `--format json`.** For a program that
+  starts this one, such as a test runner. With the flag, the session ends when its standard
+  input closes, as a normal end with a summary whose `stop_reason` is `stdin`. If the program
+  that started it dies, the session ends at once instead of running on until `--duration`. In
+  `--format json` the first line is now a `start` object, written once the capture is running,
+  so that program knows when to send the traffic it wants slowed.
 
 ### Changed
 
@@ -367,6 +342,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
   said the kernel removes a killed session's programs within about 3 seconds. Traffic does
   flow normally again within about 3 seconds, but the programs stay until the next session
   removes them. A session that stops removes its own at once.
+
+- **The `--preset` example in `--help` works.** It showed `--preset 3g`, which the program
+  refuses as an unknown preset. It now shows `--preset presets.3g`. A preset is given by its id,
+  such as `presets.3g`, or by its name in any language of the window, such as "3G network".
+
+### Docs
+
+- **The README's "Filter syntax" chapter says what the parser does.** An empty place between two
+  commas is skipped, so `80,,443` is read as `80,443`. Only a `!` with nothing after it, as in
+  `80,!`, is refused. A comma left without a backslash in a `re:` pattern splits it into two
+  patterns that both load, with no warning. In every language of the README.
+
+- **The README's feature list names the network tools.** A new line lists what the Tools tab
+  offers: a continuous ping with a chart, jitter and packet loss, a TCP and UDP port scanner, a
+  NAT and TURN check for calls, the sockets of this computer with their programs, a check of
+  which local ports are free, the health of each TCP connection and the network adapters. The
+  "No telemetry" line is now short; what each network tool sends, and when, is still said in
+  the Tools tab's description and in "Privacy: no telemetry". In every language of the README.
+
+- **The README's Linux section names every tool that works there.** NAT and STUN and Port scan
+  work on Linux too, and the list of the Tools tab's tools in that section now says so.
 
 ## [1.0.0] - 2026-11-03
 
