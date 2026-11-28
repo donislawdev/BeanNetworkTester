@@ -211,6 +211,7 @@ def test_every_outbound_link_goes_somewhere_we_named(tmp_path):
     allowed = {urlsplit(registry["base_url"]).netloc.lower(),
                urlsplit(registry["repo_url"]).netloc.lower()}
     allowed |= {urlsplit(entry["url"]).netloc.lower() for entry in registry.get("social", [])}
+    allowed |= {urlsplit(entry["url"]).netloc.lower() for entry in registry.get("articles", [])}
     check("the allow list came from the registry", len(allowed) >= 4, f"({sorted(allowed)})")
 
     seen = 0
@@ -1211,6 +1212,44 @@ def test_no_translation_is_left_as_the_english_sentence():
             continue
         left = _english_copies(english, _site_strings(code))
         check(f"{code}: every sentence is translated", not left, f"(still English: {left[:6]})")
+
+
+def test_every_home_page_links_the_articles_written_about_the_tool(tmp_path):
+    """Each article under its own title, a plain link, and its language said where it differs.
+
+    A backlink: the sites that wrote about the tool get a link a search engine follows,
+    so no ``rel`` may ask it not to. The title is the article's own, in its language.
+    """
+    registry = build_site.load_registry(ROOT)
+    articles = registry.get("articles", [])
+    check("there are articles to link", len(articles) >= 2, f"({articles})")
+    texts = {"articles.lang.en": "(in English)", "articles.lang.pl": "(in Polish)"}
+    one = [{"title": "T", "site": "S", "language": "pl", "url": "https://example.test/a"}]
+    check("canary: an article in another language says which",
+          "(in Polish)" in str(build_site.article_links({"articles": one}, texts, "en")))
+    check("canary: an article in the page's own language says nothing more",
+          "(in Polish)" not in str(build_site.article_links({"articles": one}, texts, "pl")))
+    try:
+        build_site.article_links({"articles": [{**one[0], "language": "de"}]}, texts, "en")
+        check("canary: an article in a language with no label fails the build", False)
+    except KeyError:
+        pass
+    out, written = _build(tmp_path, "articles")
+    homes = [posixpath.join(lang["dir"], "index.html") for lang in registry["languages"]]
+    check("every language has a home page", all(h in written for h in homes),
+          f"({[h for h in homes if h not in written]})")
+    for rel in homes:
+        text = _read(os.path.join(out, rel.replace("/", os.sep)))
+        for entry in articles:
+            link = re.search(r'<a href="%s"([^>]*)>([^<]*)</a>' % re.escape(entry["url"]), text)
+            check(f"{rel}: links {entry['site']}", link is not None, "(missing)")
+            if link:
+                check(f"{rel}: {entry['site']} in its own language",
+                      f'lang="{entry["language"]}"' in link.group(1), f"({link.group(1)})")
+                check(f"{rel}: {entry['site']} is a plain link", "rel=" not in link.group(1),
+                      f"({link.group(1)})")
+                check(f"{rel}: {entry['site']} under its own title",
+                      html.unescape(link.group(2)) == entry["title"], f"({link.group(2)})")
 
 
 def test_the_footer_names_the_accounts_and_carries_no_brand_mark(tmp_path):

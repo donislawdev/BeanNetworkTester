@@ -102,6 +102,7 @@ en a besoin apprendra qu'il existe.
 - [Organisation du projet](#organisation-du-projet)
 - [Fonctionnement (en bref)](#fonctionnement-en-bref)
 - [Remarques et limitations](#remarques-et-limitations)
+- [Articles sur Bean Network Tester](#articles-sur-bean-network-tester)
 - [Contribuer](#contribuer)
 - [Soutenir le projet](#soutenir-le-projet)
 - [Auteur](#auteur)
@@ -1954,6 +1955,11 @@ initialisé par une graine).
 - **"Duration" et "Traffic to modify" ne sont pris en compte qu'au START** - c'est pourquoi pendant une
   session les deux sont **verrouillés** (un champ modifiable qui ne fait rien est pire qu'un champ
   grisé).
+
+## Articles sur Bean Network Tester
+
+- [How to Test Applications Under Poor Network Conditions with Bean Network Tester](https://www.softwaretestingmagazine.com/knowledge/how-to-test-applications-under-poor-network-conditions-with-bean-network-tester/) - Software Testing Magazine (en anglais)
+- [Symulacja niekorzystnych warunków sieciowych podczas testowania aplikacji z Bean Network Tester](https://testerzy.pl/baza-wiedzy/narzedzia/symulacja-niekorzystnych-warunkow-sieciowych-podczas-testowania-aplikacji-z-bean-network-tester) - testerzy.pl (en polonais)
 
 ## Contribuer
 

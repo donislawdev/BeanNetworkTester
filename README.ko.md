@@ -91,6 +91,7 @@
 - [프로젝트 구조](#프로젝트-구조)
 - [동작 원리 (간단히)](#동작-원리-간단히)
 - [참고 사항과 제한 사항](#참고-사항과-제한-사항)
+- [Bean Network Tester를 다룬 글](#bean-network-tester를-다룬-글)
 - [기여하기](#기여하기)
 - [프로젝트 후원](#프로젝트-후원)
 - [작성자](#작성자)
@@ -1727,6 +1728,11 @@ BeanNetworkTester.spec   빌드 레시피(onedir, console, asInvoker)
   `--cleanup-driver`는 다른 프로그램이 설치하는 `WinDivert1.4`와 `WinDivert1.1`도 멈춥니다.
 - **"Duration"과 "Traffic to modify"는 START할 때만 반영됩니다** - 그래서 세션 동안 둘 다 **잠깁니다**
   (아무것도 하지 않는 편집 가능한 필드는 회색으로 비활성화된 필드보다 나쁩니다).
+
+## Bean Network Tester를 다룬 글
+
+- [How to Test Applications Under Poor Network Conditions with Bean Network Tester](https://www.softwaretestingmagazine.com/knowledge/how-to-test-applications-under-poor-network-conditions-with-bean-network-tester/) - Software Testing Magazine (영어)
+- [Symulacja niekorzystnych warunków sieciowych podczas testowania aplikacji z Bean Network Tester](https://testerzy.pl/baza-wiedzy/narzedzia/symulacja-niekorzystnych-warunkow-sieciowych-podczas-testowania-aplikacji-z-bean-network-tester) - testerzy.pl (폴란드어)
 
 ## 기여하기
 

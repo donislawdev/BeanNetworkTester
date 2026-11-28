@@ -3,6 +3,9 @@
     "code": "ar",
     "name": "العربية"
   },
+  "articles.heading": "مقالات عن Bean Network Tester",
+  "articles.lang.en": "(بالإنجليزية)",
+  "articles.lang.pl": "(بالبولندية)",
   "cli.group.checks": "فحوص لخط الإنتاج ولهذا الحاسوب",
   "cli.group.output": "ما الذي يطبعه",
   "cli.group.program": "البرنامج نفسه",

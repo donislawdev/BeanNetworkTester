@@ -3,6 +3,9 @@
     "code": "uk",
     "name": "Українська"
   },
+  "articles.heading": "Статті про Bean Network Tester",
+  "articles.lang.en": "(англійською)",
+  "articles.lang.pl": "(польською)",
   "cli.group.checks": "Перевірки для конвеєра і цього комп'ютера",
   "cli.group.output": "Що вона виводить",
   "cli.group.program": "Сама програма",

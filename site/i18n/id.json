@@ -3,6 +3,9 @@
     "code": "id",
     "name": "Bahasa Indonesia"
   },
+  "articles.heading": "Artikel tentang Bean Network Tester",
+  "articles.lang.en": "(dalam bahasa Inggris)",
+  "articles.lang.pl": "(dalam bahasa Polandia)",
   "cli.group.checks": "Pemeriksaan untuk pipeline dan untuk komputer ini",
   "cli.group.output": "Apa yang dicetaknya",
   "cli.group.program": "Program itu sendiri",

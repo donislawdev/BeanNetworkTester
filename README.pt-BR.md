@@ -98,6 +98,7 @@ dele fica sabendo que existe.
 - [Estrutura do projeto](#estrutura-do-projeto)
 - [Como funciona (em resumo)](#como-funciona-em-resumo)
 - [Observações e limitações](#observações-e-limitações)
+- [Artigos sobre o Bean Network Tester](#artigos-sobre-o-bean-network-tester)
 - [Como contribuir](#como-contribuir)
 - [Apoie o projeto](#apoie-o-projeto)
 - [Autor](#autor)
@@ -1881,6 +1882,11 @@ com semente).
   `--cleanup-driver` também para o `WinDivert1.4` e o `WinDivert1.1`, que outros programas instalam.
 - **"Duration" e "Traffic to modify" são considerados apenas no START** - e é por isso que durante uma
   sessão os dois ficam **travados** (um campo editável que não faz nada é pior que um esmaecido).
+
+## Artigos sobre o Bean Network Tester
+
+- [How to Test Applications Under Poor Network Conditions with Bean Network Tester](https://www.softwaretestingmagazine.com/knowledge/how-to-test-applications-under-poor-network-conditions-with-bean-network-tester/) - Software Testing Magazine (em inglês)
+- [Symulacja niekorzystnych warunków sieciowych podczas testowania aplikacji z Bean Network Tester](https://testerzy.pl/baza-wiedzy/narzedzia/symulacja-niekorzystnych-warunkow-sieciowych-podczas-testowania-aplikacji-z-bean-network-tester) - testerzy.pl (em polonês)
 
 ## Como contribuir
 

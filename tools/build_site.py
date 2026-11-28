@@ -1396,6 +1396,27 @@ def social_links(registry, texts):
                % (html.escape(texts["footer.elsewhere"], quote=True), "".join(items)))
 
 
+def article_links(registry, texts, code):
+    """The articles other sites wrote about the program, from the registry.
+
+    A plain link, with no rel that asks a search engine to ignore it: these sites wrote
+    about the tool. The title stays in the article's own language, marked with ``lang``
+    for a screen reader, and the page says which language that is unless it is its own
+    (``articles.lang.<code>``; an article in a new language fails the build until the key
+    is in every language file).
+    """
+    items = []
+    for entry in registry.get("articles", []):
+        language = html.escape(entry["language"], quote=True)
+        label = ("" if entry["language"] == code
+                 else " " + html.escape(texts["articles.lang." + entry["language"]], quote=True))
+        items.append('<li><a href="%s" hreflang="%s" lang="%s">%s</a> - %s%s</li>'
+                     % (html.escape(entry["url"], quote=True), language, language,
+                        html.escape(entry["title"], quote=True),
+                        html.escape(entry["site"], quote=True), label))
+    return Raw("<ul>%s</ul>" % "".join(items)) if items else Raw("")
+
+
 # A branch of source code: two nodes and a fork. Drawn here rather than taken from
 # anywhere, so the repository carries no third-party mark (see social_links).
 SOURCE_GLYPH = (
@@ -1456,6 +1477,7 @@ def page_context(page, code, registry, texts, home, colours, root, pages):
         "page.scenario_count": len(scenario_files(root)),
         "page.direction": _language(registry, code).get("direction", "ltr"),
         "page.social_links": social_links(registry, texts[code]),
+        "page.articles": article_links(registry, texts[code], code),
         "page.source_glyph": Raw(SOURCE_GLYPH),
         "page.nav_links": page_links(pages, page, code, "foot-nav",
                                      root_prefix=_root_prefix(registry) if page["output"]

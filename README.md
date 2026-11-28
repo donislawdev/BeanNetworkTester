@@ -97,6 +97,7 @@ exists.
 - [Project layout](#project-layout)
 - [How it works (in brief)](#how-it-works-in-brief)
 - [Notes and limitations](#notes-and-limitations)
+- [Written about Bean Network Tester](#written-about-bean-network-tester)
 - [Contributing](#contributing)
 - [Support the project](#support-the-project)
 - [Author](#author)
@@ -2306,6 +2307,11 @@ seeded).
   also stops `WinDivert1.4` and `WinDivert1.1`, which other programs install.
 - **"Duration" and "Traffic to modify" are taken into account only at START** - which is why during
   a session both are **locked** (an editable field that does nothing is worse than a greyed-out one).
+
+## Written about Bean Network Tester
+
+- [How to Test Applications Under Poor Network Conditions with Bean Network Tester](https://www.softwaretestingmagazine.com/knowledge/how-to-test-applications-under-poor-network-conditions-with-bean-network-tester/) - Software Testing Magazine
+- [Symulacja niekorzystnych warunków sieciowych podczas testowania aplikacji z Bean Network Tester](https://testerzy.pl/baza-wiedzy/narzedzia/symulacja-niekorzystnych-warunkow-sieciowych-podczas-testowania-aplikacji-z-bean-network-tester) - testerzy.pl (in Polish)
 
 ## Contributing
 

@@ -3,6 +3,9 @@
     "code": "tr",
     "name": "Türkçe"
   },
+  "articles.heading": "Bean Network Tester hakkında yazılar",
+  "articles.lang.en": "(İngilizce)",
+  "articles.lang.pl": "(Lehçe)",
   "cli.group.checks": "İşlem hattı ve bu bilgisayar için denetimler",
   "cli.group.output": "Ne yazdırır",
   "cli.group.program": "Programın kendisi",

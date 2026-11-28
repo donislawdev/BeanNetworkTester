@@ -3,6 +3,9 @@
     "code": "ja",
     "name": "日本語"
   },
+  "articles.heading": "Bean Network Tester を紹介した記事",
+  "articles.lang.en": "（英語）",
+  "articles.lang.pl": "（ポーランド語）",
   "cli.group.checks": "パイプラインとこのコンピューターの確認",
   "cli.group.output": "出力されるもの",
   "cli.group.program": "プログラム自体",

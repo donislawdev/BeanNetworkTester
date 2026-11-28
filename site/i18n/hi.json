@@ -3,6 +3,9 @@
     "code": "hi",
     "name": "हिन्दी"
   },
+  "articles.heading": "Bean Network Tester के बारे में लेख",
+  "articles.lang.en": "(अंग्रेज़ी में)",
+  "articles.lang.pl": "(पोलिश में)",
   "cli.group.checks": "पाइपलाइन और इस कंप्यूटर के लिए जाँच",
   "cli.group.output": "यह क्या छापता है",
   "cli.group.program": "प्रोग्राम ख़ुद",

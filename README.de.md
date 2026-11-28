@@ -102,6 +102,7 @@ der es braucht, dass es existiert.
 - [Projektaufbau](#projektaufbau)
 - [Wie es funktioniert (kurz gefasst)](#wie-es-funktioniert-kurz-gefasst)
 - [Hinweise und Einschränkungen](#hinweise-und-einschränkungen)
+- [Artikel über Bean Network Tester](#artikel-über-bean-network-tester)
 - [Mitwirken](#mitwirken)
 - [Das Projekt unterstützen](#das-projekt-unterstützen)
 - [Autor](#autor)
@@ -1956,6 +1957,11 @@ Zufall läuft über einen einzigen Generator (optional mit Seed).
 - **"Duration" und "Traffic to modify" werden nur bei START berücksichtigt** - deshalb sind beide
   während einer Sitzung **gesperrt** (ein bearbeitbares Feld, das nichts bewirkt, ist schlimmer als
   ein ausgegrautes).
+
+## Artikel über Bean Network Tester
+
+- [How to Test Applications Under Poor Network Conditions with Bean Network Tester](https://www.softwaretestingmagazine.com/knowledge/how-to-test-applications-under-poor-network-conditions-with-bean-network-tester/) - Software Testing Magazine (auf Englisch)
+- [Symulacja niekorzystnych warunków sieciowych podczas testowania aplikacji z Bean Network Tester](https://testerzy.pl/baza-wiedzy/narzedzia/symulacja-niekorzystnych-warunkow-sieciowych-podczas-testowania-aplikacji-z-bean-network-tester) - testerzy.pl (auf Polnisch)
 
 ## Mitwirken
 

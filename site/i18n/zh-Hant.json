@@ -3,6 +3,9 @@
     "code": "zh-Hant",
     "name": "繁體中文"
   },
+  "articles.heading": "介紹 Bean Network Tester 的文章",
+  "articles.lang.en": "（英文）",
+  "articles.lang.pl": "（波蘭文）",
   "cli.group.checks": "給管線和這台電腦的檢查",
   "cli.group.output": "輸出內容",
   "cli.group.program": "程式本身",

@@ -3,6 +3,9 @@
     "code": "ko",
     "name": "한국어"
   },
+  "articles.heading": "Bean Network Tester를 다룬 글",
+  "articles.lang.en": "(영어)",
+  "articles.lang.pl": "(폴란드어)",
   "cli.group.checks": "파이프라인과 이 컴퓨터를 위한 점검",
   "cli.group.output": "출력되는 것",
   "cli.group.program": "프로그램 자체",

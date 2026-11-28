@@ -102,6 +102,7 @@ tester que lo necesite.
 - [Estructura del proyecto](#estructura-del-proyecto)
 - [Cómo funciona (en resumen)](#cómo-funciona-en-resumen)
 - [Notas y limitaciones](#notas-y-limitaciones)
+- [Artículos sobre Bean Network Tester](#artículos-sobre-bean-network-tester)
 - [Cómo contribuir](#cómo-contribuir)
 - [Apoyar el proyecto](#apoyar-el-proyecto)
 - [Autor](#autor)
@@ -1909,6 +1910,11 @@ generador (opcionalmente con semilla).
   `WinDivert1.4` y `WinDivert1.1`, que instalan otros programas.
 - **"Duration" y "Traffic to modify" se tienen en cuenta solo en START**: por eso durante una sesión
   ambos están **bloqueados** (un campo editable que no hace nada es peor que uno atenuado).
+
+## Artículos sobre Bean Network Tester
+
+- [How to Test Applications Under Poor Network Conditions with Bean Network Tester](https://www.softwaretestingmagazine.com/knowledge/how-to-test-applications-under-poor-network-conditions-with-bean-network-tester/) - Software Testing Magazine (en inglés)
+- [Symulacja niekorzystnych warunków sieciowych podczas testowania aplikacji z Bean Network Tester](https://testerzy.pl/baza-wiedzy/narzedzia/symulacja-niekorzystnych-warunkow-sieciowych-podczas-testowania-aplikacji-z-bean-network-tester) - testerzy.pl (en polaco)
 
 ## Cómo contribuir
 
