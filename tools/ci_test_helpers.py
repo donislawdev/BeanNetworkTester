@@ -18,8 +18,8 @@ project's certificate. ``session`` serves two local web servers and runs a real 
 through the fixture: the server it aims at is slowed, the other one is not, and the
 session stops with a summary. ``--playwright`` (always for npm) adds a page loaded in
 Chromium. The servers are ``localhost`` and listen on IPv4 and IPv6 alike, as the README
-examples' servers do, and Chromium must reach the aim over IPv6 at least once: on Linux it
-takes ::1 for localhost where the system resolver names 127.0.0.1 alone. With BEANNETWORKTESTER_PROGRAM set (a pull request, whose release may be older
+examples' servers do, and Chromium's own requests must reach the aim over IPv6 at least
+once: on Linux it takes ::1 for localhost where the system resolver names 127.0.0.1 alone. With BEANNETWORKTESTER_PROGRAM set (a pull request, whose release may be older
 than the helper), the checkout's program runs instead of the packaged one.
 
 Each judge is a function over numbers, so each can be shown to fail
@@ -100,9 +100,15 @@ def judge_page(r: dict):
     if r.get("slow_page", 0) - r.get("base_page", 0) < SLOWED_MIN_MS:
         failures.append(f"the page in Chromium was not slowed: {r.get('base_page')} -> "
                         f"{r.get('slow_page')} ms")
-    if "ipv6" not in r.get("aim_families", []):
-        failures.append(f"the server aimed at was reached over {r.get('aim_families')} only, "
-                        "never IPv6: this run did not try localhost the way Chromium takes it")
+    seen = r.get("page_families", [])
+    if "ipv6" not in seen:
+        over = " and ".join(family.replace("ipv", "IPv") for family in seen)
+        failures.append(
+            (f"Chromium reached the server aimed at over {over} only" if seen
+             else "No request of Chromium's to the server aimed at was recorded")
+            + ", never over IPv6 (::1), so this run did not try localhost the way Chromium "
+            "takes it on Linux. Check that the try server listens on :: and that ::1 answers "
+            "on this runner, then run the try again.")
     return failures
 
 
@@ -149,8 +155,10 @@ def install(version: str, repo: Path) -> list[str]:
 
 class _Quiet(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        mapped = str(self.client_address[0]).startswith("::ffff:")
-        self.server.families.add("ipv4" if mapped else "ipv6")
+        family = "ipv4" if str(self.client_address[0]).startswith("::ffff:") else "ipv6"
+        self.server.families.add(family)
+        if "Chrome" in self.headers.get("User-Agent", ""):        # HeadlessChrome too
+            self.server.page_families.add(family)
         body = b"<!doctype html><title>try</title><p>ok</p>"
         self.send_response(200)
         self.send_header("Content-Type", "text/html")
@@ -166,11 +174,14 @@ class _Quiet(http.server.BaseHTTPRequestHandler):
 
 class _BothFamilies(http.server.ThreadingHTTPServer):
     """One socket for IPv4 and IPv6, as Node's ``listen(port)`` and ``python -m
-    http.server`` make, noting the family each request came over (IPv4 arrives mapped)."""
+    http.server`` make, noting the family each request came over (IPv4 arrives mapped):
+    every request's, and Chromium's on their own, since only Chromium's tell whether the
+    page took ::1 for localhost."""
     address_family = socket.AF_INET6
 
     def __init__(self, *args, **kwargs):
         self.families: set[str] = set()
+        self.page_families: set[str] = set()
         super().__init__(*args, **kwargs)
 
     def server_bind(self):
@@ -256,6 +267,7 @@ def session(repo: Path, playwright: bool) -> list[str]:
     failures = [] if done.returncode == 0 else [f"pytest ended with {done.returncode}"]
     results = json.loads(out.read_text(encoding="utf-8")) if out.exists() else {}
     results["aim_families"] = sorted(aim_server.families)
+    results["page_families"] = sorted(aim_server.page_families)
     print(json.dumps(results, indent=2))
     failures += judge_session(results)
     if playwright:
@@ -357,6 +369,7 @@ def session_npm(project: Path) -> list[str]:
     failures = [] if done.returncode == 0 else [f"playwright test ended with {done.returncode}"]
     results = json.loads(out.read_text(encoding="utf-8")) if out.exists() else {}
     results["aim_families"] = sorted(aim_server.families)
+    results["page_families"] = sorted(aim_server.page_families)
     print(json.dumps(results, indent=2))
     failures += judge_session(results) + judge_page(results)
     if '"bad-network"' not in (report.read_text(encoding="utf-8") if report.exists() else ""):

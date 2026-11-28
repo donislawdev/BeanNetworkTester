@@ -1234,6 +1234,20 @@ def test_every_home_page_links_the_articles_written_about_the_tool(tmp_path):
         check("canary: an article in a language with no label fails the build", False)
     except KeyError:
         pass
+    def has_lang(attributes, code):
+        return re.search(r'(?:^|\s)lang="%s"' % re.escape(code), attributes) is not None
+    check("canary: hreflang alone is not a lang", not has_lang(' href="x" hreflang="pl"', "pl"))
+    check("a lang after hreflang is found", has_lang(' hreflang="pl" lang="pl"', "pl"))
+    good = {"title": "T", "site": "S", "language": "pl", "url": "https://example.test/a"}
+    for what, bad in {"an http address": {**good, "url": "http://example.test/a"},
+                      "no address": {**good, "url": ""}, "no title": {**good, "title": " "},
+                      "a language the site lacks": {**good, "language": "xx"}}.items():
+        try:
+            build_site._check_articles([bad], ["en", "pl"])
+            check(f"canary: the registry refuses {what}", False)
+        except build_site.SiteError:
+            pass
+    build_site._check_articles([good], ["en", "pl"])
     out, written = _build(tmp_path, "articles")
     homes = [posixpath.join(lang["dir"], "index.html") for lang in registry["languages"]]
     check("every language has a home page", all(h in written for h in homes),
@@ -1245,7 +1259,7 @@ def test_every_home_page_links_the_articles_written_about_the_tool(tmp_path):
             check(f"{rel}: links {entry['site']}", link is not None, "(missing)")
             if link:
                 check(f"{rel}: {entry['site']} in its own language",
-                      f'lang="{entry["language"]}"' in link.group(1), f"({link.group(1)})")
+                      has_lang(link.group(1), entry["language"]), f"({link.group(1)})")
                 check(f"{rel}: {entry['site']} is a plain link", "rel=" not in link.group(1),
                       f"({link.group(1)})")
                 check(f"{rel}: {entry['site']} under its own title",

@@ -223,13 +223,21 @@ jobs:
 
       - name: stage with --dry-run
         # Every tarball as ./tarballs/...: npm reads tarballs/x.tgz as a repository on
-        # GitHub and asks git for it.
+        # GitHub and asks git for it. A version already on npm is skipped, as the stage
+        # job skips it: npm refuses to stage over it, dry run or not, so every pull request
+        # after a stable release would fail on that release.
+        env:
+          VERSION: ${{ needs.which.outputs.version }}
         run: |
           set -euo pipefail
           tag="$(cat tarballs/dist-tag.txt)"
           mapfile -t lines < tarballs/order.txt
           for line in "${lines[@]}"; do
-            read -r _ tarball <<< "$line"
+            read -r name tarball <<< "$line"
+            if [ "$(npm view "$name@$VERSION" version 2>/dev/null || true)" = "$VERSION" ]; then
+              echo "$name@$VERSION is already on npm, so staging would skip it"
+              continue
+            fi
             npm stage publish "./tarballs/$tarball" --dry-run --access public --tag "$tag"
           done
 

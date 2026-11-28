@@ -180,7 +180,22 @@ def load_registry(root):
                         % (reg["default_language"], codes))
     if dict(zip(codes, dirs, strict=True))[reg["default_language"]] != "":
         raise SiteError("site.json: the default language must live at the root (dir \"\")")
+    _check_articles(reg.get("articles", []), codes)
     return reg
+
+
+def _check_articles(articles, codes):
+    """Each article a published page can link: every field, an https address, a language."""
+    for article in articles:
+        for key in ("title", "site", "language", "url"):
+            if not isinstance(article.get(key), str) or not article[key].strip():
+                raise SiteError("site.json: article %r has no '%s'" % (article, key))
+        parts = urlsplit(article["url"])
+        if parts.scheme != "https" or not parts.netloc:
+            raise SiteError("site.json: article %r is not an https:// address" % article["url"])
+        if article["language"] not in codes:
+            raise SiteError("site.json: article %r is in %r, which is not one of %s"
+                            % (article["url"], article["language"], codes))
 
 
 def language_codes(registry):

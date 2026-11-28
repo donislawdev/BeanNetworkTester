@@ -178,6 +178,11 @@ def _npm_problems(text):
         problems.append("a secret other than the first release's NPM_TOKEN")
     if "if: needs.which.outputs.publish != 'true'" not in _job(text, "rehearse"):
         problems.append("the rehearsal does not run when nothing is published")
+    # npm refuses to stage over a published version, dry run or not: a rehearsal that did
+    # not skip one failed every pull request after the first stable release (#352).
+    for name in ("rehearse", "stage"):
+        if 'npm view "$name@$VERSION" version' not in _job(text, name):
+            problems.append(f"{name} does not skip a version already on npm")
     if "ci_release_channel.py decide --channel npm" not in _job(text, "which"):
         problems.append("which does not ask the shared rule for the npm channel")
     return problems
@@ -199,6 +204,9 @@ def test_only_the_guarded_job_stages_on_npm():
         "another secret": text + "\n# ${{ secrets.GH_PAT }}\n",
         "a run by hand that builds the branch": text.replace("          " + DISPATCH_REF + "\n",
                                                              "", 1),
+        # The rehearsal comes first in the file, so the first match is its skip.
+        "a rehearsal that stages over a published version": text.replace(
+            'npm view "$name@$VERSION" version', 'npm view "$name" version', 1),
     }
     for what, changed in canaries.items():
         check(f"canary: {what} is caught", changed != text and _npm_problems(changed) != [],
@@ -236,15 +244,20 @@ def test_the_session_judge_passes_a_good_run_and_names_each_fault():
         check(f"canary: {what}", len(try_package.judge_session({**GOOD, **change})) == 1,
               f"({try_package.judge_session({**GOOD, **change})})")
     check("no numbers at all fail", len(try_package.judge_session({})) >= 3)
-    page = {"base_page": 60, "slow_page": 410, "aim_families": ["ipv4", "ipv6"]}
+    page = {"base_page": 60, "slow_page": 410, "aim_families": ["ipv4", "ipv6"],
+            "page_families": ["ipv6"]}
     check("a page slowed passes", try_package.judge_page(page) == [])
     check("canary: a page not slowed",
           len(try_package.judge_page({**page, "slow_page": 70})) == 1)
-    # Chromium takes ::1 for localhost on Linux; a run that never reached the aim over
-    # IPv6 did not try that, and passed on helpers that aimed at 127.0.0.1 alone.
+    # Chromium takes ::1 for localhost on Linux; a run whose Chromium never reached the aim
+    # over IPv6 did not try that, and passed on helpers that aimed at 127.0.0.1 alone. Only
+    # Chromium's requests count: urllib and Node may take ::1 while the page took 127.0.0.1.
     for families in (["ipv4"], []):
-        check(f"canary: the aim reached over {families} only",
-              len(try_package.judge_page({**page, "aim_families": families})) == 1)
+        failures = try_package.judge_page({**page, "page_families": families})
+        check(f"canary: Chromium over {families} only", len(failures) == 1, f"({failures})")
+        check("the failure says what to check, in words",
+              failures and "listens on ::" in failures[0] and "[" not in failures[0],
+              f"({failures})")
     check("canary: no families recorded", len(try_package.judge_page(
         {"base_page": 60, "slow_page": 410})) == 1)
 
@@ -254,16 +267,24 @@ def test_the_try_servers_listen_on_both_families_as_localhost():
     try:
         check("the aim is localhost, as in the READMEs", url.startswith("http://localhost:"), url)
         port = int(url.rsplit(":", 1)[1])
-        for family, address in ((socket.AF_INET, "127.0.0.1"), (socket.AF_INET6, "::1")):
+        # Chromium over IPv4, another client over IPv6: the case the page judge must not pass.
+        for family, address, agent in ((socket.AF_INET, "127.0.0.1", b"HeadlessChrome/159.0"),
+                                       (socket.AF_INET6, "::1", b"Python-urllib/3.15")):
             with socket.socket(family, socket.SOCK_STREAM) as s:
                 s.settimeout(5)
                 s.connect((address, port))
-                s.sendall(b"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
+                s.sendall(b"GET / HTTP/1.0\r\nHost: localhost\r\nUser-Agent: " + agent
+                          + b"\r\n\r\n")
                 reply = b""
                 while chunk := s.recv(4096):
                     reply += chunk
             check(f"answers over {address}", reply.startswith(b"HTTP/1.0 200"), repr(reply[:40]))
         check("each family noted", server.families == {"ipv4", "ipv6"}, f"({server.families})")
+        check("Chromium's noted on their own", server.page_families == {"ipv4"},
+              f"({server.page_families})")
+        check("canary: so the page judge fails it", len(try_package.judge_page(
+            {"base_page": 60, "slow_page": 410, "aim_families": sorted(server.families),
+             "page_families": sorted(server.page_families)})) == 1)
     finally:
         server.shutdown()
         server.server_close()

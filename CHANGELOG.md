@@ -8,10 +8,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 ### Fixed
 
 - **The test packages slow a `localhost` server in the browser on Linux too.** A server given as
-  `localhost` is now slowed on both of the computer's own addresses, 127.0.0.1 and ::1. On Linux
-  the system often names only 127.0.0.1 for `localhost`, while Chromium reaches a server that
-  listens on both over ::1, so a page could load at full speed, the npm README's own example
-  included. Both the PyPI and the npm package.
+  `localhost` is now slowed on both of the computer's own addresses, 127.0.0.1 and ::1. On Linux,
+  the system often names only 127.0.0.1 for `localhost`. Chromium reaches a server that listens
+  on both over ::1, so the page loaded at full speed. The npm README's own example did this. The
+  fix is in both the PyPI and the npm package.
 
 ## [1.1.0] - 2026-11-28
 
