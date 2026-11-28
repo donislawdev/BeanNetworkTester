@@ -17,7 +17,9 @@ program is the release's (``--version``) and, on Windows, that it is signed with
 project's certificate. ``session`` serves two local web servers and runs a real test
 through the fixture: the server it aims at is slowed, the other one is not, and the
 session stops with a summary. ``--playwright`` (always for npm) adds a page loaded in
-Chromium. With BEANNETWORKTESTER_PROGRAM set (a pull request, whose release may be older
+Chromium. The servers are ``localhost`` and listen on IPv4 and IPv6 alike, as the README
+examples' servers do, and Chromium must reach the aim over IPv6 at least once: on Linux it
+takes ::1 for localhost where the system resolver names 127.0.0.1 alone. With BEANNETWORKTESTER_PROGRAM set (a pull request, whose release may be older
 than the helper), the checkout's program runs instead of the packaged one.
 
 Each judge is a function over numbers, so each can be shown to fail
@@ -30,6 +32,7 @@ import http.server
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import tempfile
@@ -97,6 +100,9 @@ def judge_page(r: dict):
     if r.get("slow_page", 0) - r.get("base_page", 0) < SLOWED_MIN_MS:
         failures.append(f"the page in Chromium was not slowed: {r.get('base_page')} -> "
                         f"{r.get('slow_page')} ms")
+    if "ipv6" not in r.get("aim_families", []):
+        failures.append(f"the server aimed at was reached over {r.get('aim_families')} only, "
+                        "never IPv6: this run did not try localhost the way Chromium takes it")
     return failures
 
 
@@ -143,6 +149,8 @@ def install(version: str, repo: Path) -> list[str]:
 
 class _Quiet(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+        mapped = str(self.client_address[0]).startswith("::ffff:")
+        self.server.families.add("ipv4" if mapped else "ipv6")
         body = b"<!doctype html><title>try</title><p>ok</p>"
         self.send_response(200)
         self.send_header("Content-Type", "text/html")
@@ -156,10 +164,24 @@ class _Quiet(http.server.BaseHTTPRequestHandler):
         pass
 
 
-def _serve() -> str:
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Quiet)
+class _BothFamilies(http.server.ThreadingHTTPServer):
+    """One socket for IPv4 and IPv6, as Node's ``listen(port)`` and ``python -m
+    http.server`` make, noting the family each request came over (IPv4 arrives mapped)."""
+    address_family = socket.AF_INET6
+
+    def __init__(self, *args, **kwargs):
+        self.families: set[str] = set()
+        super().__init__(*args, **kwargs)
+
+    def server_bind(self):
+        self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        super().server_bind()
+
+
+def _serve() -> tuple[str, _BothFamilies]:
+    server = _BothFamilies(("::", 0), _Quiet)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    return f"http://127.0.0.1:{server.server_address[1]}"
+    return f"http://localhost:{server.server_address[1]}", server
 
 
 TEST_FILE = '''
@@ -221,7 +243,7 @@ def test_a_page_in_chromium_is_slowed(bad_network):
 
 
 def session(repo: Path, playwright: bool) -> list[str]:
-    aim, control = _serve(), _serve()
+    (aim, aim_server), (control, _) = _serve(), _serve()
     work = Path(tempfile.mkdtemp(prefix="bnt-try-"))
     out = work / "results.json"
     body = TEST_FILE.format(aim=aim, control=control, out=str(out), latency=LATENCY_MS)
@@ -233,6 +255,7 @@ def session(repo: Path, playwright: bool) -> list[str]:
                            f"--junitxml={report}", "test_try.py"], cwd=work, check=False)
     failures = [] if done.returncode == 0 else [f"pytest ended with {done.returncode}"]
     results = json.loads(out.read_text(encoding="utf-8")) if out.exists() else {}
+    results["aim_families"] = sorted(aim_server.families)
     print(json.dumps(results, indent=2))
     failures += judge_session(results)
     if playwright:
@@ -321,7 +344,7 @@ test('a page in Chromium is slowed', async ({{ page, badNetwork }}) => {{
 
 def session_npm(project: Path) -> list[str]:
     import shutil
-    aim, control = _serve(), _serve()
+    (aim, aim_server), (control, _) = _serve(), _serve()
     out = project / "results.json"
     (project / "tests").mkdir(exist_ok=True)
     (project / "tests" / "try.spec.js").write_text(
@@ -333,6 +356,7 @@ def session_npm(project: Path) -> list[str]:
         cwd=project, env=dict(os.environ, PLAYWRIGHT_JSON_OUTPUT_NAME=str(report)), check=False)
     failures = [] if done.returncode == 0 else [f"playwright test ended with {done.returncode}"]
     results = json.loads(out.read_text(encoding="utf-8")) if out.exists() else {}
+    results["aim_families"] = sorted(aim_server.families)
     print(json.dumps(results, indent=2))
     failures += judge_session(results) + judge_page(results)
     if '"bad-network"' not in (report.read_text(encoding="utf-8") if report.exists() else ""):

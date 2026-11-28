@@ -118,6 +118,23 @@ test('a server is its addresses and its port', async () => {
   assert.deepEqual(await serverIps('h', { lookup: lookup('fe80::1%eth0') }), ['fe80::1']);
 });
 
+test('a localhost server is aimed at both loopback addresses', async () => {
+  // Ubuntu's /etc/hosts names 127.0.0.1 alone for localhost, and Chromium reaches a server
+  // listening on both families over ::1: aimed at 127.0.0.1 only, the README's own example
+  // went unslowed there (measured 2026-11-28, Ubuntu 26.04).
+  assert.deepEqual(await sessionFlags({ server: 'http://localhost:8000', settings: {},
+    lookup: lookup('127.0.0.1') }), ['--dst-ip', '127.0.0.1,::1', '--dst-port', '8000']);
+  const unresolved = async () => { throw Object.assign(new Error('not found'), { code: 'ENOTFOUND' }); };
+  for (const [host, find, want] of [
+    ['LOCALHOST.', lookup('::1'), ['::1', '127.0.0.1']],
+    ['app.localhost', unresolved, ['127.0.0.1', '::1']],
+    ['localhost', lookup('127.0.0.1', '127.0.1.1'), ['127.0.0.1', '127.0.1.1', '::1']]]) {
+    assert.deepEqual(await serverIps(host, { lookup: find }), want, host);
+  }
+  assert.deepEqual(await serverIps('notlocalhost', { lookup: lookup('192.0.2.1') }), ['192.0.2.1']);
+  await assert.rejects(serverIps('nowhere.test', { lookup: unresolved }), /has no address/);
+});
+
 test('settings become the program\'s flags', async () => {
   const flags = await sessionFlags({ process: 'self', settings: {
     latency: 300, lossBurst: 4, flapHold: true, asym: false, seed: null, blockPort: [80, 443] } });

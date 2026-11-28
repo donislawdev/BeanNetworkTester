@@ -160,6 +160,30 @@ def test_a_server_that_names_no_port_or_no_address_is_refused():
           _aim.server_ips("h", 1, resolve=_resolver("fe80::1%eth0")) == ["fe80::1"])
 
 
+def _unresolved(host, port, proto=0):
+    raise socket.gaierror(socket.EAI_NONAME, "Name or service not known")
+
+
+def test_a_localhost_server_is_aimed_at_both_loopback_addresses():
+    # Ubuntu's /etc/hosts names 127.0.0.1 alone for localhost, and Chromium reaches a
+    # server listening on both families over ::1: aimed at 127.0.0.1 only, the README's
+    # own Playwright example went unslowed there (measured 2026-11-28, Ubuntu 26.04).
+    flags = _aim.session_flags(server="http://localhost:8000", settings={},
+                               resolve=_resolver("127.0.0.1"))
+    check("localhost, the system naming 127.0.0.1 alone",
+          flags == ["--dst-ip", "127.0.0.1,::1", "--dst-port", "8000"], f"({flags})")
+    for host, resolve, want in [
+            ("LOCALHOST.", _resolver("::1"), ["::1", "127.0.0.1"]),
+            ("app.localhost", _unresolved, ["127.0.0.1", "::1"]),
+            ("localhost", _resolver("127.0.0.1", "127.0.1.1"), ["127.0.0.1", "127.0.1.1", "::1"])]:
+        got = _aim.server_ips(host, 1, resolve=resolve)
+        check(f"{host} gets both loopbacks after the system's own answer", got == want, f"({got})")
+    check("a name that only ends in the word is not one",
+          _aim.server_ips("notlocalhost", 1, resolve=_resolver("192.0.2.1")) == ["192.0.2.1"])
+    with pytest.raises(BadNetworkError, match="has no address"):
+        _aim.server_ips("nowhere.test", 1, resolve=_unresolved)
+
+
 def test_settings_become_the_programs_flags():
     flags = _aim.session_flags(process="self", settings={
         "latency": 300, "loss_burst": 4, "flap_hold": True, "asym": False, "seed": None,

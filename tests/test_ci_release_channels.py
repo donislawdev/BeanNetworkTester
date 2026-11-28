@@ -7,6 +7,7 @@ The image channel's own guards live in tests/test_ci_docker_image.py.
 import ast
 import os
 import re
+import socket
 import sys
 from pathlib import Path
 
@@ -235,8 +236,37 @@ def test_the_session_judge_passes_a_good_run_and_names_each_fault():
         check(f"canary: {what}", len(try_package.judge_session({**GOOD, **change})) == 1,
               f"({try_package.judge_session({**GOOD, **change})})")
     check("no numbers at all fail", len(try_package.judge_session({})) >= 3)
-    check("a page slowed passes", try_package.judge_page({"base_page": 60, "slow_page": 410}) == [])
-    check("canary: a page not slowed", try_package.judge_page({"base_page": 60, "slow_page": 70}))
+    page = {"base_page": 60, "slow_page": 410, "aim_families": ["ipv4", "ipv6"]}
+    check("a page slowed passes", try_package.judge_page(page) == [])
+    check("canary: a page not slowed",
+          len(try_package.judge_page({**page, "slow_page": 70})) == 1)
+    # Chromium takes ::1 for localhost on Linux; a run that never reached the aim over
+    # IPv6 did not try that, and passed on helpers that aimed at 127.0.0.1 alone.
+    for families in (["ipv4"], []):
+        check(f"canary: the aim reached over {families} only",
+              len(try_package.judge_page({**page, "aim_families": families})) == 1)
+    check("canary: no families recorded", len(try_package.judge_page(
+        {"base_page": 60, "slow_page": 410})) == 1)
+
+
+def test_the_try_servers_listen_on_both_families_as_localhost():
+    url, server = try_package._serve()
+    try:
+        check("the aim is localhost, as in the READMEs", url.startswith("http://localhost:"), url)
+        port = int(url.rsplit(":", 1)[1])
+        for family, address in ((socket.AF_INET, "127.0.0.1"), (socket.AF_INET6, "::1")):
+            with socket.socket(family, socket.SOCK_STREAM) as s:
+                s.settimeout(5)
+                s.connect((address, port))
+                s.sendall(b"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
+                reply = b""
+                while chunk := s.recv(4096):
+                    reply += chunk
+            check(f"answers over {address}", reply.startswith(b"HTTP/1.0 200"), repr(reply[:40]))
+        check("each family noted", server.families == {"ipv4", "ipv6"}, f"({server.families})")
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def test_the_install_judge_wants_the_install_and_the_releases_program():

@@ -37,6 +37,11 @@ SERVER_KEYS = frozenset({"dst_ip", "dst_port"})
 PROCESS_KEYS = frozenset({"target"})
 _KEY = re.compile(r"^[a-z][a-z0-9_]*$")
 _DEFAULT_PORTS = {"http": 80, "https": 443, "ws": 80, "wss": 443}
+# A name under localhost is this machine (RFC 6761), and browsers resolve it themselves,
+# to both loopback addresses: Chromium reaches a server that listens on both families
+# over ::1. The system may give one of them only (Ubuntu's /etc/hosts names 127.0.0.1
+# alone), so such a server is aimed at both, whatever the system says.
+LOOPBACKS = ("127.0.0.1", "::1")
 # The two shapes the program accepts for a scenario it ships (paths.shipped_scenario).
 _SHIPPED_FOLDERS = (("scenarios",), ("_internal", "scenarios"))
 _SCENARIO_ADVICE = {
@@ -79,17 +84,32 @@ def servers(server: object) -> list[tuple[str, int]]:
     return [server_address(server)]
 
 
+def is_localhost(host: str) -> bool:
+    """Whether ``host`` is ``localhost`` or a name under it, such as ``app.localhost``."""
+    name = host.lower().rstrip(".")
+    return name == "localhost" or name.endswith(".localhost")
+
+
 def server_ips(host: str, port: int, *, resolve=socket.getaddrinfo) -> list[str]:
-    """Every address the host has, IPv4 and IPv6, in the order the system gives them."""
+    """Every address the host has, IPv4 and IPv6, in the order the system gives them.
+
+    A name under localhost also has both loopback addresses (LOOPBACKS), even where the
+    system gives one or none.
+    """
+    local = is_localhost(host)
     try:
         infos = resolve(host, port, proto=socket.IPPROTO_TCP)
     except OSError as exc:
-        raise BadNetworkError(f"server host {host!r} has no address: {exc}") from exc
+        if not local:
+            raise BadNetworkError(f"server host {host!r} has no address: {exc}") from exc
+        infos = []
     out: list[str] = []
     for info in infos:
         address = str(info[4][0]).split("%")[0]       # an IPv6 zone is not part of the aim
         if address not in out:
             out.append(address)
+    if local:
+        out += [ip for ip in LOOPBACKS if ip not in out]
     if not out:
         raise BadNetworkError(f"server host {host!r} has no address.")
     return out
