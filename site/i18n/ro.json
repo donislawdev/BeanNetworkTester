@@ -3,6 +3,9 @@
     "code": "ro",
     "name": "Română"
   },
+  "articles.heading": "Articole despre Bean Network Tester",
+  "articles.lang.en": "(în engleză)",
+  "articles.lang.pl": "(în poloneză)",
   "cli.group.checks": "Verificări pentru un pipeline și pentru acest computer",
   "cli.group.output": "Ce afișează",
   "cli.group.program": "Programul în sine",

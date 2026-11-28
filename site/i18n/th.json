@@ -3,6 +3,9 @@
     "code": "th",
     "name": "ไทย"
   },
+  "articles.heading": "บทความเกี่ยวกับ Bean Network Tester",
+  "articles.lang.en": "(ภาษาอังกฤษ)",
+  "articles.lang.pl": "(ภาษาโปแลนด์)",
   "cli.group.checks": "การตรวจสำหรับไปป์ไลน์และคอมพิวเตอร์เครื่องนี้",
   "cli.group.output": "สิ่งที่พิมพ์ออกมา",
   "cli.group.program": "ตัวโปรแกรมเอง",

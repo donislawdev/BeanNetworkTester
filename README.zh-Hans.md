@@ -85,6 +85,7 @@
 - [项目结构](#项目结构)
 - [工作原理（简述）](#工作原理简述)
 - [说明与限制](#说明与限制)
+- [介绍 Bean Network Tester 的文章](#介绍-bean-network-tester-的文章)
 - [参与贡献](#参与贡献)
 - [支持本项目](#支持本项目)
 - [作者](#作者)
@@ -1629,6 +1630,11 @@ BeanNetworkTester.spec   构建配方（onedir、控制台、asInvoker）
   还会停止 `WinDivert1.4` 和 `WinDivert1.1`，那是其他程序安装的。
 - **“运行时长”和“要修改的流量”只在开始时采纳**：这就是为什么在会话期间两者都是**锁定**的
   （一个可编辑却什么也不做的字段，比一个变灰的字段更糟）。
+
+## 介绍 Bean Network Tester 的文章
+
+- [How to Test Applications Under Poor Network Conditions with Bean Network Tester](https://www.softwaretestingmagazine.com/knowledge/how-to-test-applications-under-poor-network-conditions-with-bean-network-tester/) - Software Testing Magazine（英文）
+- [Symulacja niekorzystnych warunków sieciowych podczas testowania aplikacji z Bean Network Tester](https://testerzy.pl/baza-wiedzy/narzedzia/symulacja-niekorzystnych-warunkow-sieciowych-podczas-testowania-aplikacji-z-bean-network-tester) - testerzy.pl（波兰文）
 
 ## 参与贡献
 

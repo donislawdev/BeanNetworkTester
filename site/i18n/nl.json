@@ -3,6 +3,9 @@
     "code": "nl",
     "name": "Nederlands"
   },
+  "articles.heading": "Artikelen over Bean Network Tester",
+  "articles.lang.en": "(in het Engels)",
+  "articles.lang.pl": "(in het Pools)",
   "cli.group.checks": "Controles voor een pipeline en voor deze computer",
   "cli.group.output": "Wat het afdrukt",
   "cli.group.program": "Het programma zelf",

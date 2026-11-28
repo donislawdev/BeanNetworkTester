@@ -3,6 +3,9 @@
     "code": "pl",
     "name": "Polski"
   },
+  "articles.heading": "Artykuły o Bean Network Tester",
+  "articles.lang.en": "(po angielsku)",
+  "articles.lang.pl": "(po polsku)",
   "cli.group.checks": "Sprawdzenia dla pipeline'u i tego komputera",
   "cli.group.output": "Co wypisuje",
   "cli.group.program": "Sam program",

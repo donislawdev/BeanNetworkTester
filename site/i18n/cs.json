@@ -3,6 +3,9 @@
     "code": "cs",
     "name": "Čeština"
   },
+  "articles.heading": "Články o Bean Network Tester",
+  "articles.lang.en": "(anglicky)",
+  "articles.lang.pl": "(polsky)",
   "cli.group.checks": "Kontroly pro pipeline a pro tento počítač",
   "cli.group.output": "Co vypisuje",
   "cli.group.program": "Program sám",

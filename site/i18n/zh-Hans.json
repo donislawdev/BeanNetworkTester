@@ -3,6 +3,9 @@
     "code": "zh-Hans",
     "name": "简体中文"
   },
+  "articles.heading": "介绍 Bean Network Tester 的文章",
+  "articles.lang.en": "（英文）",
+  "articles.lang.pl": "（波兰文）",
   "cli.group.checks": "用于流水线和这台电脑的检查",
   "cli.group.output": "输出内容",
   "cli.group.program": "程序本身",

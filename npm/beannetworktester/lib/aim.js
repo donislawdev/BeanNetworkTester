@@ -72,18 +72,35 @@ function servers(server) {
   return [serverAddress(server)];
 }
 
+// A name under localhost is this machine (RFC 6761), and browsers resolve it themselves,
+// to both loopback addresses: Chromium reaches a server that listens on both families
+// over ::1. The system may give one of them only (Ubuntu's /etc/hosts names 127.0.0.1
+// alone), so such a server is aimed at both, whatever the system says.
+const LOOPBACKS = ['127.0.0.1', '::1'];
+
+function isLocalhost(host) {
+  const name = String(host).toLowerCase().replace(/\.+$/, '');
+  return name === 'localhost' || name.endsWith('.localhost');
+}
+
+// Every address the host has, IPv4 and IPv6, in the order the system gives them, and
+// for a name under localhost both loopback addresses too.
 async function serverIps(host, { lookup = dns.promises.lookup } = {}) {
-  let found;
+  const local = isLocalhost(host);
+  let found = [];
   try {
     found = await lookup(host, { all: true });
   } catch (err) {
-    throw new BadNetworkError(`server host ${JSON.stringify(host)} has no address: ${err.message}`);
+    if (!local) {
+      throw new BadNetworkError(`server host ${JSON.stringify(host)} has no address: ${err.message}`);
+    }
   }
   const out = [];
   for (const { address } of found) {
     const plain = String(address).split('%')[0];     // an IPv6 zone is not part of the aim
     if (!out.includes(plain)) out.push(plain);
   }
+  if (local) out.push(...LOOPBACKS.filter((ip) => !out.includes(ip)));
   if (!out.length) throw new BadNetworkError(`server host ${JSON.stringify(host)} has no address.`);
   return out;
 }

@@ -86,6 +86,7 @@ ping を増やす、パケットを破棄する、速度に上限をかける、
 - [プロジェクト構成](#プロジェクト構成)
 - [仕組み (概要)](#仕組み-概要)
 - [注意事項と制限](#注意事項と制限)
+- [Bean Network Tester を紹介した記事](#bean-network-tester-を紹介した記事)
 - [コントリビュート](#コントリビュート)
 - [プロジェクトを支援する](#プロジェクトを支援する)
 - [作者](#作者)
@@ -1244,6 +1245,11 @@ BeanNetworkTester.spec   ビルドのレシピ (onedir、console、asInvoker)
   `WinDivert1.4` と `WinDivert1.1` も停止します。
 - **"Duration" と "Traffic to modify" が考慮されるのは START 時だけです** - そのため、セッション中は両方とも**ロック**されます
   (何もしない編集可能なフィールドは、グレーアウトされたものより悪いからです)。
+
+## Bean Network Tester を紹介した記事
+
+- [How to Test Applications Under Poor Network Conditions with Bean Network Tester](https://www.softwaretestingmagazine.com/knowledge/how-to-test-applications-under-poor-network-conditions-with-bean-network-tester/) - Software Testing Magazine（英語）
+- [Symulacja niekorzystnych warunków sieciowych podczas testowania aplikacji z Bean Network Tester](https://testerzy.pl/baza-wiedzy/narzedzia/symulacja-niekorzystnych-warunkow-sieciowych-podczas-testowania-aplikacji-z-bean-network-tester) - testerzy.pl（ポーランド語）
 
 ## コントリビュート
 

@@ -3,6 +3,9 @@
     "code": "vi",
     "name": "Tiếng Việt"
   },
+  "articles.heading": "Bài viết về Bean Network Tester",
+  "articles.lang.en": "(bằng tiếng Anh)",
+  "articles.lang.pl": "(bằng tiếng Ba Lan)",
   "cli.group.checks": "Kiểm tra cho pipeline và cho máy này",
   "cli.group.output": "Nó in ra gì",
   "cli.group.program": "Bản thân chương trình",

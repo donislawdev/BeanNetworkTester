@@ -185,5 +185,19 @@
       "name": "Twitter",
       "url": "https://twitter.com/donislawdev"
     }
+  ],
+  "articles": [
+    {
+      "title": "How to Test Applications Under Poor Network Conditions with Bean Network Tester",
+      "site": "Software Testing Magazine",
+      "language": "en",
+      "url": "https://www.softwaretestingmagazine.com/knowledge/how-to-test-applications-under-poor-network-conditions-with-bean-network-tester/"
+    },
+    {
+      "title": "Symulacja niekorzystnych warunków sieciowych podczas testowania aplikacji z Bean Network Tester",
+      "site": "testerzy.pl",
+      "language": "pl",
+      "url": "https://testerzy.pl/baza-wiedzy/narzedzia/symulacja-niekorzystnych-warunkow-sieciowych-podczas-testowania-aplikacji-z-bean-network-tester"
+    }
   ]
 }

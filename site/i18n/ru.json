@@ -3,6 +3,9 @@
     "code": "ru",
     "name": "Русский"
   },
+  "articles.heading": "Статьи о Bean Network Tester",
+  "articles.lang.en": "(на английском)",
+  "articles.lang.pl": "(на польском)",
   "cli.group.checks": "Проверки для конвейера и этого компьютера",
   "cli.group.output": "Что она выводит",
   "cli.group.program": "Сама программа",
